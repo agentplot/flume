@@ -47,7 +47,7 @@ test names is a scratch directory or file of the test's own.
 ## 6. The site
 
 - [x] 6.1 Write the effort into `site/src/content/docs/guides/agent-settings.md` beside the model, with S103's kind and launch and the advice to give an effort in the layers rather than an account's environment; `effort` in an agents table into `guides/kinds.mdx`; `--effort` and `effortLevel`'s owner into `guides/claude-code.mdx`; `effort` in the host's tables into `reference/configuration.md`; `--agent [<stage>.]effort=<word>` into `reference/commands.md`; and the agent's `effort` into `reference/state.md`. Write it all to any host's operator, naming no host, team or word of ours (design 3 to 9; core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
-- [ ] 6.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
+- [x] 6.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
 
 ## 7. Coverage and the gate
 
