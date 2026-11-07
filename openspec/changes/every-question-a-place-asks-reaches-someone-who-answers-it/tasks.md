@@ -305,7 +305,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 ## 7. An answer taken once, by its key
 
-- [ ] 7.1 Give each end its key as callers see it,
+- [x] 7.1 Give each end its key as callers see it,
   `stage/<stage>/<start>/<state>`, with `/<answered>` after it where
   `EndOf::Stage`'s `answered` is not zero, `submission/<n>/<outcome>`
   and `stall/<since>`, made from `EndOf::key`'s parts and parsed back,

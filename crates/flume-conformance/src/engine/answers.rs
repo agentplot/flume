@@ -484,7 +484,7 @@ fn place_status() -> PlaceStatus {
                         stop_short: Some(Box::new(StopShortWaited {
                             words: Some("Which design?".into()),
                             needs: Some(StopKind::NeedsAnswer),
-                            key: "stage code 1 EndedShort ".into(),
+                            key: "stage/code/1/ended-short".parse().unwrap(),
                             addressee: Some("west/ops".into()),
                         })),
                         answerer_read: true,

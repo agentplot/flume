@@ -642,7 +642,7 @@ fn ends() -> Vec<EndHeld> {
                 stop_short: Some(Box::new(StopShortWaited {
                     words: Some("Which queue does east run?".into()),
                     needs: Some(StopKind::NeedsAnswer),
-                    key: "stage code 1 EndedShort ".into(),
+                    key: "stage/code/1/ended-short".parse().unwrap(),
                     addressee: Some("west/ops".into()),
                 })),
                 answerer_read: true,
@@ -2304,6 +2304,148 @@ fn an_ends_key_with_and_without_answers() {
         end(StageState::EndedShort, None, 1).key(),
         end(StageState::EndedShort, None, 2).key()
     );
+}
+
+#[test]
+fn every_ends_key_round_trips() {
+    // 42, 43, 198: each end's key as callers see it, made from the parts
+    // of the held key, read back from its token and written to JSON as
+    // that token.
+    let stage = |state, quiet_from, answered| EndOf::Stage {
+        stage: "construct".into(),
+        start: 1,
+        state,
+        quiet_from,
+        answered,
+        end: Box::default(),
+    };
+    let submission = |verdict| EndOf::Submission { submit: 2, verdict };
+    let ends = [
+        (
+            stage(StageState::EndedShort, None, 0),
+            "stage/construct/1/ended-short",
+        ),
+        (
+            stage(StageState::EndedShort, None, 1),
+            "stage/construct/1/ended-short/1",
+        ),
+        (
+            stage(StageState::Delivered, None, 0),
+            "stage/construct/1/delivered",
+        ),
+        (
+            stage(StageState::Finished, None, 2),
+            "stage/construct/1/finished/2",
+        ),
+        (stage(StageState::Lost, None, 0), "stage/construct/1/lost"),
+        (
+            stage(StageState::NeverBegun, None, 0),
+            "stage/construct/1/never-begun",
+        ),
+        (
+            stage(StageState::Stuck, Some(160), 0),
+            "stage/construct/1/stuck",
+        ),
+        (
+            submission(Verdict::Landed {
+                commit: Revision("abc".into()),
+                place_removed: false,
+                branch_removed: false,
+            }),
+            "submission/2/landed",
+        ),
+        (
+            submission(Verdict::Failed {
+                words: "check failed".into(),
+            }),
+            "submission/2/failed",
+        ),
+        (
+            submission(Verdict::Conflict {
+                files: vec!["a.rs".into()],
+                words: "conflict".into(),
+            }),
+            "submission/2/conflict",
+        ),
+        (submission(Verdict::Withdrawn), "submission/2/withdrawn"),
+        (
+            submission(Verdict::Refused {
+                reason: "no queue".into(),
+            }),
+            "submission/2/refused",
+        ),
+        (
+            EndOf::Stall {
+                since: 3700,
+                waiting: "a retry of construct".into(),
+                answerer: None,
+                stop_short: None,
+                answerer_read: true,
+                lapsed: None,
+            },
+            "stall/3700",
+        ),
+    ];
+    for (end, token) in ends {
+        let key = end.end_key();
+        assert_eq!(key.to_string(), token);
+        assert_eq!(token.parse::<EndKey>(), Ok(key.clone()), "{token}");
+        assert_eq!(
+            serde_json::to_value(&key).expect("written"),
+            serde_json::json!(token)
+        );
+        round_trips(key);
+    }
+    // Every state a stage's key may name reads back.
+    for state in [
+        StageState::NotReached,
+        StageState::OnHold,
+        StageState::WaitingOnReadiness,
+        StageState::WaitingForRoom,
+        StageState::Refused,
+        StageState::Starting,
+        StageState::Started,
+        StageState::Begun,
+        StageState::NeverBegun,
+        StageState::Stuck,
+        StageState::Lost,
+        StageState::Stopped,
+        StageState::Delivered,
+        StageState::Repeating,
+        StageState::EndedShort,
+        StageState::Finished,
+    ] {
+        round_trips(stage(state, None, 3).end_key());
+    }
+}
+
+#[test]
+fn a_key_in_another_form_is_refused() {
+    // 42, 43: any other form refused, naming the forms, the held key's
+    // among them.
+    for given in [
+        "construct",
+        "stage/construct/1",
+        "stage//1/ended-short",
+        "stage/construct/one/ended-short",
+        "stage/construct/1/ended_short",
+        "stage/construct/1/ended-short/0",
+        "stage/construct/01/ended-short",
+        "stage/construct/1/ended-short/1/2",
+        "submission/2/merged",
+        "submission/2",
+        "stall/soon",
+        "stall/",
+        "stage construct 1 EndedShort ",
+        "",
+    ] {
+        let refused = given.parse::<EndKey>().unwrap_err();
+        assert!(
+            refused.contains(END_KEY_FORMS) && refused.contains(&format!("`{given}`")),
+            "{given}: {refused}"
+        );
+        assert!(serde_json::from_value::<EndKey>(serde_json::json!(given)).is_err());
+    }
 }
 
 #[test]

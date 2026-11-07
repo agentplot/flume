@@ -497,16 +497,18 @@ pub struct StopShortWaited {
     pub words: Option<String>,
     #[serde(default)]
     pub needs: Option<StopKind>,
-    /// The key of the stop-short's end, by which it is recorded (43).
-    pub key: String,
+    /// The key of the stop-short's end, as callers name it (42, 43).
+    pub key: EndKey,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub addressee: Option<String>,
 }
 
 impl EndOf {
-    /// The end's key: what ended, without what was read of it. A stage's
+    /// The end's key as held state records it, by which a settle records
+    /// the end once: what ended, without what was read of it. A stage's
     /// names the answers its start had taken only where there are some, so
-    /// every key written before reads as it did (43).
+    /// every key written before reads as it did (43). Callers see it as
+    /// [`EndKey`], made from the same parts.
     pub fn key(&self) -> String {
         match self {
             EndOf::Stage {
@@ -528,17 +530,189 @@ impl EndOf {
                 }
             }
             EndOf::Submission { submit, verdict } => {
-                let outcome = match verdict {
-                    Verdict::Landed { .. } => "landed",
-                    Verdict::Failed { .. } => "failed",
-                    Verdict::Conflict { .. } => "conflict",
-                    Verdict::Withdrawn => "withdrawn",
-                    Verdict::Refused { .. } => "refused",
-                };
-                format!("submission {submit} {outcome}")
+                format!("submission {submit} {}", KeyOutcome::of(verdict).word())
             }
             EndOf::Stall { since, .. } => format!("stall {since}"),
         }
+    }
+
+    /// The end's key as callers see it and name it, made from the parts
+    /// [`EndOf::key`] is made from (42, 43).
+    pub fn end_key(&self) -> EndKey {
+        match self {
+            EndOf::Stage {
+                stage,
+                start,
+                state,
+                answered,
+                ..
+            } => EndKey::Stage {
+                stage: stage.clone(),
+                start: *start,
+                state: *state,
+                answered: *answered,
+            },
+            EndOf::Submission { submit, verdict } => EndKey::Submission {
+                submit: *submit,
+                outcome: KeyOutcome::of(verdict),
+            },
+            EndOf::Stall { since, .. } => EndKey::Stall { since: *since },
+        }
+    }
+}
+
+/// An end's key as callers see it and name it, one token:
+/// `stage/<stage>/<start>/<state>`, with `/<answered>` after it where the
+/// start had taken that many answers in its session when the end was read,
+/// so a second stop-short of one start kept open is a key of its own;
+/// `submission/<n>/<outcome>`; or `stall/<since>`. Each notice, collected
+/// end, waiting place and status gives it, and an answer names the
+/// stop-short it answers by it. It is read back from that token alone,
+/// refused in any other form, naming the forms (42, 43, 198).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub enum EndKey {
+    Stage {
+        stage: String,
+        start: u32,
+        state: StageState,
+        answered: u32,
+    },
+    Submission {
+        submit: u32,
+        outcome: KeyOutcome,
+    },
+    Stall {
+        since: Seconds,
+    },
+}
+
+/// The forms an end's key takes, as a refusal names them (42, 43).
+pub const END_KEY_FORMS: &str = "stage/<stage>/<start>/<state>, with /<answered> after it where its start had taken answers in its session, submission/<n>/<outcome>, or stall/<since>";
+
+impl std::fmt::Display for EndKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EndKey::Stage {
+                stage,
+                start,
+                state,
+                answered,
+            } => {
+                write!(f, "stage/{stage}/{start}/{}", state.word())?;
+                if *answered != 0 {
+                    write!(f, "/{answered}")?;
+                }
+                Ok(())
+            }
+            EndKey::Submission { submit, outcome } => {
+                write!(f, "submission/{submit}/{}", outcome.word())
+            }
+            EndKey::Stall { since } => write!(f, "stall/{since}"),
+        }
+    }
+}
+
+impl std::str::FromStr for EndKey {
+    type Err = String;
+
+    /// Reads a key from its token, refusing any other form, a number
+    /// written otherwise than the key writes it among them, naming the
+    /// forms (42, 43).
+    fn from_str(given: &str) -> Result<EndKey, String> {
+        let refused = || format!("`{given}` is no end's key: a key is {END_KEY_FORMS}");
+        let number = |part: &str| part.parse::<u64>().map_err(|_| refused());
+        let small = |part: &str| part.parse::<u32>().map_err(|_| refused());
+        let parts: Vec<&str> = given.split('/').collect();
+        let key = match parts.as_slice() {
+            ["stage", stage, start, state] | ["stage", stage, start, state, _]
+                if !stage.is_empty() =>
+            {
+                EndKey::Stage {
+                    stage: stage.to_string(),
+                    start: small(start)?,
+                    state: StageState::from_word(state).ok_or_else(refused)?,
+                    answered: match parts.get(4) {
+                        Some(answered) => small(answered)?,
+                        None => 0,
+                    },
+                }
+            }
+            ["submission", submit, outcome] => EndKey::Submission {
+                submit: small(submit)?,
+                outcome: KeyOutcome::from_word(outcome).ok_or_else(refused)?,
+            },
+            ["stall", since] => EndKey::Stall {
+                since: number(since)?,
+            },
+            _ => return Err(refused()),
+        };
+        if key.to_string() != given {
+            return Err(refused());
+        }
+        Ok(key)
+    }
+}
+
+impl TryFrom<String> for EndKey {
+    type Error = String;
+
+    fn try_from(given: String) -> Result<EndKey, String> {
+        given.parse()
+    }
+}
+
+impl From<EndKey> for String {
+    fn from(key: EndKey) -> String {
+        key.to_string()
+    }
+}
+
+/// A submission's outcome as its end's key names it (43).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeyOutcome {
+    Landed,
+    Failed,
+    Conflict,
+    Withdrawn,
+    Refused,
+}
+
+impl KeyOutcome {
+    const ALL: [KeyOutcome; 5] = [
+        KeyOutcome::Landed,
+        KeyOutcome::Failed,
+        KeyOutcome::Conflict,
+        KeyOutcome::Withdrawn,
+        KeyOutcome::Refused,
+    ];
+
+    /// The outcome of the merge queue's verdict.
+    pub fn of(verdict: &Verdict) -> KeyOutcome {
+        match verdict {
+            Verdict::Landed { .. } => KeyOutcome::Landed,
+            Verdict::Failed { .. } => KeyOutcome::Failed,
+            Verdict::Conflict { .. } => KeyOutcome::Conflict,
+            Verdict::Withdrawn => KeyOutcome::Withdrawn,
+            Verdict::Refused { .. } => KeyOutcome::Refused,
+        }
+    }
+
+    /// The outcome's word in a key.
+    pub fn word(self) -> &'static str {
+        match self {
+            KeyOutcome::Landed => "landed",
+            KeyOutcome::Failed => "failed",
+            KeyOutcome::Conflict => "conflict",
+            KeyOutcome::Withdrawn => "withdrawn",
+            KeyOutcome::Refused => "refused",
+        }
+    }
+
+    fn from_word(word: &str) -> Option<KeyOutcome> {
+        KeyOutcome::ALL
+            .into_iter()
+            .find(|outcome| outcome.word() == word)
     }
 }
 
@@ -794,6 +968,54 @@ pub enum StageState {
 }
 
 impl StageState {
+    const ALL: [StageState; 16] = [
+        StageState::NotReached,
+        StageState::OnHold,
+        StageState::WaitingOnReadiness,
+        StageState::WaitingForRoom,
+        StageState::Refused,
+        StageState::Starting,
+        StageState::Started,
+        StageState::Begun,
+        StageState::NeverBegun,
+        StageState::Stuck,
+        StageState::Lost,
+        StageState::Stopped,
+        StageState::Delivered,
+        StageState::Repeating,
+        StageState::EndedShort,
+        StageState::Finished,
+    ];
+
+    /// The state's word in an end's key, `ended-short` for
+    /// [`StageState::EndedShort`] (43).
+    pub fn word(self) -> &'static str {
+        match self {
+            StageState::NotReached => "not-reached",
+            StageState::OnHold => "on-hold",
+            StageState::WaitingOnReadiness => "waiting-on-readiness",
+            StageState::WaitingForRoom => "waiting-for-room",
+            StageState::Refused => "refused",
+            StageState::Starting => "starting",
+            StageState::Started => "started",
+            StageState::Begun => "begun",
+            StageState::NeverBegun => "never-begun",
+            StageState::Stuck => "stuck",
+            StageState::Lost => "lost",
+            StageState::Stopped => "stopped",
+            StageState::Delivered => "delivered",
+            StageState::Repeating => "repeating",
+            StageState::EndedShort => "ended-short",
+            StageState::Finished => "finished",
+        }
+    }
+
+    fn from_word(word: &str) -> Option<StageState> {
+        StageState::ALL
+            .into_iter()
+            .find(|state| state.word() == word)
+    }
+
     /// The stage ended: delivered, ended short or finished.
     pub fn ended(self) -> bool {
         matches!(

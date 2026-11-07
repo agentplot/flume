@@ -186,16 +186,13 @@ fn stall_notices(world: &World, recipient: &str) -> Vec<String> {
 }
 
 /// The key of the end of construct's first start, ended short.
-fn construct_short_key() -> String {
-    EndOf::Stage {
+fn construct_short_key() -> EndKey {
+    EndKey::Stage {
         stage: "construct".into(),
         start: 1,
         state: StageState::EndedShort,
-        quiet_from: None,
         answered: 0,
-        end: Box::default(),
     }
-    .key()
 }
 
 /// The secret of the live start of the place's stage at `index`.

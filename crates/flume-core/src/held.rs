@@ -355,7 +355,7 @@ fn stop_short_waited(held: &HeldState, waiting: &WaitingOn) -> Option<StopShortW
         } if *name == stage.name && *start == stage.starts => Some(StopShortWaited {
             words: read.words.clone(),
             needs: read.needs,
-            key: end.of.key(),
+            key: end.of.end_key(),
             addressee: read.addressee.clone(),
         }),
         _ => None,

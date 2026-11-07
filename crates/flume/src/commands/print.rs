@@ -3918,7 +3918,7 @@ mod tests {
                     stop_short: Some(Box::new(flume_seams::StopShortWaited {
                         words: Some("Which design does the brief mean?".into()),
                         needs: Some(StopKind::NeedsAnswer),
-                        key: "stage construct 1 EndedShort ".into(),
+                        key: "stage/construct/1/ended-short".parse().unwrap(),
                         addressee: Some("west/design".into()),
                     })),
                     answerer_read: true,
@@ -3947,7 +3947,7 @@ mod tests {
             json!({
                 "words": "Which design does the brief mean?",
                 "needs": "needs_answer",
-                "key": "stage construct 1 EndedShort ",
+                "key": "stage/construct/1/ended-short",
                 "addressee": "west/design"
             })
         );
