@@ -95,7 +95,7 @@ pub fn code_of_change(
     launched(
         &world
             .engine
-            .launch(&launch("change", name, Some("plan it"))),
+            .launch(&launch("change@2", name, Some("plan it"))),
     )?;
     let id = World::id("change", name);
     world.settle(&id);
