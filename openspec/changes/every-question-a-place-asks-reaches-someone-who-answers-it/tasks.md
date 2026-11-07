@@ -202,7 +202,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 ## 4. A role's run
 
-- [ ] 4.1 In `wake.rs`, have `wake_address` name the run by its entry's
+- [x] 4.1 In `wake.rs`, have `wake_address` name the run by its entry's
   `name`, else `<stream>-<role>`, and launch it in its address's stream
   with its entry's intent and `agents` as the launch's. Have `run_of`
   find a run by its role field first, so a run an earlier flume named by
@@ -222,7 +222,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   carried address, a standing design agent, its crossing to its kind and
   a standing door, and a fault's address, and `crates/flume/tests/commands.rs`
   the wake's refusal and help.
-- [ ] 4.2 Have the settle that reads a role's run's last stage delivered
+- [x] 4.2 Have the settle that reads a role's run's last stage delivered
   declare it done, with no caller's word, and tidy it, so a later end
   wakes another run. Have a role's run's stall delivered to the answerer
   behind its stream, and never to its own address (design 2, 6; 114,
