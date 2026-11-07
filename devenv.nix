@@ -253,6 +253,22 @@ let
       "devenv.lock's nixpkgs gives TypeScript ${pkgs.typescript.version}, devenv.nix pins ${typescriptVersion}";
     pkgs.typescript;
 
+  # The nix project's tools (record 0055; the change
+  # flume-publishes-its-own-flake-and-module, design 11): the nix its type
+  # check and test evaluate with, nixfmt its format runs, and statix and
+  # deadnix its lint runs. nixpkgs' builds as devenv.lock gives them,
+  # asserted to be these versions on the shell's packages, so a lock that
+  # moves one fails to evaluate (core.22). treefmt.nix's nixfmt and deadnix
+  # are the same packages.
+  nixVersion = "2.34.8";
+  nixfmtVersion = "1.5.0";
+  statixVersion = "0.5.8-unstable-2026-07-17";
+  deadnixVersion = "1.3.2";
+
+  # The flake's inputs as flake.lock locks them, fetched by this shell
+  # outside the gate's sandbox (nix/inputs.nix).
+  flakeInputs = import ./nix/inputs.nix { };
+
   # OpenSpec, which root:specs and root:changes validate with and the
   # change profile reads other schemas through: sluice's release, built as
   # nixpkgs builds its older one. Bump the version, then each hash from
@@ -364,12 +380,38 @@ in
   # sluice are the releases pinned above, never the host's (core.22).
   # shellcheck and dash are the herdr plugin's lint and its second shell. The
   # site's tools are bun, and Playwright with the one browser it drives,
-  # from Nix, for the site's screenshots (site/scripts/shots.mjs).
+  # from Nix, for the site's screenshots (site/scripts/shots.mjs). nix,
+  # nixfmt, statix and deadnix are the nix project's, each asserted to its
+  # pin above.
   packages = [
     pkgs.git
     pkgs.jq
     pkgs.shellcheck
     pkgs.dash
+    (
+      assert lib.assertMsg (
+        pkgs.nix.version == nixVersion
+      ) "devenv.lock's nixpkgs gives nix ${pkgs.nix.version}, devenv.nix pins ${nixVersion}";
+      pkgs.nix
+    )
+    (
+      assert lib.assertMsg (
+        pkgs.nixfmt.version == nixfmtVersion
+      ) "devenv.lock's nixpkgs gives nixfmt ${pkgs.nixfmt.version}, devenv.nix pins ${nixfmtVersion}";
+      pkgs.nixfmt
+    )
+    (
+      assert lib.assertMsg (
+        pkgs.statix.version == statixVersion
+      ) "devenv.lock's nixpkgs gives statix ${pkgs.statix.version}, devenv.nix pins ${statixVersion}";
+      pkgs.statix
+    )
+    (
+      assert lib.assertMsg (
+        pkgs.deadnix.version == deadnixVersion
+      ) "devenv.lock's nixpkgs gives deadnix ${pkgs.deadnix.version}, devenv.nix pins ${deadnixVersion}";
+      pkgs.deadnix
+    )
     proto
     vale
     claude
@@ -385,6 +427,11 @@ in
   # shims, and the hook config the shell links into a worktree.
   env.FLUME_HOOKS = "${hookShims}";
   env.FLUME_HOOKS_CONFIG = "${config.git-hooks.configFile}";
+
+  # The flake's inputs, fetched by this shell outside the gate's sandbox and
+  # given to nix:typecheck and nix:test by their store paths, which they
+  # read with no network and no nix daemon (nix/check.sh).
+  env.FLUME_FLAKE_INPUTS = builtins.toJSON flakeInputs.paths;
 
   env.PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers-chromium}";
 
