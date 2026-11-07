@@ -18,11 +18,14 @@
 //! does not declare leaving it pending, and nothing of where the agent
 //! was is kept (132, 143, 190, C.7; core.28).
 
+use super::caller_waits::{asks_in_east, construct_asks};
 use super::carried_conversations::{talk, talking};
-use super::settling::deliver_fix;
+use super::role_waking::answerer_behind;
+use super::settling::{deliver_fix, write_change};
+use super::stage_runs::east_and_west;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Answer, EndStatus, WaitFor};
+use flume_core::{Act, Answer, EndStatus, WaitFor, WaitingPlace, Waits};
 use flume_fakes::Plan;
 use flume_seams::*;
 use std::sync::{Arc, Mutex};
@@ -125,6 +128,46 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: collected_after_a_restart,
         },
         Scenario {
+            name: "end delivery: a question collected by the inbox, then a restart: the next inbox collects nothing and gives the place waiting on a retry of construct, since the stop-short, with its words and key",
+            cites: &["43", "130", "S94"],
+            run: a_question_collected_then_a_restart,
+        },
+        Scenario {
+            name: "end delivery: the inbox of the role a stop-short named gives the place waiting on it, naming the role as the stop-short's addressee",
+            cites: &["43", "41", "193"],
+            run: the_inbox_of_the_role_asked,
+        },
+        Scenario {
+            name: "end delivery: the inbox of the answerer a stall was given to gives the place waiting, though the answerer is not among its recipients",
+            cites: &["43", "130", "193"],
+            run: the_answerers_waiting_places,
+        },
+        Scenario {
+            name: "end delivery: the inbox gives a held question with the hold's words, since when and its bound, and the next inbox gives it the same",
+            cites: &["43", "130"],
+            run: a_held_question_in_the_inbox,
+        },
+        Scenario {
+            name: "end delivery: a stop-short's notice is one line naming the place, its brief's first line cut at 60 characters, construct needing an answer, its key and flume inbox",
+            cites: &["43", "S94", "95"],
+            run: a_stop_shorts_notice,
+        },
+        Scenario {
+            name: "end delivery: a delivery's notice names its key and flume status",
+            cites: &["43", "95"],
+            run: a_deliverys_notice,
+        },
+        Scenario {
+            name: "end delivery: a session's own inbox collects as the session the terminal names, never as the address its environment names, and gives none where no terminal names one",
+            cites: &["43", "7", "190"],
+            run: a_sessions_own_inbox,
+        },
+        Scenario {
+            name: "end delivery: a restarted session's words give the place, the question, its key, its agent kept open and the three ways on, and nothing where nothing waits",
+            cites: &["43", "130", "198", "S94"],
+            run: a_restarted_sessions_words,
+        },
+        Scenario {
             name: "end delivery: two inboxes at once deliver each end once",
             cites: &["43", "75"],
             run: two_inboxes_at_once,
@@ -155,18 +198,18 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: an_agent_revived_under_its_name,
         },
         Scenario {
-            name: "end delivery: a standing entry naming a stream and no session is sought in the session the stream names, in the stream's terminal",
-            cites: &["143", "190", "132"],
-            run: the_session_from_the_entrys_stream,
+            name: "end delivery: a standing entry naming no session is sought in the session its address's stream names, in that stream's terminal",
+            cites: &["143", "190", "132", "193"],
+            run: the_session_from_the_addresss_stream,
         },
         Scenario {
-            name: "end delivery: a standing entry naming neither stream nor session is sought in the terminal's own part where the default stream names no session",
-            cites: &["107", "143", "132"],
+            name: "end delivery: a standing entry of an address of the default stream naming no session is sought in the terminal's own part where the default stream names no session",
+            cites: &["107", "143", "132", "193"],
             run: the_default_streams_own_session,
         },
         Scenario {
-            name: "end delivery: a standing entry naming a stream the host does not declare asks no terminal, and the end stays pending",
-            cites: &["143", "132"],
+            name: "end delivery: a standing entry whose address names a stream the host does not declare asks no terminal, and the end stays pending",
+            cites: &["143", "132", "193"],
             run: a_stream_not_declared,
         },
         Scenario {
@@ -207,9 +250,22 @@ fn ends(world: &World, id: &PlaceId) -> Result<Vec<EndStatus>, String> {
     Ok(world.status(id)?.ends)
 }
 
-/// The notice a place's end is sent as.
-fn notice(name: &str, what: &str) -> String {
-    format!("flume: fix--{name} {what}; read: flume status fix--{name}")
+/// The notice a fix `name`'s end is sent as: its brief, what ended, its
+/// key and the command that reads it, `flume inbox` where the place waits
+/// on its caller's move and `flume status` otherwise (43; design 9).
+fn notice(name: &str, what: &str, key: &str, read: &str) -> String {
+    format!("flume: fix--{name} (mend it) {what} [{key}]; read: {read}")
+}
+
+/// The notice of a fix `name`'s code delivered at its first start, which
+/// waits on no move of its caller's.
+fn delivered(name: &str) -> String {
+    notice(
+        name,
+        "code delivered",
+        "stage/code/1/delivered",
+        &format!("flume status fix--{name}"),
+    )
 }
 
 /// The tidied documents standing on the host.
@@ -232,7 +288,7 @@ fn a_delivery_and_its_record(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![notice("one", "code delivered")],
+        vec![delivered("one")],
         "the notices to ops"
     );
     let ends = ends(&world, &id)?;
@@ -285,7 +341,12 @@ fn an_agent_killed(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![notice("one", "code lost")],
+        vec![notice(
+            "one",
+            "code lost",
+            "stage/code/1/lost",
+            "flume inbox"
+        )],
         "the notices to ops"
     );
     let ends = ends(&world, &id)?;
@@ -336,7 +397,7 @@ fn a_landing_and_a_failure(_: &()) -> Outcome {
     ] {
         let sent = notices
             .iter()
-            .filter(|text| **text == notice("one", &what))
+            .filter(|text| text.starts_with(&format!("flume: fix--one (mend it) {what} [")))
             .count();
         let once = if what == "code delivered" { 2 } else { 1 };
         ensure_eq!(sent, once, "notices of {what}");
@@ -376,7 +437,7 @@ fn a_recipient_asking(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![notice("one", "code delivered")],
+        vec![delivered("one")],
         "the notices once ops asks nothing"
     );
     Ok(())
@@ -419,7 +480,7 @@ fn a_recipient_away_and_back(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![notice("one", "code delivered")],
+        vec![delivered("one")],
         "the notices once ops is back"
     );
     Ok(())
@@ -889,6 +950,11 @@ fn collected_after_a_restart(_: &()) -> Outcome {
             vec![("ops".to_string(), DeliveredBy::Inbox)],
             "the deliveries"
         );
+        ensure_eq!(
+            collected.end.key.to_string(),
+            "stage/code/1/delivered",
+            "the end's key"
+        );
     }
     for name in ["one", "two"] {
         let status = world.status(&World::id("fix", name))?;
@@ -972,22 +1038,26 @@ fn fix_for(world: &World, name: &str, recipient: &str) -> Result<PlaceId, String
     Ok(id)
 }
 
-/// The host's configuration gives `address` the standing agent `agent`,
-/// in `session` and `stream` where given.
-fn stands(world: &World, address: &str, agent: &str, session: Option<&str>, stream: Option<&str>) {
+/// A source gives `address` the standing agent `agent`, in `session`
+/// where given, its stream its address's (132, 193).
+fn stands(world: &World, address: &str, agent: &str, session: Option<&str>) {
     world.host.set_standing(
         address,
         Some(StandingAgent {
+            source: "acme".into(),
             agent: agent.into(),
             session: session.map(str::to_string),
-            stream: stream.map(str::to_string),
+            answers: None,
+            answerer: false,
         }),
     );
 }
 
-/// The planner stands as `madswan-planner` in the session `madswan`.
+/// The planner stands as `madswan-planner` in the session `madswan`, of
+/// the stream `madswan` the host declares.
 fn planner_stands(world: &World) {
-    stands(world, PLANNER, "madswan-planner", Some("madswan"), None);
+    world.host.set_stream("madswan", Some(Stream::default()));
+    stands(world, PLANNER, "madswan-planner", Some("madswan"));
 }
 
 /// A fix named `name` for the planner, launched, begun and delivered, its
@@ -1017,7 +1087,7 @@ fn a_standing_agent_waiting(_: &()) -> Outcome {
     let id = delivered_for_planner(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![notice("one", "code delivered")],
+        vec![delivered("one")],
         "the notices to the standing agent"
     );
     ensure_eq!(
@@ -1063,7 +1133,7 @@ fn a_standing_agent_asking(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![notice("one", "code delivered")],
+        vec![delivered("one")],
         "the notices once it waits"
     );
     Ok(())
@@ -1130,7 +1200,7 @@ fn an_agent_revived_under_its_name(_: &()) -> Outcome {
     let one = delivered_for_planner(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&first),
-        vec![notice("one", "code delivered")],
+        vec![delivered("one")],
         "the first agent's notices"
     );
     world.terminal.remove_agent(&first);
@@ -1142,7 +1212,7 @@ fn an_agent_revived_under_its_name(_: &()) -> Outcome {
     world.settle(&one);
     ensure_eq!(
         world.terminal.notices(&revived),
-        vec![notice("two", "code delivered")],
+        vec![delivered("two")],
         "the revived agent's notices"
     );
     ensure_eq!(
@@ -1153,7 +1223,7 @@ fn an_agent_revived_under_its_name(_: &()) -> Outcome {
     Ok(())
 }
 
-fn the_session_from_the_entrys_stream(_: &()) -> Outcome {
+fn the_session_from_the_addresss_stream(_: &()) -> Outcome {
     let world = World::new();
     let other = world.other_terminal("other");
     world.host.set_stream(
@@ -1164,7 +1234,7 @@ fn the_session_from_the_entrys_stream(_: &()) -> Outcome {
         }),
     );
     world.host.set_display("w", Some("other"), None, None);
-    stands(&world, "w/planner", "w-planner", None, Some("w"));
+    stands(&world, "w/planner", "w-planner", None);
     let wrong = world
         .terminal
         .add_agent(Some("w-main"), "w-planner", AgentState::Waiting);
@@ -1175,7 +1245,7 @@ fn the_session_from_the_entrys_stream(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         other.notices(&at),
-        vec![notice("one", "code delivered")],
+        vec![delivered("one")],
         "the notices in w's terminal"
     );
     ensure!(
@@ -1197,7 +1267,7 @@ fn the_session_from_the_entrys_stream(_: &()) -> Outcome {
 
 fn the_default_streams_own_session(_: &()) -> Outcome {
     let world = World::new();
-    stands(&world, "w/planner", "w-planner", None, None);
+    stands(&world, "default/planner", "w-planner", None);
     let elsewhere = world
         .terminal
         .add_agent(Some("w"), "w-planner", AgentState::Waiting);
@@ -1205,12 +1275,12 @@ fn the_default_streams_own_session(_: &()) -> Outcome {
         .terminal
         .add_agent(None, "w-planner", AgentState::Waiting);
     world.queue.plan_submits(vec![Plan::Hold]);
-    let id = fix_for(&world, "one", "w/planner")?;
+    let id = fix_for(&world, "one", "default/planner")?;
     deliver_fix(&world, &id);
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![notice("one", "code delivered")],
+        vec![delivered("one")],
         "the notices in the terminal's own part"
     );
     ensure!(
@@ -1227,12 +1297,14 @@ fn the_default_streams_own_session(_: &()) -> Outcome {
 
 fn a_stream_not_declared(_: &()) -> Outcome {
     let world = World::new();
-    stands(&world, PLANNER, "madswan-planner", None, Some("gone"));
+    stands(&world, "gone/planner", "madswan-planner", None);
     let at = world
         .terminal
         .add_agent(Some("gone"), "madswan-planner", AgentState::Waiting);
     world.queue.plan_submits(vec![Plan::Hold]);
-    let id = delivered_for_planner(&world, "one")?;
+    let id = fix_for(&world, "one", "gone/planner")?;
+    deliver_fix(&world, &id);
+    world.settle(&id);
     ensure_eq!(world.terminal.log.count("agents_in"), 0, "parts asked");
     ensure!(
         world.terminal.notices(&at).is_empty(),
@@ -1240,7 +1312,7 @@ fn a_stream_not_declared(_: &()) -> Outcome {
     );
     ensure_eq!(
         pending(&world, &id)?,
-        vec![vec![PLANNER.to_string()]],
+        vec![vec!["gone/planner".to_string()]],
         "pending"
     );
     Ok(())
@@ -1314,7 +1386,7 @@ fn a_lost_talk_with_a_bare_agent(_: &()) -> Outcome {
     ensure_eq!(
         notices,
         vec![
-            "flume: research--one talk lost, and flume left the agent the terminal brought back in its pane; read: flume status research--one"
+            "flume: research--one (weigh the options) talk lost, and flume left the agent the terminal brought back in its pane [stage/talk/1/lost]; read: flume inbox"
                 .to_string()
         ],
         "the notices to ops"
@@ -1331,8 +1403,330 @@ fn a_lost_talk_with_no_agent(_: &()) -> Outcome {
     ensure!(!end.left_in_pane, "talk's lost end says an agent was left");
     ensure_eq!(
         notices,
-        vec!["flume: research--one talk lost; read: flume status research--one".to_string()],
+        vec![
+            "flume: research--one (weigh the options) talk lost [stage/talk/1/lost]; read: flume inbox"
+                .to_string()
+        ],
         "the notices to ops"
+    );
+    Ok(())
+}
+
+/// The places the inbox gave as waiting on its recipient.
+fn waiting(answer: &Answer) -> Result<Vec<WaitingPlace>, String> {
+    match answer {
+        Answer::Inbox { waiting, .. } => Ok(waiting.clone()),
+        other => Err(format!("the inbox answered {other:?}")),
+    }
+}
+
+/// The key of construct's first start, ended short.
+fn construct_short() -> EndKey {
+    "stage/construct/1/ended-short".parse().expect("a key")
+}
+
+fn a_question_collected_then_a_restart(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, asked) = construct_asks(&world, "plan", &["ops"], None)?;
+    let first = world.engine().inbox("ops");
+    ensure_eq!(
+        collected(&first)?,
+        vec!["change--plan construct needs an answer".to_string()],
+        "what ops collected first"
+    );
+    let before = world.held(&id);
+    let again = world.engine().inbox("ops");
+    ensure!(collected(&again)?.is_empty(), "the restart collected again");
+    ensure_eq!(world.held(&id), before, "the second inbox wrote the place");
+    let waits = waiting(&again)?;
+    ensure_eq!(waits.len(), 1, "the places waiting on ops: {waits:?}");
+    let place = &waits[0];
+    ensure_eq!(
+        (
+            place.place.clone(),
+            place.kind.as_str(),
+            place.name.as_str(),
+            place.brief.as_deref()
+        ),
+        (id.clone(), "change", "plan", Some("plan it")),
+        "the place"
+    );
+    ensure_eq!(
+        (
+            place.waiting_on.act,
+            place.waiting_on.stage.as_deref(),
+            place.waiting_on.why
+        ),
+        (Act::Retry, Some("construct"), Waits::Answer),
+        "the move"
+    );
+    ensure!(
+        place.waiting_on.since.is_some_and(|since| since >= asked),
+        "since when: {:?}",
+        place.waiting_on.since
+    );
+    let stop_short = place.stop_short.clone().ok_or("no stop-short")?;
+    ensure_eq!(
+        (
+            stop_short.words.as_deref(),
+            stop_short.needs,
+            stop_short.key,
+            stop_short.addressee
+        ),
+        (
+            Some("Which design does the brief mean?"),
+            Some(StopKind::NeedsAnswer),
+            construct_short(),
+            None
+        ),
+        "the stop-short"
+    );
+    ensure!(place.hold.is_none(), "a hold given: {:?}", place.hold);
+    ensure!(
+        waiting(&world.engine().inbox("planner"))?.is_empty(),
+        "another recipient's inbox gives the place"
+    );
+    Ok(())
+}
+
+fn the_inbox_of_the_role_asked(_: &()) -> Outcome {
+    let world = World::new();
+    east_and_west(&world);
+    answerer_behind(&world, "east");
+    let (id, _) = asks_in_east(&world, &["east/planner"], Some("ops"))?;
+    let waits = waiting(&world.engine.inbox("east/ops"))?;
+    let place = waits.iter().find(|place| place.place == id).ok_or(format!(
+        "east/ops's inbox gives no waiting place: {waits:?}"
+    ))?;
+    ensure_eq!(
+        place
+            .stop_short
+            .as_ref()
+            .and_then(|stop_short| stop_short.addressee.clone()),
+        Some("east/ops".to_string()),
+        "the stop-short's addressee"
+    );
+    ensure_eq!(place.stream.as_str(), "east", "the place's stream");
+    ensure!(
+        waiting(&world.engine.inbox("east/design"))?
+            .iter()
+            .all(|place| place.place != id),
+        "a role neither asked nor a recipient is given the place"
+    );
+    Ok(())
+}
+
+fn the_answerers_waiting_places(_: &()) -> Outcome {
+    let world = World::new();
+    east_and_west(&world);
+    answerer_behind(&world, "east");
+    world.terminal.add_session("ops", AgentState::Waiting);
+    world.host.set_recipient(None);
+    world.terminal.set_session(Some("ops"));
+    let (id, _) = asks_in_east(&world, &[], None)?;
+    ensure!(
+        waiting(&world.engine.inbox("east/operator"))?
+            .iter()
+            .all(|place| place.place != id),
+        "the answerer is given a place that has not stalled"
+    );
+    world.host.advance(STALL_AFTER);
+    world.settle(&id);
+    let held = world.held(&id).ok_or("no place")?;
+    ensure!(
+        !held.place.recipients.contains(&"east/operator".to_string()),
+        "the answerer is a recipient: {:?}",
+        held.place.recipients
+    );
+    let waits = waiting(&world.engine.inbox("east/operator"))?;
+    let place = waits.iter().find(|place| place.place == id).ok_or(format!(
+        "the answerer's inbox gives no waiting place: {waits:?}"
+    ))?;
+    ensure_eq!(
+        place
+            .stop_short
+            .as_ref()
+            .map(|stop_short| stop_short.key.clone()),
+        Some(construct_short()),
+        "the stop-short's key"
+    );
+    Ok(())
+}
+
+fn a_held_question_in_the_inbox(_: &()) -> Outcome {
+    let world = World::new();
+    east_and_west(&world);
+    answerer_behind(&world, "east");
+    let (id, _) = asks_in_east(&world, &["east/planner"], None)?;
+    world.host.advance(60);
+    let held_at = world.host.now();
+    let words = "east-planner has it";
+    let answer = world
+        .engine
+        .hold(&id, HoldOn::Waiting, words, Some(60 * 60));
+    ensure!(
+        answer.refusal().is_none(),
+        "the hold was refused: {answer:?}"
+    );
+    let due = Some(Hold {
+        on: HoldOn::Waiting,
+        words: Some(words.into()),
+        since: held_at,
+        bound: Some(60 * 60),
+        lapsed: None,
+    });
+    for read in ["the first", "the next"] {
+        let waits = waiting(&world.engine.inbox("east/planner"))?;
+        let place = waits
+            .iter()
+            .find(|place| place.place == id)
+            .ok_or(format!("{read} inbox gives no waiting place: {waits:?}"))?;
+        ensure_eq!(
+            place.hold.clone(),
+            due.clone(),
+            "the hold {read} inbox gives"
+        );
+    }
+    Ok(())
+}
+
+/// A brief whose first line runs past what a notice gives of it.
+const LONG_BRIEF: &str = "Every question a place asks reaches someone who answers it, whichever stream asked\n\nThe rest of the brief.";
+
+/// [`LONG_BRIEF`]'s first line as a notice gives it: cut at 60
+/// characters, the ellipsis saying where.
+const CUT_BRIEF: &str = "Every question a place asks reaches someone who answers it,…";
+
+/// The change `every-question` launched for `ops` with [`LONG_BRIEF`] and
+/// begun.
+fn every_question(world: &World) -> Result<PlaceId, String> {
+    let mut change = launch("change", "every-question", Some(LONG_BRIEF));
+    change.recipients = vec!["ops".into()];
+    launched(&world.engine.launch(&change))?;
+    let id = World::id("change", "every-question");
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "construct"),
+        Some(StageState::Begun),
+        "construct"
+    );
+    Ok(id)
+}
+
+fn a_stop_shorts_notice(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    let id = every_question(&world)?;
+    let construct = World::identity("change", "every-question", "construct", 1);
+    let secret = world
+        .held(&id)
+        .and_then(|held| held.stages[0].start.clone())
+        .ok_or("no start")?
+        .secret;
+    let asked = world.host.now();
+    let answer = world.engine.needs(
+        &construct.to_string(),
+        &secret.0,
+        "Which design does the brief mean?\nThe brief names two.",
+        StopKind::NeedsAnswer,
+    );
+    ensure!(answer.refusal().is_none(), "the stop-short: {answer:?}");
+    world.settle(&id);
+    ensure!(
+        CUT_BRIEF.trim_end_matches('…').chars().count() <= 60,
+        "the brief given is longer than 60 characters"
+    );
+    let notices = world.terminal.notices("ops");
+    ensure_eq!(
+        notices,
+        vec![format!(
+            "flume: change--every-question ({CUT_BRIEF}) construct needs an answer, its agent kept open for the answer until {} [stage/construct/1/ended-short]; read: flume inbox",
+            asked + flume_core::KEEP_OPEN
+        )],
+        "the notices to ops"
+    );
+    ensure!(
+        notices.iter().all(|notice| !notice.contains('\n')),
+        "a notice of more than one line"
+    );
+    Ok(())
+}
+
+fn a_deliverys_notice(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    let id = every_question(&world)?;
+    write_change(&world, "every-question");
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.notices("ops"),
+        vec![format!(
+            "flume: change--every-question ({CUT_BRIEF}) construct delivered [stage/construct/1/delivered]; read: flume status change--every-question"
+        )],
+        "the notices to ops"
+    );
+    Ok(())
+}
+
+fn a_sessions_own_inbox(_: &()) -> Outcome {
+    let world = World::new();
+    east_and_west(&world);
+    answerer_behind(&world, "east");
+    world.keep_watch();
+    let (id, _) = asks_in_east(&world, &["east/planner"], None)?;
+    world.host.set_recipient(Some("east/planner"));
+    world.terminal.set_session(None);
+    ensure!(
+        world.engine.session_inbox().is_none(),
+        "an inbox where no terminal names the session"
+    );
+    world.terminal.set_session(Some("ops"));
+    let answer = world.engine.session_inbox().ok_or("no inbox")?;
+    ensure!(
+        matches!(&answer, Answer::Inbox { recipient, ends, waiting }
+            if recipient == "ops" && ends.is_empty() && waiting.is_empty()),
+        "the session's inbox: {answer:?}"
+    );
+    let stop_short = ends(&world, &id)?
+        .into_iter()
+        .find(|end| matches!(end.end.of, EndOf::Stage { .. }))
+        .ok_or("no stop-short")?;
+    ensure!(
+        stop_short.pending_for.contains(&"east/planner".to_string()),
+        "the stop-short is no longer pending for east/planner: {:?}",
+        stop_short.pending_for
+    );
+    Ok(())
+}
+
+fn a_restarted_sessions_words(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.set_session(Some("ops"));
+    world.host.set_recipient(None);
+    let (_, asked) = construct_asks(&world, "plan", &["ops"], None)?;
+    collected(&world.engine().inbox("ops"))?;
+    let answer = world.engine.session_inbox().ok_or("no inbox")?;
+    let words = flume_core::session_words(&answer).ok_or("no words")?;
+    let until = asked + flume_core::KEEP_OPEN;
+    for said in [
+        "what waits on it, ops, from `flume inbox`".to_string(),
+        "change--plan (plan it), in the stream default, waits on a retry of construct".to_string(),
+        "Its stop-short stage/construct/1/ended-short needs an answer:".to_string(),
+        "  Which design does the brief mean?".to_string(),
+        format!("Its agent is kept open for the answer until {until}."),
+        "- answer it, naming its key: flume retry change--plan --stage construct --answers stage/construct/1/ended-short --words \"<answer>\"".to_string(),
+        "  or, while its agent is kept open: flume tell change--plan --answers stage/construct/1/ended-short \"<answer>\"".to_string(),
+        "- hold the move with your words, saying who has it: flume hold change--plan \"<words>\" --waiting --for <time>".to_string(),
+        "- leave it: once it stalls, the answerer behind its stream has it.".to_string(),
+    ] {
+        ensure!(words.contains(&said), "{said:?} not in the words:\n{words}");
+    }
+    world.terminal.set_session(Some("lead"));
+    let nothing = world.engine.session_inbox().ok_or("no inbox")?;
+    ensure_eq!(
+        flume_core::session_words(&nothing),
+        None,
+        "the words where nothing waits"
     );
     Ok(())
 }

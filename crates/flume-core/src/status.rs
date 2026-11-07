@@ -403,6 +403,7 @@ impl Engine {
             cannot_read,
             failures: held.failures.clone(),
             recipients: place.recipients.clone(),
+            recipients_from: place.recipients_from.clone(),
             hold_words: place.hold_words.clone(),
             waiting_on: waiting.as_ref().map(|waiting| waiting.on.clone()),
             stalled: waiting.as_ref().is_some_and(|waiting| waiting.stalled),
@@ -433,36 +434,65 @@ impl Engine {
 impl Engine {
     /// Each source the host declares as it stands when asked, by name: its
     /// file, its packages' directory and every identity that directory
-    /// holds, or why its file or its directory cannot be read (56, 159,
-    /// 191; core.15).
-    pub(crate) fn host_sources(&self) -> Vec<SourceStatus> {
+    /// holds, or why its file or its directory cannot be read; and its
+    /// roles as `roles`, read once for the status, give them: its roles
+    /// file, each address it declares, each entry that declares nothing,
+    /// with why, or why the file cannot be read (56, 159, 191, 193;
+    /// core.15).
+    pub(crate) fn host_sources(&self, roles: &HostRoles) -> Vec<SourceStatus> {
         let kinds = self.resolver.kinds();
         self.host
             .sources()
             .into_iter()
-            .map(|(name, source)| match source.read {
-                HostSourceRead::Read { kinds_dir } => {
-                    let (kinds, cannot_read) = match kinds.read_source(&name, &kinds_dir) {
-                        SourceRead::Read { kinds } => {
-                            (kinds.into_iter().map(|kind| kind.spelled).collect(), None)
+            .map(|(name, source)| {
+                let declared = roles
+                    .declared
+                    .iter()
+                    .filter(|(_, entry)| entry.source() == name)
+                    .map(|(address, _)| address.clone())
+                    .collect();
+                let roles_refused = roles
+                    .refused
+                    .iter()
+                    .filter(|refused| refused.source == name)
+                    .cloned()
+                    .collect();
+                let roles_cannot_read = roles.unread.get(&name).map(|unread| unread.reason.clone());
+                match source.read {
+                    HostSourceRead::Read {
+                        kinds_dir,
+                        roles: roles_file,
+                    } => {
+                        let (kinds, cannot_read) = match kinds.read_source(&name, &kinds_dir) {
+                            SourceRead::Read { kinds } => {
+                                (kinds.into_iter().map(|kind| kind.spelled).collect(), None)
+                            }
+                            SourceRead::CouldNotRead { reason } => (vec![], Some(reason)),
+                        };
+                        SourceStatus {
+                            name,
+                            source_file: source.file,
+                            kinds_dir: Some(kinds_dir),
+                            kinds,
+                            cannot_read,
+                            roles_file,
+                            roles: declared,
+                            roles_refused,
+                            roles_cannot_read,
                         }
-                        SourceRead::CouldNotRead { reason } => (vec![], Some(reason)),
-                    };
-                    SourceStatus {
+                    }
+                    HostSourceRead::CouldNotRead { reason } => SourceStatus {
                         name,
                         source_file: source.file,
-                        kinds_dir: Some(kinds_dir),
-                        kinds,
-                        cannot_read,
-                    }
+                        kinds_dir: None,
+                        kinds: vec![],
+                        cannot_read: Some(reason),
+                        roles_file: None,
+                        roles: declared,
+                        roles_refused,
+                        roles_cannot_read,
+                    },
                 }
-                HostSourceRead::CouldNotRead { reason } => SourceStatus {
-                    name,
-                    source_file: source.file,
-                    kinds_dir: None,
-                    kinds: vec![],
-                    cannot_read: Some(reason),
-                },
             })
             .collect()
     }

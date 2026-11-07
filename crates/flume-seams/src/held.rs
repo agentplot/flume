@@ -36,14 +36,17 @@ pub struct HeldState {
     /// pending for every recipient it has no delivery to (43).
     #[serde(default)]
     pub ends: Vec<EndHeld>,
-    /// The role's address `<partition>/<role>` a role's run serves, by
+    /// The role's address `<stream>/<role>` a role's run serves, by
     /// which a command run in it collects for the address (132); none
     /// for any other place.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
     /// Each hold on a stage or the submission, the launch's and those put
-    /// after it, with its words and since when; a retry naming its stage
-    /// or the submission ends it, and nothing else does (47, 49, 130).
+    /// after it, with its words and since when, a retry naming its stage
+    /// or the submission ending it and nothing else; and the hold on the
+    /// move the place waits on, with its words, since when and its bound,
+    /// ended by the move made, a retry or a drop, and lapsed at its bound
+    /// (47, 49, 52, 130).
     #[serde(default)]
     pub holds: Vec<Hold>,
     /// The move the place waits on its caller for, since when, and
@@ -57,9 +60,9 @@ pub struct HeldState {
     #[serde(default = "stall_after")]
     pub stall_after: Seconds,
     /// Why a role's address this place has an end pending for was not
-    /// woken at the last settle, by the address: the configuration naming
-    /// nothing for it, or the wake's launch refused; gone once it is
-    /// woken (132; core.28).
+    /// woken at the last settle, by the address: no source declaring a run
+    /// for it, or the wake's launch refused; gone once it is woken (132,
+    /// 193; core.28).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub unwoken: BTreeMap<String, String>,
     /// Each move of a stage of the place, or of its intent at a start of
@@ -140,10 +143,19 @@ impl HeldState {
     pub fn submission_hold(&self) -> Option<&Hold> {
         self.holds.iter().find(|hold| hold.on == HoldOn::Submission)
     }
+
+    /// The hold on the move the place waits on, if it is held and has not
+    /// lapsed (130).
+    pub fn waiting_hold(&self) -> Option<&Hold> {
+        self.holds
+            .iter()
+            .find(|hold| hold.on == HoldOn::Waiting && hold.lapsed.is_none())
+    }
 }
 
-/// A hold on a stage or the submission, with its caller's words and
-/// since when (47, 130).
+/// A hold on a stage, the submission or the move the place waits on, with
+/// its caller's words and since when, and, on the waiting move, its bound
+/// and when it lapsed (47, 130).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hold {
     #[serde(flatten)]
@@ -153,14 +165,24 @@ pub struct Hold {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub words: Option<String>,
     pub since: Seconds,
+    /// For a hold on the waiting move, how long it holds from its since,
+    /// none where it holds until the move is made (130).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bound: Option<Seconds>,
+    /// When the settle that read its bound passed lapsed it, after which it
+    /// holds nothing and the place stalls again (130).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lapsed: Option<Seconds>,
 }
 
-/// What a hold holds: a stage, or the submission (47).
+/// What a hold holds: a stage, the submission (47), or the move the place
+/// waits on its caller for (130).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "on", rename_all = "snake_case")]
 pub enum HoldOn {
     Stage { stage: String },
     Submission,
+    Waiting,
 }
 
 /// The move a place waits on its caller for, as the settle last read it,
@@ -286,12 +308,33 @@ pub struct EndHeld {
     /// (42).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub answer: Option<AnswerHeld>,
+    /// For a stop-short needing an answer, the answer being taken for it
+    /// now, claimed before its words are handed to the agent kept open or
+    /// a fresh agent is started to carry them, so a second answer at once
+    /// is refused with nothing typed; gone once the answer is recorded or
+    /// not taken, and none in an end written before (42, 53, 75).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claim: Option<AnswerClaim>,
+}
+
+/// An answer being taken for a stop-short: who gives it and the key it
+/// named, as its command names them, when it was claimed, and until when
+/// the claim holds, past which a later answer may take the stop-short, as
+/// where the command that claimed it was ended before it let go (42, 75).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnswerClaim {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<EndKey>,
+    pub at: Seconds,
+    pub until: Seconds,
 }
 
 /// An answer to a stop-short: the caller's words, the act they came by,
-/// when flume took them and, where they were handed to the session of the
-/// agent kept open for them, when they were sent and received there (42,
-/// 53, 54, 198).
+/// when flume took them, who gave them and the key they named, and, where
+/// they were handed to the session of the agent kept open for them, when
+/// they were sent and received there (42, 53, 54, 198).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnswerHeld {
     pub words: String,
@@ -299,6 +342,15 @@ pub struct AnswerHeld {
     pub at: Seconds,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session: Option<Handed>,
+    /// Who gave the answer, as the answering command's recipient named
+    /// it; none where it named none, and in an answer written before (42).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by: Option<String>,
+    /// The key of the stop-short the answer named, taken only while the
+    /// place waited on it; none where it named none, and in an answer
+    /// written before (42).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<EndKey>,
 }
 
 /// An answer handed to the session of an agent kept open: when it was
@@ -353,13 +405,51 @@ impl EndHeld {
             .any(|delivery| delivery.recipient == recipient)
     }
 
-    /// The recipients of `recipients` it stands pending for (43).
+    /// The recipients of the end, of a place whose recipients are
+    /// `recipients`: for a stop-short that named a role, that role's
+    /// address alone; otherwise those, then, for a stall, the role the
+    /// stop-short it waits on named and the answerer behind the place's
+    /// stream, each once (41, 43, 130, 193).
+    pub fn recipients(&self, recipients: &[String]) -> Vec<String> {
+        if let EndOf::Stage { end, .. } = &self.of {
+            if let Some(addressee) = &end.addressee {
+                return vec![addressee.clone()];
+            }
+        }
+        let mut every = recipients.to_vec();
+        if let EndOf::Stall {
+            answerer,
+            stop_short,
+            ..
+        } = &self.of
+        {
+            let addressee = stop_short
+                .as_ref()
+                .and_then(|stop_short| stop_short.addressee.as_ref());
+            for also in [addressee, answerer.as_ref()].into_iter().flatten() {
+                if !every.contains(also) {
+                    every.push(also.clone());
+                }
+            }
+        }
+        every
+    }
+
+    /// The recipients of the end it stands pending for, of a place whose
+    /// recipients are `recipients` (43, 130).
     pub fn pending(&self, recipients: &[String]) -> Vec<String> {
-        recipients
-            .iter()
+        self.recipients(recipients)
+            .into_iter()
             .filter(|recipient| !self.delivered_to(recipient))
-            .cloned()
             .collect()
+    }
+
+    /// Whether the end stands pending for `recipient`, of a place whose
+    /// recipients are `recipients` (43).
+    pub fn pending_to(&self, recipients: &[String], recipient: &str) -> bool {
+        self.pending(recipients)
+            .iter()
+            .any(|pending| pending == recipient)
     }
 }
 
@@ -388,7 +478,7 @@ pub enum EndOf {
         /// What was read of it: the head or report, the agent's words and
         /// whether it needs an answer or found work, or what flume read of
         /// an agent lost, never begun or stuck; boxed, so an end stays
-        /// small beside a submission's.
+        /// small beside a submission's or a stall's.
         end: Box<StageEnd>,
     },
     Submission {
@@ -398,17 +488,60 @@ pub enum EndOf {
         verdict: Verdict,
     },
     Stall {
-        /// Since when the place waited on its caller (130).
+        /// Since when the place waited on its caller under no hold's
+        /// words: since the move, or since the hold on it lapsed (130).
         since: Seconds,
         /// The move it waits on.
         waiting: String,
+        /// The answerer behind the place's stream as its sources declared
+        /// it when the stall was read, delivered the stall besides the
+        /// place's recipients; none where no role stood behind the stream,
+        /// where the place is that answerer's own run, or where an earlier
+        /// flume wrote none (130, 132, 193).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        answerer: Option<String>,
+        /// The stop-short the place waits on, where the move answers one,
+        /// so a reader who never saw the place has the question whole;
+        /// none where it answers none, or an earlier flume wrote none
+        /// (41, 42, 130, 193); boxed, so an end stays small.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        stop_short: Option<Box<StopShortWaited>>,
+        /// Whether the flume that recorded it read the answerer and the
+        /// stop-short: false only for a stall an earlier flume recorded,
+        /// which the first settle that reads it, while the place still
+        /// waits on its caller under no hold's words, reads them for
+        /// (130, 193).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        answerer_read: bool,
+        /// The words of the hold on the waiting move whose bound passed,
+        /// stalling the place again; none for a stall under no hold
+        /// (130, 193).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        lapsed: Option<String>,
     },
 }
 
+/// The stop-short a stalled place waits on, as the stall read it: its
+/// words, whether it needs an answer or found work, its end's key, and the
+/// role's address it named, whole, none where it named none (41, 42, 43,
+/// 130, 193).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StopShortWaited {
+    pub words: Option<String>,
+    #[serde(default)]
+    pub needs: Option<StopKind>,
+    /// The key of the stop-short's end, as callers name it (42, 43).
+    pub key: EndKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub addressee: Option<String>,
+}
+
 impl EndOf {
-    /// The end's key: what ended, without what was read of it. A stage's
+    /// The end's key as held state records it, by which a settle records
+    /// the end once: what ended, without what was read of it. A stage's
     /// names the answers its start had taken only where there are some, so
-    /// every key written before reads as it did (43).
+    /// every key written before reads as it did (43). Callers see it as
+    /// [`EndKey`], made from the same parts.
     pub fn key(&self) -> String {
         match self {
             EndOf::Stage {
@@ -430,17 +563,189 @@ impl EndOf {
                 }
             }
             EndOf::Submission { submit, verdict } => {
-                let outcome = match verdict {
-                    Verdict::Landed { .. } => "landed",
-                    Verdict::Failed { .. } => "failed",
-                    Verdict::Conflict { .. } => "conflict",
-                    Verdict::Withdrawn => "withdrawn",
-                    Verdict::Refused { .. } => "refused",
-                };
-                format!("submission {submit} {outcome}")
+                format!("submission {submit} {}", KeyOutcome::of(verdict).word())
             }
             EndOf::Stall { since, .. } => format!("stall {since}"),
         }
+    }
+
+    /// The end's key as callers see it and name it, made from the parts
+    /// [`EndOf::key`] is made from (42, 43).
+    pub fn end_key(&self) -> EndKey {
+        match self {
+            EndOf::Stage {
+                stage,
+                start,
+                state,
+                answered,
+                ..
+            } => EndKey::Stage {
+                stage: stage.clone(),
+                start: *start,
+                state: *state,
+                answered: *answered,
+            },
+            EndOf::Submission { submit, verdict } => EndKey::Submission {
+                submit: *submit,
+                outcome: KeyOutcome::of(verdict),
+            },
+            EndOf::Stall { since, .. } => EndKey::Stall { since: *since },
+        }
+    }
+}
+
+/// An end's key as callers see it and name it, one token:
+/// `stage/<stage>/<start>/<state>`, with `/<answered>` after it where the
+/// start had taken that many answers in its session when the end was read,
+/// so a second stop-short of one start kept open is a key of its own;
+/// `submission/<n>/<outcome>`; or `stall/<since>`. Each notice, collected
+/// end, waiting place and status gives it, and an answer names the
+/// stop-short it answers by it. It is read back from that token alone,
+/// refused in any other form, naming the forms (42, 43, 198).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub enum EndKey {
+    Stage {
+        stage: String,
+        start: u32,
+        state: StageState,
+        answered: u32,
+    },
+    Submission {
+        submit: u32,
+        outcome: KeyOutcome,
+    },
+    Stall {
+        since: Seconds,
+    },
+}
+
+/// The forms an end's key takes, as a refusal names them (42, 43).
+pub const END_KEY_FORMS: &str = "stage/<stage>/<start>/<state>, with /<answered> after it where its start had taken answers in its session, submission/<n>/<outcome>, or stall/<since>";
+
+impl std::fmt::Display for EndKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EndKey::Stage {
+                stage,
+                start,
+                state,
+                answered,
+            } => {
+                write!(f, "stage/{stage}/{start}/{}", state.word())?;
+                if *answered != 0 {
+                    write!(f, "/{answered}")?;
+                }
+                Ok(())
+            }
+            EndKey::Submission { submit, outcome } => {
+                write!(f, "submission/{submit}/{}", outcome.word())
+            }
+            EndKey::Stall { since } => write!(f, "stall/{since}"),
+        }
+    }
+}
+
+impl std::str::FromStr for EndKey {
+    type Err = String;
+
+    /// Reads a key from its token, refusing any other form, a number
+    /// written otherwise than the key writes it among them, naming the
+    /// forms (42, 43).
+    fn from_str(given: &str) -> Result<EndKey, String> {
+        let refused = || format!("`{given}` is no end's key: a key is {END_KEY_FORMS}");
+        let number = |part: &str| part.parse::<u64>().map_err(|_| refused());
+        let small = |part: &str| part.parse::<u32>().map_err(|_| refused());
+        let parts: Vec<&str> = given.split('/').collect();
+        let key = match parts.as_slice() {
+            ["stage", stage, start, state] | ["stage", stage, start, state, _]
+                if !stage.is_empty() =>
+            {
+                EndKey::Stage {
+                    stage: stage.to_string(),
+                    start: small(start)?,
+                    state: StageState::from_word(state).ok_or_else(refused)?,
+                    answered: match parts.get(4) {
+                        Some(answered) => small(answered)?,
+                        None => 0,
+                    },
+                }
+            }
+            ["submission", submit, outcome] => EndKey::Submission {
+                submit: small(submit)?,
+                outcome: KeyOutcome::from_word(outcome).ok_or_else(refused)?,
+            },
+            ["stall", since] => EndKey::Stall {
+                since: number(since)?,
+            },
+            _ => return Err(refused()),
+        };
+        if key.to_string() != given {
+            return Err(refused());
+        }
+        Ok(key)
+    }
+}
+
+impl TryFrom<String> for EndKey {
+    type Error = String;
+
+    fn try_from(given: String) -> Result<EndKey, String> {
+        given.parse()
+    }
+}
+
+impl From<EndKey> for String {
+    fn from(key: EndKey) -> String {
+        key.to_string()
+    }
+}
+
+/// A submission's outcome as its end's key names it (43).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeyOutcome {
+    Landed,
+    Failed,
+    Conflict,
+    Withdrawn,
+    Refused,
+}
+
+impl KeyOutcome {
+    const ALL: [KeyOutcome; 5] = [
+        KeyOutcome::Landed,
+        KeyOutcome::Failed,
+        KeyOutcome::Conflict,
+        KeyOutcome::Withdrawn,
+        KeyOutcome::Refused,
+    ];
+
+    /// The outcome of the merge queue's verdict.
+    pub fn of(verdict: &Verdict) -> KeyOutcome {
+        match verdict {
+            Verdict::Landed { .. } => KeyOutcome::Landed,
+            Verdict::Failed { .. } => KeyOutcome::Failed,
+            Verdict::Conflict { .. } => KeyOutcome::Conflict,
+            Verdict::Withdrawn => KeyOutcome::Withdrawn,
+            Verdict::Refused { .. } => KeyOutcome::Refused,
+        }
+    }
+
+    /// The outcome's word in a key.
+    pub fn word(self) -> &'static str {
+        match self {
+            KeyOutcome::Landed => "landed",
+            KeyOutcome::Failed => "failed",
+            KeyOutcome::Conflict => "conflict",
+            KeyOutcome::Withdrawn => "withdrawn",
+            KeyOutcome::Refused => "refused",
+        }
+    }
+
+    fn from_word(word: &str) -> Option<KeyOutcome> {
+        KeyOutcome::ALL
+            .into_iter()
+            .find(|outcome| outcome.word() == word)
     }
 }
 
@@ -461,6 +766,20 @@ pub enum DeliveredBy {
     Notice,
     Wait,
     Inbox,
+}
+
+/// Where a launch took a place's recipients from, the first of these
+/// that gave any: the recipients the launch named, `FLUME_RECIPIENT` in
+/// the launching command's environment, the session the launching
+/// command ran in as the terminal names it, or the answerer behind the
+/// place's stream, with the source that declares it (7, 190, 193).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "from", rename_all = "kebab-case")]
+pub enum RecipientsFrom {
+    Launch,
+    Environment,
+    Session,
+    Answerer { source: String },
 }
 
 /// Where a launch read its base's revision (9, 56, 126, C.1).
@@ -527,10 +846,15 @@ pub struct PlaceRecord {
     /// The words of each hold the launch put, by stage name (7, 130).
     #[serde(default)]
     pub hold_words: BTreeMap<String, String>,
-    /// The recipients of the place's ends, as the launch named them (7,
-    /// 8, 43).
+    /// The recipients of the place's ends, as the launch fixed them (7,
+    /// 8, 43, 193).
     #[serde(default)]
     pub recipients: Vec<String>,
+    /// Where the launch took its recipients from, the first of the four
+    /// that gave any; none for a role's run, which has none, and for a
+    /// place launched before flume kept it (7, 56, 193).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recipients_from: Option<RecipientsFrom>,
     /// The stream the place runs in, fixed at its launch, and where it
     /// came from (8, 143).
     pub stream: StreamHeld,
@@ -578,6 +902,16 @@ impl PlaceRecord {
     /// The place as its agents' identities name it, `<kind>--<name>`.
     pub fn short(&self) -> String {
         format!("{}--{}", self.kind.name, self.name)
+    }
+
+    /// The first line of its brief that holds anything, trimmed; none
+    /// where it has no brief or a blank one (43; design 9).
+    pub fn brief_line(&self) -> Option<&str> {
+        self.brief
+            .as_deref()?
+            .lines()
+            .map(str::trim)
+            .find(|line| !line.is_empty())
     }
 }
 
@@ -677,6 +1011,54 @@ pub enum StageState {
 }
 
 impl StageState {
+    const ALL: [StageState; 16] = [
+        StageState::NotReached,
+        StageState::OnHold,
+        StageState::WaitingOnReadiness,
+        StageState::WaitingForRoom,
+        StageState::Refused,
+        StageState::Starting,
+        StageState::Started,
+        StageState::Begun,
+        StageState::NeverBegun,
+        StageState::Stuck,
+        StageState::Lost,
+        StageState::Stopped,
+        StageState::Delivered,
+        StageState::Repeating,
+        StageState::EndedShort,
+        StageState::Finished,
+    ];
+
+    /// The state's word in an end's key, `ended-short` for
+    /// [`StageState::EndedShort`] (43).
+    pub fn word(self) -> &'static str {
+        match self {
+            StageState::NotReached => "not-reached",
+            StageState::OnHold => "on-hold",
+            StageState::WaitingOnReadiness => "waiting-on-readiness",
+            StageState::WaitingForRoom => "waiting-for-room",
+            StageState::Refused => "refused",
+            StageState::Starting => "starting",
+            StageState::Started => "started",
+            StageState::Begun => "begun",
+            StageState::NeverBegun => "never-begun",
+            StageState::Stuck => "stuck",
+            StageState::Lost => "lost",
+            StageState::Stopped => "stopped",
+            StageState::Delivered => "delivered",
+            StageState::Repeating => "repeating",
+            StageState::EndedShort => "ended-short",
+            StageState::Finished => "finished",
+        }
+    }
+
+    fn from_word(word: &str) -> Option<StageState> {
+        StageState::ALL
+            .into_iter()
+            .find(|state| state.word() == word)
+    }
+
     /// The stage ended: delivered, ended short or finished.
     pub fn ended(self) -> bool {
         matches!(
@@ -816,6 +1198,11 @@ pub struct StageEnd {
     /// Whether the stop-short needs an answer or found work (41, 131).
     #[serde(default)]
     pub needs: Option<StopKind>,
+    /// The role's address, whole, a stop-short named as the one its words
+    /// are for, which its end goes to in place of the place's recipients;
+    /// none where it named none (41, 43, 132).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub addressee: Option<String>,
     /// For a stuck, lost or never-begun end, the agent's last words as
     /// its own record held them (43).
     #[serde(default)]
@@ -946,6 +1333,12 @@ pub struct StartHeld {
     /// where every task was ticked there (140).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<GroupHeld>,
+    /// Each role's address, whole, its prompt listed for a stop-short to
+    /// name, in the prompt's order, read from the host's sources at the
+    /// start; none where it listed none, and in a start written before
+    /// (28, 41, 193).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub may_name: Vec<String>,
     /// The command of flume's opening the agent, as the host names it,
     /// until the terminal's open answers: while it lives, the terminal may
     /// still be bringing the program up, and no other command sends the

@@ -22,15 +22,45 @@ use crate::{Engine, Step};
 use flume_seams::*;
 use std::collections::BTreeMap;
 
-/// The one line a notice is: the place, what ended, until when a
-/// stop-short's agent is kept open for its answer, and the command that
-/// reads it whole (43, 198, design 2).
-pub fn notice(place: &PlaceRecord, of: &EndOf) -> String {
+/// How much of a brief's first line a notice gives (43; design 9).
+pub const NOTICE_BRIEF: usize = 60;
+
+/// The one line a notice is: the place, its brief's first line cut at
+/// [`NOTICE_BRIEF`] characters, what ended, until when a stop-short's
+/// agent is kept open for its answer, the end's key, and the command that
+/// reads it whole: `flume inbox` where the place, as `held` gives it when
+/// the notice is sent, waits on a move of its caller's, which gives the
+/// question and how to answer it, and `flume status <place>` otherwise.
+/// It names no fact to act on blindly, and no question's words, which
+/// are many lines (43, 198; core.11, core.25; design 9).
+pub fn notice(held: &HeldState, of: &EndOf) -> String {
+    let place = &held.place;
     let short = place.short();
+    let brief = place
+        .brief_line()
+        .map(|line| format!(" ({})", cut(line, NOTICE_BRIEF)))
+        .unwrap_or_default();
+    let read = if held.waiting.is_some() {
+        "flume inbox".to_string()
+    } else {
+        format!("flume status {short}")
+    };
     format!(
-        "flume: {short} {}; read: flume status {short}",
-        end_words(of)
+        "flume: {short}{brief} {} [{}]; read: {read}",
+        end_words(of),
+        of.end_key()
     )
+}
+
+/// `line` cut at `at` characters, an ellipsis saying where it was cut.
+fn cut(line: &str, at: usize) -> String {
+    let mut chars = line.chars();
+    let head: String = chars.by_ref().take(at).collect();
+    if chars.next().is_none() {
+        head
+    } else {
+        format!("{}…", head.trim_end())
+    }
 }
 
 /// What ended, in the words a notice and the inbox give it: what ended,
@@ -149,7 +179,7 @@ impl Engine {
                 if !claimed {
                     continue;
                 }
-                let why = match terminal.send_to(&at, &notice(&held.place, &end.of)) {
+                let why = match terminal.send_to(&at, &notice(&held, &end.of)) {
                     ToSession::Sent => continue,
                     ToSession::NotFound => format!("no session is named {at}"),
                     ToSession::Refused { reason } => reason,
@@ -174,8 +204,9 @@ impl Engine {
 
     /// The document of a place whose worktree and branch are gone, kept
     /// apart from a live place's under its id and the tidy's time while an
-    /// end of it stands pending, naming the recipients it waits on; none
-    /// kept where nothing is pending (43, 62).
+    /// end of it stands pending, naming the recipients it waits on, and
+    /// holding no line of what its stages made; none kept where nothing
+    /// is pending (43, 62, 129).
     pub(crate) fn keep_for_ends(&self, held: &HeldState, over: &Over) -> Option<PlaceId> {
         let pending = held.pending_for();
         if pending.is_empty() {
@@ -193,9 +224,14 @@ impl Engine {
             at,
             pending_for: pending,
         };
+        // The made lines go with the place's folder, so the document kept
+        // for its ends holds none of them (62, 129; core.23).
         for stage in &mut kept.stages {
             if let Some(start) = stage.start.as_mut() {
                 start.live = false;
+            }
+            if let Some(end) = stage.end.as_mut() {
+                end.made.clear();
             }
         }
         match self.store.write(&id, None, Some(&kept)) {

@@ -27,10 +27,10 @@
 //! does not take is refused with nothing recorded, the stage waiting on
 //! its answer still (42, 47 to 50, 53 to 55).
 
-use crate::acts::asked;
+use crate::acts::{asked, Answering};
 use crate::reading::AgentReading;
 use crate::start::Starts;
-use crate::{Answer, Engine, Step};
+use crate::{Answer, Engine, Step, TELL_BOUND};
 use flume_seams::*;
 
 impl Engine {
@@ -52,8 +52,9 @@ impl Engine {
     /// Hands `words`, the answer to the question the agent `kept` holds
     /// open stopped short with, to its session as a tell is handed, within
     /// `bound`, the question then the answer; once received, in one write,
-    /// records it on the stop-short's end with `act` and when it was sent
-    /// and received, raises its start's count of answers, carries the stage
+    /// records it on the stop-short's end with `act`, when it was sent and
+    /// received, and who gave it and the key it named as `answering` names
+    /// them, raises its start's count of answers, carries the stage
     /// on begun under the same start, its quiet and its limit read afresh,
     /// and ends each hold on the stage, then settles the place, which reads
     /// the agent's end where a settle read its session ended once it took
@@ -67,9 +68,24 @@ impl Engine {
         words: &str,
         act: Act,
         bound: Option<Seconds>,
+        answering: &Answering,
     ) -> Answer {
         let at = self.host.now();
         let question = kept.end.words.clone().unwrap_or_default();
+        // The answer claimed on its stop-short before anything is typed, so
+        // a second answer at once finds the claim and is refused with
+        // nothing typed; let go when this returns where the answer was not
+        // recorded, as where the agent did not take it (42, 53, 75).
+        let key = EndKey::Stage {
+            stage: kept.stage.clone(),
+            start: kept.start.n,
+            state: StageState::EndedShort,
+            answered: kept.start.answered,
+        };
+        let _claimed = match self.claim_answer(id, &key, answering, bound.unwrap_or(TELL_BOUND)) {
+            Ok(claimed) => claimed,
+            Err(reason) => return Answer::refused(reason),
+        };
         let handed = match self.hand(id, &kept.start, &asked(&question, words), bound) {
             Ok(handed) => handed,
             Err(reason) => return Answer::refused(reason),
@@ -110,7 +126,10 @@ impl Engine {
                     act,
                     at,
                     session: Some(handed),
+                    by: answering.by.clone(),
+                    key: answering.key.clone(),
                 });
+                end.claim = None;
                 let stage = &mut held.stages[kept.index];
                 if let Some(start) = stage.start.as_mut() {
                     start.live = true;

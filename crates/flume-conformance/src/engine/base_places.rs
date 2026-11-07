@@ -460,9 +460,17 @@ fn on_a_branch_no_place_holds(_: &()) -> Outcome {
     Ok(())
 }
 
-/// The notice a base place's end is sent to its recipient as.
-fn notice(name: &str, what: &str) -> String {
-    format!("flume: train--{name} {what}; read: flume status train--{name}")
+/// The notice a base place's end is sent to its recipient as, with its
+/// key, pointing at status where the place waits on no move of its
+/// caller's as it is sent (43; design 9).
+fn notice(name: &str, what: &str, key: &str) -> String {
+    format!("flume: train--{name} {what} [{key}]; read: flume status train--{name}")
+}
+
+/// The notice of an end sent while the place waits on its caller, which
+/// points at the inbox (43, 130; design 9).
+fn notice_waiting(name: &str, what: &str, key: &str) -> String {
+    format!("flume: train--{name} {what} [{key}]; read: flume inbox")
 }
 
 /// A retry of the base place's submission, or its refusal's reason.
@@ -566,7 +574,11 @@ fn s110_a_base_place_and_two_changes_land(_: &()) -> Outcome {
     };
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![notice("spring", &format!("submission landed {landed}"))],
+        vec![notice(
+            "spring",
+            &format!("submission landed {landed}"),
+            "submission/1/landed"
+        )],
         "the notices to ops"
     );
     ensure!(world.held(&spring).is_none(), "the base place stays");
@@ -695,7 +707,11 @@ fn landed_with_no_inbox(_: &()) -> Outcome {
         .ok_or("the submission did not land")?;
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![notice("spring", &format!("submission landed {landed}"))],
+        vec![notice(
+            "spring",
+            &format!("submission landed {landed}"),
+            "submission/1/landed"
+        )],
         "the notices to ops, once"
     );
     ensure!(world.held(&spring).is_none(), "the landed base place stays");
@@ -760,7 +776,9 @@ fn s112_a_failed_base_place_takes_a_fix(_: &()) -> Outcome {
     ensure_eq!(
         notices
             .iter()
-            .filter(|text| **text == notice("spring", "submission failed"))
+            .filter(|text| {
+                **text == notice_waiting("spring", "submission failed", "submission/1/failed")
+            })
             .count(),
         1,
         "notices of the failure: {notices:?}"
@@ -1017,7 +1035,11 @@ fn waiting_on_its_caller(_: &()) -> Outcome {
     ensure_eq!(status.line.short, "stalled", "its line");
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![notice("spring", "stalled: a retry of the submission")],
+        vec![notice_waiting(
+            "spring",
+            "stalled: a retry of the submission",
+            &format!("stall/{read_none}")
+        )],
         "the notices to ops"
     );
     Ok(())

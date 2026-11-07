@@ -335,6 +335,7 @@ mod tests {
             hold_submission: false,
             hold_words: BTreeMap::new(),
             recipients: vec![],
+            recipients_from: None,
             stream: StreamHeld {
                 name: DEFAULT_STREAM.into(),
                 from: StreamFrom::Default,

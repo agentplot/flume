@@ -194,6 +194,20 @@ impl Walk {
         &self.home
     }
 
+    /// The walkthrough's `PATH`: the stand-in, then flume's own folder,
+    /// then the test's.
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    /// The host user's login shell, the walk's own, which gives the walk's
+    /// `PATH` to what a launch runs for a place.
+    pub fn login_shell(&self) -> &Path {
+        self.shell
+            .as_deref()
+            .expect("a walkthrough with the stand-in")
+    }
+
     /// The stand-in for sluice first on `PATH` as `sluice`, so the
     /// first submission is answered decided.
     pub fn sluice_decides_the_first_submit(&self) {
@@ -238,6 +252,12 @@ impl Walk {
         self.configure_whole(&text);
     }
 
+    /// The host's configuration folder, `$XDG_CONFIG_HOME/flume`, which
+    /// holds `config.toml` and `sources/` (191, C.7).
+    pub fn config_dir(&self) -> PathBuf {
+        self.home.join("config/flume")
+    }
+
     /// The stand-in's account `name` as a pool's `accounts` lists it: its
     /// program `claude`, its `CLAUDE_CONFIG_DIR` the folder `home` and its
     /// `CLAUDE_CODE_OAUTH_TOKEN` the walk's word, and, on a host under
@@ -257,7 +277,7 @@ impl Walk {
     /// The host's configuration as `text` gives it whole, its pools and
     /// accounts among it.
     pub fn configure_whole(&self, text: &str) {
-        let dir = self.home.join("config/flume");
+        let dir = self.config_dir();
         std::fs::create_dir_all(&dir).expect("the configuration's folder");
         std::fs::write(dir.join("config.toml"), text).expect("the configuration");
     }
@@ -293,10 +313,37 @@ impl Walk {
         command
     }
 
+    /// flume's binary with the walkthrough's environment in its
+    /// repository, for `words`: a launch's environment names
+    /// `$FLUME_RECIPIENT` as `caller`, since a launch from no session that
+    /// names no recipient and finds no role behind its stream is refused
+    /// (7, 193).
+    fn flume_command(&self, words: &[&str]) -> Command {
+        let mut command = self.command(env!("CARGO_BIN_EXE_flume"), &self.repository.dir);
+        if words.contains(&"launch") {
+            command.env("FLUME_RECIPIENT", "caller");
+        }
+        command
+    }
+
     /// flume's answer to `words`, as JSON, and whether it refused.
     pub fn flume_ran(&self, words: &[&str]) -> (Value, bool) {
-        let output = self
-            .command(env!("CARGO_BIN_EXE_flume"), &self.repository.dir)
+        Walk::answered(self.flume_command(words), words)
+    }
+
+    /// flume's answer to `words` as [`Walk::flume_ran`] gives it, run with
+    /// `env` beside the walkthrough's and no `$FLUME_RECIPIENT`: a launch
+    /// from the session `env` names, or from none where it names none (7,
+    /// 193).
+    pub fn flume_ran_from(&self, words: &[&str], env: &[(&str, &str)]) -> (Value, bool) {
+        let mut command = self.command(env!("CARGO_BIN_EXE_flume"), &self.repository.dir);
+        command.envs(env.iter().copied());
+        Walk::answered(command, words)
+    }
+
+    /// `command`'s answer to `words`, as JSON, and whether it refused.
+    fn answered(mut command: Command, words: &[&str]) -> (Value, bool) {
+        let output = command
             .args(words)
             .arg("--json")
             .output()
@@ -323,7 +370,7 @@ impl Walk {
     /// refuse.
     pub fn person(&self, words: &[&str]) -> String {
         let output = self
-            .command(env!("CARGO_BIN_EXE_flume"), &self.repository.dir)
+            .flume_command(words)
             .args(words)
             .output()
             .expect("flume runs");

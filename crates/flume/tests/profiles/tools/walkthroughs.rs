@@ -74,12 +74,25 @@
 //! reach that agent, a stand-in started in a session of the pinned herdr
 //! under the agent's name, as one notice, status saying where the agent
 //! lives and a wake launching nothing, no planner's place made (43, 132,
-//! C.5).
+//! C.5); a change launched from no session in `east` takes the answerer
+//! behind east as its recipient, and its construct's question addressed
+//! to east's ops wakes that role's run, a source's of the host, which
+//! reads its inbox, holds the waiting move and retries naming the
+//! question's key, the answer reaching construct's agent kept open in its
+//! session, a second answer to the key refused, no run of the answerer
+//! launched and the run tidied once it delivers (S93; 41, 42, 43, 130,
+//! 132, 191, 193, 198); and a person's own session in a herdr pane
+//! launches a change, takes its notice and is started again, its
+//! SessionStart giving it the place, the question by its key and the ways
+//! on, and five minutes of the walkthrough's clock later the stall reaches
+//! the pane and the answerer behind east, whose run is woken for it (S94;
+//! 43, 130, 193, C.4).
 
 use super::walk::*;
 use flume::profiles::agent::claude::carry::{UNREACHED, UNREADABLE};
 use flume::profiles::kinds::weir::Weir;
-use flume_seams::{Kinds, PackageRead};
+use flume::profiles::store::state_dir::StateDir;
+use flume_seams::{Kinds, PackageRead, PlaceId, Store, Written};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -1096,8 +1109,9 @@ fn a_failed_submission_sends_a_repeating_stage_back_for_one_repetition_with_no_g
 /// The words a carried start's prompt opens with, flume's own (146, 179).
 const CARRIED: &str = "Your last turn stopped at your account's usage limit. This session now goes on under an account of the pool, with its conversation as it stood: carry on from where you stopped.";
 
-/// The way to stop short the Claude Code profile gives every start (28).
-const STOP_SHORT: &str = "run `flume needs \"<words>\"` when you cannot go on without an answer, saying what you need, or `flume needs --found \"<words>\"` when you found work this stage cannot deliver past, saying what you found; then stop.";
+/// The way to stop short the Claude Code profile gives every start, then
+/// the words that it is the agent's one way to ask (28; design 4).
+const STOP_SHORT: &str = "run `flume needs \"<words>\"` when you cannot go on without an answer, saying what you need, or `flume needs --found \"<words>\"` when you found work this stage cannot deliver past, saying what you found; then stop. Stopping short is your one way to ask for what your stage needs: write no card and no message to a person yourself, since whoever answers your question decides whether it is a person's.";
 
 /// The host's fill-first pool of two accounts, `stand-in-1` and
 /// `stand-in-2`, whose `CLAUDE_CONFIG_DIR`s are `first` and `second`.
@@ -2827,25 +2841,7 @@ fn standing_under_herdr(host: &UnderHerdr, session: &str, name: &str) -> (String
     write(scratch.join("bin/claude"), STANDING);
     let shell = write(scratch.join("shell"), "#!/bin/sh\nexec /bin/sh -i\n");
     let log = scratch.join("took");
-    let mut server = host.walk.command("herdr", &scratch);
-    server
-        .args(["--session", session, "server"])
-        .env("SHELL", &shell)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-    // Stopped through its socket when the host is dropped.
-    drop(server.spawn().expect("herdr's session server starts"));
-    let began = std::time::Instant::now();
-    let socket = loop {
-        if let Some((_, socket)) = host.running().into_iter().find(|(s, _)| s == session) {
-            break socket;
-        }
-        assert!(
-            began.elapsed() < std::time::Duration::from_secs(20),
-            "herdr's session {session} did not run"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    };
+    let socket = scratch_session(host, session, &scratch, &shell);
     let made = host.herdr(
         Some(&socket),
         &[
@@ -2904,20 +2900,62 @@ fn standing_under_herdr(host: &UnderHerdr, session: &str, name: &str) -> (String
     (format!("herdr:{pane}@{socket}"), log)
 }
 
+/// The session `session` of the host's herdr started headless in `dir`,
+/// its panes' shell `shell`, as a person keeps one: its socket, once
+/// herdr lists it running. It stops through its socket when the host is
+/// dropped (C.5; core.29).
+fn scratch_session(host: &UnderHerdr, session: &str, dir: &Path, shell: &Path) -> String {
+    let mut server = host.walk.command("herdr", dir);
+    server
+        .args(["--session", session, "server"])
+        .env("SHELL", shell)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    drop(server.spawn().expect("herdr's session server starts"));
+    let began = std::time::Instant::now();
+    loop {
+        if let Some((_, socket)) = host.running().into_iter().find(|(s, _)| s == session) {
+            return socket;
+        }
+        assert!(
+            began.elapsed() < std::time::Duration::from_secs(20),
+            "herdr's session {session} did not run"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
 #[test]
 fn a_standing_agent_under_herdr_takes_a_fixs_end_through_the_binary() {
     // The end-delivery spec's "A standing agent under herdr through the
-    // binary" (43, 132, C.5): the default stream's terminal is herdr, where
-    // `w/planner`'s agent `w-planner` stands in the session `w`; the fix
-    // runs in `t` under the printed command, its submission held so one
-    // end is pending for the planner.
+    // binary" (43, 132, 193, C.5): the stream `w`'s terminal is the host's,
+    // herdr, where the source acme's roles file gives `w/planner` the
+    // agent `w-planner` in the session `w`; the fix runs in `t` under the
+    // printed command, its submission held so one end is pending for the
+    // planner.
     let host = UnderHerdr::new(Walk::new("walk-standing"), "w");
     host.walk.configure_whole(&format!(
-        "[host]\nmultiplexer = \"herdr\"\n\n[streams.t]\nmultiplexer = \"printed\"\npool = \"stand-in\"\n\n\
-         [pools.stand-in]\nstrategy = \"fill-first\"\naccounts = [{{ name = \"stand-in-1\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?}, CLAUDE_CODE_OAUTH_TOKEN = \"{STAND_IN_TOKEN}\" }} }}]\n\n\
-         [roles.\"w/planner\"]\nagent = \"w-planner\"\nsession = \"w\"\n",
+        "[host]\nmultiplexer = \"herdr\"\n\n[streams.w]\n\n[streams.t]\nmultiplexer = \"printed\"\npool = \"stand-in\"\n\n\
+         [pools.stand-in]\nstrategy = \"fill-first\"\naccounts = [{{ name = \"stand-in-1\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?}, CLAUDE_CODE_OAUTH_TOKEN = \"{STAND_IN_TOKEN}\" }} }}]\n",
         host.walk.account().display().to_string()
     ));
+    let config = host.walk.config_dir();
+    let roles = config.join("acme-roles.toml");
+    std::fs::write(
+        &roles,
+        "[roles.\"w/planner\"]\nagent = \"w-planner\"\nsession = \"w\"\n",
+    )
+    .expect("acme's roles file");
+    std::fs::create_dir_all(config.join("sources")).expect("the sources folder");
+    std::fs::write(
+        config.join("sources/acme.toml"),
+        format!(
+            "kinds_dir = {:?}\nroles = {:?}\n",
+            config.join("kinds/acme").display().to_string(),
+            roles.display().to_string()
+        ),
+    )
+    .expect("acme's source file");
     let (at, took) = standing_under_herdr(&host, "w", "w-planner");
     let took = || -> Vec<String> {
         std::fs::read_to_string(&took)
@@ -2943,7 +2981,9 @@ fn a_standing_agent_under_herdr_takes_a_fixs_end_through_the_binary() {
         .until(&place, "its end taken by the standing agent", |_| {
             !took().is_empty()
         });
-    let notice = "flume: fix--one code delivered; read: flume status fix--one".to_string();
+    // The submission is held, so the place waits on its caller's move and
+    // the notice points at the inbox (43; design 9).
+    let notice = "flume: fix--one (fix the parser) code delivered [stage/code/1/delivered]; read: flume inbox".to_string();
     assert_eq!(took(), vec![notice.clone()], "what the standing agent took");
     host.walk.settle(&place);
     assert_eq!(took(), vec![notice], "taken again at the next settle");
@@ -2969,7 +3009,7 @@ fn a_standing_agent_under_herdr_takes_a_fixs_end_through_the_binary() {
         planner["standing"],
         json!({
             "agent": "w-planner",
-            "stream": "default",
+            "stream": "w",
             "session": {"name": "w", "from": "role"},
             "terminal": "herdr",
             "found": {"one": {"at": at, "state": "waiting"}},
@@ -3294,4 +3334,591 @@ fn a_lost_talk_whose_transcript_is_gone_starts_afresh_with_flumes_words() {
     });
     walk.flume(&["done", &place]);
     walk.until(&place, "done and tidied", Value::is_null);
+}
+
+/// The kind `name@1` of the host's source acme, whose one stage `stage`
+/// delivers commits and which lands nothing: a role's run of the
+/// walkthrough's own (114, 132, 157).
+fn role_package(kinds_dir: &Path, name: &str, stage: &str) {
+    let dir = kinds_dir.join(format!("{name}@1"));
+    std::fs::create_dir_all(dir.join("prompts")).expect("the package's folder");
+    std::fs::write(
+        dir.join("kind.toml"),
+        format!(
+            "[kinds.{name}]\nversion = 1\nbranch = \"{name}\"\nstarts_unready = true\nlands = false\n\n\
+             [[kinds.{name}.stages]]\nname = \"{stage}\"\nprompt = \"prompts/{stage}.md\"\n\
+             deliverables = [\"commits\"]\nagents = [{{}}]\n"
+        ),
+    )
+    .expect("the package's declaration");
+    std::fs::write(
+        dir.join(format!("prompts/{stage}.md")),
+        "Read what is pending for you with flume inbox, and answer it.\n",
+    )
+    .expect("the package's prompt");
+}
+
+/// The host under herdr declaring the stream `east` on the stand-in's
+/// pool, and the source acme, its kinds `door@1` and `ops@1` locked on the
+/// host, whose roles file declares runs of the walkthrough's repository
+/// for `east/operator`, the answerer behind `east`, and `east/ops`, each
+/// with the words of what it answers (132, 143, 191, 193; design 2, 5).
+fn east_with_its_roles(host: &UnderHerdr) {
+    host.configure("", "[streams.east]\npool = \"stand-in\"\n");
+    let config = host.walk.config_dir();
+    let kinds = config.join("kinds/acme");
+    role_package(&kinds, "door", "door");
+    role_package(&kinds, "ops", "answer");
+    let roles = config.join("acme-roles.toml");
+    let repository = host.walk.repository.dir.display().to_string();
+    std::fs::write(
+        &roles,
+        format!(
+            "[roles.\"east/operator\"]\nrepository = {repository:?}\nkind = \"door\"\nanswerer = true\n\
+             answers = \"whatever no other role of east answers\"\n\n\
+             [roles.\"east/ops\"]\nrepository = {repository:?}\nkind = \"ops\"\n\
+             answers = \"east's live systems: its queues, its deploys and their settings\"\n"
+        ),
+    )
+    .expect("acme's roles file");
+    std::fs::create_dir_all(config.join("sources")).expect("the sources folder");
+    std::fs::write(
+        config.join("sources/acme.toml"),
+        format!(
+            "kinds_dir = {:?}\nroles = {:?}\n",
+            kinds.display().to_string(),
+            roles.display().to_string()
+        ),
+    )
+    .expect("acme's source file");
+    host.walk
+        .flume(&["kinds", "lock", "--host", "acme/door@1", "acme/ops@1"]);
+}
+
+/// Settles every place, as a caller does between its commands, until
+/// `holds` holds, for up to three minutes; `what` names it where it never
+/// does, with every place's line.
+fn settled_until(host: &UnderHerdr, what: &str, holds: impl Fn() -> bool) {
+    let began = std::time::Instant::now();
+    loop {
+        host.walk.flume(&["settle"]);
+        if holds() {
+            return;
+        }
+        if began.elapsed() > std::time::Duration::from_secs(180) {
+            let lines: Vec<Value> = host.everything()["places"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|place| json!([place["place"], place["line"]["full"], place["waiting_on"]]))
+                .collect();
+            panic!("never came to {what}: {lines:?}");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(300));
+    }
+}
+
+/// The JSON a file holds, null where it holds none yet.
+fn json_in(path: &Path) -> Value {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or(Value::Null)
+}
+
+/// Where the place `<kind>--<name>` of the walkthrough's repository is
+/// made (C.1).
+fn location(host: &UnderHerdr, place: &str) -> String {
+    flume::profiles::place::git_worktree::location(
+        &host.walk.repository.name(),
+        place,
+        Some(&host.home().join("data/flume")),
+    )
+    .expect("the place's location")
+}
+
+/// The question construct asks east's ops in S93.
+const ASKED_OPS: &str = "Which queue's settings are live in east?";
+
+/// The answer east's ops gives it.
+const OPS_READ: &str = "east runs the queue at 2.4, as deployed.";
+
+/// The key of construct's first stop-short, as callers name it (42, 43).
+const CONSTRUCT_KEY: &str = "stage/construct/1/ended-short";
+
+#[test]
+fn s93_a_question_for_easts_ops_is_answered_once_by_its_woken_run() {
+    // S93; 41, 42, 43, 130, 132, 191, 193, 198: a change launched from no
+    // session in `east` takes the answerer behind east, `east/operator`,
+    // as its recipient. Its construct stops short naming `ops`, so the end
+    // goes to `east/ops` alone, whose run is woken in east. The run
+    // collects the question with its key, holds the waiting move and
+    // retries naming the key, which reaches construct's stand-in, kept
+    // open for its answer, in its session. A second retry naming the key
+    // is refused. No run of `east/operator` is launched, and the run of
+    // `east/ops` delivers and is tidied with no caller's word.
+    let host = Walk::under_herdr("walk-s93");
+    east_with_its_roles(&host);
+    let out = host.walk.repository.scratch.path("ops");
+    std::fs::create_dir_all(&out).expect("the run's folder");
+    let (inbox, hold, retry) = (
+        out.join("inbox.json"),
+        out.join("hold.json"),
+        out.join("retry.json"),
+    );
+    host.script(
+        "construct",
+        1,
+        json!([
+            [{ "bash": format!("flume needs --to ops \"{ASKED_OPS}\"") }],
+            [{ "wait_for": host.signal("never") }],
+        ]),
+    );
+    host.script(
+        "answer",
+        1,
+        json!([
+            { "bash": format!("flume inbox --json > '{}'", inbox.display()) },
+            { "bash": format!(
+                "key=$(grep -o '\"key\":\"stage/construct/[^\"]*\"' '{}' | head -n 1 | cut -d '\"' -f 4) \
+                 && flume hold change--s93 'east/ops has it' --waiting --for 1h --json > '{}' \
+                 && flume retry change--s93 --stage construct --answers \"$key\" --words '{OPS_READ}' --json > '{}'",
+                inbox.display(),
+                hold.display(),
+                retry.display()
+            ) },
+            { "write": { "path": "answered.md", "text": "construct's question answered\n" } },
+            { "bash": "git add -A && git commit --quiet -m 'answer construct'" },
+        ]),
+    );
+    let (launched, refused) = host.walk.flume_ran_from(
+        &[
+            "launch",
+            "--kind",
+            "change",
+            "--name",
+            "s93",
+            "--stream",
+            "east",
+            "--brief",
+            "Choose the queue's settings.",
+        ],
+        &[],
+    );
+    assert!(!refused, "the launch from no session: {launched}");
+    let place = launched["launched"]["place"]["place"]
+        .as_str()
+        .unwrap_or_else(|| panic!("no place launched: {launched}"))
+        .to_string();
+    assert_eq!(
+        launched["launched"]["place"]["recipients"],
+        json!(["east/operator"]),
+        "{launched}"
+    );
+    assert_eq!(
+        launched["launched"]["place"]["recipients_from"]["from"], "answerer",
+        "{launched}"
+    );
+
+    let run = location(&host, "ops--east-ops");
+    settled_until(&host, "the run of east/ops answered and tidied", || {
+        host.prompts("construct", 1).len() == 2 && host.status(&run).is_null()
+    });
+
+    // The run's inbox gives the place waiting on it with the question by
+    // its key; the end itself reached the run once, delivered as a notice
+    // into its session by the settle its inbox runs first, or by the inbox
+    // where no settle delivered it before (43, 132; design 9).
+    let inbox = json_in(&inbox);
+    assert_eq!(inbox["inbox"]["recipient"], "east/ops", "{inbox}");
+    let waiting = inbox["inbox"]["waiting"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|waiting| waiting["place"] == place.as_str())
+        .unwrap_or_else(|| panic!("the inbox gives no waiting place: {inbox}"));
+    assert_eq!(
+        (
+            &waiting["stop_short"]["key"],
+            &waiting["stop_short"]["addressee"],
+            &waiting["stop_short"]["words"]
+        ),
+        (&json!(CONSTRUCT_KEY), &json!("east/ops"), &json!(ASKED_OPS)),
+        "{inbox}"
+    );
+
+    let hold = json_in(&hold);
+    let held = hold["acted"]["status"]["holds"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|held| held["on"] == "waiting")
+        .unwrap_or_else(|| panic!("the run held no waiting move: {hold}"));
+    assert_eq!(
+        (&held["words"], &held["bound"]),
+        (&json!("east/ops has it"), &json!(3600)),
+        "{hold}"
+    );
+
+    let retry = json_in(&retry);
+    assert_eq!(retry["acted"]["act"], "retry", "{retry}");
+    let answered = retry["acted"]["status"]["ends"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|end| end["key"] == CONSTRUCT_KEY)
+        .map(|end| end["answer"].clone())
+        .unwrap_or_default();
+    assert_eq!(
+        (&answered["words"], &answered["by"], &answered["key"]),
+        (&json!(OPS_READ), &json!("east/ops"), &json!(CONSTRUCT_KEY)),
+        "{retry}"
+    );
+    assert!(
+        answered["session"].is_object(),
+        "the answer reached no session: {retry}"
+    );
+    let deliveries: Vec<&Value> = retry["acted"]["status"]["ends"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|end| end["key"] == CONSTRUCT_KEY)
+        .flat_map(|end| end["deliveries"].as_array().into_iter().flatten())
+        .collect();
+    assert_eq!(
+        deliveries
+            .iter()
+            .map(|delivery| &delivery["recipient"])
+            .collect::<Vec<_>>(),
+        [&json!("east/ops")],
+        "the stop-short's deliveries: {retry}"
+    );
+    let prompts = host.prompts("construct", 1);
+    assert_eq!(
+        prompts[1],
+        format!("The question: {ASKED_OPS}\n\nThe answer: {OPS_READ}"),
+        "the answer construct's session took"
+    );
+    assert_eq!(host.log("construct", 2), "", "a second start of construct");
+
+    let (again, refused) = host.walk.flume_ran(&[
+        "retry",
+        "change--s93",
+        "--stage",
+        "construct",
+        "--answers",
+        CONSTRUCT_KEY,
+        "--words",
+        "2.3",
+    ]);
+    let words = again.to_string();
+    assert!(
+        refused
+            && words.contains("east/ops")
+            && words.contains(OPS_READ)
+            && words.contains("taken once"),
+        "a second retry naming the key: {again}"
+    );
+    assert_eq!(host.prompts("construct", 1).len(), 2, "{prompts:?}");
+
+    assert_eq!(host.log("door", 1), "", "a run of east/operator started");
+    let everything = host.everything();
+    assert!(
+        !everything["places"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|listed| listed["kind"] == "door"),
+        "a run of east/operator launched: {everything}"
+    );
+    assert!(
+        host.log("answer", 1).contains("session ended"),
+        "{}",
+        host.log("answer", 1)
+    );
+}
+
+/// The question construct asks its recipient in S94.
+const WHICH_DESIGN: &str = "Which design for the parser, a table or a recursive descent?";
+
+/// A person's own pane in the session `session` of the host's herdr, in
+/// the walkthrough's repository, its shell reading no startup file: its
+/// pane and its server's socket (7, C.5).
+fn persons_pane(host: &UnderHerdr, session: &str, dir: &Path) -> (String, String) {
+    let shell = dir.join("shell");
+    std::fs::write(&shell, "#!/bin/sh\nexec /bin/sh -i\n").expect("the shell");
+    std::fs::set_permissions(&shell, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+        .expect("the shell made executable");
+    let socket = scratch_session(host, session, dir, &shell);
+    let made = host.herdr(
+        Some(&socket),
+        &[
+            "workspace",
+            "create",
+            "--cwd",
+            &host.walk.repository.dir.to_string_lossy(),
+            "--env",
+            &format!("SHELL={}", shell.display()),
+            "--label",
+            "person",
+            "--no-focus",
+        ],
+    );
+    let pane = made["root_pane"]["pane_id"]
+        .as_str()
+        .unwrap_or_else(|| panic!("herdr gave no pane in {made}"))
+        .to_string();
+    host.herdr(
+        Some(&socket),
+        &[
+            "pane",
+            "wait-output",
+            &pane,
+            "--source",
+            "visible",
+            "--regex",
+            r"\S",
+            "--timeout",
+            "20000",
+        ],
+    );
+    (pane, socket)
+}
+
+/// The person's Claude Code started in `pane` by `launcher`, typed into
+/// its shell as a person types it, once herdr reads it up and idle.
+fn person_starts(host: &UnderHerdr, socket: &str, pane: &str, launcher: &Path) {
+    host.herdr(
+        Some(socket),
+        &["pane", "run", pane, &launcher.to_string_lossy()],
+    );
+    let began = std::time::Instant::now();
+    loop {
+        let read = host.herdr(Some(socket), &["pane", "get", pane])["pane"].clone();
+        if read["agent"] == "claude" && read["agent_status"] == "idle" {
+            return;
+        }
+        assert!(
+            began.elapsed() < std::time::Duration::from_secs(30),
+            "the person's session never came up idle: {read}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
+/// Moves the walkthrough's clock five minutes on for the place's wait on
+/// its caller: the since its held state records for the move written back
+/// five minutes earlier, by compare-and-set, as five minutes passing
+/// leaves it; the since so written (130).
+fn five_minutes_on(host: &UnderHerdr, place: &str) -> u64 {
+    let store = StateDir::at(host.home().join("state/flume"));
+    let id = PlaceId::new(place);
+    for _ in 0..20 {
+        let read = store.read(&id).expect("the place's held state");
+        let mut state = read.state;
+        let waiting = state.waiting.as_mut().expect("a move its caller makes");
+        let since = waiting.on.since.expect("since when") - 5 * 60;
+        waiting.on.since = Some(since);
+        if let Written::Written { .. } = store.write(&id, Some(read.version), Some(&state)) {
+            return since;
+        }
+    }
+    panic!("the place's held state moved under every write");
+}
+
+#[test]
+fn s94_a_restarted_session_is_given_its_place_and_the_stall_reaches_the_door() {
+    // S94; 43, 130, 193, C.4: a person's Claude Code in a pane of their
+    // own launches a change in `east`, so the pane's session is its
+    // recipient. Its construct stops short, and the notice reaches the
+    // pane. The person's session ends and they start it again: the new
+    // session's SessionStart gives it the place, the question by its key
+    // and the ways on. Five minutes of the walkthrough's clock later the
+    // place stalls, and the stall reaches `east/operator`, the answerer
+    // behind east, whose woken run collects it, as well as the pane.
+    let host = Walk::under_herdr("walk-s94");
+    east_with_its_roles(&host);
+    let door = host.walk.repository.scratch.path("door");
+    std::fs::create_dir_all(&door).expect("the door's folder");
+    let door_inbox = door.join("inbox.json");
+    host.script(
+        "construct",
+        1,
+        json!([[{ "bash": format!("flume needs \"{WHICH_DESIGN}\"") }], []]),
+    );
+    host.script(
+        "door",
+        1,
+        json!([
+            { "bash": format!("flume inbox --json > '{}'", door_inbox.display()) },
+            { "write": { "path": "read.md", "text": "the stall read\n" } },
+            { "bash": "git add -A && git commit --quiet -m 'read the stall'" },
+        ]),
+    );
+
+    let person = host.walk.repository.scratch.path("person");
+    std::fs::create_dir_all(&person).expect("the person's folder");
+    let (launched, log) = (person.join("launched.json"), person.join("person.log"));
+    let script = person.join("script.json");
+    std::fs::write(
+        &script,
+        json!([
+            [{ "bash": format!(
+                "[ -e '{0}' ] || flume launch --kind change --name s94 --stream east \
+                 --brief 'Choose a design for the parser.' --json > '{0}'",
+                launched.display()
+            ) }],
+            [],
+        ])
+        .to_string(),
+    )
+    .expect("the person's script");
+    let plugin = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../plugins/claude")
+        .canonicalize()
+        .expect("flume's plugin for Claude Code");
+    let home = host.home().to_path_buf();
+    let launcher = person.join("launcher");
+    std::fs::write(
+        &launcher,
+        format!(
+            "#!/bin/sh\nexport HOME='{h}' XDG_STATE_HOME='{h}/state' XDG_CONFIG_HOME='{h}/config' \
+             XDG_DATA_HOME='{h}/data' PATH='{path}' SHELL='{shell}' OPENSPEC_TELEMETRY=0 \
+             STAND_IN_SCRIPT='{script}' STAND_IN_LOG='{log}'\nexec claude --plugin-dir '{plugin}'\n",
+            h = home.display(),
+            path = host.walk.path(),
+            shell = host.walk.login_shell().display(),
+            script = script.display(),
+            log = log.display(),
+            plugin = plugin.display(),
+        ),
+    )
+    .expect("the launcher");
+    std::fs::set_permissions(
+        &launcher,
+        std::os::unix::fs::PermissionsExt::from_mode(0o755),
+    )
+    .expect("the launcher made executable");
+    let logged = || std::fs::read_to_string(&log).unwrap_or_default();
+
+    let (pane, socket) = persons_pane(&host, "p", &person);
+    person_starts(&host, &socket, &pane, &launcher);
+    host.herdr(
+        Some(&socket),
+        &["agent", "prompt", &pane, "Launch the change."],
+    );
+    settled_until(&host, "the change launched from the pane", || {
+        json_in(&launched)["launched"]["place"]["place"].is_string()
+    });
+    let launched = json_in(&launched);
+    let place = launched["launched"]["place"]["place"]
+        .as_str()
+        .expect("the place")
+        .to_string();
+    assert_eq!(
+        launched["launched"]["place"]["recipients_from"]["from"], "session",
+        "{launched}"
+    );
+    let recipient = launched["launched"]["place"]["recipients"][0]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    assert!(
+        recipient.starts_with(&format!("herdr:{pane}@")),
+        "the pane's session as its recipient: {launched}"
+    );
+
+    let notice = format!("[{CONSTRUCT_KEY}]; read: flume inbox");
+    settled_until(&host, "the notice in the person's session", || {
+        logged().lines().any(|line| {
+            line.starts_with("stand-in: took the prompt: ")
+                && line.contains("flume: change--s94 (Choose a design for the parser.)")
+                && line.contains(&notice)
+        })
+    });
+    settled_until(&host, "the person's first session ended", || {
+        logged().contains("session ended")
+    });
+    assert!(
+        !logged().contains("given at its start"),
+        "the first session was given something: {}",
+        logged()
+    );
+
+    settled_until(&host, "herdr listing no agent in the person's pane", || {
+        host.herdr(Some(&socket), &["pane", "get", &pane])["pane"]["agent"].is_null()
+    });
+    person_starts(&host, &socket, &pane, &launcher);
+    settled_until(&host, "the restarted session given its place", || {
+        logged().contains("stand-in: given at its start: ")
+    });
+    let given: String = logged()
+        .lines()
+        .find_map(|line| line.strip_prefix("stand-in: given at its start: "))
+        .map(|context| serde_json::from_str(context).expect("the context as JSON"))
+        .expect("the context");
+    for said in [
+        format!("flume, at this session's start: what waits on it, {recipient}, from `flume inbox`."),
+        "change--s94 (Choose a design for the parser.), in the stream east, waits on".to_string(),
+        format!("Its stop-short {CONSTRUCT_KEY} needs an answer:"),
+        format!("  {WHICH_DESIGN}"),
+        format!(
+            "flume retry change--s94 --stage construct --answers {CONSTRUCT_KEY} --words \"<answer>\""
+        ),
+        format!("flume tell change--s94 --answers {CONSTRUCT_KEY} \"<answer>\""),
+        "flume hold change--s94 \"<words>\" --waiting --for <time>".to_string(),
+    ] {
+        assert!(
+            given.contains(&said),
+            "the restarted session was not given {said:?}: {given}"
+        );
+    }
+
+    let since = five_minutes_on(&host, &place);
+    let stall = format!("stall/{since}");
+    // The stall reaches east/operator's woken run once, as a notice into
+    // its session by the settle its inbox runs first, or by the inbox;
+    // either way its inbox gives the place as waiting on it, the answerer
+    // given a stall of the move the place waits on (43, 130, 193).
+    settled_until(&host, "east/operator's run reading its inbox", || {
+        json_in(&door_inbox)["inbox"]["ends"].is_array()
+    });
+    let collected = json_in(&door_inbox);
+    assert_eq!(
+        collected["inbox"]["recipient"], "east/operator",
+        "{collected}"
+    );
+    assert!(
+        collected["inbox"]["waiting"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|waiting| waiting["place"] == place.as_str()),
+        "east/operator's inbox gives no waiting {place}: {collected}"
+    );
+    let status = host.status(&place);
+    assert_eq!(status["stalled"], true, "{status}");
+    let delivered: Vec<&Value> = status["ends"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|end| end["key"] == stall.as_str())
+        .flat_map(|end| end["deliveries"].as_array().into_iter().flatten())
+        .map(|delivery| &delivery["recipient"])
+        .collect();
+    assert!(
+        delivered
+            .iter()
+            .filter(|to| **to == "east/operator")
+            .count()
+            == 1,
+        "the stall's deliveries: {status}"
+    );
+    settled_until(&host, "the stall in the person's session", || {
+        logged().lines().any(|line| {
+            line.starts_with("stand-in: took the prompt: ")
+                && line.contains("stalled")
+                && line.contains(&format!("[{stall}]"))
+        })
+    });
 }

@@ -287,6 +287,8 @@ fn answered_in_session(
                 sent_at: at,
                 received_at: at,
             }),
+            by: None,
+            key: None,
         }),
         "the answer the stop-short's end holds"
     );
@@ -1050,6 +1052,8 @@ fn an_answer_taken_before_its_session_ended(_: &()) -> Outcome {
                 sent_at: at,
                 received_at: at + POLL,
             }),
+            by: None,
+            key: None,
         }),
         "the answer the stop-short's end holds"
     );
@@ -1581,7 +1585,7 @@ fn the_notice_of_a_question(_: &()) -> Outcome {
     ensure_eq!(
         world.terminal.notices("ops"),
         vec![format!(
-            "flume: fix--one code needs an answer, its agent kept open for the answer until {until}; read: flume status fix--one"
+            "flume: fix--one (x) code needs an answer, its agent kept open for the answer until {until} [stage/code/1/ended-short]; read: flume inbox"
         )],
         "the notices to ops"
     );

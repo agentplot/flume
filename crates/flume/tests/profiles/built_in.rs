@@ -107,6 +107,7 @@ agents = [{}]
         base: "main".into(),
         brief: Some("look around".into()),
         declaration: Some(scratch.path("kinds/kinds.toml").to_string_lossy().into()),
+        recipients: vec!["caller".into()],
         ..Launch::default()
     });
     let Answer::Launched { place } = answer else {
@@ -333,6 +334,7 @@ fn a_recipient_unnamed_is_the_herdr_pane_the_command_runs_in() {
         Answer::Inbox {
             recipient: format!("herdr:w1-p2@{}", socket.display()),
             ends: vec![],
+            waiting: vec![],
         }
     );
 }

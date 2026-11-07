@@ -155,7 +155,7 @@ $ flume status fix--the-parser-reads-tabs
   the deliverable exists
   submission: found {"submission":{"branch":"fix/the-parser-reads-tabs","id":"1","state":"under_test","target":"main"}}, submitted 1 times, sent back 0 times
   recipients: me
-  ended: code delivered; pending for me
+  ended stage/code/1/delivered: code delivered; pending for me
 host: 0 agents running, no bound
 ```
 
@@ -168,8 +168,9 @@ main at 84130b3 · 1 in the queue · testing 1 at once (up to 1)
   testing main + #1 fix/the-parser-reads-tabs · 2s of 1h00m
 ```
 
-`ended: code delivered; pending for me` is the stage's end, kept for
-the recipient `me` until it is delivered.
+`ended stage/code/1/delivered: code delivered; pending for me` is the
+stage's end under its key, kept for the recipient `me` until it is
+delivered.
 
 ## 5. The landing and the tidy
 
@@ -184,8 +185,8 @@ $ flume status fix--the-parser-reads-tabs
   branch fix/the-parser-reads-tabs from main
   stage code: delivered, started 1 times, ended at 3abbf3b6b8ed59e66b11146dff00e7f9d418f6c3
   recipients: me
-  ended: code delivered; pending for me
-  ended: submission landed d185a879b51dba33555c036392b50443f4dfc5e8; pending for me
+  ended stage/code/1/delivered: code delivered; pending for me
+  ended submission/1/landed: submission landed d185a879b51dba33555c036392b50443f4dfc5e8; pending for me
 $ git log --oneline main
 d185a87 chore(land): #1 fix/the-parser-reads-tabs
 3abbf3b fix(parser): keep a tab after a quote
@@ -211,7 +212,7 @@ recipient, on every place of the host:
 
 ```console
 $ flume inbox --recipient me
-fix--the-parser-reads-tabs code delivered; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
+fix--the-parser-reads-tabs code delivered [stage/code/1/delivered]; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
 $ flume inbox --recipient me
 nothing pending for me
 $ flume status

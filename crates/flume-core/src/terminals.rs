@@ -295,7 +295,7 @@ impl Engine {
 
     /// The calling command's session, as the first terminal the host
     /// binds that names one names it (7, 190).
-    pub(crate) fn caller_session(&self) -> Option<String> {
+    pub fn caller_session(&self) -> Option<String> {
         self.host_terminals()
             .iter()
             .find_map(|bound| bound.terminal.session())

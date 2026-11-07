@@ -493,6 +493,7 @@ fn a_place_in_two_terminals(_: &()) -> Outcome {
 fn a_caller_under_a_streams_terminal(_: &()) -> Outcome {
     let world = World::new();
     let other = work_and_trial(&world);
+    world.host.set_recipient(None);
     other.set_session(Some("caller-1"));
     other.add_session("caller-1", AgentState::Waiting);
     let fix = fix_on(&world, "work", "one")?;

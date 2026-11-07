@@ -2,8 +2,9 @@
 //! file's write time, whether a command of flume's still lives, the bound
 //! on agents its configuration states, its streams with their sessions,
 //! labels and displays, its pools of accounts, the labels it gives kinds,
-//! its configuration's values with their layers, the runs and standing
-//! agents it names for roles' addresses, the sources of its kinds, and a
+//! its configuration's values with their layers, the sources of its
+//! kinds and the roles they declare, each address's run, standing agent
+//! or carrying, each stream's answerer and the roles that answer, and a
 //! lock over the room (design 3, 6). No seam of Part B.
 
 use crate::{KindSettings, Seconds, Secret, Settings};
@@ -405,13 +406,22 @@ pub struct HostSettings {
     pub every_agent: Settings,
 }
 
-/// The run a host wakes for a role's address, as its configuration's
-/// `[roles."<partition>/<role>"]` table gives it: the repository and kind
-/// it is launched as, at the priority given, on the base named or the
-/// repository's default branch where it names none, with the brief where
-/// one is given, in the stream named where one is (132, 143, C.7).
+/// The run a source declares for a role's address, as the
+/// `[roles."<stream>/<role>"]` entry of the roles file its declaration
+/// names gives it: the source that declares it; the repository it is
+/// launched in, by its location on the host, and the kind it is launched
+/// as, one of its source's own named by its name, its version the
+/// locks'; at the priority given, zero where it gives none; on the base
+/// named, the repository's default branch where it names none; with the
+/// brief, the place's name (else `<stream>-<role>`), the intent and the
+/// agents' settings it gives, each none where it gives none; the words of
+/// what the role answers, which a stage's prompt gives; and whether it
+/// stands behind its address's stream. Its stream is its address's, and
+/// it names none of its own (7, 28, 132, 143, 154, 155, 193, C.7).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RoleRun {
+    #[serde(default)]
+    pub source: String,
     pub repository: String,
     pub kind: String,
     #[serde(default)]
@@ -421,24 +431,258 @@ pub struct RoleRun {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub brief: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stream: Option<String>,
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub intent: Option<String>,
+    #[serde(default, skip_serializing_if = "RoleAgents::is_empty")]
+    pub agents: RoleAgents,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answers: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub answerer: bool,
 }
 
-/// The standing agent a host's configuration names for a role's address,
-/// as its `[roles."<partition>/<role>"]` table gives it with `agent`: the
-/// name the terminal knows the agent by, which a caller keeps standing;
-/// the session it lives in where the entry names one, else its stream's
-/// own; and the stream whose session and terminal it is found in where
-/// the entry names one, else the default stream. The address's ends go
-/// into that agent, and flume starts, wakes and keeps nothing of it (43,
-/// 132, 143, 190, C.7; core.28).
+/// The settings a role's entry gives its run's agents under its `agents`
+/// table, as a launch's `--agent` gives them: every stage's, and each
+/// stage's by the stage's name under `stages`, which come before every
+/// stage's; none where it gives none (7, 32, 193, C.7).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoleAgents {
+    #[serde(default, skip_serializing_if = "is_unset")]
+    pub every_stage: Settings,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub stages: BTreeMap<String, Settings>,
+}
+
+impl RoleAgents {
+    /// Whether the entry gives its run's agents no setting.
+    pub fn is_empty(&self) -> bool {
+        is_unset(&self.every_stage) && self.stages.is_empty()
+    }
+}
+
+/// Whether settings give nothing.
+fn is_unset(settings: &Settings) -> bool {
+    *settings == Settings::default()
+}
+
+/// The standing agent a source declares for a role's address, as its
+/// roles file's entry gives it with `agent`: the source that declares
+/// it; the name the terminal knows the agent by, which a caller keeps
+/// standing; the session it lives in where the entry names one, else its
+/// address's stream's own; the words of what the role answers; and
+/// whether it stands behind its address's stream. It is found in its
+/// address's stream's terminal, the address's ends go into it, and flume
+/// starts, wakes and keeps nothing of it (43, 132, 143, 190, 193, C.5,
+/// C.7; core.28; record 0039's amendment).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StandingAgent {
+    #[serde(default)]
+    pub source: String,
     pub agent: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stream: Option<String>,
+    pub answers: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub answerer: bool,
+}
+
+/// An address a source declares carried, `carried = true`, its run on
+/// another host and its stream that host's: the source, and the words of
+/// what the role answers where it gives them. flume launches nothing for
+/// it and keeps its ends pending (132, 193, C.7).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CarriedRole {
+    pub source: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answers: Option<String>,
+}
+
+/// What one entry of a source's roles file declares for its address: a
+/// run, a standing agent, or the address carried to another host (132,
+/// 193, C.7).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RoleEntry {
+    Run(Box<RoleRun>),
+    Standing(StandingAgent),
+    Carried(CarriedRole),
+}
+
+impl RoleEntry {
+    /// The source that declares it.
+    pub fn source(&self) -> &str {
+        match self {
+            RoleEntry::Run(run) => &run.source,
+            RoleEntry::Standing(agent) => &agent.source,
+            RoleEntry::Carried(carried) => &carried.source,
+        }
+    }
+
+    /// The words of what the role answers, none where it gives none.
+    pub fn answers(&self) -> Option<&str> {
+        match self {
+            RoleEntry::Run(run) => run.answers.as_deref(),
+            RoleEntry::Standing(agent) => agent.answers.as_deref(),
+            RoleEntry::Carried(carried) => carried.answers.as_deref(),
+        }
+    }
+
+    /// Whether it stands behind its address's stream; a carried address
+    /// never does.
+    pub fn answerer(&self) -> bool {
+        match self {
+            RoleEntry::Run(run) => run.answerer,
+            RoleEntry::Standing(agent) => agent.answerer,
+            RoleEntry::Carried(_) => false,
+        }
+    }
+}
+
+/// An entry of a source's roles file that declares nothing for its
+/// address: the address as the entry names it, the source, and why: the
+/// entry at fault, its address's stream one the host does not declare,
+/// the address another entry declares too, or another address whose run
+/// would be the same place (3, 4, 132, 143, 193, C.7).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoleRefused {
+    pub address: String,
+    pub source: String,
+    pub reason: String,
+}
+
+/// A source's roles file that cannot be read, so declares no role: the
+/// file as the source's declaration names it, read, and why (191, 193).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RolesUnread {
+    pub file: String,
+    pub reason: String,
+}
+
+/// A role's address and the source that declares it.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct DeclaredBy {
+    pub address: String,
+    pub source: String,
+}
+
+/// Who stands behind a stream: the one role its sources declare to, an
+/// address of the stream, with its source; or the roles that each
+/// declare to, two or more, so none stands behind it (143, 193).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StreamAnswerer {
+    Stands(DeclaredBy),
+    Contested { roles: Vec<DeclaredBy> },
+}
+
+/// A role a source declares with the words of what it answers: its
+/// address, its stream and the words (28, 41, 132, 193).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnsweringRole {
+    pub address: String,
+    pub stream: String,
+    pub answers: String,
+}
+
+/// What the host's sources declare of roles, read from the roles file
+/// each source's declaration names as they stand when asked, and never
+/// kept: each address one entry declares, with that entry; each entry
+/// that declares nothing for its address, with why; and each source whose
+/// roles file cannot be read, by the source, with the file and why (132,
+/// 191, 193, C.7).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostRoles {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub declared: BTreeMap<String, RoleEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub refused: Vec<RoleRefused>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub unread: BTreeMap<String, RolesUnread>,
+}
+
+impl HostRoles {
+    /// What the sources declare for `address`, or why nothing is: each
+    /// entry's reason that names it and declares nothing, else that no
+    /// source declares it (132, 193).
+    pub fn declared(&self, address: &str) -> Result<RoleEntry, String> {
+        if let Some(entry) = self.declared.get(address) {
+            return Ok(entry.clone());
+        }
+        let mut reasons: Vec<&str> = vec![];
+        for refused in self
+            .refused
+            .iter()
+            .filter(|refused| refused.address == address)
+        {
+            if !reasons.contains(&refused.reason.as_str()) {
+                reasons.push(&refused.reason);
+            }
+        }
+        if reasons.is_empty() {
+            Err(format!("no source of the host declares {address}"))
+        } else {
+            Err(reasons.join("; "))
+        }
+    }
+
+    /// The run a source declares for `address`; none where it declares a
+    /// standing agent, a carried address or nothing (132).
+    pub fn run(&self, address: &str) -> Option<RoleRun> {
+        match self.declared.get(address) {
+            Some(RoleEntry::Run(run)) => Some(RoleRun::clone(run)),
+            _ => None,
+        }
+    }
+
+    /// Each address a source declares a standing agent for, by the
+    /// address (132; record 0039's amendment).
+    pub fn standing(&self) -> BTreeMap<String, StandingAgent> {
+        self.declared
+            .iter()
+            .filter_map(|(address, entry)| match entry {
+                RoleEntry::Standing(agent) => Some((address.clone(), agent.clone())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Who stands behind `stream`: none where no declared role stands
+    /// behind it (143, 193).
+    pub fn answerer(&self, stream: &str) -> Option<StreamAnswerer> {
+        let mut roles: Vec<DeclaredBy> = self
+            .declared
+            .iter()
+            .filter(|(address, entry)| entry.answerer() && stream_of(address) == stream)
+            .map(|(address, entry)| DeclaredBy {
+                address: address.clone(),
+                source: entry.source().to_string(),
+            })
+            .collect();
+        match roles.len() {
+            0 => None,
+            1 => roles.pop().map(StreamAnswerer::Stands),
+            _ => Some(StreamAnswerer::Contested { roles }),
+        }
+    }
+
+    /// Every address a source declares with the words of what it
+    /// answers, a run's, a standing agent's or a carried one's, each with
+    /// its stream and its words, in the addresses' order (28, 41, 132,
+    /// 193).
+    pub fn answering(&self) -> Vec<AnsweringRole> {
+        self.declared
+            .iter()
+            .filter_map(|(address, entry)| {
+                entry.answers().map(|answers| AnsweringRole {
+                    address: address.clone(),
+                    stream: stream_of(address).to_string(),
+                    answers: answers.to_string(),
+                })
+            })
+            .collect()
+    }
 }
 
 /// A source the host's configuration declares by a file of its own in its
@@ -451,20 +695,28 @@ pub struct HostSource {
     pub read: HostSourceRead,
 }
 
-/// A source's file read: the directory holding its packages, its leading
-/// `~` read as the host user's home; or why the file cannot be read, a
-/// name that is flume's own source's, the repository's or a launch's
-/// among the reasons (154, 191, C.7).
+/// A source's file read: the directory holding its packages, and the file
+/// in which it declares its roles where it names one, none where it
+/// names none, each leading `~` read as the host user's home; or why the
+/// file cannot be read, a name that is flume's own source's, the
+/// repository's or a launch's among the reasons (154, 191, 193, C.7).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HostSourceRead {
-    Read { kinds_dir: String },
-    CouldNotRead { reason: String },
+    Read {
+        kinds_dir: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        roles: Option<String>,
+    },
+    CouldNotRead {
+        reason: String,
+    },
 }
 
-/// Whether a recipient's name is a role's address, `<partition>/<role>`,
-/// each part a word of letters, digits, `.`, `_` and `-`; any other name
-/// is a session's (132; design 1).
+/// Whether a recipient's name is a role's address, `<stream>/<role>`,
+/// each part a word of letters, digits, `.`, `_` and `-`: the role a
+/// source declares for a stream; any other name is a session's (132,
+/// 143, 193; design 1).
 pub fn is_address(name: &str) -> bool {
     let word = |part: &str| {
         !part.is_empty()
@@ -473,13 +725,18 @@ pub fn is_address(name: &str) -> bool {
                 .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
     };
     name.split_once('/')
-        .is_some_and(|(partition, role)| word(partition) && word(role))
+        .is_some_and(|(stream, role)| word(stream) && word(role))
 }
 
-/// The role an address names, its part after the partition: the name a
-/// run of the role is launched under (132).
+/// The role an address names, its part after its stream (132, 193).
 pub fn role_of(address: &str) -> &str {
     address.split_once('/').map_or(address, |(_, role)| role)
+}
+
+/// The stream an address names, its part before its role: the stream a
+/// role's run runs in and its standing agent is found in (143, 193).
+pub fn stream_of(address: &str) -> &str {
+    address.split_once('/').map_or("", |(stream, _)| stream)
 }
 
 /// The host's facts (design 3).
@@ -519,17 +776,40 @@ pub trait Host: Send + Sync {
     /// 143, C.7).
     fn settings(&self, repository: &str, kind: &str, stream: &str) -> HostSettings;
 
-    /// The run the host's configuration names for a role's address, as
-    /// it stands now; none where it names nothing for it (132, C.7).
-    fn role(&self, address: &str) -> Option<RoleRun>;
+    /// What the host's sources declare of roles, read from their roles
+    /// files as they stand now, and never kept (132, 191, 193, C.7).
+    fn roles(&self) -> HostRoles;
 
-    /// Each address the host's configuration gives a standing agent, by
-    /// the address, as it stands now: read at each delivery and each
+    /// What the sources declare for a role's address, or why nothing is,
+    /// as they stand now (132, 193).
+    fn declared(&self, address: &str) -> Result<RoleEntry, String> {
+        self.roles().declared(address)
+    }
+
+    /// The run a source declares for a role's address, as it stands now;
+    /// none where it declares no run for it (132, 193).
+    fn role(&self, address: &str) -> Option<RoleRun> {
+        self.roles().run(address)
+    }
+
+    /// Each address a source declares a standing agent for, by the
+    /// address, as the sources stand now: read at each delivery and each
     /// status, never kept, and none of them a run's, which `role` gives
-    /// (132, C.7). None by default, a host whose configuration gives no
-    /// standing agent.
+    /// (132, 193; record 0039's amendment).
     fn standing(&self) -> BTreeMap<String, StandingAgent> {
-        BTreeMap::new()
+        self.roles().standing()
+    }
+
+    /// Who stands behind `stream`, as the sources stand now; none where
+    /// no role does (143, 193).
+    fn answerer(&self, stream: &str) -> Option<StreamAnswerer> {
+        self.roles().answerer(stream)
+    }
+
+    /// Every address a source declares with the words of what it
+    /// answers, as the sources stand now (28, 41, 132, 193).
+    fn answering(&self) -> Vec<AnsweringRole> {
+        self.roles().answering()
     }
 
     /// The streams the host's configuration declares, by name, as it

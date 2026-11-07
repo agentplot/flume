@@ -10,7 +10,9 @@
 use crate::accounts::Choice;
 use crate::live::LiveRead;
 use crate::open_sessions::told;
-use crate::prompt::{asks, group_text, notes_path, render};
+use crate::prompt::{
+    asks, group_text, may_name, notes_path, render, roles_text, way_to_stop_short,
+};
 use crate::room::Admit;
 use crate::start_record::start_record;
 use crate::{repository_id, Engine, Step};
@@ -216,15 +218,30 @@ impl Engine {
         }
     }
 
+    /// The roles a stop-short of the place may name, read from the host's
+    /// sources as they stand now: every role they declare with words of
+    /// what it answers, but the place's own where it is a role's run, its
+    /// stream's first (28, 41, 132, 193).
+    pub(crate) fn may_name(&self, held: &HeldState) -> Vec<AnsweringRole> {
+        may_name(
+            self.host.answering(),
+            &held.place.stream.name,
+            held.role.as_deref(),
+        )
+    }
+
     /// The stage's prompt filled for `identity`'s start, or the first
     /// part it asks for with nothing to fill it (27). The way to stop
     /// short is in every prompt (28), as `agent`, the profile of the
-    /// stage's program, gives it; and a first stage started in a place
-    /// that could not be made ready carries the step and its words (12).
-    /// A repeating stage fills `{{group}}` with `group`, the start's,
-    /// which none fills where the change could not be read, and
-    /// `{{notes}}` with its notes' path; a stage that does not repeat
-    /// fills neither (27, 141).
+    /// stage's program, gives it, saying it is the agent's one way to ask;
+    /// and a first stage started in a place that could not be made ready
+    /// carries the step and its words (12). A repeating stage fills
+    /// `{{group}}` with `group`, the start's, which none fills where the
+    /// change could not be read, and `{{notes}}` with its notes' path; a
+    /// stage that does not repeat fills neither (27, 141). The roles in
+    /// `listed`, which a stop-short may name, come last, after every part
+    /// the stage's repetitions share (28, 41; core.31).
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn fill(
         &self,
         held: &HeldState,
@@ -233,11 +250,12 @@ impl Engine {
         words: Option<&str>,
         agent: Option<&dyn Agent>,
         group: Option<Option<&GroupHeld>>,
+        listed: &[AnsweringRole],
     ) -> Result<String, PromptPart> {
         let place = &held.place;
         let stage = &place.kind.stages[index];
         let change = self.bound(place).ok().and_then(|bound| bound.change);
-        let stop_short = agent.map(|agent| agent.stop_short(identity));
+        let stop_short = agent.map(|agent| way_to_stop_short(agent, identity));
         let fill = |part: PromptPart| -> Option<String> {
             match part {
                 PromptPart::Brief => place.brief.clone(),
@@ -274,6 +292,10 @@ impl Engine {
         {
             text.push_str("\n\n");
             text.push_str(&unready(&held.readiness));
+        }
+        if let Some(roles) = agent.and_then(|agent| roles_text(listed, &place.stream.name, agent)) {
+            text.push_str("\n\n");
+            text.push_str(&roles);
         }
         Ok(text)
     }
@@ -488,6 +510,10 @@ impl Engine {
         };
         let made_from = self.store.made(id).len();
         let label = self.label_of(place);
+        // The roles a stop-short may name, read once for the start before
+        // its claim, so a claim written again reads no file again (28, 41,
+        // 193).
+        let listed = self.may_name(&read.state);
         let claimed = self.update(id, |held| {
             if let Admit::Waiting(_) = admit {
                 if held.phase != Phase::Live
@@ -566,16 +592,22 @@ impl Engine {
             // retry's as its words (27, 28, 49, 146). A lost carried
             // start keeps the retry's words, so a fresh start after it
             // that did not begin is given them again (S79).
+            let stream = &held.place.stream.name;
+            let way = |first: String| {
+                let way = format!("{first}\n\n{}", way_to_stop_short(agent, &identity));
+                match roles_text(&listed, stream, agent) {
+                    Some(roles) => format!("{way}\n\n{roles}"),
+                    None => way,
+                }
+            };
             let (text, started_with) = match &resume {
                 Some(_) if lost => {
                     let resumed = then_words(StartReason::Resumed.words(), words.as_deref());
-                    let text = format!("{resumed}\n\n{}", agent.stop_short(&identity));
-                    (text, words.clone())
+                    (way(resumed), words.clone())
                 }
                 Some(_) => {
                     let words = StartReason::Carried.words();
-                    let text = format!("{words}\n\n{}", agent.stop_short(&identity));
-                    (text, Some(words))
+                    (way(words.clone()), Some(words))
                 }
                 None => match self.fill(
                     held,
@@ -584,6 +616,7 @@ impl Engine {
                     fresh.as_deref(),
                     Some(agent),
                     group.as_ref().map(Option::as_ref),
+                    &listed,
                 ) {
                     Err(part) => {
                         let stage = &mut held.stages[index];
@@ -709,6 +742,7 @@ impl Engine {
                 past_limit: false,
                 printed: None,
                 group: group.clone().flatten(),
+                may_name: listed.iter().map(|role| role.address.clone()).collect(),
                 opening: Some(self.host.command()),
                 dialog: None,
                 conversation: conversation.clone(),

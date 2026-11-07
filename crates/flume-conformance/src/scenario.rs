@@ -130,6 +130,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
             hold_submission: false,
             hold_words: BTreeMap::new(),
             recipients: vec![],
+            recipients_from: None,
             stream: StreamHeld {
                 name: DEFAULT_STREAM.into(),
                 from: StreamFrom::Default,

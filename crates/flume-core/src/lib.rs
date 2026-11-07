@@ -44,7 +44,7 @@ mod wait;
 mod wake;
 
 pub use accounts::{FRESH, THRESHOLD};
-pub use acts::Retry;
+pub use acts::{Answering, Retry};
 pub use agent_acts::ANSWER_RECORDED_WITHIN;
 pub use answer::*;
 pub use ends::{end_words, notice, what_ended};
@@ -52,11 +52,11 @@ pub use held::Step;
 pub use kinds_lock::{KindsLock, LockOf};
 pub use line::NOT_ITS_AGENT;
 pub use own::shaped_as_credential;
-pub use prompt::group_name;
+pub use prompt::{group_name, way_to_stop_short, ONE_WAY_TO_ASK};
 pub use start_record::{
     variable_digest, AGENT_VARIABLE, PLACE_VARIABLE, STAGE_VARIABLE, TERMINALS_OWN,
 };
-pub use wait::{WaitFor, WAIT_POLL};
+pub use wait::{session_words, WaitFor, WAIT_POLL};
 
 use flume_seams::{
     Agent, Binding, Change, History, Host, MergeQueue, Place, PlaceRecord, Resolver, Seconds,
@@ -297,6 +297,7 @@ mod tests {
             hold_submission: false,
             hold_words: BTreeMap::new(),
             recipients: vec![],
+            recipients_from: None,
             stream: flume_seams::StreamHeld {
                 name: flume_seams::DEFAULT_STREAM.into(),
                 from: flume_seams::StreamFrom::Default,

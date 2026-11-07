@@ -94,7 +94,15 @@
 //! the directory holds no script of acts none. It then keeps its log at
 //! `<stage>-<n>.log` beside the script: each line it prints, each prompt
 //! it took among them, as `took the prompt: <the prompt as JSON>`, so a
-//! walkthrough reads what reached the session.
+//! walkthrough reads what reached the session. A session read by
+//! `STAND_IN_SCRIPT`, as one a person starts in a pane of their own, keeps
+//! its log in the file `STAND_IN_LOG` names, where one is named.
+//!
+//! The context its SessionStart hooks give, each
+//! `hookSpecificOutput.additionalContext`, it prints as `given at its
+//! start: <the context as JSON>`, as that release hands it to the model
+//! before the first prompt, so a walkthrough reads what a session was
+//! given at its start (C.4; design 9).
 //!
 //! The first run's prompt is the command's argument, as the printed
 //! command passes it; where the command passes none, as a terminal that
@@ -264,7 +272,12 @@ fn script() -> Value {
             let _ = LOG.set(dir.join(format!("{stage}-{start}.log")));
             Some(dir.join(format!("{stage}-{start}.json")))
         }
-        None => std::env::var_os("STAND_IN_SCRIPT").map(PathBuf::from),
+        None => {
+            if let Some(log) = std::env::var_os("STAND_IN_LOG").filter(|log| !log.is_empty()) {
+                let _ = LOG.set(PathBuf::from(log));
+            }
+            std::env::var_os("STAND_IN_SCRIPT").map(PathBuf::from)
+        }
     };
     file.and_then(|file| std::fs::read_to_string(file).ok())
         .and_then(|text| serde_json::from_str::<Value>(&text).ok())
@@ -642,7 +655,10 @@ impl Session {
             self.cwd.display(),
             if self.resumed { ", resumed" } else { "" }
         ));
-        self.hook("SessionStart", json!({ "source": source }), None);
+        let started = self.hook("SessionStart", json!({ "source": source }), None);
+        for context in &started.context {
+            say(&format!("given at its start: {}", json!(context)));
+        }
         let mut failed = false;
         let mut given = prompt;
         for (at, acts) in runs.iter().enumerate() {
@@ -959,6 +975,9 @@ impl Session {
                             .to_string(),
                     );
                 }
+                if let Some(context) = specific["additionalContext"].as_str() {
+                    answer.context.push(context.to_string());
+                }
                 if output["decision"] == "block" {
                     answer
                         .blocked
@@ -1124,6 +1143,8 @@ enum Turn {
 struct Answer {
     denied: Option<String>,
     blocked: Option<String>,
+    /// Each hook's added context, in order.
+    context: Vec<String>,
 }
 
 #[derive(Default)]

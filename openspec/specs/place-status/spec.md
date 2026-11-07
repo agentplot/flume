@@ -399,17 +399,17 @@ it there (49, 56, 77, 207; core.30).
 
 ### Requirement: Status says where each standing address lives
 
-The host's status SHALL give every address the configuration gives a
-standing agent, pending or not, with its agent, stream, session and
-where that came from, the stream's terminal, and what the terminal
-found at the ask: one agent with its state, none, more than one, or why
-it could not read; each terminal and session read once per status, and
-nothing kept (56, 132, 190; core.14, core.15).
+The host's status SHALL give every address a source gives a standing
+agent, pending or not, with its agent, stream, session and where that
+came from, the stream's terminal, and what the terminal found at the
+ask: one agent with its state, none, more than one, or why it could not
+read; each terminal and session read once per status, and nothing kept
+(56, 132, 190, 193; core.14, core.15).
 
 #### Scenario: An agent found
 
 - **WHEN** the host's status is asked while `madswan/planner`'s standing agent waits in `madswan` and two ends are pending for it
-- **THEN** the address gives `madswan-planner`, the session `madswan` from `role`, the agent found waiting, and the two pending ends (56, 132)
+- **THEN** the address gives `madswan-planner`, the stream `madswan` from its address, the session `madswan` from `role`, the agent found waiting, and the two pending ends (56, 132)
 
 #### Scenario: None of the name
 
@@ -428,7 +428,7 @@ nothing kept (56, 132, 190; core.14, core.15).
 
 #### Scenario: Nothing pending
 
-- **WHEN** the configuration gives `madswan/ops` a standing agent and no end is pending for it
+- **WHEN** a source gives `madswan/ops` a standing agent and no end is pending for it
 - **THEN** the host's status still gives `madswan/ops` with its standing (56)
 
 #### Scenario: Two addresses in one session
@@ -513,3 +513,32 @@ host's `watch` (61, 122, 208; core.14).
 
 - **WHEN** a caller keeps watch, the host binds the fake terminal and `trial` names `other`, and status is asked
 - **THEN** each terminal's answer gives `watch` none, and the host's `watch` gives the caller's bound (61, 122, 208)
+
+### Requirement: Status gives who answers a place
+
+Status SHALL give each place's recipients, each with where it came
+from; the role a stop-short named; each end's key, and a stop-short's
+answer with who gave it and when; and a hold on the waiting move with
+its words, since when, its bound or that it lapsed (56, 130, 193).
+
+#### Scenario: Recipients and their sources
+
+- **WHEN** one place names `ops` at its launch and another took its stream's answerer `east/operator`
+- **THEN** status gives the first `ops` from the launch and the second `east/operator` from the stream's answerer, declared by the source `acme`, in the JSON form and the person's
+
+#### Scenario: An answered question
+
+- **WHEN** a construct's stop-short in `east`, naming `ops`, was answered by a retry naming its key from the run of `east/ops`
+- **THEN** status gives the end's key, `east/ops` as its addressee, and the answer's words with `east/ops` and when
+
+### Requirement: Status gives the roles a host wakes
+
+Status SHALL give, for each stream, its answerer with the source that
+declares it; each source's roles, or why they cannot be read; and for
+each address an end stands pending for, its run, or that it is carried
+or wakes nothing and why (56, 132, 191, 193).
+
+#### Scenario: An address that wakes nothing
+
+- **WHEN** an end stands pending for `east/planner`, which no source declares, on a place whose stream's answerer is `east/operator`
+- **THEN** status gives the address with no run and that no source declares it, and the stream's answerer `east/operator`

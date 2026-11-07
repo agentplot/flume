@@ -1,6 +1,6 @@
 ---
 title: Callers, holds and ends
-description: Who is told how a place's stages end, how flume delivers an end once or keeps it pending, flume wait and flume inbox, holds with words, stops short, the agent kept open for its answer, retries and stalls.
+description: Who answers a place and is told how its stages end, how flume delivers an end once or keeps it pending, flume wait and flume inbox, holds with words and the hold on the waiting move, stops short and a question put to a role, the agent kept open for its answer, the answer taken once by its key, retries and stalls.
 sidebar:
   order: 4
 ---
@@ -11,14 +11,52 @@ the kind through on its own and tells the caller each end. It waits on
 the caller only where a hold, a question or a failure says so, and it
 says which, since when, and in whose words.
 
-## Recipients
+## Who answers a place
 
 Each place has recipients, who are told how its stages end. A launch
-names them with `--recipient`, once per recipient. With none, the
-recipient is `$FLUME_RECIPIENT`, else the terminal session the launch
-ran in: under herdr, `herdr:<pane>@<socket>`, the pane that ran
-`flume launch`. A recipient may also be a role's address, which
-[roles and wake](/flume/guides/roles-and-wake/) covers.
+takes them from the first of these that gives any:
+
+1. `--recipient`, once per recipient: a terminal's session by its name,
+   or a role's address, `<stream>/<role>`, of any stream
+   ([roles and wake](/flume/guides/roles-and-wake/));
+2. `$FLUME_RECIPIENT` in the launching command's environment;
+3. the terminal session the launch ran in: under herdr,
+   `herdr:<pane>@<socket>`, the pane that ran `flume launch`;
+4. the answerer behind the place's stream, the role a source of the host
+   declares to stand behind it
+   ([the answerer behind a stream](/flume/guides/roles-and-wake/#the-answerer-behind-a-stream)).
+
+A launch that finds none of the four is refused, with nothing made, so
+no place runs with nobody to tell:
+
+```console
+$ flume launch --kind fix --name the-parser-reads-tabs --brief "The parser drops a tab after a quote."
+refused: the launch finds no one to answer it: it names no --recipient, $FLUME_RECIPIENT is unset, the terminal names no session it runs in, and no source of the host declares a role standing behind the stream default; give it one of the four
+```
+
+A launch is refused too where it would take the answerer and two roles
+stand behind its stream, naming both, and where it names a role's
+address that no source declares, or two declare, while no answerer
+stands behind its stream. Where an answerer stands behind it, such a
+launch is taken: the address's ends stay pending, status says it wakes
+nothing, and its questions reach the answerer at their stall.
+
+The recipients are fixed at the launch, and status gives them with
+where they came from:
+
+```text
+  recipients: east/operator, from the stream's answerer, declared by acme
+```
+
+Three more may hear of a place's question, each in its turn:
+
+- **the role its question names.** A stage's agent may put one
+  question to a role of any stream, `flume needs --to <role>`, and that
+  role alone is told ([stopping short](#stopping-short));
+- **the answerer behind its stream**, at its stall, besides its
+  recipients and the role its question named ([stalls](#stalls));
+- **whoever answers it once**, by the question's key
+  ([the answer's key](#the-answers-key)).
 
 `flume wait` and `flume inbox` act as a recipient the same way:
 `--recipient`, else `$FLUME_RECIPIENT`, else the role a role's run
@@ -47,7 +85,12 @@ happens:
 Each end is delivered **once** to each recipient, inside the settle
 that reads it, as a one-line notice through the terminal into the
 recipient's own pane, such as
-`flume: fix--the-parser-reads-tabs code delivered; read: flume status fix--the-parser-reads-tabs`. flume records on the place that it was
+`flume: fix--the-parser-reads-tabs (The parser drops a tab after a quote.) code delivered [stage/code/1/delivered]; read: flume status fix--the-parser-reads-tabs`.
+The notice names the place, the first line of its brief cut at 60
+characters, what ended, the end's key, and the command that reads it
+whole: `flume inbox` where the place now waits on a move of its
+caller's, which gives the question and how to answer it, and
+`flume status <place>` otherwise. flume records on the place that it was
 delivered, to whom and when. A recipient asking a question, or one the
 terminal cannot read or find, gets nothing typed into its pane; the end stays
 **pending** for a later settle, a wait or the inbox. Under the printed
@@ -55,8 +98,8 @@ command nothing is ever typed, so every end stays pending until
 collected. Status shows each end and whom it is pending for:
 
 ```text
-  ended: code delivered; pending for me
-  ended: submission landed d185a879b51dba33555c036392b50443f4dfc5e8; pending for me
+  ended stage/code/1/delivered: code delivered; pending for me
+  ended submission/1/landed: submission landed d185a879b51dba33555c036392b50443f4dfc5e8; pending for me
 ```
 
 A place whose work is over keeps only its record while an end of it
@@ -94,13 +137,32 @@ write, so two inboxes at once deliver each end once:
 
 ```console
 $ flume inbox --recipient me
-fix--the-parser-reads-tabs code delivered; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
+fix--the-parser-reads-tabs code delivered [stage/code/1/delivered]; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
 $ flume inbox --recipient me
 nothing pending for me
 ```
 
-A session that starts runs it to catch up on what it missed. Reading
-`flume status` delivers nothing.
+Beneath what it collected, the inbox gives every place that waits on
+its caller and on the recipient: one it is a recipient of, one whose
+stop-short named it, or one whose stall reached it as the answerer
+behind its stream. Each comes with the move it waits on and since when,
+the stop-short's words and key, the role it named, and a hold on the
+move. The inbox marks nothing for these, so a recipient that collected
+a question and then restarted still finds it:
+
+```console
+$ flume inbox --recipient east/ops
+nothing pending for east/ops
+change--plan (one of two designs), in east, waits on east/ops; read: flume status ~/.local/share/flume/places/f5f5e14159a8/change--plan
+  waits on its caller to retry construct (answer) since 1793287734: Which design does the brief mean?
+  its stop-short stage/construct/1/ended-short needs an answer, asking east/ops
+```
+
+A session that starts runs it to catch up on what it missed. Under
+herdr, flume's Claude Code plugin does that at a session's start, as the
+pane the session runs in, and hands the agent what the inbox gives
+([a session of your own](/flume/guides/claude-code/#a-session-of-your-own)).
+Reading `flume status` delivers nothing.
 
 ## Holds
 
@@ -147,6 +209,47 @@ anything flume cannot see.
 A stage whose declaration says `wait = true` is held the same way,
 with no words, until a retry names it.
 
+### A hold on the waiting move
+
+A place that waits on its caller stalls once nobody's words say who
+is on it. Whoever takes the move
+says so with a hold on it, `--waiting`, and an optional bound,
+`--for`, in the same times as `--stall-after`:
+
+```sh
+flume hold change--plan "east-ops has it" --waiting --for 1h
+flume hold change--plan "passed to west/ops" --waiting --for 1h
+flume hold change--plan "put to a person, waiting on their answer" --waiting --for 24h
+```
+
+While the hold holds, the place is not stalled, so no stall of it
+reaches anyone. A place already stalled reads not stalled once
+the hold is put. A later hold on the move replaces the words, the bound
+and since when. Status gives the hold beneath the move:
+
+```text
+  waits on its caller to retry construct (answer) since 1793287841: Which design does the brief mean?
+  the move it waits on on hold since 1793287900, for 3600 seconds: east-ops has it
+```
+
+The hold ends once the place waits on another move or none, whatever
+made the move: a retry, a drop or a stage that went on. Where it gives
+a bound, the settle that reads the bound passed lapses it: status says
+it lapsed and when, `lapsed at <time>`, and the place stalls at once,
+with the lapsed hold's words in its stall. Where it gives none, it
+holds until the move is made. A lapsed hold holds nothing and stays in
+status until the move is made or a later hold replaces it.
+
+`flume hold --waiting` refuses a place that waits on no move of its
+caller's, naming the place. A bound is the waiting move's alone: a hold
+on a stage or the submission that gives `--for` is refused.
+
+**Hold before you put a question to a person.** A person's answer can
+take a day. Hold the move first, saying the question is going to a
+person, then hold again naming where it waits, with a bound of a day or
+more. The place then stalls to nobody while the person has it, and
+stalls again at the bound if their answer never comes.
+
 ## Stopping short
 
 An agent that cannot deliver says why, from inside the place:
@@ -164,7 +267,7 @@ whether it needs an answer or found work:
   stage code: ended_short, started 2 times, saying: Which README, the root's or the parser's?
   waits on its caller to retry code (answer) since 1793287841: Which README, the root's or the parser's?
     its agent kept open for the answer until 1793291441: retry with --words, or tell it
-  ended: code needs an answer; pending for me
+  ended stage/code/2/ended-short: code needs an answer; pending for me
 ```
 
 A question starts no next stage: the place waits on its answer. Found
@@ -172,6 +275,56 @@ work from the kind's last stage starts the kind's fix round on its own,
 as a failed submission does
 ([kinds](/flume/guides/kinds/#how-a-kind-runs-through)). Found work
 from any other stage waits on its answer as a question does.
+
+A stop-short is a stage's agent's one way to ask. Every prompt's way to
+stop short says so: the agent writes no card and no message to a person
+itself, since whoever answers the question decides whether it is a
+person's ([prompt parts](/flume/reference/prompt-parts/#what-flume-adds)).
+
+### Asking a role
+
+An agent's question may be another role's than the place's recipients':
+a reading of a live system, say, where the place's owner plans the
+work. Every prompt lists, after its way to stop short, each role the
+agent may name, with what each answers in its source's words: every
+role a source of the host declares with `answers`, the place's own
+stream's first by the role alone, and every other stream's after by its
+whole address. A role's run is not offered its own address.
+
+```text
+Where your words are for one of these roles rather than for the place's recipients, name it with `--to`, as `flume needs --to <name> "<words>"` or `flume needs --found --to <name> "<words>"`, the name written as listed here:
+- `operator`: Whatever reaches the stream's work from outside it, and a question no role took up.
+- `ops`: A live system: what is deployed, a credential, a deploy, a landing that failed.
+- `west/ops`: A live system of the stream west.
+```
+
+```sh
+flume needs --to ops "Which queue is deployed on the staging host?"
+flume needs --to west/ops "Is west's deploy of the parser still running?"
+```
+
+A role alone, `ops`, is the place's own stream's; an address,
+`west/ops`, is that stream's. flume reads the list from the sources at
+each start, and records it with the start. A name the prompt did not
+list is refused, naming those it did, and the stage goes on, so the
+agent can ask again:
+
+```text
+refused: the stop-short names `design`, which its prompt did not list: it may name `operator`, `ops` and `west/ops`, or none
+```
+
+The stop-short's end goes to that role alone, in place of the place's
+recipients: into its run's pane, or pending, waking its run in its own
+stream. Status names the role it asked:
+
+```text
+  stage construct: ended_short, started 1 times, asking west/ops, saying: Is west's deploy of the parser still running?
+```
+
+With no `--to`, the end goes to the place's recipients. flume reads
+nothing of the words to choose a role: the agent picks, and a role that
+takes a question not its own passes it on
+([an answering run's way with a question](/flume/guides/roles-and-wake/#an-answering-runs-way-with-a-question)).
 
 ## The agent kept open
 
@@ -182,7 +335,7 @@ Its stage still reads ended short, waiting on its answer. Its notice
 says until when:
 
 ```text
-flume: chore--tidy-the-readme code needs an answer, its agent kept open for the answer until 1793291441; read: flume status chore--tidy-the-readme
+flume: chore--tidy-the-readme (Say what the parser reads.) code needs an answer, its agent kept open for the answer until 1793291441 [stage/code/1/ended-short]; read: flume inbox
 ```
 
 While it is kept open, the agent holds the host's room, its stream's
@@ -343,6 +496,61 @@ while a process runs its conversation, `kept while its session runs`,
 naming the process. A retry of a lost stage that is not a conversation
 starts afresh from what its place holds.
 
+## The answer's key
+
+Every end has a key, which every notice, every collected end, every
+waiting place the inbox gives and status give:
+
+| End | Key |
+|---|---|
+| a stage's | `stage/<stage>/<start>/<state>`, as `stage/construct/1/ended-short`, with `/<answered>` after it where the start had taken that many answers in its session, so a second stop-short of one agent kept open has a key of its own |
+| a submission's | `submission/<n>/<outcome>`, as `submission/1/landed` |
+| a stall's | `stall/<since>`, as `stall/1793288141` |
+
+A stop-short's key names its start, so a fresh agent that asks again
+asks under a new key.
+
+An answer may name the key of the stop-short it answers, by a retry or,
+while its agent is kept open, a tell:
+
+```sh
+flume retry change--plan --stage construct --answers stage/construct/1/ended-short --words "The second design."
+flume tell change--plan --answers stage/construct/1/ended-short "The second design."
+```
+
+flume takes it only while the place waits on that stop-short and no
+answer was taken for it. It checks the key before anything is ended,
+started or typed, so an answer refused for its key changes nothing. The
+refusal names the answer taken, who gave it and when, and the move the
+place waits on now:
+
+```text
+refused: the stop-short stage/construct/1/ended-short of the place ~/.local/share/flume/places/f5f5e14159a8/change--plan was answered by east/ops at 1793288012: The second design.; an answer is taken once, and it waits on no move of its caller's now
+```
+
+Two answers given at once are taken once as well. Before an answer is
+typed into the agent kept open, or before a fresh agent is started to
+carry one that names its key, flume claims the stop-short for it. A
+second answer that finds the claim is refused with nothing typed,
+naming who gives the first and when it was claimed. The claim goes once
+the first answer is recorded, or once the agent did not take it, so a
+later answer is then taken.
+
+A key naming another stage than the retry's, or an answer with no
+words, is refused too, and a key in any other form is refused naming
+the forms. The answer so taken is recorded on the stop-short's end
+with its words, the key, and who gave it: the recipient the answering
+command acts as, `$FLUME_RECIPIENT`, else the role of the run it runs
+in, else the terminal's session. Status gives it beneath the end:
+
+```text
+  ended stage/construct/1/ended-short: construct needs an answer; answered at 1793288012 by east/ops, by a retry naming its key: The second design.
+```
+
+An answer with no `--answers` is taken as before, so two answerers
+naming no key can both act. Name the key wherever more than one
+recipient, role or answerer may see the question.
+
 ## Stalls
 
 A place waits on its caller only as status says: which move, since
@@ -351,9 +559,29 @@ hold's words, such as a stage never begun or a fix round past its
 bound. A place whose agent shows a dialog before it takes its prompt
 waits on a person to answer it in the agent's pane, with the dialog's
 words. A place waiting so is **stalled** after five minutes, or the
-launch's `--stall-after`, and each recipient is told that once. A
-place waiting for room on the host is never stalled, and a hold you
-put never stalls.
+launch's `--stall-after`, and its stall is delivered once to each of
+these:
+
+- each recipient of the place;
+- the role its stop-short named by `--to`, of whichever stream;
+- the answerer behind the place's own stream, where one stands, and
+  never a role's run's own address.
+
+The stall carries the move, and where the move answers a stop-short,
+its words, whether it needs an answer or found work, its key and the
+role it asked, so a reader who never saw the place has the question
+whole:
+
+```text
+  ended stall/1793288141: stalled: a retry of construct; its stop-short needs an answer, asking west/ops, saying: Is west's deploy of the parser still running?; pending for east/operator, west/ops
+```
+
+A hold on the waiting move keeps the place from stalling while it
+holds, and its lapse stalls the place again, a stall with a key of its
+own, carrying the lapsed hold's words, to the same recipients
+([a hold on the waiting move](#a-hold-on-the-waiting-move)). A place
+waiting for room on the host is never stalled, and a hold you put never
+stalls.
 
 ## The other acts
 
@@ -364,7 +592,7 @@ put never stalls.
 | `flume done <place>` | declares the work of a kind that does not land complete, and tidies the place |
 | `flume finish <place>` | ends a conversation's agent; the conversation counts as delivered |
 | `flume priority <place> <n>` | sets the place's priority in the host's queue |
-| `flume tell <place> <words>` | hands the agent your words as a prompt, once it waits; to a stage whose agent is kept open, they are its answer |
+| `flume tell <place> <words>` | hands the agent your words as a prompt, once it waits; to a stage whose agent is kept open, they are its answer, `--answers <key>` naming the stop-short they answer |
 
 `stop`, `drop`, `done` and `finish` end an agent only once it is
 quiet, unless you pass `--force`. Under the printed command flume

@@ -91,8 +91,8 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: the_moves_waited_on,
         },
         Scenario {
-            name: "status: a place stalled on a retry of construct gives the move, since when, stalled, and its end delivered to one recipient and pending for another",
-            cites: &["56", "130", "43"],
+            name: "status: a place stalled on a retry of construct gives the move, since when, stalled, and its end delivered to one recipient and pending for another and for the answerer behind its stream",
+            cites: &["56", "130", "43", "193"],
             run: a_stalled_place_with_a_pending_end,
         },
         Scenario {
@@ -269,6 +269,21 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "status: a place whose talk reads lost while the fake terminal holds its agent brought back bare gives that agent left in its pane",
             cites: &["S113", "56", "77"],
             run: a_bare_agent_left,
+        },
+        Scenario {
+            name: "status: one place names ops at its launch and another took its stream's answerer east/operator; status gives each with where it came from, the answerer's source acme, in the JSON form",
+            cites: &["7", "56", "193"],
+            run: recipients_and_their_sources,
+        },
+        Scenario {
+            name: "status: a construct's stop-short in east, naming ops, answered by a retry naming its key from the run of east/ops, gives the end's key, east/ops as its addressee, and the answer's words with east/ops and when, in the JSON form",
+            cites: &["56", "42", "41", "193"],
+            run: an_answered_question,
+        },
+        Scenario {
+            name: "status: an end pending for east/planner, which no source declares, gives the address with no run and that no source declares it, and the stream's answerer east/operator",
+            cites: &["56", "132", "193"],
+            run: an_address_that_wakes_nothing,
         },
         Scenario {
             name: "status: a place whose agent took xhigh from --agent effort=xhigh gives the effort xhigh from launch, passed and not read back, in the JSON form",
@@ -580,6 +595,10 @@ fn a_source_and_a_fault(_: &()) -> Outcome {
                 kinds_dir: Some("/kinds/acme".into()),
                 kinds: vec!["acme/review@1".into(), "acme/review@2".into()],
                 cannot_read: None,
+                roles_file: None,
+                roles: vec![],
+                roles_refused: vec![],
+                roles_cannot_read: None,
             },
             flume_core::SourceStatus {
                 name: "bad".into(),
@@ -587,6 +606,10 @@ fn a_source_and_a_fault(_: &()) -> Outcome {
                 kinds_dir: None,
                 kinds: vec![],
                 cannot_read: Some("it gives no kinds_dir, the directory of its packages".into()),
+                roles_file: None,
+                roles: vec![],
+                roles_refused: vec![],
+                roles_cannot_read: None,
             },
         ],
         "the host's sources"
@@ -994,6 +1017,8 @@ fn two_answers_in_one_session(_: &()) -> Outcome {
                     act: Act::Retry,
                     at: first,
                     session: handed(first),
+                    by: None,
+                    key: None,
                 },
             },
             SessionAnswer {
@@ -1003,6 +1028,8 @@ fn two_answers_in_one_session(_: &()) -> Outcome {
                     act: Act::Tell,
                     at: second,
                     session: handed(second),
+                    by: None,
+                    key: None,
                 },
             },
         ],
@@ -1357,6 +1384,7 @@ fn a_place_gone(_: &()) -> Outcome {
 fn a_stalled_place_with_a_pending_end(_: &()) -> Outcome {
     let world = World::new();
     world.terminal.add_session("ops", AgentState::Working);
+    super::role_waking::answerer_behind(&world, DEFAULT_STREAM);
     let (id, asked) =
         super::caller_waits::construct_asks(&world, "plan", &["ops", "madswan/planner"], None)?;
     world.host.advance(STALL_AFTER);
@@ -1392,7 +1420,10 @@ fn a_stalled_place_with_a_pending_end(_: &()) -> Outcome {
     );
     ensure_eq!(
         stall.pending_for,
-        vec!["madswan/planner".to_string()],
+        vec![
+            "madswan/planner".to_string(),
+            "default/operator".to_string()
+        ],
         "pending for"
     );
     Ok(())
@@ -1962,15 +1993,20 @@ fn a_carried_start_that_did_not_begin(_: &()) -> Outcome {
 
 const PLANNER: &str = "madswan/planner";
 
-/// The host's configuration gives `address` the standing agent `agent`
-/// in the session `madswan`.
+/// A source gives `address` the standing agent `agent` in the session
+/// `madswan`, the stream its address names declared.
 fn stands_in_madswan(world: &World, address: &str, agent: &str) {
+    world
+        .host
+        .set_stream(stream_of(address), Some(Stream::default()));
     world.host.set_standing(
         address,
         Some(StandingAgent {
+            source: "acme".into(),
             agent: agent.into(),
             session: Some("madswan".into()),
-            stream: None,
+            answers: None,
+            answerer: false,
         }),
     );
 }
@@ -2030,7 +2066,7 @@ fn a_standing_agent_found(_: &()) -> Outcome {
     let status = address_status(&world, PLANNER)?;
     let standing = status.standing.clone().ok_or("no standing")?;
     ensure_eq!(standing.agent, "madswan-planner", "the agent");
-    ensure_eq!(standing.stream, DEFAULT_STREAM, "the stream");
+    ensure_eq!(standing.stream, "madswan", "the stream, its address's");
     ensure_eq!(
         standing.session,
         SessionHeld {
@@ -2285,6 +2321,160 @@ fn a_bare_agent_left(_: &()) -> Outcome {
         json["agent"]["left_in_pane"],
         serde_json::json!(true),
         "left_in_pane in the JSON form"
+    );
+    Ok(())
+}
+
+/// The place-status spec's "An answered question": status gives the
+/// stop-short's end with its key as callers name it, the address it
+/// named, and the answer's words with who gave them, the key they named
+/// and when, in the JSON form (41, 42, 56, 193; core.14).
+fn an_answered_question(_: &()) -> Outcome {
+    use super::caller_acts::{answered_by_ops, construct_key, READ};
+    let world = World::new();
+    let (id, at) = answered_by_ops(&world)?;
+    let key = construct_key(0).to_string();
+    let json = status_json(&world, &id)?;
+    let end = json["ends"]
+        .as_array()
+        .ok_or("status gives no ends")?
+        .iter()
+        .find(|end| end["key"] == key.as_str())
+        .ok_or_else(|| format!("status gives no end keyed {key}: {}", json["ends"]))?;
+    ensure_eq!(
+        (
+            end["end"]["addressee"].clone(),
+            end["answer"]["words"].clone(),
+            end["answer"]["by"].clone(),
+            end["answer"]["key"].clone(),
+            end["answer"]["at"].clone()
+        ),
+        (
+            serde_json::json!("east/ops"),
+            serde_json::json!(READ),
+            serde_json::json!("east/ops"),
+            serde_json::json!(key),
+            serde_json::json!(at)
+        ),
+        "the end's addressee, and its answer's words, who gave them, the key they named and when"
+    );
+    Ok(())
+}
+
+/// The place-status spec's "Recipients and their sources": the place
+/// `one` names `ops` at its launch, and `two`, launched from no session
+/// in `east`, takes the answerer acme declares behind it; status gives
+/// each with where it came from, in the JSON form (7, 56, 193; core.14).
+fn recipients_and_their_sources(_: &()) -> Outcome {
+    use super::launching::{declares, from_no_session};
+    let world = World::new();
+    from_no_session(&world);
+    declares(&world, "acme", "east/operator", true);
+    launched(&world.engine.launch(&Launch {
+        recipients: vec!["ops".into()],
+        ..launch("fix", "one", Some("x"))
+    }))?;
+    launched(&world.engine().launch(&Launch {
+        stream: Some("east".into()),
+        ..launch("fix", "two", Some("x"))
+    }))?;
+    for (name, recipient, from, source) in [
+        ("one", "ops", "launch", None),
+        ("two", "east/operator", "answerer", Some("acme")),
+    ] {
+        let status = world.status(&World::id("fix", name))?;
+        let json = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+        ensure_eq!(
+            json["recipients"],
+            serde_json::json!([recipient]),
+            format!("{name}'s recipients")
+        );
+        ensure_eq!(
+            json["recipients_from"]["from"],
+            from,
+            format!("where {name}'s recipients came from")
+        );
+        ensure_eq!(
+            json["recipients_from"]["source"].as_str(),
+            source,
+            format!("the source of {name}'s answerer")
+        );
+    }
+    Ok(())
+}
+
+/// The place-status spec's "An address that wakes nothing": an end
+/// stands pending for `east/planner`, which no source declares, on a
+/// place in `east`, whose answerer is acme's `east/operator`; status
+/// gives the address with no run and why it wakes nothing, the
+/// stream's answerer with its source, and each source's roles or why
+/// they cannot be read (56, 132, 191, 193; core.15).
+fn an_address_that_wakes_nothing(_: &()) -> Outcome {
+    use super::launching::declares;
+    let world = World::new();
+    world.host.set_source("acme", "/kinds/acme");
+    world.host.set_source("beta", "/kinds/beta");
+    world
+        .host
+        .set_roles_unread("beta", Some(("/state/beta/roles.toml", "no such file")));
+    declares(&world, "acme", "east/operator", true);
+    launched(&world.engine.launch(&Launch {
+        stream: Some("east".into()),
+        recipients: vec!["east/planner".into()],
+        ..launch("fix", "one", Some("x"))
+    }))?;
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    super::settling::deliver_fix(&world, &id);
+    world.settle(&id);
+    let Answer::Status { host, .. } = world.engine().status(None) else {
+        return Err("status answered no status".into());
+    };
+    let planner = host
+        .addresses
+        .iter()
+        .find(|address| address.address == "east/planner")
+        .ok_or("status names no east/planner")?;
+    ensure_eq!(planner.pending.len(), 1, "the ends pending for it");
+    ensure_eq!(
+        (&planner.role, &planner.run, &planner.carried),
+        (&None, &None, &None),
+        "its run, standing or carried"
+    );
+    ensure_eq!(
+        planner.wakes_nothing.as_deref(),
+        Some("no source of the host declares east/planner"),
+        "why it wakes nothing"
+    );
+    let east = host
+        .streams
+        .iter()
+        .find(|stream| stream.name == "east")
+        .ok_or("status names no stream east")?;
+    ensure_eq!(
+        east.answerer,
+        Some(StreamAnswerer::Stands(DeclaredBy {
+            address: "east/operator".into(),
+            source: "acme".into(),
+        })),
+        "east's answerer"
+    );
+    let roles_of = |name: &str| {
+        host.sources
+            .iter()
+            .find(|source| source.name == name)
+            .map(|source| (source.roles.clone(), source.roles_cannot_read.clone()))
+    };
+    ensure_eq!(
+        roles_of("acme"),
+        Some((vec!["east/operator".to_string()], None)),
+        "acme's roles"
+    );
+    ensure_eq!(
+        roles_of("beta"),
+        Some((vec![], Some("no such file".to_string()))),
+        "beta's roles"
     );
     Ok(())
 }

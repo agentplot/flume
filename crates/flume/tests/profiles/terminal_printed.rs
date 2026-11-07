@@ -326,12 +326,15 @@ fn agents_under_the_printed_command_are_not_read_and_nothing_is_run() {
     }
     let scratch = Scratch::new("printed-agents");
     let world = World::new();
+    world.host.set_stream("madswan", Some(Stream::default()));
     world.host.set_standing(
         "madswan/planner",
         Some(StandingAgent {
+            source: "acme".into(),
             agent: "madswan-planner".into(),
             session: Some("madswan".into()),
-            stream: None,
+            answers: None,
+            answerer: false,
         }),
     );
     let engine = printed(&world, &scratch);
