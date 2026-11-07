@@ -25,9 +25,11 @@ impl Engine {
     /// An agent's stop-short, with its identity, its start's secret, its
     /// words and whether it needs an answer or found work: the stage ends
     /// short with the words whole, the kind and a repetition's task group
-    /// (142), and no next stage starts,
-    /// except that found work from the kind's last stage starts its fix
-    /// round once the agent is quiet (41, 42, 131).
+    /// (142), and no next stage starts, except that found work from the
+    /// kind's last stage starts its fix round once the agent is quiet,
+    /// where the fix round is a stage before it; found work from any other
+    /// stage, and from a last stage that is its kind's own fix round, is
+    /// taken as needing an answer (41, 42, 131).
     pub fn needs(&self, identity: &str, secret: &str, words: &str, kind: StopKind) -> Answer {
         self.settle_attended();
         let Some((held, index)) = self.current_start(identity) else {

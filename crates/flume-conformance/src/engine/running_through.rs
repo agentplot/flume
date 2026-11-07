@@ -1,9 +1,13 @@
 //! A kind runs through on its own (40, 47, 111, 112, 130, 131): each
 //! delivery starts the next stage and the last submits, with no caller's
-//! word; a failed or conflicting submission, and found work from the
-//! kind's last stage, start the kind's fix round with the merge queue's or
-//! the agent's words, every going-back counted together toward the kind's
-//! bound; found work from any other stage waits on an answer.
+//! word; a failed or conflicting submission starts the kind's fix round
+//! with the merge queue's words, and found work from the kind's last stage
+//! starts it with the agent's words only where the fix round is a stage
+//! before the one that found, every going-back counted together toward
+//! the kind's bound; found work from any other stage, and from a last
+//! stage that is its kind's own fix round, is taken as needing an answer,
+//! no stage before it being able to do that work again, and waits on a
+//! retry of that stage, which counts no going-back (41, 42, 48, 49).
 
 use super::settling::{
     archive, change_at_verify, construct_begun, deliver_fix, fix_begun, write_change,

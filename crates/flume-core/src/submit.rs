@@ -6,8 +6,8 @@
 //! queue decided the submission as it took it in and delivered the
 //! outcome with that answer, and acted on once each: a landing makes the
 //! work over, a failure or a conflict starts the kind's fix round, as found
-//! work from its last stage does, every going-back counted together up to
-//! the kind's bound. A withdrawal, and a landing before flume
+//! work from its last stage does where the fix round is a stage before it,
+//! every going-back counted together up to the kind's bound. A withdrawal, and a landing before flume
 //! submits, are read from the merge queue's record of the branch, never
 //! one it held before the place's launch or before flume's submit (3,
 //! 99); an open submission's base is driven one round per command, and
@@ -313,9 +313,13 @@ impl Engine {
     }
 
     /// Found work from the kind's last stage starts the kind's fix round
-    /// with the findings as its words, once the agent that stopped short
-    /// is quiet and ended, so the place never has two agents (131, 30).
-    /// True when it changed something.
+    /// with the findings as its words where the fix round is a stage
+    /// before it, once the agent that stopped short is quiet and ended, so
+    /// the place never has two agents (131, 30). A found from any other
+    /// stage, and from a last stage that is its kind's own fix round, goes
+    /// back nowhere: it changes nothing here, its agent kept as any
+    /// stop-short's, and is taken as needing an answer, which a caller's
+    /// retry gives (42, 49, 131). True when it changed something.
     pub(crate) fn found_work(&self, id: &PlaceId) -> bool {
         let Some(read) = self.store.read(id) else {
             return false;
