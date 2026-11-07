@@ -1,41 +1,46 @@
 //! What a launch's words give the core (2 to 8, 32, 70, 107, 130, 162,
-//! 195; design 5a, 16a): each `--agent [<stage>.]<field>=<value>` one
+//! 195, 198; design 5a, 16a): each `--agent [<stage>.]<field>=<value>` one
 //! setting of every stage's agent or one stage's,
 //! `[<stage>.]mode.<program>=<value>` one entry of its mode's table of
-//! programs, `[<stage>.]programs.<program>.settings.<key>=<value>` one of a
+//! programs, `[<stage>.]keep_open=<time>` how long the agent is kept open
+//! for an answer, one time for every program, `[<stage>.]programs.<program>.settings.<key>=<value>` one of a
 //! program's own settings and `[<stage>.]programs.<program>.file=<path>`
 //! its settings file, read now, and each `--hold <stage>=<words>` a stage
 //! on hold with its words. Nothing is resolved or refused here but words
 //! that name no setting, a mode none of flume's four, a mode given both
-//! as a word and as a table, one of a program's own settings or its file
-//! given twice for one stage, and a file flume cannot read: the core
+//! as a word and as a table, a `keep_open` that is no time or is given
+//! for a program, one of a program's own settings or its file given twice
+//! for one stage, and a file flume cannot read: the core
 //! refuses the rest, a value shaped as a credential among it (4, 169,
 //! 195).
 
-use flume_seams::{ModeSetting, Settings};
+use flume_seams::{read_span, ModeSetting, Settings};
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-/// The fields `--agent` sets (32, 107, 162, 195).
-const FIELDS: [&str; 7] = [
+/// The fields `--agent` sets (32, 107, 162, 195, 198).
+const FIELDS: [&str; 8] = [
     "program",
     "model",
     "instructions",
     "beside",
     "session",
     "mode",
+    "keep_open",
     "programs",
 ];
 
 /// The settings `--agent` gives, as its refusals name them.
 const SETTINGS: &str =
-    "the settings are program, model, instructions, beside, session and mode, or mode.<program> for one program's entry of a mode, and programs, programs.<program>.settings.<key> for one of a program's own settings and programs.<program>.file for its settings file";
+    "the settings are program, model, instructions, beside, session and mode, or mode.<program> for one program's entry of a mode, keep_open, how long an agent is kept open for an answer as <n>, <n>s, <n>m or <n>h, and programs, programs.<program>.settings.<key> for one of a program's own settings and programs.<program>.file for its settings file";
 
 /// Sets the one setting `given` names, `[<stage>.]<field>=<value>`, in
 /// `every_stage` or in its stage's entry of `stages` (7, 32); a mode's
 /// entries for programs build one table, which a mode given as a word
-/// refuses, and the word it (169); a program's own settings build one
+/// refuses, and the word it (169); `keep_open` is a time [`read_span`]
+/// takes, kept as written, and one time for every program, so a
+/// `keep_open.<program>` is refused (198); a program's own settings build one
 /// entry, its file read now, relative to `directory`, the command's
 /// working directory (21, 195).
 pub fn agent(
@@ -76,6 +81,19 @@ pub fn agent(
                 return Err(both(given, &prefix, stage, settings));
             }
             settings.mode = Some(word);
+        }
+        "keep_open" => {
+            read_span(value).map_err(|reason| {
+                format!(
+                    "--agent {given}: {prefix}keep_open is how long an agent is kept open for an answer, and {reason}; {SETTINGS}"
+                )
+            })?;
+            settings.keep_open = text;
+        }
+        _ if field.starts_with("keep_open.") => {
+            return Err(format!(
+                "--agent {given}: keep_open is one time for every program, never a program's: it is [<stage>.]keep_open=<time>, the time <n>, <n>s, <n>m or <n>h; {SETTINGS}"
+            ))
         }
         _ if field.starts_with("programs.") => {
             let whose = match stage {
@@ -266,6 +284,69 @@ mod tests {
                 refused.contains("beside, session and mode") && refused.contains("mode.<program>"),
                 "{refused}"
             );
+        }
+    }
+
+    #[test]
+    fn a_stages_keep_open() {
+        // 7, 32, 198: the command-line spec's "A stage's time", kept as
+        // written, and every stage's beside it; the launch's JSON form
+        // takes it as `Settings` serializes it.
+        let (every, stages) = given(&["code.keep_open=15m", "keep_open=0"]).unwrap();
+        assert_eq!(stages["code"].keep_open.as_deref(), Some("15m"));
+        assert_eq!(every.keep_open.as_deref(), Some("0"));
+        let launch = flume_seams::Launch {
+            every_stage: every,
+            settings: stages,
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&launch).unwrap();
+        assert_eq!(json["settings"]["code"]["keep_open"], "15m");
+        assert_eq!(json["every_stage"]["keep_open"], "0");
+        let read: flume_seams::Launch = serde_json::from_value(json).unwrap();
+        assert_eq!(read, launch);
+    }
+
+    #[test]
+    fn a_keep_open_in_another_form_is_refused() {
+        // 7: the command-line spec's "A time in another form", named with
+        // the forms it takes, a stage's as every stage's.
+        for words in ["keep_open=soon", "code.keep_open=1d", "keep_open="] {
+            let refused = given(&[words]).unwrap_err();
+            assert!(
+                refused.contains(&format!("--agent {words}:"))
+                    && refused.contains("keep_open is how long an agent is kept open")
+                    && refused.contains("<n>, <n>s, <n>m or <n>h"),
+                "{refused}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_programs_keep_open_is_refused() {
+        // 7, 198: the command-line spec's "A program's time": one time for
+        // every program, never a program's.
+        for words in ["keep_open.claude=1h", "code.keep_open.claude=1h"] {
+            let refused = given(&[words]).unwrap_err();
+            assert!(
+                refused.contains(&format!("--agent {words}:"))
+                    && refused.contains("keep_open is one time for every program"),
+                "{refused}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_refusal_naming_the_fields_names_keep_open() {
+        // 7: `keep_open` among the fields each refusal names.
+        for words in [
+            "colour=red",
+            "model",
+            "code.colour=red",
+            "programs.agent.colour=1",
+        ] {
+            let refused = given(&[words]).unwrap_err();
+            assert!(refused.contains("keep_open"), "{words}: {refused}");
         }
     }
 
