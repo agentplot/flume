@@ -388,7 +388,6 @@ needing an answer, beside `found_work` (`settle.rs`), and
 `open_until` is set and its end records no close, it reads the agent
 let go by the first of these that holds:
 
-- `ClosedBy::Time`: now is at or past `open_until`.
 - `ClosedBy::Stopped`: the start is no longer live, as a caller's stop
   leaves it (51).
 - `ClosedBy::AgentEnded`: the agent is read stopped, its pane gone or
@@ -403,6 +402,13 @@ let go by the first of these that holds:
   it spent because another agent reached its limit (146; core.32). An
   account past its pool's threshold is not spent, and lets no agent go
   (185).
+- `ClosedBy::Time`: now is at or past `open_until`.
+
+The causes read from the agent come before the time. A settle that
+finds the time passed and the agent ended as well records the agent
+ended, since that is what a later answer's retry acts on: a
+conversation's agent lost with its host is carried (decision 6), and
+one brought back bare in its pane is ended by no retry (core.10).
 
 It records `StageEnd::closed`, a `SessionClosed { at, by, ended_at,
 left_in_pane }`, in one write. Then, while the start is live:

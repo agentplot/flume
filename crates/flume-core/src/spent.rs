@@ -64,6 +64,23 @@ impl Engine {
         }
     }
 
+    /// Whether the host's documents hold the account `account` spent now,
+    /// as a settle of any flume process on the host recorded it (146,
+    /// core.32).
+    pub(crate) fn spent_now(&self, account: &AccountHeld) -> bool {
+        let key = HostKey::Account {
+            pool: account.pool.clone(),
+            account: account.name.clone(),
+        };
+        matches!(
+            self.store.read_host(&key),
+            Some(HostVersioned {
+                document: HostDocument::Account(spent),
+                ..
+            }) if spent.until > self.host.now()
+        )
+    }
+
     /// The live start `start` of the stage at `index` read spent: its
     /// account recorded spent, and, once its agent is quiet and the stage
     /// has not delivered, the agent ended and the stage started again with

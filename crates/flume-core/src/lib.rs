@@ -22,6 +22,7 @@ mod line;
 mod list;
 mod live;
 mod open;
+mod open_sessions;
 mod own;
 mod prompt;
 mod reading;
