@@ -1050,7 +1050,14 @@ its hold's bound.
 An end of a stall recorded before this change names no answerer. The
 first settle after the build reads it as the answerer's too, where the
 place still waits under no hold's words, so the questions waiting on
-deneb when the build lands reach the door at once.
+deneb when the build lands reach the door at once. A stall this change
+records says it read the answerer, `answerer_read`, so a stall that
+reached no answerer because none stood behind the stream is never read
+again; the settle that reads an earlier stall reads the stop-short the
+place waits on with it, so the door has the question whole. Reading
+every stall that names no answerer at every settle was the other way:
+it reads the sources for every stalled place at every settle, and
+reaches an answerer declared after the stall.
 
 Rejected:
 
@@ -1097,6 +1104,15 @@ says it lapsed and when, and the place stalls at once, its stall
 delivered as decision 6 has it. Where it gives none, it stands until the
 move is made, as every hold does. It is refused, naming why, on a place
 that waits on no move of its caller's.
+
+A place stalled before the hold reads not stalled once it is put. The
+hold ends once the place waits on another move or none, whatever made
+the move: a retry, a drop, or a stage that went on. A lapsed hold stays
+recorded, with when it lapsed, until the move is made or a later hold
+replaces it, and holds nothing. The stall its lapse makes is since the
+lapse, so its key, `stall/<since>`, is its own. A bound is given only
+to a hold on the waiting move; a hold on a stage or the submission that
+gives one is refused.
 
 Rejected:
 
