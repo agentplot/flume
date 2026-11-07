@@ -1653,11 +1653,7 @@ fn a_run_whose_kind_lands(_: &()) -> Outcome {
     let held = world
         .held(&planner_id())
         .ok_or("the run is gone before its landing")?;
-    ensure_eq!(
-        held.phase,
-        Phase::Making { by: String::new() },
-        "the run once submitted"
-    );
+    ensure_eq!(held.phase, Phase::Live, "the run once submitted");
     let branch = held.place.branch.clone();
     ensure_eq!(
         world.queue.submissions(REPOSITORY, &branch).len(),
