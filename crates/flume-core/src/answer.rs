@@ -66,6 +66,14 @@ pub enum Answer {
         woke: Woke,
         place: PlaceStatus,
     },
+    /// A wake of a role's address the host's configuration gives a
+    /// standing agent: nothing made, where the address lives, read at
+    /// the ask, and each end pending for it (132; core.28).
+    Held {
+        address: String,
+        standing: StandingStatus,
+        pending: Vec<PendingEnd>,
+    },
     /// `flume kinds lock`'s act: the lock it wrote, each kind it recorded
     /// at its content's hash, and each it removed (155).
     Locked {

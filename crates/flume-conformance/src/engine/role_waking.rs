@@ -9,12 +9,17 @@
 //! status names its pending ends; and a run's inbox collects for its
 //! address. A place launched again under a name whose earlier place
 //! landed never reads that landing as its own (3, 99). The host gives an
-//! address a standing agent holds apart from a run (132, C.7).
+//! address a standing agent holds apart from a run (132, C.7): a settle
+//! wakes no run for it and records nothing, a carrier's wake launches
+//! nothing and answers held, and the configuration at each delivery
+//! decides between a standing agent and a run (132, S38; core.28).
 
 use super::settling::deliver_fix;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{AddressStatus, Answer, Engine, PlaceStatus, Woke};
+use flume_core::{
+    AddressStatus, Answer, Engine, PendingEnd, PlaceStatus, StandingFound, StandingStatus, Woke,
+};
 use flume_fakes::{FakeHistory, FakeStore};
 use flume_seams::*;
 use std::collections::BTreeMap;
@@ -86,6 +91,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "role waking: the host gives the standing agent it names for one address apart from the run it names for another, and no run for the standing address",
             cites: &["132", "3"],
             run: standing_and_run_apart,
+        },
+        Scenario {
+            name: "role waking: three ends pending for a standing address whose agent is nowhere, settled twice, make no place, open nothing and leave the address unwoken by nothing (S38)",
+            cites: &["132", "S38"],
+            run: ends_pending_while_the_agent_is_away,
+        },
+        Scenario {
+            name: "role waking: a carrier's wake of a standing address launches nothing and answers held, naming the agent, its session, what was found and the ends pending",
+            cites: &["132"],
+            run: a_carrier_wakes_a_standing_address,
+        },
+        Scenario {
+            name: "role waking: an entry giving a standing agent for an address whose run of an earlier entry is live sends the next end to the standing agent and none to the run",
+            cites: &["132", "32"],
+            run: a_standing_agent_over_a_run_still_live,
+        },
+        Scenario {
+            name: "role waking: an entry that gave a standing agent and then gives a kind wakes a run for the next end, and the standing agent takes no second notice",
+            cites: &["132", "32"],
+            run: a_standing_entry_becomes_a_runs,
         },
     ]
 }
@@ -683,5 +708,219 @@ fn a_roles_kind_unlocked(_: &()) -> Outcome {
     );
     ensure_eq!(world.store.places(), Vec::<PlaceId>::new(), "places made");
     ensure_eq!(world.place.log.count("make"), 0, "makes");
+    Ok(())
+}
+
+/// The host's configuration gives the planner the standing agent
+/// `madswan-planner` in the session `madswan`.
+fn planner_stands(world: &World) {
+    world.host.set_standing(
+        PLANNER,
+        Some(StandingAgent {
+            agent: "madswan-planner".into(),
+            session: Some("madswan".into()),
+            stream: None,
+        }),
+    );
+}
+
+/// The notice a fix's code delivered is sent as.
+fn code_delivered(name: &str) -> String {
+    format!("flume: fix--{name} code delivered; read: flume status fix--{name}")
+}
+
+/// A fix named `name` for the planner, delivered with its submission
+/// held, and settled.
+fn delivered_for_planner(world: &World, name: &str) -> Result<PlaceId, String> {
+    let id = fix_for(world, name, &[PLANNER])?;
+    deliver_fix(world, &id);
+    world.settle(&id);
+    Ok(id)
+}
+
+fn ends_pending_while_the_agent_is_away(_: &()) -> Outcome {
+    let world = World::new();
+    planner_stands(&world);
+    world.queue.plan_submits(vec![
+        flume_fakes::Plan::Hold,
+        flume_fakes::Plan::Hold,
+        flume_fakes::Plan::Hold,
+    ]);
+    let places: Vec<PlaceId> = ["one", "two", "three"]
+        .into_iter()
+        .map(|name| fix_for(&world, name, &[PLANNER]))
+        .collect::<Result<_, _>>()?;
+    let opens = world.terminal.log.count("open");
+    for id in &places {
+        deliver_fix(&world, id);
+    }
+    for _ in 0..2 {
+        for id in &places {
+            world.settle(id);
+        }
+    }
+    world.engine().settle(None);
+    let mut sorted = places.clone();
+    sorted.sort();
+    ensure_eq!(world.store.places(), sorted, "the places on the host");
+    ensure_eq!(runs(&world), Vec::<PlaceId>::new(), "runs launched");
+    ensure_eq!(world.terminal.log.count("open"), opens, "agents opened");
+    for id in &places {
+        let held = world.held(id).ok_or("no place")?;
+        ensure_eq!(
+            held.pending_for(),
+            vec![PLANNER.to_string()],
+            "pending for {id}"
+        );
+        ensure!(
+            held.unwoken.is_empty(),
+            "{id}'s unwoken names {:?}",
+            held.unwoken
+        );
+    }
+    ensure!(
+        world.terminal.every_notice().is_empty(),
+        "a notice sent to nobody"
+    );
+    Ok(())
+}
+
+/// What a wake answered held: the address, where it lives and its ends.
+fn held(answer: &Answer) -> Result<(String, StandingStatus, Vec<PendingEnd>), String> {
+    match answer {
+        Answer::Held {
+            address,
+            standing,
+            pending,
+        } => Ok((address.clone(), standing.clone(), pending.clone())),
+        other => Err(format!("the wake answered {other:?}")),
+    }
+}
+
+fn a_carrier_wakes_a_standing_address(_: &()) -> Outcome {
+    let world = World::new();
+    planner_stands(&world);
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    let id = delivered_for_planner(&world, "one")?;
+    let opens = world.terminal.log.count("open");
+    let (address, standing, pending) = held(&world.engine().wake(PLANNER))?;
+    ensure_eq!(address, PLANNER, "the address");
+    ensure_eq!(standing.agent, "madswan-planner", "the agent");
+    ensure_eq!(
+        standing.session,
+        SessionHeld {
+            name: Some("madswan".into()),
+            from: SessionFrom::Role,
+        },
+        "the session"
+    );
+    ensure_eq!(standing.found, StandingFound::None, "found while away");
+    ensure_eq!(
+        pending
+            .iter()
+            .map(|end| (end.place.clone(), end.what.clone()))
+            .collect::<Vec<_>>(),
+        vec![(id.clone(), "code delivered".to_string())],
+        "the ends pending"
+    );
+    let at = world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-planner", AgentState::Waiting);
+    let (_, standing, pending) = held(&world.engine().wake(PLANNER))?;
+    ensure_eq!(
+        standing.found,
+        StandingFound::One {
+            at: at.clone(),
+            state: AgentState::Waiting,
+        },
+        "found once it waits"
+    );
+    ensure_eq!(
+        pending,
+        Vec::<PendingEnd>::new(),
+        "pending after the wake's settle"
+    );
+    ensure_eq!(
+        world.terminal.notices(&at),
+        vec![code_delivered("one")],
+        "the notice the wake's settle sent"
+    );
+    ensure_eq!(world.store.places(), vec![id], "the places on the host");
+    ensure_eq!(runs(&world), Vec::<PlaceId>::new(), "runs launched");
+    ensure_eq!(world.terminal.log.count("open"), opens, "agents opened");
+    Ok(())
+}
+
+fn a_standing_agent_over_a_run_still_live(_: &()) -> Outcome {
+    let world = World::new();
+    configure(
+        &world,
+        "Read what is pending for you.",
+        planner_run(None, None),
+    );
+    let (woke, _) = woken(&world.engine.wake(PLANNER))?;
+    ensure_eq!(woke, Woke::Launched, "the run woken");
+    world.settle(&planner_id());
+    ensure!(
+        world.terminal.session_state(PLANNER).is_some(),
+        "the run's session is not named {PLANNER}"
+    );
+    world.host.set_role(PLANNER, None);
+    planner_stands(&world);
+    let at = world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-planner", AgentState::Waiting);
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    delivered_for_planner(&world, "one")?;
+    ensure_eq!(
+        world.terminal.notices(&at),
+        vec![code_delivered("one")],
+        "the standing agent's notices"
+    );
+    ensure_eq!(
+        world.terminal.notices(PLANNER),
+        Vec::<String>::new(),
+        "the run's notices"
+    );
+    ensure_eq!(runs(&world), vec![planner_id()], "the runs on the host");
+    Ok(())
+}
+
+fn a_standing_entry_becomes_a_runs(_: &()) -> Outcome {
+    let world = World::new();
+    planner_stands(&world);
+    let at = world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-planner", AgentState::Waiting);
+    world
+        .queue
+        .plan_submits(vec![flume_fakes::Plan::Hold, flume_fakes::Plan::Hold]);
+    delivered_for_planner(&world, "one")?;
+    ensure_eq!(
+        world.terminal.notices(&at),
+        vec![code_delivered("one")],
+        "the standing agent's first notice"
+    );
+    ensure_eq!(runs(&world), Vec::<PlaceId>::new(), "runs while it stands");
+    world.host.set_standing(PLANNER, None);
+    configure(
+        &world,
+        "Read what is pending for you.",
+        planner_run(None, None),
+    );
+    let two = delivered_for_planner(&world, "two")?;
+    ensure_eq!(runs(&world), vec![planner_id()], "the run woken");
+    ensure_eq!(
+        world.held(&two).map(|held| held.unwoken),
+        Some(BTreeMap::new()),
+        "two's unwoken"
+    );
+    world.settle(&planner_id());
+    world.settle(&two);
+    ensure_eq!(
+        world.terminal.notices(&at).len(),
+        1,
+        "the standing agent's notices"
+    );
     Ok(())
 }

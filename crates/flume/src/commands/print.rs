@@ -116,6 +116,19 @@ pub fn person(answer: &Answer) -> String {
             });
             lines.extend(place_lines(place));
         }
+        Answer::Held {
+            address,
+            standing,
+            pending,
+        } => {
+            lines.push(format!(
+                "{address} is held by the standing agent {}; nothing made",
+                standing.agent
+            ));
+            for end in pending {
+                lines.push(format!("  {}: {}", end.place, end.what));
+            }
+        }
         Answer::Locked {
             lock_file,
             recorded,

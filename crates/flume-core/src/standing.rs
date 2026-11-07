@@ -36,6 +36,11 @@ struct Asked {
 }
 
 impl Standing {
+    /// Whether the entries give `address` a standing agent.
+    pub fn holds(&self, address: &str) -> bool {
+        self.entries.contains_key(address)
+    }
+
     /// The agents the part `session` of `terminal` holds, asked once for
     /// each terminal and part.
     fn agents_in(&mut self, terminal: &Arc<dyn Terminal>, session: Option<&str>) -> &AgentsIn {
