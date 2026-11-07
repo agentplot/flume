@@ -18,9 +18,8 @@ main in. The user, relayed by agentplot-operator the same day:
 > Just make sure it's in the fucking design because it should be.
 
 Record 0056 decides it, accepted by the user on their card on
-2026-11-07, and the statement carries it in 1, 203 and I6 on
-agentplot/blueprints' main at 24d36f8, which the remote's main, at
-b0df70b, does not yet hold; the orchestrator pushes it. Today a base
+2026-11-07, and the statement carries it in 1, 203 and I6, accepted at
+agentplot/blueprints 24d36f8 and on its main at 31f9f1c. Today a base
 place, a bolt under
 record 0051, waits on its caller after a failed or conflicting
 submission (`submit.rs`, the base place's arm of the outcome), and
@@ -34,8 +33,13 @@ A place with stages already goes back to its fix round on its own (112,
 - **A base place's kind names its fix (23).** A kind that lands with no
   stages may name the kind its fixes run as, and how many fixes it runs
   before its place waits on its caller. flume reads both through
-  weir's crate (core.4), which carries them once weir's follow-up W2
-  lands. A base place's launch resolves the kind named as a launch's
+  weir's crate (core.4), which carries them once weir's unit
+  a-kind-with-no-stages-names-its-fix (W2) lands, and flume's follow-up
+  unit a-base-places-fix-kind-is-read-from-weirs-format maps them after
+  it; until then a kind in weir's format names no fix, and its base
+  place waits on its caller as before (203). This change builds every
+  part but that mapping over kinds built in Rust. A base place's launch
+  resolves the kind named as a launch's
   name resolves (154), and the launch is refused whole where it resolves
   to no kind flume could launch on the branch for it (4; core.8). The
   base place keeps the identity it resolved (21).
@@ -72,15 +76,15 @@ A place with stages already goes back to its fix round on its own (112,
   its recipients as its base place's. The JSON form only gains fields
   (61; core.14).
 - **The statement and the rules follow.** The statement's amendment,
-  worded in design 13, is on agentplot/blueprints' branch
-  `design/flume-a-base-place-launches-its-fix` at cffcbcc, cut from
-  24d36f8, for the orchestrator to push: 23, 56, 157, 165, 203, the new
-  Part B clause 210, C.6, S112 and the new S120, with weir 52, 57, 89
-  and C.4, marked proposed under record 0056's amendment. Rules core.53
-  and core.34 and the details of core.6, core.34, core.36 and core.53
-  are amended, mirrored on the site's rules page, and record 0056 gains
-  an amendment naming what this design decides beyond it, proposed;
-  this change's construct wrote each, and its build holds them.
+  worded in design 13, is on agentplot/blueprints' main at 31f9f1c: 23,
+  56, 157, 165, 203, the new Part B clause 210, C.6, S112 and the new
+  S120, with weir 52, 57, 89 and C.4, under record 0056's amendment,
+  settled by agentplot-design as mechanism within the decision the user
+  accepted. Rules core.53 and core.34 and the details of core.6,
+  core.34, core.36 and core.53 are amended, mirrored on the site's rules
+  page, and record 0056 gains that amendment, naming what this design
+  decides beyond it; this change's construct wrote each, and its build
+  holds them.
 
 ## Capabilities
 
@@ -100,8 +104,6 @@ None. The behaviour belongs to `base-places`.
   held types of a base place's fixes.
 - `seam-fakes`: the fake merge queue scripts a forecast.
 - `merge-queue-profile`: sluice forecasts a base place's branch.
-- `kinds-profile`: a kind with no stages that names its fix kind and its
-  bound, read through weir's crate.
 - `clause-coverage`: the suite reads the statement's revision holding
   210 and S120.
 
@@ -118,20 +120,21 @@ None. The behaviour belongs to `base-places`.
 - `crates/flume-fakes`: the fake merge queue's forecast.
 - `crates/flume-conformance`: base places' scenarios, S112 as amended
   and S120, the seam's forecast scenarios, and the clause list.
-- `crates/flume`: the sluice profile's forecast; the kinds profile's
-  mapping of weir's fields; status in the person's form; tests over
-  scratch repositories and against the pinned sluice.
-- `site/`: the merge-queue guide's base place failure, the kinds
-  guide's kind with no stages, the state reference, and the rules page.
+- `crates/flume`: the sluice profile's forecast; status in the person's
+  form; tests over scratch repositories and against the pinned sluice.
+- `site/`: the merge-queue guide's base place failure, the state
+  reference, and the rules page.
 - `docs/`: record 0056's amendment; rules core.53 and core.34, and the
   details of core.6, core.34, core.36 and core.53.
-- agentplot/blueprints: main at 24d36f8 (1, 203 and I6, accepted), and
-  flume 23, 56, 157, 165, 203, 210, C.6, S112 and S120 with weir 52, 57,
-  89 and C.4 on the branch `design/flume-a-base-place-launches-its-fix`
-  at cffcbcc, each for the orchestrator to push. The clause list reads
-  the revision of main that holds both.
-- agentplot/weir: follow-up W2, the two fields of a kind with no stages.
-  weir-kinds' pin moves to the revision that lands it.
+- agentplot/blueprints: main at 31f9f1c, holding 1, 203 and I6,
+  accepted at 24d36f8, and flume 23, 56, 157, 165, 203, 210, C.6, S112
+  and S120 with weir 52, 57, 89 and C.4. The clause list reads that
+  revision.
+- agentplot/weir: W2, the two fields of a kind with no stages, queued
+  as weir's unit a-kind-with-no-stages-names-its-fix; then flume's
+  follow-up unit a-base-places-fix-kind-is-read-from-weirs-format moves
+  weir-kinds' pin to the revision that lands it and maps both in the
+  kinds profile.
 - afterthought/crew: follow-up C2, its bolt kind naming its fix, and its
   own bolt-against-main forecast and take-main fix retired.
 - No new crate, plugin or site part, so no new moon project, and no new

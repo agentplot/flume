@@ -10,15 +10,14 @@ reach no real account, no repository of the user's, no person's queue
 and no network.
 
 Record 0056 is accepted, on the user's card of 2026-11-07, and the
-statement carries it in 1, 203 and I6 on agentplot/blueprints' main at
-24d36f8. The statement's amendment this design needs, 210 and S120
-among it, is on blueprints' branch
-`design/flume-a-base-place-launches-its-fix` at cffcbcc. Only task 6.2,
-the clause list, needs either on the remote's main, and only task 7.1
-needs weir's follow-up W2 (design, "Named follow-ups"); each is near
-the end, so every task before it is built either way. A build that
-finds what a task needs not landed stops short naming it, every task
-before it done.
+statement carries it in 1, 203 and I6, and the amendment this design
+needs, 210 and S120 among it, settled by agentplot-design, on
+agentplot/blueprints' main at 31f9f1c. weir's two fields of a kind with
+no stages, and the kinds profile's mapping of them, are the follow-ups
+design names, weir's unit a-kind-with-no-stages-names-its-fix and
+flume's a-base-places-fix-kind-is-read-from-weirs-format after it:
+until they land, a kind in weir's format names no fix, and its base
+place waits on its caller as before (203).
 
 The engine's scenarios use the repository's kinds `train`, landing with
 no stages, and `mend`, landing with one code stage delivering commits,
@@ -31,7 +30,7 @@ Every scenario added cites its clauses as data (106).
 
 ## 1. The decision recorded
 
-- [x] 1.1 Hold record 0056's amendment line as this change's construct wrote it, as design 14 words it, citing the blueprints branch at cffcbcc; amend it where the statement the build reads differs (core.19). True when `devenv shell -- sh check-adrs.sh` and `devenv shell -- treefmt --ci docs/adr/0056-a-base-place-forecast-or-found-to-conflict-with-its-base-or-whose-submission-failed-has-its-fix-launched-by-flume.md` pass.
+- [x] 1.1 Hold record 0056's amendment line as this change's construct wrote it, as design 14 words it, citing the statement at agentplot/blueprints 31f9f1c; amend it where the statement the build reads differs (core.19). True when `devenv shell -- sh check-adrs.sh` and `devenv shell -- treefmt --ci docs/adr/0056-a-base-place-forecast-or-found-to-conflict-with-its-base-or-whose-submission-failed-has-its-fix-launched-by-flume.md` pass.
 - [x] 1.2 Hold core.53's and core.34's rules and details and core.6's and core.36's details in `docs/architecture/core.md`, and the mirror of core.53 and core.34 in `site/src/content/docs/architecture/rules.md`, as this change's construct wrote them to design 14 (core.19, core.35). True when `devenv shell -- treefmt --ci docs/architecture/core.md site/src/content/docs/architecture/rules.md` and `devenv shell -- sh -c 'cd site && vale src/content/docs/architecture/rules.md'` pass.
 
 ## 2. The seams and the fakes
@@ -69,4 +68,4 @@ Every scenario added cites its clauses as data (106).
 
 ## 7. The kinds profile
 
-- [ ] 7.1 Move `weir-kinds`' pin in `Cargo.toml` to the revision of weir's main that lands W2, and have `map_kind` in `crates/flume/src/profiles/kinds/weir/mod.rs` map weir's two fields of a kind with no stages onto `Kind::fix` and `Kind::fix_limit` in weir's spelling; add the kinds-profile spec's "A train naming mend over a scratch repository" to `crates/flume/tests/profiles/kinds_weir.rs`, and give `site/src/content/docs/guides/kinds.mdx`'s kind with no stages the kind of its fixes and its bound in weir's spelling (4, 23, 157; weir 52, 57, 89; core.4, core.22, core.35). Where W2 has not landed on weir's main, stop short naming it. True when `devenv shell -- cargo test -p flume --test profiles kinds_weir` and `devenv shell -- sh -c 'cd site && vale src/content/docs/guides/kinds.mdx'` pass.
+- [x] 7.1 Leave the kinds profile as it stands, its mapping of weir's two fields of a kind with no stages the follow-up unit a-base-places-fix-kind-is-read-from-weirs-format after weir's unit a-kind-with-no-stages-names-its-fix, both named in design's "Named follow-ups" and in the proposal: this change's specs hold no kinds-profile requirement, `site/src/content/docs/guides/kinds.mdx` gains no sentence of it, and `site/src/content/docs/guides/merge-queue.md` says no kind names a fix yet, a base place waiting on its caller as before. Hold record 0056's amendment line, core.34's and core.53's marks in `docs/architecture/core.md` and their mirror in `site/src/content/docs/architecture/rules.md` as settled by agentplot-design, the statement at agentplot/blueprints 31f9f1c (203; core.4, core.19, core.35). True when `devenv shell -- openspec validate a-conflicting-base-place-gets-its-fix-launched --strict`, `devenv shell -- sh check-adrs.sh`, `devenv shell -- treefmt --ci docs/adr/0056-a-base-place-forecast-or-found-to-conflict-with-its-base-or-whose-submission-failed-has-its-fix-launched-by-flume.md docs/architecture/core.md site/src/content/docs/architecture/rules.md` and `devenv shell -- sh -c 'cd site && vale src/content/docs/guides/merge-queue.md src/content/docs/architecture/rules.md'` pass.

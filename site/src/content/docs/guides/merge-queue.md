@@ -259,10 +259,11 @@ moves it as it moves every submitted place.
 ### Its fixes
 
 A kind with no stages may name the kind its fixes run as, and how many
-fixes it runs before its place waits on you
-([a kind with no stages](/flume/guides/kinds/#a-kind-with-no-stages)).
-For a base place of such a kind, flume watches its branch against its
-base while it waits on you. At each settle, while no place on its branch
+fixes it runs before its place waits on you. A kind's declaration has
+no field for either yet. Until it does, no kind names a fix, and every
+base place waits on you after a failed or conflicting submission, with
+sluice's words. For a base place whose kind names one, flume watches its
+branch against its base while it waits on you. At each settle, while no place on its branch
 is live and its submission isn't open, flume asks sluice for a
 forecast, run in the repository:
 

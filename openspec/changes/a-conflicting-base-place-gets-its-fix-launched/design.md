@@ -23,9 +23,8 @@ merge queue; a forecast conflict, or a failed or conflicting
 submission, launches that fix on the branch with the merge queue's
 words; one fix at a time, each counted toward the kind's bound; and the
 submission stays the caller's retry. The statement carries it in 1,
-203 and I6 on agentplot/blueprints' main at 24d36f8, accepted there at
-the same commit. The remote's main, at b0df70b, does not yet hold that
-revision; the orchestrator pushes it.
+203 and I6, accepted at agentplot/blueprints 24d36f8, and its main at
+31f9f1c holds it with this design's amendment (decision 13).
 
 This change lands on the base place
 `bolt/flume-launches-a-conflicting-bolts-fix`, a bolt of the kind this
@@ -54,7 +53,8 @@ design teaches flume to fix.
   says a package names no other kind. flume defines no field of the
   format (core.4), so weir's format must gain the kind a kind with no
   stages names for its fixes, and its bound, before flume can read
-  them: weir's follow-up W2.
+  them: weir's follow-up W2, and flume's mapping of them after it
+  ("Named follow-ups").
 - **sluice already forecasts a named head.** The pinned sluice, 0.71.0,
   takes `sluice submit <base> --check --head <branch> --json` from
   anywhere in the repository. It answers `{conflict, head, onto,
@@ -121,8 +121,8 @@ details (decision 14).
 
 **Non-Goals:**
 
-- weir's fields themselves, and crew's bolt kind naming its fix: the
-  follow-ups below.
+- weir's fields themselves, the kinds profile's mapping of them, and
+  crew's bolt kind naming its fix: the follow-ups below.
 - A forecast of places with stages: sluice 64 forecasts a session's head
   for its agent already, and 112 and 131 send such a place back on its
   own submission.
@@ -152,8 +152,11 @@ max_fixes = 2      # how many fixes before the base place waits on its caller
 ```
 
 flume's `Kind` gains `fix: Option<String>` and `fix_limit:
-Option<u32>`, mapped by the kinds profile from weir's two fields and
-from nothing else (core.4). A kind read before reads as naming none
+Option<u32>`, which the kinds profile maps from weir's two fields and
+from nothing else (core.4), in flume's follow-up unit
+a-base-places-fix-kind-is-read-from-weirs-format once W2 lands. Until
+then a kind in weir's format names no fix, and its base place waits on
+its caller as before (203). A kind read before reads as naming none
 (serde default). A bound left out is flume's default for a stage's,
 `Defaults::send_backs` (2), as 58 leaves a field left out to its reader.
 
@@ -161,8 +164,8 @@ The named kind is a name, not a part. weir 89 and flume 157 keep a
 package whole: no part outside it, and no stage that extends, includes
 or hands over to another kind's. A fix kind's name is resolved by the
 reader at a launch, as a role's entry names its kind, and the package's
-hash covers the name alone. W2 amends weir 89 to say so, and this change
-amends 157 to match (decision 13).
+hash covers the name alone. The statement's weir 89 says so, which W2
+builds, and 157 matches it (decision 13).
 
 ### 2. The fix kind resolves at the base place's launch
 
@@ -412,7 +415,9 @@ differs from the one held, so an unchanged forecast writes nothing.
 - The sluice profile: forecast as decision 3 has it.
 - Every stand-in a test holds: forecast answers could not read, naming
   the stand-in.
-- The kinds profile: weir's two fields mapped, once W2 lands.
+- The kinds profile: as it stands; flume's follow-up unit
+  a-base-places-fix-kind-is-read-from-weirs-format maps weir's two
+  fields once W2 lands.
 - The fake merge queue: `answer_forecast(repository, branch, Forecast)`,
   clear at the base's revision where nothing is scripted, each ask
   logged `forecast <branch> onto <base>`; a forecast scripted once
@@ -430,11 +435,9 @@ launch picks the field up.
 
 ### 13. The statement's amendment
 
-On agentplot/blueprints' branch
-`design/flume-a-base-place-launches-its-fix` at cffcbcc, cut from main
-at 24d36f8, for the orchestrator to push, each clause fitted to main's
-text and marked proposed under flume record 0056's amendment. The
-words:
+On agentplot/blueprints' main at 31f9f1c, each clause marked as flume
+record 0056's amendment, settled by agentplot-design as mechanism
+within the decision the user accepted. The words:
 
 - **23**, after "how many times a place may go back before it waits on
   its caller": "One that lands with no stages may name the kind its
@@ -562,21 +565,28 @@ build:
   submission of the base place, its kind naming it, which reads no
   base's checks (203; core.53; record 0056)".
 - **Record 0056** gains an amendment line: "Amended 2026-11-07 by the
-  change a-conflicting-base-place-gets-its-fix-launched, proposed: the
-  forecast is the merge queue seam's (210, C.6); the fix kind is named
-  by weir's format (W2) and resolved at the base place's launch; a
-  forecast that conflicts only with entries queued ahead
-  launches nothing; each forecast and each submission is acted on once;
-  the fix takes the base place's stream, priority, named intent and
-  recipients, and no points; a refused launch counts toward the bound
-  (23, 56, 157, 165, 203, 210, C.6, S112, S120)." The site's rules page
-  mirrors core.53 and core.34.
+  change a-conflicting-base-place-gets-its-fix-launched, settled by
+  agentplot-design as mechanism within the decision the user accepted:
+  the forecast is the merge queue seam's (210, C.6); the fix kind is
+  named by weir's format and resolved at the base place's launch; a
+  forecast that conflicts only with entries queued ahead launches
+  nothing; each forecast and each submission is acted on once; the fix
+  takes the base place's stream, priority, named intent and recipients,
+  and no points; a refused launch counts toward the bound (23, 56, 157,
+  165, 203, 210, C.6, S112, S120). The statement carries it, with weir
+  52, 57, 89 and C.4, at agentplot/blueprints 31f9f1c. weir's format
+  gains the fix kind by weir's unit a-kind-with-no-stages-names-its-fix,
+  and flume reads it by its unit
+  a-base-places-fix-kind-is-read-from-weirs-format after it; until then
+  a kind in weir's format names no fix, and its base place waits on its
+  caller as before (203)." core.53's and core.34's marks name the
+  amendment as settled, and the site's rules page mirrors both rules.
 
 ## Who owns what
 
 | piece | owner | flume's part |
 |---|---|---|
-| the kind of a base place's fixes and its bound, in the format | weir (W2) | read through weir-kinds (core.4) |
+| the kind of a base place's fixes and its bound, in the format | weir (W2) | read through weir-kinds (core.4), by the follow-up unit after W2 |
 | which fix kind a bolt names | crew's bolt kind, in its package (C2) | resolve and launch it |
 | forming the forecast | sluice (64) | ask it through the seam, by one command |
 | when to forecast, what to launch, the bound | flume (203) | this change |
@@ -585,13 +595,25 @@ build:
 
 ### Named follow-ups
 
-- **agentplot/weir, W2: a kind with no stages names its fix.** weir 52,
-  57, 89 and C.4 as design 13 words them, with weir's own record;
-  weir-kinds' `Kind` gains the kind a kind that lands with no stages
-  names for its fixes and its bound, read on such a kind and refused on
-  any other naming the field, and `weir check` lists them. The pack holds
-  a kind with both, and one with stages that names either, refused.
-  flume's task 7.1 moves its pin to the revision that lands it.
+- **agentplot/weir, W2: a kind with no stages names its fix**, queued
+  as weir's unit a-kind-with-no-stages-names-its-fix. weir 52, 57, 89
+  and C.4 as design 13 words them, at agentplot/blueprints 31f9f1c,
+  with weir's own record; weir-kinds' `Kind` gains the kind a kind that
+  lands with no stages names for its fixes and its bound, read on such a
+  kind and refused on any other naming the field, and `weir check` lists
+  them. The pack holds a kind with both, and one with stages that names
+  either, refused.
+- **flume, a-base-places-fix-kind-is-read-from-weirs-format**, after
+  W2. weir-kinds' pin in `Cargo.toml` moves to the revision of weir's
+  main that lands W2, and `map_kind` maps weir's two fields of a kind
+  with no stages onto `Kind::fix` and `Kind::fix_limit` in weir's
+  spelling and from nothing else; the kinds profile's scenarios read a
+  `train` naming `mend` with a bound of 2, a `yard` naming none, and a
+  kind with stages naming a fix refused in weir's words, over a scratch
+  repository; and the kinds guide's kind with no stages gives both
+  fields in weir's spelling (4, 23, 157; weir 52, 57, 89; core.4,
+  core.22, core.35). Until it lands, a kind in weir's format names no
+  fix, and its base place waits on its caller as before (203).
 - **afterthought/crew, C2: a bolt's kind names its fix.** Once crew's
   bolts are base places (crew record 0056), crew's bolt kind names the
   kind its fixes run as, and crew retires its own bolt-against-main
@@ -666,11 +688,11 @@ for Boomdrive, whose runner keeps the watch that settles (208).
   stop-shorts reach the base place's recipients, which is who asked for
   the work (core.54); a caller that wants them elsewhere launches its
   own fix.
-- **Until W2 lands, no kind names a fix.** The seams, the core, status
-  and the sluice profile build and test over the fakes, whose kinds are
-  built in Rust; the kinds profile's mapping waits on W2 (task 7.1),
-  the change's last task, so every task before it is built whether W2
-  has landed or not.
+- **Until the follow-ups land, no kind names a fix.** The seams, the
+  core, status and the sluice profile build and test over the fakes,
+  whose kinds are built in Rust. A kind in weir's format names no fix
+  until W2 and flume's follow-up unit after it land, and its base place
+  waits on its caller as before (203).
 
 ## Migration Plan
 
@@ -683,6 +705,5 @@ gains flume's fix only once C2 names its fix kind.
 
 ## Open Questions
 
-None for this change. W2 settles the fields' spelling; the specs and
-tasks name them by what they mean, and the build follows weir's
-spelling.
+None for this change. W2 settles the fields' spelling, and flume's
+follow-up unit follows it.
