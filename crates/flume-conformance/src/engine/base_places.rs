@@ -131,6 +131,31 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["4", "23", "203"],
             run: a_fix_kind_with_no_stages,
         },
+        Scenario {
+            name: "base places: a settle of every place forecasts no base place while a change works on its branch, and the base place waits on its places",
+            cites: &["203", "210"],
+            run: no_forecast_while_a_change_works,
+        },
+        Scenario {
+            name: "base places: a settle forecasts no base place whose submission is open",
+            cites: &["111", "203", "210"],
+            run: no_forecast_while_submitted,
+        },
+        Scenario {
+            name: "base places: a settle forecasts no base place whose kind names no fix",
+            cites: &["203"],
+            run: no_forecast_for_a_kind_naming_no_fix,
+        },
+        Scenario {
+            name: "base places: three settles of a base place waiting on its caller forecast it once each, and it holds the forecast the first read, clear at main's revision, the two after writing none",
+            cites: &["46", "203", "210"],
+            run: forecast_while_it_waits_on_its_caller,
+        },
+        Scenario {
+            name: "base places: a forecast that could not be read launches nothing and fails no settle, each settle asking again, and the base place holds it unread with the merge queue's words",
+            cites: &["17", "203", "210"],
+            run: a_forecast_that_could_not_be_read,
+        },
     ]
 }
 
@@ -1182,6 +1207,115 @@ fn a_fix_kind_with_no_stages(_: &()) -> Outcome {
     ensure!(
         world.git.branch_head(REPOSITORY, "train/spring").is_none(),
         "the branch was made"
+    );
+    Ok(())
+}
+
+/// The forecasts the merge queue was asked, as its log names them.
+fn forecasts(world: &World) -> Vec<String> {
+    world.queue.log.of("forecast")
+}
+
+fn no_forecast_while_a_change_works(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    change_working(&world, "one", "train/spring")?;
+    world.queue.log.clear();
+    world.engine().settle(None);
+    ensure_eq!(forecasts(&world), Vec::<String>::new(), "the forecasts");
+    ensure_eq!(
+        world.status(&spring)?.waits_on,
+        Some(flume_core::WaitsOn::Places),
+        "whom it waits on"
+    );
+    Ok(())
+}
+
+fn no_forecast_while_submitted(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    retry_submission(&world, &spring)?;
+    world.queue.log.clear();
+    world.engine().settle(None);
+    ensure_eq!(forecasts(&world), Vec::<String>::new(), "the forecasts");
+    Ok(())
+}
+
+fn no_forecast_for_a_kind_naming_no_fix(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring(&world)?;
+    for _ in 0..3 {
+        world.engine().settle(None);
+    }
+    ensure_eq!(forecasts(&world), Vec::<String>::new(), "the forecasts");
+    ensure_eq!(
+        world.status(&spring)?.waits_on,
+        Some(flume_core::WaitsOn::Caller),
+        "whom it waits on"
+    );
+    Ok(())
+}
+
+fn forecast_while_it_waits_on_its_caller(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    world.queue.log.clear();
+    let first = world.host.now();
+    for _ in 0..3 {
+        world.engine().settle(None);
+        world.host.advance(60);
+    }
+    ensure_eq!(
+        forecasts(&world),
+        vec!["forecast train/spring onto main".to_string(); 3],
+        "the forecasts"
+    );
+    let main = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
+    let head = world
+        .git
+        .branch_head(REPOSITORY, "train/spring")
+        .ok_or("no train/spring")?;
+    ensure_eq!(
+        world.held(&spring).and_then(|held| held.forecast),
+        Some(ForecastHeld {
+            at: first,
+            forecast: Forecast::Clear { head, onto: main },
+        }),
+        "the forecast held"
+    );
+    Ok(())
+}
+
+fn a_forecast_that_could_not_be_read(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    let torn = Forecast::CouldNotRead {
+        reason: "the reader's document is torn".into(),
+    };
+    world
+        .queue
+        .answer_forecast(REPOSITORY, "train/spring", torn.clone());
+    world.queue.log.clear();
+    for _ in 0..2 {
+        match world.engine().settle(None) {
+            flume_core::Answer::Settled { .. } => {}
+            other => return Err(format!("the settle answered {other:?}")),
+        }
+    }
+    ensure_eq!(forecasts(&world).len(), 2, "the forecasts asked");
+    ensure_eq!(
+        world.store.places(),
+        vec![spring.clone()],
+        "the places standing"
+    );
+    ensure_eq!(
+        world
+            .held(&spring)
+            .and_then(|held| held.forecast)
+            .map(|held| held.forecast),
+        Some(torn),
+        "the forecast held"
     );
     Ok(())
 }

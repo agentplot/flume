@@ -16,6 +16,19 @@ pub(crate) fn base_place(kind: &Kind) -> bool {
     kind.lands && kind.stages.is_empty()
 }
 
+/// Whether two forecasts are one for holding: the same outcome, clear,
+/// in conflict with the base, in conflict only with entries queued ahead,
+/// or unread, at the same head and base's revision (203, 210).
+fn same_forecast(was: &Forecast, now: &Forecast) -> bool {
+    let outcome = |forecast: &Forecast| match forecast {
+        Forecast::Clear { .. } => 0,
+        Forecast::Conflict { with, .. } if with.is_empty() => 1,
+        Forecast::Conflict { .. } => 2,
+        Forecast::CouldNotRead { .. } => 3,
+    };
+    outcome(was) == outcome(now) && was.formed() == now.formed()
+}
+
 /// Whether a place's submission is made and not yet decided: submitted,
 /// or a request opened for it, and no outcome read (111, 124, 204).
 pub(crate) fn submission_open(held: &HeldState) -> bool {
@@ -118,6 +131,50 @@ impl Engine {
             .read(id)
             .map(|read| read.state)
             .ok_or_else(|| format!("the place {id} was removed while it was launched"))
+    }
+
+    /// The settle's forecast of a base place whose kind names a fix, once
+    /// at each settle of it: asked of the merge queue while it is live, no
+    /// place on its branch is being made or live and its submission is not
+    /// open, and held with when it was read only where its outcome, its
+    /// head or its base's revision changed. A forecast that could not be
+    /// read fails nothing, and the next settle asks again; a settle of
+    /// another place never asks it (46, 203, 208, 210; core.13, core.17).
+    pub(crate) fn forecast_base(&self, id: &PlaceId) {
+        let Some(read) = self.store.read(id) else {
+            return;
+        };
+        let held = read.state;
+        let place = &held.place;
+        if held.phase != Phase::Live || !base_place(&place.kind) || place.fixes_as.is_none() {
+            return;
+        }
+        if held.fixes.iter().any(|fix| fix.ended == FixEnded::Live)
+            || !self.on_branch(place).is_empty()
+            || submission_open(&held)
+        {
+            return;
+        }
+        let Some(queue) = self.bound(place).ok().and_then(|bound| bound.merge_queue) else {
+            return;
+        };
+        let forecast = queue.forecast(&place.repository, &place.branch, &place.base);
+        let now = self.host.now();
+        self.update(id, |held| {
+            if held.phase != Phase::Live
+                || held
+                    .forecast
+                    .as_ref()
+                    .is_some_and(|was| same_forecast(&was.forecast, &forecast))
+            {
+                return Step::Keep(());
+            }
+            held.forecast = Some(ForecastHeld {
+                at: now,
+                forecast: forecast.clone(),
+            });
+            Step::Write(())
+        });
     }
 
     /// The head of a base place's branch where the merge queue says it
