@@ -434,6 +434,31 @@ pub struct PlaceStatus {
     /// branch, given for a base place alone (56, 130, 203).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub on_branch: Option<Vec<PlaceId>>,
+    /// For a base place whose kind names a fix, the kind its fixes run as,
+    /// as its launch resolved it, with where it came from (21, 56, 203).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_kind: Option<FixKind>,
+    /// For such a base place, how many fixes it runs before it waits on
+    /// its caller: its kind's bound, or flume's default for a stage's (23,
+    /// 56, 203).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_limit: Option<u32>,
+    /// For such a base place, the newest forecast a settle held of its
+    /// branch, with when it was read, its head and its base's revision:
+    /// clear, in conflict with its files and the entries ahead it meets,
+    /// or unread with why; status forms none of its own (56, 58, 203, 210;
+    /// core.15).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forecast: Option<ForecastHeld>,
+    /// For a base place, each fix flume launched for it, with its number,
+    /// its place, its cause, when it was launched and how it ended (56,
+    /// 203).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fixes: Vec<BaseFix>,
+    /// For a place flume launched as a base place's fix, that base place,
+    /// the fix's number and its cause (56, 203).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_of: Option<FixOf>,
 }
 
 /// A stage waiting for room while a process runs the conversation its

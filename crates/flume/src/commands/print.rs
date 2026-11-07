@@ -3562,6 +3562,11 @@ mod tests {
             waits_on: None,
             worktree: None,
             on_branch: None,
+            fix_kind: None,
+            fix_limit: None,
+            forecast: None,
+            fixes: vec![],
+            fix_of: None,
         }
     }
 

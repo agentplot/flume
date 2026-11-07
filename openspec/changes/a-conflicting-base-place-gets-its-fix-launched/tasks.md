@@ -53,7 +53,7 @@ Every scenario added cites its clauses as data (106).
 
 ## 4. Status
 
-- [ ] 4.1 Give `PlaceStatus` design 10's `fix_kind`, `fix_limit`, `forecast`, `fixes` and `fix_of`, each left out where it does not apply, read from the held state with no forecast formed, and the recipients' source `base-place`; list each in `FIELDS` in `crates/flume-conformance/src/engine/answers.rs`, and add the place-status spec's JSON scenarios to the engine's status scenarios (56, 58, 61, 203; core.14, core.15). True when `devenv shell -- cargo test -p flume-conformance --test engine` passes.
+- [x] 4.1 Give `PlaceStatus` design 10's `fix_kind`, `fix_limit`, `forecast`, `fixes` and `fix_of`, each left out where it does not apply, read from the held state with no forecast formed, and the recipients' source `base-place`; list each in `FIELDS` in `crates/flume-conformance/src/engine/answers.rs`, and add the place-status spec's JSON scenarios to the engine's status scenarios (56, 58, 61, 203; core.14, core.15). True when `devenv shell -- cargo test -p flume-conformance --test engine` passes.
 - [ ] 4.2 Have `crates/flume/src/commands/print.rs` give design 10's person's form of a base place's fix kind, forecast and fixes and of a fix's base place, with a unit test of the place-status spec's "A fix landed, in the person's form" in its `tests` module (56). True when `devenv shell -- cargo test -p flume --lib commands::print` passes.
 - [ ] 4.3 Name the new fields in `site/src/content/docs/reference/state.md`: a base place's fix kind, bound, forecast and fixes, and a fix's `fix_of` and its recipients' source, to any host's operator (56, 61; core.35). True when `devenv shell -- sh -c 'cd site && vale src/content/docs/reference/state.md'` passes.
 

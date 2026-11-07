@@ -279,7 +279,7 @@ fn spring_launch() -> Launch {
 /// The base place `train--spring` on `main`, its kind naming `mend` the
 /// kind of its fixes with `limit` its bound, the repository declaring
 /// both; its recipient `ops` a session that asks nothing (23, 203).
-fn spring_mended(world: &World, limit: Option<u32>) -> Result<PlaceId, String> {
+pub(crate) fn spring_mended(world: &World, limit: Option<u32>) -> Result<PlaceId, String> {
     world.terminal.add_session("ops", AgentState::Waiting);
     world
         .kinds
@@ -290,7 +290,7 @@ fn spring_mended(world: &World, limit: Option<u32>) -> Result<PlaceId, String> {
 
 /// The base place `train--spring` on `main`, its recipient `ops` a
 /// session that asks nothing.
-fn spring(world: &World) -> Result<PlaceId, String> {
+pub(crate) fn spring(world: &World) -> Result<PlaceId, String> {
     world.terminal.add_session("ops", AgentState::Waiting);
     train_on(world, "spring", "main")
 }
@@ -1403,7 +1403,7 @@ fn a_forecast_that_could_not_be_read(_: &()) -> Outcome {
 }
 
 /// The base place `train--spring`'s fix `number`, a place of `mend`.
-fn mend_fix(number: u32) -> PlaceId {
+pub(crate) fn mend_fix(number: u32) -> PlaceId {
     World::id("mend", &format!("spring-{number}"))
 }
 
@@ -1419,7 +1419,10 @@ fn conflict_words(with: &str, onto: &Revision) -> String {
 /// The fake merge queue forecasting `train/spring` at its head in conflict
 /// on `README.md` with main's revision, meeting `with` queued ahead, none
 /// where it meets main itself: the head and the revision.
-fn forecast_conflict(world: &World, with: &[&str]) -> Result<(Revision, Revision), String> {
+pub(crate) fn forecast_conflict(
+    world: &World,
+    with: &[&str],
+) -> Result<(Revision, Revision), String> {
     let head = world
         .git
         .branch_head(REPOSITORY, "train/spring")
