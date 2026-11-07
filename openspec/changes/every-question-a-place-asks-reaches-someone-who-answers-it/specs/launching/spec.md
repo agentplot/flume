@@ -7,9 +7,7 @@ session that launched it as the terminal names it, or else the answerer
 behind the place's stream, the role a source of the host declares to
 stand behind it, and SHALL record the place with its priority, its
 recipients, where each came from, and its holds' words, which nothing
-after the launch changes. A recipient the launch names SHALL be a
-session's name, or a role's address of any stream written whole (7, 8,
-43, 70, 132, 193).
+after the launch changes (7, 8, 43, 70, 193).
 
 #### Scenario: Recipients at the launch
 
@@ -26,12 +24,19 @@ session's name, or a role's address of any stream written whole (7, 8,
 - **WHEN** `acme` also declares `west/operator` standing behind the stream `west`, and a like launch names `west`
 - **THEN** the place's one recipient is `west/operator` (143, 193)
 
+## ADDED Requirements
+
+### Requirement: A recipient a launch names
+
+A recipient the launch names SHALL be a session's name, or a role's
+address of any stream written whole, `<stream>/<role>`, and SHALL be
+recorded as from the launch, whatever the place's own stream
+(7, 132, 193).
+
 #### Scenario: Another stream's role named
 
-- **WHEN** a launch in `east` names the recipient `west/planner`, which `acme` declares
+- **WHEN** a launch in the stream `east` names the recipient `west/planner`, which the scratch source `acme` declares
 - **THEN** the place's one recipient is `west/planner`, from the launch
-
-## ADDED Requirements
 
 ### Requirement: A launch no one would answer is refused
 
