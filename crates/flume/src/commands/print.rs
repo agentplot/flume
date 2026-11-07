@@ -10,9 +10,9 @@ use flume_core::{
     Woke,
 };
 use flume_seams::{
-    AccountFrom, Act, BaseFrom, CarryCause, ClosedBy, ConfigLayer, ConfigValue, Conversation,
-    EndOf, Given, Hold, HoldOn, HostConfiguration, IntentKey, Kept, KindFrom, LabelHeld,
-    LiveProcess, LocalLayer, Made, NamedBy, NamedSession, Phase, ProfileHeld, Readiness,
+    AccountFrom, Act, AnswerHeld, BaseFrom, CarryCause, ClosedBy, ConfigLayer, ConfigValue,
+    Conversation, EndOf, Given, Hold, HoldOn, HostConfiguration, IntentKey, Kept, KindFrom,
+    LabelHeld, LiveProcess, LocalLayer, Made, NamedBy, NamedSession, Phase, ProfileHeld, Readiness,
     RecipientsFrom, SessionFrom, SessionHeld, StopKind, StreamAnswerer, StreamHeld, SubmissionRead,
     UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch, LAUNCH_SOURCE, OWN_SOURCE,
     REPO_SOURCE,
@@ -371,8 +371,15 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         ));
     }
     for end in &place.ends {
-        let mut line = format!("  ended: {}", flume_core::what_ended(&end.end.of));
+        let mut line = format!(
+            "  ended {}: {}",
+            end.key,
+            flume_core::what_ended(&end.end.of)
+        );
         line.push_str(&stall_words(&end.end.of));
+        if let Some(answer) = &end.end.answer {
+            line.push_str(&format!("; {}", answered_words(answer)));
+        }
         let delivered: Vec<&str> = end
             .end
             .deliveries
@@ -1253,18 +1260,47 @@ fn stage_lines(stage: &StageStatus) -> Vec<String> {
 }
 
 /// An answer a stage's start took in its session: the act it came by,
-/// when it was received, and the question then the answer (42, 56).
+/// who gave it where it named one, when it was received, and the question
+/// then the answer (42, 56).
 fn answer_line(answer: &SessionAnswer) -> String {
+    let from = answer
+        .answer
+        .by
+        .as_ref()
+        .map(|by| format!(" from {by}"))
+        .unwrap_or_default();
     let received = answer
         .answer
         .session
         .map(|handed| format!(", received at {}", handed.received_at))
         .unwrap_or_default();
     format!(
-        "    answered by {}{received}: asked {}; answered {}",
+        "    answered by {}{from}{received}: asked {}; answered {}",
         word(json!(answer.answer.act)),
         answer.question.as_deref().unwrap_or_default(),
         answer.answer.words
+    )
+}
+
+/// A stop-short's answer on its end's line: when it was taken, who gave
+/// it where it named one, the act it came by, whether it named the key,
+/// and its words (42, 56).
+fn answered_words(answer: &AnswerHeld) -> String {
+    let by = answer
+        .by
+        .as_ref()
+        .map(|by| format!(" by {by}"))
+        .unwrap_or_default();
+    let keyed = if answer.key.is_some() {
+        " naming its key"
+    } else {
+        ""
+    };
+    format!(
+        "answered at {}{by}, by a {}{keyed}: {}",
+        answer.at,
+        word(json!(answer.act)),
+        answer.words
     )
 }
 
@@ -3547,7 +3583,7 @@ mod tests {
             "{lines:#?}"
         );
         assert!(lines.contains(
-            &"  ended: talk lost, and flume left the agent the terminal brought back in its pane; pending for ops".to_string()
+            &"  ended stage/talk/1/lost: talk lost, and flume left the agent the terminal brought back in its pane; pending for ops".to_string()
         ));
         let inbox = Answer::Inbox {
             recipient: "ops".into(),
@@ -3728,6 +3764,13 @@ mod tests {
                 "    answered by retry, received at 1205: asked Which file holds the log?; answered notes.md".to_string(),
                 "    answered by tell, received at 2405: asked Which test covers it?; answered the walkthrough".to_string(),
             ]
+        );
+        // 42: who gave an answer, where it named one.
+        let mut from_ops = stage;
+        from_ops.answers[1].answer.by = Some("east/ops".into());
+        assert_eq!(
+            stage_lines(&from_ops)[2],
+            "    answered by tell from east/ops, received at 2405: asked Which test covers it?; answered the walkthrough"
         );
     }
 
@@ -3940,7 +3983,7 @@ mod tests {
             ..a_place()
         };
         assert!(place_lines(&place).contains(
-            &"  ended: stalled: a retry of construct, its hold lapsed: on the user's card; its stop-short needs an answer, asking west/design, saying: Which design does the brief mean?; pending for east/planner"
+            &"  ended stall/3700: stalled: a retry of construct, its hold lapsed: on the user's card; its stop-short needs an answer, asking west/design, saying: Which design does the brief mean?; pending for east/planner"
                 .to_string()
         ), "{:?}", place_lines(&place));
         let json = serde_json::to_value(&stall).expect("the end as JSON");
@@ -3954,6 +3997,85 @@ mod tests {
                 "key": "stage/construct/1/ended-short",
                 "addressee": "west/design"
             })
+        );
+    }
+
+    #[test]
+    fn an_answered_question_with_its_key() {
+        // 41, 42, 56: an end's line opens with its key as callers name it,
+        // and a stop-short's answer gives when, who gave it, the act and
+        // whether it named the key; in the JSON form as fields.
+        let answered = EndStatus {
+            end: EndHeld {
+                of: EndOf::Stage {
+                    stage: "construct".into(),
+                    start: 1,
+                    state: flume_seams::StageState::EndedShort,
+                    quiet_from: None,
+                    answered: 0,
+                    end: Box::new(StageEnd {
+                        words: Some("Which queue's settings are live in east?".into()),
+                        needs: Some(StopKind::NeedsAnswer),
+                        addressee: Some("east/ops".into()),
+                        ..StageEnd::default()
+                    }),
+                },
+                read_at: 1000,
+                deliveries: vec![],
+                answer: Some(AnswerHeld {
+                    words: "2.4, as deployed".into(),
+                    act: Act::Retry,
+                    at: 1600,
+                    session: None,
+                    by: Some("east/ops".into()),
+                    key: Some("stage/construct/1/ended-short".parse().unwrap()),
+                }),
+            },
+            key: "stage/construct/1/ended-short".parse().unwrap(),
+            pending_for: vec![],
+            open_until: None,
+        };
+        let place = PlaceStatus {
+            ends: vec![answered.clone()],
+            ..a_place()
+        };
+        assert!(
+            place_lines(&place).contains(
+                &"  ended stage/construct/1/ended-short: construct needs an answer; answered at 1600 by east/ops, by a retry naming its key: 2.4, as deployed"
+                    .to_string()
+            ),
+            "{:?}",
+            place_lines(&place)
+        );
+        let json = serde_json::to_value(&answered).expect("the end as JSON");
+        assert_eq!(json["key"], json!("stage/construct/1/ended-short"));
+        assert_eq!(
+            json["answer"],
+            json!({
+                "words": "2.4, as deployed",
+                "act": "retry",
+                "at": 1600,
+                "by": "east/ops",
+                "key": "stage/construct/1/ended-short"
+            })
+        );
+        // An answer that named no key and no one: its line says neither.
+        let mut unnamed = answered;
+        if let Some(answer) = unnamed.end.answer.as_mut() {
+            answer.by = None;
+            answer.key = None;
+        }
+        let place = PlaceStatus {
+            ends: vec![unnamed],
+            ..a_place()
+        };
+        assert!(
+            place_lines(&place).contains(
+                &"  ended stage/construct/1/ended-short: construct needs an answer; answered at 1600, by a retry: 2.4, as deployed"
+                    .to_string()
+            ),
+            "{:?}",
+            place_lines(&place)
         );
     }
 

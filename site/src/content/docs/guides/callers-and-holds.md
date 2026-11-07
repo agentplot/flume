@@ -55,8 +55,8 @@ command nothing is ever typed, so every end stays pending until
 collected. Status shows each end and whom it is pending for:
 
 ```text
-  ended: code delivered; pending for me
-  ended: submission landed d185a879b51dba33555c036392b50443f4dfc5e8; pending for me
+  ended stage/code/1/delivered: code delivered; pending for me
+  ended submission/1/landed: submission landed d185a879b51dba33555c036392b50443f4dfc5e8; pending for me
 ```
 
 A place whose work is over keeps only its record while an end of it
@@ -163,7 +163,7 @@ whether it needs an answer or found work:
   stage code: ended_short, started 2 times, saying: Which README, the root's or the parser's?
   waits on its caller to retry code (answer) since 1793287841: Which README, the root's or the parser's?
     its agent kept open for the answer until 1793291441: retry with --words, or tell it
-  ended: code needs an answer; pending for me
+  ended stage/code/2/ended-short: code needs an answer; pending for me
 ```
 
 A question starts no next stage: the place waits on its answer. Found

@@ -775,14 +775,14 @@ fn a_session_run_in_a_pane_flume_did_not_make(_: &()) -> Outcome {
 }
 
 /// The question construct asks `east/ops` in the answer scenarios.
-const ASKED: &str = "Which queue's settings are live in east?";
+pub const ASKED: &str = "Which queue's settings are live in east?";
 
 /// The answer `east/ops` gives it.
-const READ: &str = "east runs the queue at 2.4, as deployed.";
+pub const READ: &str = "east runs the queue at 2.4, as deployed.";
 
 /// The key of construct's first start ended short after `answered`
 /// answers in its session (42, 43).
-fn construct_key(answered: u32) -> EndKey {
+pub fn construct_key(answered: u32) -> EndKey {
     EndKey::Stage {
         stage: "construct".into(),
         start: 1,
@@ -878,7 +878,7 @@ fn by_ops(act: Act, at: Seconds, key: Option<EndKey>, session: bool) -> AnswerHe
 /// The run of `east/ops` answered construct's stop-short by a retry naming
 /// its key at `at`, construct's agent kept open taking it in its session:
 /// the place, and when.
-fn answered_by_ops(world: &World) -> Result<(PlaceId, Seconds), String> {
+pub fn answered_by_ops(world: &World) -> Result<(PlaceId, Seconds), String> {
     let (id, _) = asks_ops(world, None)?;
     world.host.advance(10 * 60);
     let at = world.host.now();

@@ -326,7 +326,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   moon run core:test conformance:test` passes. `engine/caller_acts.rs`
   holds the caller-acts spec's seven scenarios, with S93's engine part,
   `s93_a_question_for_ops_answered_once`.
-- [ ] 7.3 Have status give each end's key, and a stop-short's answer
+- [x] 7.3 Have status give each end's key, and a stop-short's answer
   with who gave it and when (56; core.14). True when `sluice exec main
   -- moon run core:test conformance:test flume:test` passes, with the
   place-status spec's scenario of an answered question.

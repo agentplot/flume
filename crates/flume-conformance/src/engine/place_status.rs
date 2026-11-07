@@ -276,6 +276,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: recipients_and_their_sources,
         },
         Scenario {
+            name: "status: a construct's stop-short in east, naming ops, answered by a retry naming its key from the run of east/ops, gives the end's key, east/ops as its addressee, and the answer's words with east/ops and when, in the JSON form",
+            cites: &["56", "42", "41", "193"],
+            run: an_answered_question,
+        },
+        Scenario {
             name: "status: an end pending for east/planner, which no source declares, gives the address with no run and that no source declares it, and the stream's answerer east/operator",
             cites: &["56", "132", "193"],
             run: an_address_that_wakes_nothing,
@@ -2316,6 +2321,42 @@ fn a_bare_agent_left(_: &()) -> Outcome {
         json["agent"]["left_in_pane"],
         serde_json::json!(true),
         "left_in_pane in the JSON form"
+    );
+    Ok(())
+}
+
+/// The place-status spec's "An answered question": status gives the
+/// stop-short's end with its key as callers name it, the address it
+/// named, and the answer's words with who gave them, the key they named
+/// and when, in the JSON form (41, 42, 56, 193; core.14).
+fn an_answered_question(_: &()) -> Outcome {
+    use super::caller_acts::{answered_by_ops, construct_key, READ};
+    let world = World::new();
+    let (id, at) = answered_by_ops(&world)?;
+    let key = construct_key(0).to_string();
+    let json = status_json(&world, &id)?;
+    let end = json["ends"]
+        .as_array()
+        .ok_or("status gives no ends")?
+        .iter()
+        .find(|end| end["key"] == key.as_str())
+        .ok_or_else(|| format!("status gives no end keyed {key}: {}", json["ends"]))?;
+    ensure_eq!(
+        (
+            end["end"]["addressee"].clone(),
+            end["answer"]["words"].clone(),
+            end["answer"]["by"].clone(),
+            end["answer"]["key"].clone(),
+            end["answer"]["at"].clone()
+        ),
+        (
+            serde_json::json!("east/ops"),
+            serde_json::json!(READ),
+            serde_json::json!("east/ops"),
+            serde_json::json!(key),
+            serde_json::json!(at)
+        ),
+        "the end's addressee, and its answer's words, who gave them, the key they named and when"
     );
     Ok(())
 }
