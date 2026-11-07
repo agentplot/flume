@@ -1,7 +1,7 @@
 ---
 number: 56
 title: A base place forecast or found to conflict with its base, or whose submission failed, has its fix launched by flume
-status: proposed
+status: accepted
 date: 2026-11-07
 decision-makers:
 - Chuck Swanberg
@@ -10,7 +10,7 @@ decision-makers:
 
 # A base place forecast or found to conflict with its base, or whose submission failed, has its fix launched by flume
 
-Status: proposed on 2026-11-07, from the user's own words that day, relayed by agentplot-operator; accepted on their yes.
+Status: accepted by the user on 2026-11-07, on their card. Proposed the same day from their own words, relayed by agentplot-operator.
 
 Amends record 0051 in part, where a base place's failed or conflicting submission starts nothing and its caller launches the fix (203), and clause 1 and I6, where flume launches only when a caller asks.
 
