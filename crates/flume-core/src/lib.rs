@@ -28,6 +28,7 @@ mod room;
 mod settings;
 mod settle;
 mod spent;
+mod standing;
 mod start;
 mod start_record;
 mod status;

@@ -9,7 +9,12 @@
 //! answers an end pending for its recipient and delivers it, reads one
 //! already delivered, and otherwise follows the host's state under its
 //! timeout, settling nothing under a watch (119, 122); the inbox collects
-//! every end pending for a recipient, each delivered once (75).
+//! every end pending for a recipient, each delivered once (75). An end
+//! for a role's address the host's configuration gives a standing agent
+//! goes into the one agent of its name the terminal finds in the session
+//! of the entry's stream at each settle, none, two or a stream the host
+//! does not declare leaving it pending, and nothing of where the agent
+//! was is kept (132, 143, 190, C.7; core.28).
 
 use super::settling::deliver_fix;
 use super::world::*;
@@ -120,6 +125,51 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "end delivery: two inboxes at once deliver each end once",
             cites: &["43", "75"],
             run: two_inboxes_at_once,
+        },
+        Scenario {
+            name: "end delivery: an end for a standing address goes as one notice into the agent of the entry's name waiting in the entry's session, recorded delivered to the address, and no place is made",
+            cites: &["43", "132"],
+            run: a_standing_agent_waiting,
+        },
+        Scenario {
+            name: "end delivery: no notice goes into a standing agent asking, and the first settle that reads it waiting delivers the end once",
+            cites: &["43", "95"],
+            run: a_standing_agent_asking,
+        },
+        Scenario {
+            name: "end delivery: no agent of the standing entry's name in its session leaves the end pending, nothing claimed, and the settle goes on",
+            cites: &["132", "43"],
+            run: no_agent_of_the_name,
+        },
+        Scenario {
+            name: "end delivery: two agents of the standing entry's name in its session each take no notice, and the end stays pending",
+            cites: &["132"],
+            run: two_agents_of_the_name,
+        },
+        Scenario {
+            name: "end delivery: a standing agent removed and another added under its name takes the next notice, and the removed one no second",
+            cites: &["132"],
+            run: an_agent_revived_under_its_name,
+        },
+        Scenario {
+            name: "end delivery: a standing entry naming a stream and no session is sought in the session the stream names, in the stream's terminal",
+            cites: &["143", "190", "132"],
+            run: the_session_from_the_entrys_stream,
+        },
+        Scenario {
+            name: "end delivery: a standing entry naming neither stream nor session is sought in the terminal's own part where the default stream names no session",
+            cites: &["107", "143", "132"],
+            run: the_default_streams_own_session,
+        },
+        Scenario {
+            name: "end delivery: a standing entry naming a stream the host does not declare asks no terminal, and the end stays pending",
+            cites: &["143", "132"],
+            run: a_stream_not_declared,
+        },
+        Scenario {
+            name: "end delivery: the inbox collects an end pending for a standing address whose agent is away, delivered to the address, and no later settle sends a notice of it",
+            cites: &["43", "132"],
+            run: the_inbox_collects_for_a_standing_address,
         },
     ]
 }
@@ -886,5 +936,329 @@ fn two_inboxes_at_once(_: &()) -> Outcome {
             ensure_eq!(end.deliveries.len(), 1, "deliveries of {name}'s end");
         }
     }
+    Ok(())
+}
+
+const PLANNER: &str = "madswan/planner";
+
+/// A fix named `name` launched for `recipient` and begun.
+fn fix_for(world: &World, name: &str, recipient: &str) -> Result<PlaceId, String> {
+    let mut launch = launch("fix", name, Some("mend it"));
+    launch.recipients = vec![recipient.into()];
+    launched(&world.engine.launch(&launch))?;
+    let id = World::id("fix", name);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "{name}'s code"
+    );
+    Ok(id)
+}
+
+/// The host's configuration gives `address` the standing agent `agent`,
+/// in `session` and `stream` where given.
+fn stands(world: &World, address: &str, agent: &str, session: Option<&str>, stream: Option<&str>) {
+    world.host.set_standing(
+        address,
+        Some(StandingAgent {
+            agent: agent.into(),
+            session: session.map(str::to_string),
+            stream: stream.map(str::to_string),
+        }),
+    );
+}
+
+/// The planner stands as `madswan-planner` in the session `madswan`.
+fn planner_stands(world: &World) {
+    stands(world, PLANNER, "madswan-planner", Some("madswan"), None);
+}
+
+/// A fix named `name` for the planner, launched, begun and delivered, its
+/// submission held, and settled.
+fn delivered_for_planner(world: &World, name: &str) -> Result<PlaceId, String> {
+    let id = fix_for(world, name, PLANNER)?;
+    deliver_fix(world, &id);
+    world.settle(&id);
+    Ok(id)
+}
+
+/// Who each end of the place stands pending for.
+fn pending(world: &World, id: &PlaceId) -> Result<Vec<Vec<String>>, String> {
+    Ok(ends(world, id)?
+        .into_iter()
+        .map(|end| end.pending_for)
+        .collect())
+}
+
+fn a_standing_agent_waiting(_: &()) -> Outcome {
+    let world = World::new();
+    planner_stands(&world);
+    let at = world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-planner", AgentState::Waiting);
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = delivered_for_planner(&world, "one")?;
+    ensure_eq!(
+        world.terminal.notices(&at),
+        vec![notice("one", "code delivered")],
+        "the notices to the standing agent"
+    );
+    ensure_eq!(
+        world.terminal.notices(PLANNER),
+        Vec::<String>::new(),
+        "notices to a session named by the address"
+    );
+    let ends = ends(&world, &id)?;
+    let end = ends.first().ok_or("no end recorded")?;
+    ensure_eq!(
+        end.end
+            .deliveries
+            .iter()
+            .map(|delivery| (delivery.recipient.as_str(), delivery.at, delivery.by))
+            .collect::<Vec<_>>(),
+        vec![(PLANNER, world.host.now(), DeliveredBy::Notice)],
+        "the delivery recorded"
+    );
+    ensure_eq!(world.store.places(), vec![id], "the places on the host");
+    ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
+    Ok(())
+}
+
+fn a_standing_agent_asking(_: &()) -> Outcome {
+    let world = World::new();
+    planner_stands(&world);
+    let at = world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-planner", AgentState::Asking);
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = delivered_for_planner(&world, "one")?;
+    ensure!(
+        world.terminal.notices(&at).is_empty(),
+        "a notice sent into a question"
+    );
+    ensure_eq!(
+        pending(&world, &id)?,
+        vec![vec![PLANNER.to_string()]],
+        "pending while it asks"
+    );
+    world.terminal.set_session_state(&at, AgentState::Waiting);
+    world.settle(&id);
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.notices(&at),
+        vec![notice("one", "code delivered")],
+        "the notices once it waits"
+    );
+    Ok(())
+}
+
+fn no_agent_of_the_name(_: &()) -> Outcome {
+    let world = World::new();
+    planner_stands(&world);
+    let other = world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-ops", AgentState::Waiting);
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = delivered_for_planner(&world, "one")?;
+    ensure!(
+        world.terminal.every_notice().is_empty(),
+        "a notice sent: {:?}",
+        world.terminal.every_notice()
+    );
+    ensure!(
+        world.terminal.notices(&other).is_empty(),
+        "a notice to an agent of another name"
+    );
+    ensure_eq!(world.queue.log.count("submit"), 1, "the place submitted");
+    let ends = ends(&world, &id)?;
+    ensure!(!ends.is_empty(), "no end recorded");
+    for end in &ends {
+        ensure_eq!(end.pending_for, vec![PLANNER.to_string()], "pending");
+        ensure!(end.end.deliveries.is_empty(), "a delivery claimed");
+    }
+    Ok(())
+}
+
+fn two_agents_of_the_name(_: &()) -> Outcome {
+    let world = World::new();
+    planner_stands(&world);
+    let first = world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-planner", AgentState::Waiting);
+    let second = world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-planner", AgentState::Waiting);
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = delivered_for_planner(&world, "one")?;
+    world.settle(&id);
+    ensure!(
+        world.terminal.notices(&first).is_empty() && world.terminal.notices(&second).is_empty(),
+        "a notice to one of two of the name"
+    );
+    ensure_eq!(
+        pending(&world, &id)?,
+        vec![vec![PLANNER.to_string()]],
+        "pending"
+    );
+    Ok(())
+}
+
+fn an_agent_revived_under_its_name(_: &()) -> Outcome {
+    let world = World::new();
+    planner_stands(&world);
+    let first = world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-planner", AgentState::Waiting);
+    world.queue.plan_submits(vec![Plan::Hold, Plan::Hold]);
+    let one = delivered_for_planner(&world, "one")?;
+    ensure_eq!(
+        world.terminal.notices(&first),
+        vec![notice("one", "code delivered")],
+        "the first agent's notices"
+    );
+    world.terminal.remove_agent(&first);
+    let revived = world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-planner", AgentState::Waiting);
+    ensure!(revived != first, "the revived agent shares its key");
+    delivered_for_planner(&world, "two")?;
+    world.settle(&one);
+    ensure_eq!(
+        world.terminal.notices(&revived),
+        vec![notice("two", "code delivered")],
+        "the revived agent's notices"
+    );
+    ensure_eq!(
+        world.terminal.notices(&first).len(),
+        1,
+        "the removed agent's notices"
+    );
+    Ok(())
+}
+
+fn the_session_from_the_entrys_stream(_: &()) -> Outcome {
+    let world = World::new();
+    let other = world.other_terminal("other");
+    world.host.set_stream(
+        "w",
+        Some(Stream {
+            session: Some("w-main".into()),
+            ..Stream::default()
+        }),
+    );
+    world.host.set_display("w", Some("other"), None, None);
+    stands(&world, "w/planner", "w-planner", None, Some("w"));
+    let wrong = world
+        .terminal
+        .add_agent(Some("w-main"), "w-planner", AgentState::Waiting);
+    let at = other.add_agent(Some("w-main"), "w-planner", AgentState::Waiting);
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = fix_for(&world, "one", "w/planner")?;
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    ensure_eq!(
+        other.notices(&at),
+        vec![notice("one", "code delivered")],
+        "the notices in w's terminal"
+    );
+    ensure!(
+        world.terminal.notices(&wrong).is_empty(),
+        "a notice in a terminal not the stream's"
+    );
+    ensure_eq!(
+        other.log.of("agents_in"),
+        vec!["agents_in w-main".to_string()],
+        "the parts w's terminal was asked for"
+    );
+    ensure_eq!(
+        world.terminal.log.count("agents_in"),
+        0,
+        "the host's own terminal asked"
+    );
+    Ok(())
+}
+
+fn the_default_streams_own_session(_: &()) -> Outcome {
+    let world = World::new();
+    stands(&world, "w/planner", "w-planner", None, None);
+    let elsewhere = world
+        .terminal
+        .add_agent(Some("w"), "w-planner", AgentState::Waiting);
+    let at = world
+        .terminal
+        .add_agent(None, "w-planner", AgentState::Waiting);
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = fix_for(&world, "one", "w/planner")?;
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.notices(&at),
+        vec![notice("one", "code delivered")],
+        "the notices in the terminal's own part"
+    );
+    ensure!(
+        world.terminal.notices(&elsewhere).is_empty(),
+        "a notice in a part not the default stream's"
+    );
+    ensure_eq!(
+        world.terminal.log.of("agents_in"),
+        vec!["agents_in own".to_string()],
+        "the parts asked"
+    );
+    Ok(())
+}
+
+fn a_stream_not_declared(_: &()) -> Outcome {
+    let world = World::new();
+    stands(&world, PLANNER, "madswan-planner", None, Some("gone"));
+    let at = world
+        .terminal
+        .add_agent(Some("gone"), "madswan-planner", AgentState::Waiting);
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = delivered_for_planner(&world, "one")?;
+    ensure_eq!(world.terminal.log.count("agents_in"), 0, "parts asked");
+    ensure!(
+        world.terminal.notices(&at).is_empty(),
+        "a notice in a stream the host does not declare"
+    );
+    ensure_eq!(
+        pending(&world, &id)?,
+        vec![vec![PLANNER.to_string()]],
+        "pending"
+    );
+    Ok(())
+}
+
+fn the_inbox_collects_for_a_standing_address(_: &()) -> Outcome {
+    let world = World::new();
+    planner_stands(&world);
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = delivered_for_planner(&world, "one")?;
+    ensure!(
+        world.terminal.every_notice().is_empty(),
+        "a notice sent while the agent is away"
+    );
+    ensure_eq!(
+        collected(&world.engine().inbox(PLANNER))?,
+        vec!["fix--one code delivered".to_string()],
+        "what the inbox collected"
+    );
+    let held = world.held(&id).ok_or("no place")?;
+    for end in &held.ends {
+        ensure_eq!(
+            deliveries(end),
+            vec![(PLANNER.to_string(), DeliveredBy::Inbox)],
+            "the deliveries"
+        );
+    }
+    let at = world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-planner", AgentState::Waiting);
+    world.settle(&id);
+    ensure!(
+        world.terminal.notices(&at).is_empty(),
+        "a notice of an end the inbox collected"
+    );
     Ok(())
 }

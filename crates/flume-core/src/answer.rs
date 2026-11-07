@@ -624,6 +624,36 @@ pub struct AddressStatus {
     pub unwoken: Option<String>,
 }
 
+/// Where a role's address a standing agent holds lives, read at the ask
+/// and kept by nothing (56, 132, 190, C.7; core.15): the agent's name as
+/// the terminal knows it, the stream it is sought in, the session there
+/// with where that came from, the profile the stream's terminal names,
+/// none where the host declares no such stream, and what the terminal
+/// found.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StandingStatus {
+    pub agent: String,
+    pub stream: String,
+    pub session: SessionHeld,
+    pub terminal: Option<String>,
+    pub found: StandingFound,
+}
+
+/// What the terminal found of a standing agent in its session (132,
+/// C.5): the one agent of its name, at the session name a notice reaches
+/// it by, with its state; none of that name; more than one, which herdr
+/// never lists and which takes no notice; or why it could not read, the
+/// host declaring no such stream or its terminal naming no profile flume
+/// carries among the reasons.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StandingFound {
+    One { at: String, state: AgentState },
+    None,
+    Several { count: usize },
+    Unread { reason: String },
+}
+
 /// An end pending for a role's address: the place it is of, its key, and
 /// what ended in a notice's words (43, 132).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

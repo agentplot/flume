@@ -7,13 +7,17 @@
 //! send, as a prompt's sending is, so two settles at once send one
 //! notice (75); a recipient asking, unread or not found, or a send
 //! refused, leaves the end pending for a later settle, a wait or the
-//! inbox. A place whose work is over and whose worktree is gone keeps
+//! inbox. A recipient the host's configuration gives a standing agent is
+//! reached in that agent alone, found by its name in its stream's
+//! terminal and session at each delivery, none or more than one of the
+//! name leaving the end pending with nothing claimed (132, 190, C.7;
+//! core.28). A place whose work is over and whose worktree is gone keeps
 //! its document alone, apart from a live place's, while an end of it
 //! stands pending, and it goes once every end is delivered or its caller
 //! drops it (3, 62).
 
 use crate::prompt::group_name;
-use crate::terminals::HeldIn;
+use crate::standing::Reached;
 use crate::{Engine, Step};
 use flume_seams::*;
 use std::collections::BTreeMap;
@@ -73,19 +77,31 @@ pub fn what_ended(of: &EndOf) -> String {
 impl Engine {
     /// Sends each end of the place pending for a recipient whose session
     /// asks no question, once, through the first terminal the host binds
-    /// that holds the session, claimed before the send and released where
-    /// the send was not made (43, 75, 190, core.11).
+    /// that holds the session, or, for a recipient the host's standing
+    /// entries name, read once, into the one agent of the entry's name in
+    /// its stream's terminal and session; claimed before the send and
+    /// released where the send was not made, and claimed not at all where
+    /// no one agent asking no question is found (43, 75, 132, 190, C.7;
+    /// core.11, core.28).
     pub(crate) fn deliver_ends(&self, id: &PlaceId) {
         let Some(read) = self.store.read(id) else {
             return;
         };
         let held = read.state;
-        let mut states: BTreeMap<String, Option<HeldIn>> = BTreeMap::new();
+        let mut standing = None;
+        let mut states: BTreeMap<String, Option<Reached>> = BTreeMap::new();
         for end in &held.ends {
             for recipient in end.pending(&held.place.recipients) {
-                let Some((terminal, AgentState::Working | AgentState::Waiting)) = states
+                let Some(Reached {
+                    terminal,
+                    state: AgentState::Working | AgentState::Waiting,
+                    at,
+                }) = states
                     .entry(recipient.clone())
-                    .or_insert_with(|| self.recipient_terminal(&recipient))
+                    .or_insert_with(|| {
+                        let standing = standing.get_or_insert_with(|| self.standing());
+                        self.reached(standing, &recipient)
+                    })
                     .clone()
                 else {
                     continue;
@@ -111,9 +127,9 @@ impl Engine {
                 if !claimed {
                     continue;
                 }
-                let why = match terminal.send_to(&recipient, &notice(&held.place, &end.of)) {
+                let why = match terminal.send_to(&at, &notice(&held.place, &end.of)) {
                     ToSession::Sent => continue,
-                    ToSession::NotFound => format!("no session is named {recipient}"),
+                    ToSession::NotFound => format!("no session is named {at}"),
                     ToSession::Refused { reason } => reason,
                 };
                 states.insert(recipient.clone(), None);
