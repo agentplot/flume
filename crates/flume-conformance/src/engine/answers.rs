@@ -457,6 +457,9 @@ fn place_status() -> PlaceStatus {
             },
         }),
         line: line(),
+        waits_on: Some(WaitsOn::Places),
+        worktree: Some(false),
+        on_branch: Some(vec![PlaceId::new("/r/places/change--two")]),
     }
 }
 
@@ -674,11 +677,20 @@ fn tidied() -> Tidied {
                 },
             },
         ],
-        branches_kept: vec![BranchKept {
-            place: place.clone(),
-            branch: "fix/one".into(),
-            commits: vec![Revision::new("c4")],
-        }],
+        branches_kept: vec![
+            BranchKept {
+                place: place.clone(),
+                branch: "fix/one".into(),
+                commits: vec![Revision::new("c4")],
+                reason: None,
+            },
+            BranchKept {
+                place: place.clone(),
+                branch: "train/spring".into(),
+                commits: vec![],
+                reason: Some("train/spring holds c5 that main lacks".into()),
+            },
+        ],
         not_over: vec![place.clone()],
         terminal: vec![TerminalTidied {
             place,

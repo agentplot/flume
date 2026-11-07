@@ -113,8 +113,8 @@ pub struct Listed {
 }
 
 /// Whom a waiting place waits on: its caller for a move 130 names, the
-/// host for room (70), or the merge queue for its submission's outcome
-/// (111).
+/// host for room (70), the merge queue for its submission's outcome
+/// (111), or, for a base place, the places on its branch (203).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WaitsOn {
@@ -124,6 +124,10 @@ pub enum WaitsOn {
     /// carry, or flume could not read whether one does (49, 207).
     Session,
     MergeQueue,
+    /// A base place whose branch a place is live on, which lands there
+    /// before the base place is submitted; never stalled for it (130,
+    /// 203).
+    Places,
 }
 
 impl WaitsOn {
@@ -134,6 +138,7 @@ impl WaitsOn {
             WaitsOn::Host => "waits on the host",
             WaitsOn::Session => "waits on its session",
             WaitsOn::MergeQueue => "waits on the merge queue",
+            WaitsOn::Places => "waits on the places on its branch",
         }
     }
 }
@@ -399,6 +404,19 @@ pub struct PlaceStatus {
     /// line asked alone (56, 60; S14).
     #[serde(default)]
     pub line: PlaceLine,
+    /// Whom a live place waits on, as the list gives it, the places on
+    /// its branch among them for a base place; none where it waits on
+    /// nobody (56, 130, 200, 203; core.14).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waits_on: Option<WaitsOn>,
+    /// Whether the place has a worktree, given for a base place alone,
+    /// which has none (9, 56, 202).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worktree: Option<bool>,
+    /// The places being made or live whose base is a base place's
+    /// branch, given for a base place alone (56, 130, 203).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_branch: Option<Vec<PlaceId>>,
 }
 
 /// A stage waiting for room while a process runs the conversation its
@@ -1210,9 +1228,14 @@ pub struct KeptPlace {
     pub why: Kept,
 }
 
+/// A branch a tidy kept, named once: the commits it holds whose change
+/// its base lacks, or, for a base place's branch the merge queue kept at
+/// its close, the merge queue's words (67, 206).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BranchKept {
     pub place: PlaceId,
     pub branch: String,
     pub commits: Vec<Revision>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }

@@ -8,7 +8,9 @@
 //! 58, 60; S14; core.14, core.15). Nothing here writes, sends or starts
 //! anything (57; core.16).
 
+use crate::base::submission_open;
 use crate::clues::word;
+use crate::held::waiting_now;
 use crate::reading::reads_change;
 use crate::start::Starts;
 use crate::status::{group_status, session_wait};
@@ -61,15 +63,22 @@ impl Engine {
 
     /// The place's line from what it reads itself: the held state given,
     /// the change at the place's head once where its kind reads a change
-    /// and the place is live, and the live agent's asking mark from its
-    /// profile; no terminal operation, no merge-queue operation and no
-    /// host reading (57, 58, 90).
+    /// and the place is live, the live agent's asking mark from its
+    /// profile, and, for a base place, the held state of the places on
+    /// its branch; no terminal operation, no merge-queue operation and no
+    /// host reading (57, 58, 90, 203).
     pub(crate) fn line_of(&self, held: &HeldState, identity: Option<&Identity>) -> PlaceLine {
         let change = match held.phase {
             Phase::Live => self.change_at_head(held),
             _ => None,
         };
-        Engine::place_line(held, change.as_ref(), self.asking(held), identity)
+        Engine::place_line(
+            held,
+            change.as_ref(),
+            self.asking(held),
+            self.on_branch_count(held),
+            identity,
+        )
     }
 
     /// Whether the live agent's profile reads it asking a person, from
@@ -117,13 +126,15 @@ impl Engine {
 
     /// The place's line from facts already read: its held state, the
     /// change at its head where it was read, whether the live agent's
-    /// profile reads it asking a person, and the identity of the session
-    /// asking where one asks. It reads nothing itself, so status and the
-    /// line asked alone give one line from one place's facts (60; S14).
+    /// profile reads it asking a person, for a base place how many places
+    /// are live on its branch, and the identity of the session asking
+    /// where one asks. It reads nothing itself, so status and the line
+    /// asked alone give one line from one place's facts (60, 203; S14).
     pub fn place_line(
         held: &HeldState,
         change: Option<&ChangeFacts>,
         asking: bool,
+        on_branch: Option<usize>,
         identity: Option<&Identity>,
     ) -> PlaceLine {
         let place = &held.place;
@@ -141,7 +152,7 @@ impl Engine {
             let ticked = facts.tasks.iter().filter(|task| task.ticked).count();
             format!("{ticked}/{}", facts.tasks.len())
         });
-        let state = state_words(held, at, asking);
+        let state = state_words(held, at, asking, on_branch);
         let short = [
             stage.clone(),
             run.map(|run| format!("run {run}")),
@@ -197,8 +208,17 @@ fn its_agent(held: &HeldState, identity: &Identity) -> bool {
 /// 51, 63, 70, 90, 112, 114, 118, 130); a stage waiting for room while a
 /// process runs the conversation its start would carry reads `waiting on
 /// its session`, as the last settle left its wait (49, 207); the list
-/// gives a place the same words (200; core.14).
-pub(crate) fn state_words(held: &HeldState, at: Option<usize>, asking: bool) -> String {
+/// gives a place the same words (200; core.14). A base place's, with
+/// `on_branch` the count of the live places on its branch, is `<n> on its
+/// branch · open` while any is live and its submission is not open, and
+/// `waiting on its caller` while it waits for its submission's retry
+/// under no hold or failure (130, 139, 200, 203).
+pub(crate) fn state_words(
+    held: &HeldState,
+    at: Option<usize>,
+    asking: bool,
+    on_branch: Option<usize>,
+) -> String {
     match &held.phase {
         Phase::Making { .. } => return "being made".into(),
         Phase::Over { over, .. } | Phase::Gone { over, .. } | Phase::Tidied { over, .. } => {
@@ -211,7 +231,12 @@ pub(crate) fn state_words(held: &HeldState, at: Option<usize>, asking: bool) -> 
         }
         Phase::Live => {}
     }
-    if let Some(waiting) = &held.waiting {
+    if let Some(count) = on_branch.filter(|count| *count > 0) {
+        if !submission_open(held) {
+            return format!("{count} on its branch{SEPARATOR}open");
+        }
+    }
+    if let Some(waiting) = &waiting_now(held, on_branch) {
         if waiting.stalled {
             return "stalled".into();
         }
@@ -227,6 +252,7 @@ pub(crate) fn state_words(held: &HeldState, at: Option<usize>, asking: bool) -> 
             Waits::PastBound => "past its bound",
             Waits::Submission => "submission refused",
             Waits::Delivered => "waiting on done",
+            Waits::Unsubmitted => "waiting on its caller",
         }
         .into();
     }

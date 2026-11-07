@@ -160,6 +160,7 @@ impl Engine {
                 place: id.clone(),
                 branch: place.branch.clone(),
                 commits,
+                reason: None,
             });
         }
         // Each terminal its agents opened in tidies what it made for the

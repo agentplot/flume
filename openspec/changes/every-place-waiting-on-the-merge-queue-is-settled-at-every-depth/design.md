@@ -343,9 +343,13 @@ change: a base place is told by its kind, which the document holds.
 location is known, and then:
 
 1. **Refusals first (2, 4, 8).** A base place's launch that gives
-   points is refused, naming them (165): it has no agents' work. A
-   repository whose binding names no merge queue refuses it as it
-   refuses any kind that lands.
+   points is refused, naming them (165): it has no agents' work. flume
+   builds no points yet: a launch carries none, and the host's
+   configuration refuses a stream's `points` and `pace`, so nothing
+   reaches a base place's launch to refuse, and the spec's scenario of
+   points given waits on the change that builds points (165 to 168),
+   which refuses them there. A repository whose binding names no merge
+   queue refuses it as it refuses any kind that lands.
 2. **The base read (9, 126; core.7).** `base_now` reads the base as for
    any place and keeps `base_from`. The launch refuses a base it cannot
    read.

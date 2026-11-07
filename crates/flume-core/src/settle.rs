@@ -162,14 +162,19 @@ impl Engine {
     }
 
     /// Reads the move a live place waits on its caller for, and records
-    /// it stalled once its bound has passed under no hold's words (130).
+    /// it stalled once its bound has passed under no hold's words (130);
+    /// a base place's from the live places on its branch, read now (203).
     fn stall(&self, id: &PlaceId) {
         let now = self.host.now();
+        let Some(read) = self.store.read(id) else {
+            return;
+        };
+        let on_branch = self.on_branch_count(&read.state);
         self.update(id, |held| {
             if held.phase != Phase::Live {
                 return Step::Keep(());
             }
-            read_stall(held, now);
+            read_stall(held, now, on_branch);
             Step::Write(())
         });
     }
@@ -300,12 +305,27 @@ impl Engine {
     }
 
     /// A place whose launching command is gone while it was made: what
-    /// was made is removed, so nothing of it is left (2, 76).
+    /// was made is removed, so nothing of it is left; a base place's
+    /// branch closed by the merge queue into its base, where its open
+    /// made it, and nothing asked of the place seam (2, 76, 206).
     fn undo(&self, held: &HeldState) -> bool {
         let place = &held.place;
         let Ok(bound) = self.bound(place) else {
             return false;
         };
+        if crate::base::base_place(&place.kind) {
+            if let Some(queue) = &bound.merge_queue {
+                if let BranchClosed::Kept { reason } =
+                    queue.close(&place.repository, &place.branch, &place.base)
+                {
+                    self.host.log(&format!(
+                        "the branch {} of {}, whose launch died, was kept: {reason}",
+                        place.branch, place.id
+                    ));
+                }
+            }
+            return self.remove_held(&place.id);
+        }
         let at = place.place_ref();
         if let PlaceRead::Live { .. } = bound.place.read(&at) {
             if let Removed::Refused { .. } = bound.place.remove(&at) {

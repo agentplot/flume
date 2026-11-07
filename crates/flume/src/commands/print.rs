@@ -1296,12 +1296,18 @@ fn tidy_lines(tidy: &Tidied) -> Vec<String> {
         });
     }
     for branch in &tidy.branches_kept {
-        lines.push(format!(
-            "kept the branch {} of {}, {} commits not landed",
-            branch.branch,
-            branch.place,
-            branch.commits.len()
-        ));
+        lines.push(match &branch.reason {
+            Some(reason) => format!(
+                "kept the branch {} of {}, the merge queue keeping it: {reason}",
+                branch.branch, branch.place
+            ),
+            None => format!(
+                "kept the branch {} of {}, {} commits not landed",
+                branch.branch,
+                branch.place,
+                branch.commits.len()
+            ),
+        });
     }
     for place in &tidy.not_over {
         lines.push(format!("{place}'s work is not over"));
@@ -2699,6 +2705,9 @@ mod tests {
             role: None,
             clues: None,
             line: a_line("fix--one", "code · run 1 · working"),
+            waits_on: None,
+            worktree: None,
+            on_branch: None,
         }
     }
 
@@ -2857,6 +2866,41 @@ mod tests {
         assert_eq!(
             person(&inbox),
             "research--one talk lost, and flume left the agent the terminal brought back in its pane; read: flume status /d/places/1/research--one"
+        );
+    }
+
+    #[test]
+    fn a_base_places_branch_the_merge_queue_kept() {
+        // 67, 206: a branch the merge queue keeps at a base place's tidy
+        // is named once with its words; a place's with its commits.
+        let place = PlaceId::new("/d/places/1/train--spring");
+        let tidy = Tidied {
+            removed: vec![place.clone()],
+            kept: vec![],
+            branches_kept: vec![
+                flume_core::BranchKept {
+                    place: place.clone(),
+                    branch: "train/spring".into(),
+                    commits: vec![],
+                    reason: Some("work main lacks".into()),
+                },
+                flume_core::BranchKept {
+                    place: PlaceId::new("/d/places/1/fix--one"),
+                    branch: "fix/one".into(),
+                    commits: vec![flume_seams::Revision::new("c4")],
+                    reason: None,
+                },
+            ],
+            not_over: vec![],
+            terminal: vec![],
+        };
+        assert_eq!(
+            tidy_lines(&tidy),
+            [
+                "removed /d/places/1/train--spring",
+                "kept the branch train/spring of /d/places/1/train--spring, the merge queue keeping it: work main lacks",
+                "kept the branch fix/one of /d/places/1/fix--one, 1 commits not landed",
+            ]
         );
     }
 

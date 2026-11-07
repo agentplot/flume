@@ -700,6 +700,7 @@ fn holds_the_waiting_move_and_the_stall_bound() {
         Waits::PastBound,
         Waits::Submission,
         Waits::Delivered,
+        Waits::Unsubmitted,
     ] {
         round_trips(why);
     }
