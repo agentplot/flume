@@ -1,5 +1,6 @@
 # nix:typecheck: every package of every system evaluates to a derivation,
-# and `default` is `flume` (the flake spec; the change
+# `default` is `flume`, and each module evaluates in a minimal system of
+# its platform (the flake spec; the change
 # flume-publishes-its-own-flake-and-module, design 11).
 t:
 let
@@ -46,4 +47,10 @@ in
     ++ lib.concatMap (
       system: if outputs.packages ? ${system} then givesSet system else [ "packages gives no ${system}" ]
     ) systems;
+
+  # The nix-darwin module in a minimal system of its platform, whose
+  # derivation throws on a failed assertion.
+  "The nix-darwin module" =
+    t.expect (builtins.tryEval (t.darwinSystem { }).system.drvPath).success
+      "a nix-darwin system with services.flume enabled does not evaluate";
 }

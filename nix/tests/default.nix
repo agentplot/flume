@@ -22,5 +22,6 @@ in
     // import ./file.nix t
     // import ./credential.nix t
     // import ./options.nix t
+    // import ./darwin.nix t
   );
 }

@@ -57,8 +57,25 @@
           inherit flume;
           default = flume;
         };
+      packages = lib.genAttrs systems packagesOf;
+
+      # A module of a platform, keyed so a configuration that imports it
+      # twice, directly and through another flake's module, declares
+      # services.flume once (design 4).
+      moduleOf = platform: file: {
+        _file = file;
+        key = "github:agentplot/flume#${platform}Modules.flume";
+        imports = [ (import file { inherit packages; }) ];
+      };
     in
     {
-      packages = lib.genAttrs systems packagesOf;
+      inherit packages;
+
+      # services.flume, flume's managed file written whole from settings
+      # named as the file names them (record 0055).
+      darwinModules = rec {
+        flume = moduleOf "darwin" ./nix/modules/darwin.nix;
+        default = flume;
+      };
     };
 }
