@@ -1,36 +1,67 @@
 # Verify: an-agents-effort-is-a-setting-of-flumes-layers
 
-Read on 2026-11-07 at `9149f29`, the head of the branch
+Read on 2026-11-07 at `6a2427a`, the head of the branch
 `change/an-agents-effort-is-a-setting-of-flumes-layers`. The check
 covers the change's proposal, design, ten delta specs and tasks. The
-branch holds flume's main at `376c17c`, merged by task 1.1. Origin's
-main, fetched on 2026-11-07, is at `e189da4`. What it adds since
-`376c17c` is records 0053 to 0055, sluice record 0093's marks and
-core.6's one line. None of it touches a file of this change's code,
-specs or site, and `git merge-tree` finds no conflict.
+branch holds flume's main at `f6a5ba7`, merged by task 8.1 after the
+merge queue found the first archive conflicting with #131 to #141.
+Origin's main, fetched on 2026-11-07, is still at `f6a5ba7`.
 
 ## Verdict
 
 **Holds; archived.**
 
-- Every task of groups 1 to 7 is ticked: 20 of 20.
+- Every task of groups 1 to 8 is ticked: 21 of 21.
 - Every requirement of the ten delta specs is built, and each scenario
-  is held by a test that asserts its THEN (below).
+  is held by a test that asserts its THEN (below). Each test named here
+  is in the tree at the head.
 - `openspec validate an-agents-effort-is-a-setting-of-flumes-layers
   --strict` passes.
+- `openspec/specs/` at the head is main's at `f6a5ba7`, byte for byte,
+  and `agent-effort` is not among them until the archive.
 - A trial archive passes 45 of 45 specs. It ran on the head's
   `openspec/`, copied to a scratch directory, and applied 16
   requirements added and 7 modified. It made the new spec
-  `agent-effort`. No modified requirement lost a scenario main holds:
-  launching keeps 36 and clause-coverage 5, and every other spec only
-  gains.
-- `sluice exec main` at `9149f29`, against main at `e189da4`, passes
-  all 23 of the check tasks the head affects. check-fast and
-  check-tools are among them: flume:test 212 of 212 and flume:tools
-  111 of 111, which runs S103's walkthrough and the efforts' check of
-  the pinned Claude Code. sluice did not record the pass under its key,
-  since this report stood uncommitted in the worktree as it ran; the
-  head's code was the run's.
+  `agent-effort`. No requirement or scenario heading main holds at
+  `f6a5ba7` is lost from any spec. Launching and clause-coverage, whose
+  requirements the change only modifies, come out as the first archive
+  at `7a5bfc4` made them. Place-status, seam-contracts and seam-fakes
+  hold the effort's requirements beside the standing address's, as the
+  merge's resolution did, the effort's after them.
+- `sluice exec main` at `6a2427a`, against main at `f6a5ba7`, passes
+  all 23 of the check tasks the head affects, and sluice recorded the
+  23 results under their keys for `6a2427a`. check-fast and check-tools
+  are among them: flume:test's suites, its largest 226 of 226, and
+  flume:tools 117 of 117, which runs S103's walkthrough, the efforts'
+  check of the pinned Claude Code and #141's standing agent under
+  herdr. conformance:coverage finds every clause it holds at `c94c496`
+  cited by the suite's 718 scenarios, 197 and S103 among them.
+
+## The merge of main at f6a5ba7
+
+The merge commit `bfdf502` took #131 to #141. Git found five files
+contested, and each keeps both sides:
+
+- `crates/flume-conformance/src/engine/place_status.rs` and
+  `crates/flume/src/commands/print.rs`: the conflict was each file's
+  import list alone. Each now imports `EffortStatus` beside
+  `AddressStatus`, `StandingFound` and `PendingEnd`, and no other hunk
+  of either was contested.
+- `openspec/specs/place-status`, `seam-contracts` and `seam-fakes`:
+  each held the effort's requirements, from the first archive, beside
+  the standing address's from #141. Commit `6a2427a` then moved the
+  change out of the archive and gave back `openspec/specs/` as main
+  holds it, so the archive above applies the change's deltas afresh.
+
+Both sides also changed twelve other files, which git merged
+untouched: the conformance's `answers.rs` and `fake_harness.rs`, the
+core's `answer.rs`, the fakes' tests, the seams' `round_trip.rs`,
+`commands/mod.rs`, `host/config.rs`, the tools' `walkthroughs.rs`,
+`core.md`, and the site's commands, configuration and state references.
+Each still holds the effort's lines against main, and the gate above
+runs each test among them. Record 0044, core.30, core.39 and the site's
+rules page still carry the effort, and the clause list still drops 197
+and S103 from the unbuilt.
 
 ## The scenarios and their tests
 
@@ -186,7 +217,7 @@ These do not hold the change back.
   2.1.296 reads it as `xhigh` with dynamic workflows on. No test leans
   on it: Claude Code's profile refuses `ultracode` before any command
   is built.
-- Record 0055, accepted on main since `376c17c`, names a repository by
+- Record 0055, accepted on main, names a repository by
   its address. The host's `[repos."<repository>".agents]`, which this
   change reads `effort` in, is keyed by location as main's code keys it
   today; moving that key is 0055's own change.
