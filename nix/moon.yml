@@ -34,7 +34,7 @@ tasks:
   # scripts' cases, nix/tests/scripts.sh.
   test:
     command: 'sh nix/check.sh test'
-    inputs: ['/flake.nix', '/flake.lock', '/nix/**/*', '/devenv.nix', '/devenv.lock', '/Cargo.toml', '/Cargo.lock', '/.prototools', '/crates/**/*']
+    inputs: ['/flake.nix', '/flake.lock', '/nix/**/*', '/devenv.nix', '/devenv.lock', '/Cargo.toml', '/Cargo.lock', '/.prototools', '/crates/**/*', '/.github/workflows/**/*']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
   # In no layer: the package built for the host's system, which needs the

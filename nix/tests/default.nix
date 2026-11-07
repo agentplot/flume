@@ -25,5 +25,6 @@ in
     // import ./darwin.nix t
     // import ./nixos.nix t
     // import ./outputs.nix t
+    // import ./workflow.nix t
   );
 }

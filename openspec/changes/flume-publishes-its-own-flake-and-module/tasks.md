@@ -45,7 +45,7 @@ no home but a scratch one.
 
 ## 6. CI
 
-- [ ] 6.1 Add to `.github/workflows/ci.yml` a job `flake` on `ubuntu-latest` and `macos-latest`, `fail-fast: false`. It checks out, installs nix and devenv as the `fast` job does, and runs `devenv shell -- moon run nix:build`. Have the file's opening comment say that the job builds the flake's package on each runner's system. Add `nix/tests/workflow.nix`, under `test`, which reads the workflow's text and holds the `flake` job: its two runners, its run on each pull request and each push to main, and its step. Add `/.github/workflows/**/*` to `nix:test`'s inputs (the-gate spec; design 11). Check: `devenv shell -- treefmt --ci .github/workflows/ci.yml`, then `sluice exec <base> -- moon run nix:test`.
+- [x] 6.1 Add to `.github/workflows/ci.yml` a job `flake` on `ubuntu-latest` and `macos-latest`, `fail-fast: false`. It checks out, installs nix and devenv as the `fast` job does, and runs `devenv shell -- moon run nix:build`. Have the file's opening comment say that the job builds the flake's package on each runner's system. Add `nix/tests/workflow.nix`, under `test`, which reads the workflow's text and holds the `flake` job: its two runners, its run on each pull request and each push to main, and its step. Add `/.github/workflows/**/*` to `nix:test`'s inputs (the-gate spec; design 11). Check: `devenv shell -- treefmt --ci .github/workflows/ci.yml`, then `sluice exec <base> -- moon run nix:test`.
 
 ## 7. The rule and the pages
 
