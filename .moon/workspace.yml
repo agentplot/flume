@@ -1,5 +1,6 @@
-# moon runs flume's checks: one project per crate and for the site, each
-# holding its own checks (core.21); the root holds what spans the tree.
+# moon runs flume's checks: one project per crate, for the site and for the
+# flake, each holding its own checks (core.21); the root holds what spans
+# the tree.
 # Each check is tagged with its layer, which a branch's policy requires by
 # tag (.config/sluice.toml):
 #   check-fast    the site's prose and its build; each crate's format,
@@ -9,7 +10,8 @@
 #                 manifest, its lint and its scripts against stand-in
 #                 herdr and flume; the conformance suite's clause
 #                 coverage; the root's format, toolchain, records, specs,
-#                 changes, hooks, layers and versions. Every branch
+#                 changes, hooks, layers and versions; the flake's
+#                 format, lint, evaluation and tests. Every branch
 #                 requires it, and CI runs it on Linux and macOS
 #   check-tools   the sluice and herdr profiles against the pinned tools,
 #                 the herdr plugin linked into the pinned herdr, and the
@@ -34,6 +36,7 @@ projects:
   plugin-claude: 'plugins/claude'
   plugin-herdr: 'plugins/herdr'
   site: 'site'
+  nix: 'nix'
   root: '.'
 
 # --affected compares against the merge-base with main.
