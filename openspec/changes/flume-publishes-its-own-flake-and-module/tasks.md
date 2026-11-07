@@ -33,7 +33,7 @@ no home but a scratch one.
 ## 4. No credential in the store
 
 - [x] 4.1 Move every case of `each_shape_is_a_credential`, `a_value_that_passes` and `a_variable_named_rather_than_a_value` in `crates/flume-core/src/own.rs` into `crates/flume-core/tests/credential-shapes.json`, each a `name`, a `text` and `shaped`, true or false, the texts written out where the tests built them. Have the three tests, their names kept, read it by `include_str!`, each holding its own cases by a field the table gives, and fail naming the case's name and never more of its text than the test did (core.50; design 8). Check: `devenv shell -- moon run core:test -- own::tests`.
-- [ ] 4.2 Add `nix/modules/credential.nix`, flume-core's `shaped_as_credential` in Nix: the same prefixes, secret names, variables, runs and web token as `own.rs` gives them. Add `nix/tests/credential.nix`, under `test`, which runs every case of `crates/flume-core/tests/credential-shapes.json` through it and fails naming each case it reads otherwise than the table says (core.50; the host-module spec; design 8). Check: `sluice exec <base> -- moon run nix:test`.
+- [x] 4.2 Add `nix/modules/credential.nix`, flume-core's `shaped_as_credential` in Nix: the same prefixes, secret names, variables, runs and web token as `own.rs` gives them. Add `nix/tests/credential.nix`, under `test`, which runs every case of `crates/flume-core/tests/credential-shapes.json` through it and fails naming each case it reads otherwise than the table says (core.50; the host-module spec; design 8). Check: `sluice exec <base> -- moon run nix:test`.
 
 ## 5. The modules
 

@@ -16,7 +16,7 @@ let
   file = "nix/packages/git-crates.nix";
   cargoLock = builtins.fromTOML (builtins.readFile ../../Cargo.lock);
   version = (builtins.fromTOML (builtins.readFile ../../Cargo.toml)).workspace.package.version;
-  rust = (builtins.fromTOML (builtins.readFile ../../.prototools)).rust;
+  inherit (builtins.fromTOML (builtins.readFile ../../.prototools)) rust;
 
   each = check: lib.concatMap (system: check system outputs.packages.${system}.flume) systems;
 
