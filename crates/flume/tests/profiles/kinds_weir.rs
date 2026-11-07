@@ -1347,8 +1347,9 @@ type Summary = (
 
 #[test]
 fn flumes_own_kinds_are_built_in() {
-    // 22, 140, 157, C.2: fix@1, chore@1, change@1 and change@2, change@2's
-    // code stage repeating per task group and change@1's not.
+    // 22, 140, 157, C.2: fix@1, chore@1, change@1, change@2 and change@3,
+    // change@2's code stage repeating per task group and change@1's and
+    // change@3's not, all landing, each last stage's `on_fail` `code`.
     let own = own_kinds();
     let summary: Vec<Summary> = own
         .iter()
@@ -1392,6 +1393,7 @@ fn flumes_own_kinds_are_built_in() {
         vec![
             change(1, false),
             change(2, true),
+            change(3, false),
             (
                 "chore".into(),
                 1,
