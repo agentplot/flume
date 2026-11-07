@@ -1136,6 +1136,27 @@ impl UnderHerdr {
             .unwrap_or_default()
     }
 
+    /// Every start's stand-in log, each under its `<stage>-<n>.log`, in
+    /// the order of their names, so a walkthrough that never came to what
+    /// it waited on says what each agent took and did.
+    pub fn logs(&self) -> String {
+        let mut logs: Vec<PathBuf> = std::fs::read_dir(self.scripts())
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "log"))
+            .collect();
+        logs.sort();
+        logs.iter()
+            .map(|path| {
+                let name = path.file_name().unwrap_or_default().to_string_lossy();
+                let log = std::fs::read_to_string(path).unwrap_or_default();
+                format!("--- {name}\n{log}")
+            })
+            .collect()
+    }
+
     fn scripts(&self) -> &Path {
         self.walk.scripts.as_deref().expect("a host under herdr")
     }

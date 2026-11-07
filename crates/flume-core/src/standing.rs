@@ -187,9 +187,12 @@ impl Engine {
     /// Where a notice for `recipient` goes: the one standing agent the
     /// entries give it, where they give it one, and otherwise the first
     /// terminal the host binds that holds a session of its name; none
-    /// where neither is found. Which agent holds an address is the
-    /// configuration's at each delivery, so a standing agent takes an
-    /// address's ends over a live run of an earlier entry (43, 132, 190).
+    /// where neither is found, and none while the session is a role's
+    /// run whose current start has not taken its prompt, which a notice
+    /// typed now would come before (37, 38). Which agent holds an
+    /// address is the configuration's at each delivery, so a standing
+    /// agent takes an address's ends over a live run of an earlier entry
+    /// (43, 132, 190).
     pub(crate) fn reached(&self, standing: &mut Standing, recipient: &str) -> Option<Reached> {
         match self.reach(standing, recipient) {
             Some(Reach {
@@ -205,6 +208,7 @@ impl Engine {
                 at,
             }),
             Some(_) => None,
+            None if is_address(recipient) && self.awaits_its_prompt(recipient) => None,
             None => self
                 .recipient_terminal(recipient)
                 .map(|(terminal, state)| Reached {
@@ -213,5 +217,23 @@ impl Engine {
                     at: recipient.to_string(),
                 }),
         }
+    }
+
+    /// Whether the address's run stands with its current start live and
+    /// its prompt not yet received: starting, or started and its prompt
+    /// sent or still to send. Its agent may wait in its session already,
+    /// and would take a notice typed into it as its prompt, its stage's
+    /// own then never received (37, 38, 43, 132).
+    fn awaits_its_prompt(&self, address: &str) -> bool {
+        self.store.read_every().into_iter().any(|read| {
+            let held = read.state;
+            held.role.as_deref() == Some(address)
+                && !matches!(held.phase, Phase::Tidied { .. })
+                && held.current.is_some_and(|index| {
+                    let stage = &held.stages[index];
+                    stage.start.as_ref().is_some_and(|start| start.live)
+                        && matches!(stage.state, StageState::Starting | StageState::Started)
+                })
+        })
     }
 }

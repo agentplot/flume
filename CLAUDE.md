@@ -86,6 +86,19 @@ the fast layer, `:#check-tools` the tools layer; `site-build` and
 <crate>:test` one crate's tests (`seams`, `core`, `fakes`,
 `conformance`, `flume`). The site's own notes are `site/README.md`.
 
+## Claude Code
+
+**Claude Code.** The MCP servers are `devenv.nix`'s
+(`claude.code.mcpServers`), devenv's hosted `mcp.devenv.sh` among them,
+each approved by name, so a session in a trusted folder starts them
+unasked. devenv writes `.mcp.json` and `.claude/settings.json` on
+entering the shell, and as a place's readiness sources it, and git
+ignores both (agentplot/boomdrive's record 0022): a Claude Code setting
+of the repository's goes into devenv's options, never into those files.
+OpenSpec's skills and commands under `.claude/` are tracked as the
+pinned OpenSpec writes them (`openspec init --tools claude --profile
+custom`), and written again when its pin moves.
+
 ## Commits
 
 Stage by pathspec and commit the paths you wrote: `git add <paths>`, then
