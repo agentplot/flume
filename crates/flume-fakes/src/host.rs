@@ -2,8 +2,8 @@ use crate::{lock, Log};
 use flume_seams::{
     ConfigLayer, ConfigValue, Host, HostConfiguration, HostSettings, HostSource, HostSourceRead,
     KindSessions, KindSettings, LabelFrom, LabelHeld, NamedBy, Pool, PoolFrom, PoolNamed,
-    ProfileHeld, RoleRun, RoomGuard, Seconds, Secret, Settings, Share, Stream, StreamDisplay,
-    StreamFrom, StreamHeld, Usage, View, ViewHeld, DEFAULT_STREAM,
+    ProfileHeld, RoleRun, RoomGuard, Seconds, Secret, Settings, Share, StandingAgent, Stream,
+    StreamDisplay, StreamFrom, StreamHeld, Usage, View, ViewHeld, DEFAULT_STREAM,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex};
@@ -15,8 +15,10 @@ use std::sync::{Arc, Condvar, Mutex};
 /// and stages' sessions, labels' shares, titles and displays, the host's own display, its pools of
 /// accounts, each account's reading by its path, the labels it gives
 /// kinds, its configuration's values with their layers, the sources of
-/// its kinds with where their files and its lock lie, the recipient the
-/// calling command's environment names, the host user's login
+/// its kinds with where their files and its lock lie, the runs and the
+/// standing agents it names for roles' addresses, each apart from the
+/// other, the recipient the calling command's environment names, the
+/// host user's login
 /// environment, and an exclusive room lock. It reads no configuration
 /// file and no reading's file (106, 184).
 pub struct FakeHost {
@@ -74,6 +76,9 @@ struct HostState {
     login: BTreeMap<String, String>,
     /// The role runs the configuration names, by address (132, C.7).
     roles: BTreeMap<String, RoleRun>,
+    /// The standing agents the configuration names, by address (132,
+    /// C.7).
+    standing: BTreeMap<String, StandingAgent>,
     /// The streams the configuration declares, by name (143).
     streams: BTreeMap<String, Stream>,
     /// The stream named for a repository and kind, a repository, or a
@@ -127,6 +132,7 @@ impl Default for FakeHost {
                 every_agent: Settings::default(),
                 login: BTreeMap::from([("HOME".to_string(), "/home/user".to_string())]),
                 roles: BTreeMap::new(),
+                standing: BTreeMap::new(),
                 streams: BTreeMap::new(),
                 streams_named: BTreeMap::new(),
                 pool: None,
@@ -262,6 +268,17 @@ impl FakeHost {
         match run {
             Some(run) => state.roles.insert(address.to_string(), run),
             None => state.roles.remove(address),
+        };
+    }
+
+    /// The standing agent the configuration names for a role's address,
+    /// or none; the address's run, if one is set, is left as it is
+    /// (132, C.7).
+    pub fn set_standing(&self, address: &str, agent: Option<StandingAgent>) {
+        let mut state = lock(&self.state);
+        match agent {
+            Some(agent) => state.standing.insert(address.to_string(), agent),
+            None => state.standing.remove(address),
         };
     }
 
@@ -499,6 +516,11 @@ impl Host for FakeHost {
     fn role(&self, address: &str) -> Option<RoleRun> {
         self.log.push(format!("role {address}"));
         lock(&self.state).roles.get(address).cloned()
+    }
+
+    fn standing(&self) -> BTreeMap<String, StandingAgent> {
+        self.log.push("standing");
+        lock(&self.state).standing.clone()
     }
 
     fn streams(&self) -> BTreeMap<String, Stream> {

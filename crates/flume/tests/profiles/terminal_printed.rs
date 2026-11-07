@@ -3,8 +3,9 @@
 //! refused with nothing typed, the command status gives, the same
 //! command printed whatever session its stream names (107), an agent
 //! read stopped once its record says its session ended (134), attach
-//! refused for either view with nothing run (187), and runs holding no
-//! part, in attach's words, with nothing run (201).
+//! refused for either view with nothing run (187), runs holding no
+//! part, in attach's words, with nothing run (201), and agents in a part
+//! not read, in the seam's words, with nothing run (132, C.5).
 
 use crate::common::window::StandIn;
 use crate::common::*;
@@ -15,7 +16,7 @@ use flume::profiles::window::terminal::TerminalApp;
 use flume_conformance::engine::world::{launch, launched, World};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::terminal::{self, TerminalHarness};
-use flume_core::{Answer, Engine, StreamListed};
+use flume_core::{Answer, Engine, StandingFound, StreamListed};
 use flume_seams::*;
 use std::sync::Arc;
 
@@ -303,6 +304,54 @@ fn runs_under_the_printed_command_holds_no_part_and_runs_nothing() {
         "the streams' lines"
     );
     assert!(osascript.runs_settled().is_empty(), "a window program ran");
+    assert_eq!(files_under(&state), before, "the printed command's marks");
+}
+
+#[test]
+fn agents_under_the_printed_command_are_not_read_and_nothing_is_run() {
+    // The terminal-profiles spec's "Agents under the printed command"
+    // (132, C.5): `madswan` and its own part each answered not read, in
+    // the seam's words; and a standing agent in `madswan` found so by
+    // status, nothing written where the printed command keeps the
+    // commands it prints.
+    for part in [Some("madswan"), None] {
+        assert_eq!(
+            Printed.agents_in(part),
+            AgentsIn::Unread {
+                reason: NO_NAMED_AGENTS.into()
+            },
+            "the agents of {part:?}"
+        );
+    }
+    let scratch = Scratch::new("printed-agents");
+    let world = World::new();
+    world.host.set_standing(
+        "madswan/planner",
+        Some(StandingAgent {
+            agent: "madswan-planner".into(),
+            session: Some("madswan".into()),
+            stream: None,
+        }),
+    );
+    let engine = printed(&world, &scratch);
+    let state = scratch.path("state");
+    let before = files_under(&state);
+    let Answer::Status { host, .. } = engine.status(None) else {
+        panic!("status answered otherwise");
+    };
+    let found = host
+        .addresses
+        .iter()
+        .find(|address| address.address == "madswan/planner")
+        .and_then(|address| address.standing.as_ref())
+        .map(|standing| standing.found.clone());
+    assert_eq!(
+        found,
+        Some(StandingFound::Unread {
+            reason: NO_NAMED_AGENTS.into()
+        }),
+        "the standing agent under the printed command"
+    );
     assert_eq!(files_under(&state), before, "the printed command's marks");
 }
 

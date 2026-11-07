@@ -42,7 +42,9 @@
 //! socket, a name herdr refuses, and herdr's app refused (187); and runs:
 //! a session not listed left so, a running session and the own session,
 //! a herdr that does not answer within the bound, and an own server held
-//! by its socket (201).
+//! by its socket (201); and agents_in: a standing agent found by its name
+//! and reached, a session that does not run, an agent with no name, the
+//! agent gone, and a herdr that refuses or does not answer (132, C.5).
 
 use crate::common::*;
 use flume::host::config::HostConfig;
@@ -346,6 +348,12 @@ impl TestServer {
 
     /// herdr's result for a call of the test's own, or its words.
     fn try_herdr(&self, args: &[&str]) -> Result<Value, String> {
+        self.try_herdr_on(&self.socket, args)
+    }
+
+    /// herdr's result for a call of the test's own on the server at
+    /// `socket`, or its words.
+    fn try_herdr_on(&self, socket: &Path, args: &[&str]) -> Result<Value, String> {
         let mut command = Command::new("herdr");
         command.args(args);
         for (name, _) in std::env::vars_os() {
@@ -354,7 +362,7 @@ impl TestServer {
             }
         }
         let output = command
-            .env("HERDR_SOCKET_PATH", &self.socket)
+            .env("HERDR_SOCKET_PATH", socket)
             .env("HOME", self.scratch.path("home"))
             .stdin(Stdio::null())
             .output()
@@ -368,7 +376,11 @@ impl TestServer {
     }
 
     fn herdr(&self, args: &[&str]) -> Value {
-        self.try_herdr(args)
+        self.herdr_on(&self.socket, args)
+    }
+
+    fn herdr_on(&self, socket: &Path, args: &[&str]) -> Value {
+        self.try_herdr_on(socket, args)
             .unwrap_or_else(|words| panic!("herdr {}: {words}", args.join(" ")))
     }
 
@@ -457,6 +469,28 @@ impl TestServer {
         fs::read_to_string(self.scratch.path("log").join(pane).join(name))
             .map(|text| text.lines().map(str::to_string).collect())
             .unwrap_or_default()
+    }
+
+    /// What the stand-in that started in `pane` keeps under `name`, line
+    /// by line: on this server's own, or on a session's, whose stand-ins
+    /// keep their logs under its socket's digest, since two servers give
+    /// panes the same ids.
+    fn kept_at(&self, pane: &Pane, name: &str) -> Vec<String> {
+        if pane.socket == self.socket {
+            return self.kept(&pane.id, name);
+        }
+        let log = self.session_log(&pane.socket).join(&pane.id).join(name);
+        fs::read_to_string(log)
+            .map(|text| text.lines().map(str::to_string).collect())
+            .unwrap_or_default()
+    }
+
+    /// Where the stand-ins on the session's server at `socket` keep their
+    /// logs.
+    fn session_log(&self, socket: &Path) -> PathBuf {
+        self.scratch
+            .path("log")
+            .join(digest(&socket.to_string_lossy()))
     }
 
     /// Waits up to ten seconds for `condition`.
@@ -578,8 +612,9 @@ struct Harness {
     caller: Pane,
     /// The pane each moved agent started in, by identity.
     moved: RefCell<BTreeMap<String, String>>,
-    /// The home of the sessions attach starts, the test's own.
-    _home: SessionHome,
+    /// The home of the sessions attach starts and the standing agents
+    /// stand in, the test's own.
+    home: SessionHome,
 }
 
 impl Harness {
@@ -601,7 +636,7 @@ impl Harness {
             seam,
             caller,
             moved: RefCell::default(),
-            _home: home,
+            home,
         }
     }
 }
@@ -743,7 +778,7 @@ impl TerminalHarness for Harness {
         let pane = Pane::named(session).expect("a session the profile named");
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
-            let got = self.server.kept(&pane.id, "got");
+            let got = self.server.kept_at(&pane, "got");
             if !got.is_empty() || Instant::now() >= deadline {
                 return got;
             }
@@ -812,6 +847,14 @@ impl TerminalHarness for Harness {
         )
         .expect("setup.json");
         vec![words.to_string()]
+    }
+
+    /// A stand-in started in the session `session` of the harness's own
+    /// home by `herdr agent start <name>`, as a host's standing agent
+    /// stands in its session (132, C.5).
+    fn named_agent(&self, session: &str, name: &str) -> bool {
+        standing(&self.server, &self.home, session, Some(name));
+        true
     }
 }
 
@@ -3129,6 +3172,50 @@ impl SessionHome {
             .collect()
     }
 
+    /// The socket of the session `name`'s server under this home, started
+    /// headless where none runs, as a host's own session runs: with
+    /// nothing on its `PATH` but herdr's own folder and the system's, the
+    /// scratch's home and its shell that reads no startup file of the
+    /// host's.
+    fn start(&self, server: &TestServer, name: &str) -> PathBuf {
+        if let Some(socket) = self.running().remove(name) {
+            return socket;
+        }
+        let program = herdr_program();
+        let path = format!(
+            "{}:/usr/bin:/bin",
+            program.parent().expect("herdr's folder").display()
+        );
+        let child = Command::new(&program)
+            .args(["--session", name, "server"])
+            .env_clear()
+            .env("PATH", path)
+            .env("HOME", server.scratch.path("home"))
+            .env("SHELL", server.scratch.path("bin/shell"))
+            .env("TERM", "xterm-256color")
+            .env("LANG", "en_US.UTF-8")
+            .env(SESSION_HOME, &self.link)
+            .current_dir(server.scratch.path("home"))
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("herdr's session server starts");
+        // Stopped through its socket when the home is dropped.
+        drop(child);
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            if let Some(socket) = self.running().remove(name) {
+                return socket;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "herdr's session {name} did not run"
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
     /// The labels herdr lists of `what`, `workspace` or `tab`, on the
     /// server at `socket`.
     fn labels(&self, socket: &Path, what: &str) -> Vec<String> {
@@ -3798,4 +3885,288 @@ fn runs_of_an_own_server_held_by_its_socket_reads_the_session_listed_there() {
         ),
         other => panic!("runs of a socket no session lists gave {other:?}"),
     }
+}
+
+/// A stand-in in a workspace of its own on the server of the session
+/// `session` under `home`, that server started first where none runs, as
+/// a standing agent stands in a host's session: under the herdr name
+/// `name` by herdr's agent start, or, where none is given, run by its
+/// kind typed into the pane's shell, as a person starts an agent herdr
+/// lists with no name; its pane once herdr lists its agent there and it
+/// came up. Its log is kept under its server's socket (132, C.5).
+fn standing(server: &TestServer, home: &SessionHome, session: &str, name: Option<&str>) -> Pane {
+    let socket = home.start(server, session);
+    let made = server.herdr_on(
+        &socket,
+        &[
+            "workspace",
+            "create",
+            "--cwd",
+            &server.scratch.path("home").to_string_lossy(),
+            "--env",
+            &format!(
+                "PATH={}:/usr/bin:/bin",
+                server.scratch.path("bin").display()
+            ),
+            "--env",
+            &format!("SHELL={}", server.scratch.path("bin/shell").display()),
+            "--env",
+            &format!("STAND_IN_LOG={}", server.session_log(&socket).display()),
+            "--label",
+            name.unwrap_or("unnamed"),
+            "--no-focus",
+        ],
+    );
+    let pane = Pane {
+        id: made["root_pane"]["pane_id"]
+            .as_str()
+            .unwrap_or_else(|| panic!("herdr gave no pane in {made}"))
+            .to_string(),
+        socket: socket.clone(),
+    };
+    // The pane's shell at its prompt first, as the profile's own start
+    // waits for it.
+    let timeout = HARNESS_START.as_millis().to_string();
+    server.herdr_on(
+        &socket,
+        &[
+            "pane",
+            "wait-output",
+            &pane.id,
+            "--source",
+            "visible",
+            "--regex",
+            r"\S",
+            "--timeout",
+            &timeout,
+        ],
+    );
+    match name {
+        Some(name) => {
+            let deadline = Instant::now() + HARNESS_START;
+            loop {
+                match server.try_herdr_on(
+                    &socket,
+                    &[
+                        "agent",
+                        "start",
+                        name,
+                        "--kind",
+                        "claude",
+                        "--pane",
+                        &pane.id,
+                        "--timeout",
+                        &timeout,
+                    ],
+                ) {
+                    Ok(_) => break,
+                    // The pane's shell not yet at its prompt, as the
+                    // profile's own start reads it.
+                    Err(words)
+                        if words.contains("agent_start_input_failed")
+                            && Instant::now() < deadline =>
+                    {
+                        std::thread::sleep(Duration::from_millis(250))
+                    }
+                    Err(words) => panic!("herdr agent start {name}: {words}"),
+                }
+            }
+        }
+        None => {
+            server.herdr_on(&socket, &["pane", "send-text", &pane.id, "claude"]);
+            server.herdr_on(&socket, &["pane", "send-keys", &pane.id, "enter"]);
+        }
+    }
+    server.within("herdr lists no agent in the standing pane", || {
+        server.herdr_on(&socket, &["agent", "list"])["agents"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|agent| agent["pane_id"].as_str() == Some(pane.id.as_str()))
+    });
+    server.within("the standing stand-in did not come up", || {
+        server
+            .session_log(&socket)
+            .join(&pane.id)
+            .join("started")
+            .exists()
+    });
+    pane
+}
+
+#[test]
+fn a_standing_agent_is_found_by_its_name_and_reached() {
+    // The terminal-profiles spec's "A standing agent found and reached"
+    // (95, 132, C.5): a stand-in started in `w` by `herdr agent start
+    // w-planner`, given by that name, waiting, at its pane on `w`'s
+    // server, and a notice sent there taken.
+    let server = TestServer::start("herdr-standing");
+    let home = SessionHome::new(&["w"]);
+    let profile = server.profile().with_session_home(home.path());
+    let pane = standing(&server, &home, "w", Some("w-planner"));
+    assert_eq!(
+        profile.agents_in(Some("w")),
+        AgentsIn::Read {
+            agents: vec![NamedAgent {
+                name: "w-planner".into(),
+                at: pane.session(),
+                state: AgentState::Waiting,
+            }]
+        }
+    );
+    assert_eq!(
+        profile.send_to(&pane.session(), "flume: fix--one code delivered"),
+        ToSession::Sent,
+        "the notice to the standing agent"
+    );
+    server.within("the standing agent did not take the notice", || {
+        server.kept_at(&pane, "got") == vec!["flume: fix--one code delivered".to_string()]
+    });
+}
+
+#[test]
+fn a_session_that_does_not_run_holds_no_agent_and_is_not_started() {
+    // The terminal-profiles spec's "A session that does not run" (132;
+    // core.13): `x`, which the listing does not name running, beside `w`,
+    // which runs a standing agent.
+    let server = TestServer::start("herdr-standing-none");
+    let home = SessionHome::new(&["w", "x"]);
+    let profile = server.profile().with_session_home(home.path());
+    standing(&server, &home, "w", Some("w-planner"));
+    assert_eq!(
+        profile.agents_in(Some("x")),
+        AgentsIn::Read { agents: vec![] }
+    );
+    assert!(
+        !home.running().contains_key("x"),
+        "x runs once its agents were asked: {:?}",
+        home.running()
+    );
+    assert!(!listed(&home, "x"), "x listed once its agents were asked");
+}
+
+#[test]
+fn an_agent_herdr_lists_with_no_name_is_not_given() {
+    // The terminal-profiles spec's "An agent with no name" (C.5): beside
+    // `w-planner`, a stand-in run by its kind typed into a pane of `w`,
+    // which herdr lists with no name.
+    let server = TestServer::start("herdr-standing-unnamed");
+    let home = SessionHome::new(&["w"]);
+    let profile = server.profile().with_session_home(home.path());
+    let named = standing(&server, &home, "w", Some("w-planner"));
+    let unnamed = standing(&server, &home, "w", None);
+    let listed = server.herdr_on(&unnamed.socket, &["agent", "list"]);
+    let nameless = listed["agents"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|agent| agent["pane_id"].as_str() == Some(unnamed.id.as_str()))
+        .unwrap_or_else(|| panic!("herdr lists no agent in the unnamed pane: {listed}"));
+    assert!(
+        nameless.get("name").is_none_or(Value::is_null),
+        "herdr lists a name for the agent started with none: {nameless}"
+    );
+    assert_eq!(
+        profile.agents_in(Some("w")),
+        AgentsIn::Read {
+            agents: vec![NamedAgent {
+                name: "w-planner".into(),
+                at: named.session(),
+                state: AgentState::Waiting,
+            }]
+        }
+    );
+}
+
+#[test]
+fn a_standing_agent_gone_is_not_given() {
+    // The terminal-profiles spec's "The agent gone" (132): the stand-in's
+    // pane closed, the session running still with another workspace.
+    let server = TestServer::start("herdr-standing-gone");
+    let home = SessionHome::new(&["w"]);
+    let profile = server.profile().with_session_home(home.path());
+    let pane = standing(&server, &home, "w", Some("w-planner"));
+    server.herdr_on(
+        &pane.socket,
+        &["workspace", "create", "--label", "kept", "--no-focus"],
+    );
+    let named = |agents: &AgentsIn| match agents {
+        AgentsIn::Read { agents } => Some(
+            agents
+                .iter()
+                .filter(|agent| agent.name == "w-planner")
+                .count(),
+        ),
+        AgentsIn::Unread { .. } => None,
+    };
+    assert_eq!(named(&profile.agents_in(Some("w"))), Some(1), "before");
+    server.herdr_on(&pane.socket, &["pane", "close", &pane.id]);
+    server.within("w-planner is given once its pane closed", || {
+        named(&profile.agents_in(Some("w"))) == Some(0)
+    });
+    assert!(home.running().contains_key("w"), "w stopped");
+}
+
+#[test]
+fn agents_in_of_a_herdr_that_refuses_or_does_not_answer_is_unread_in_its_words() {
+    // 132; core.29: a herdr of the test's own that lists `w` and `slow`
+    // running, refuses `agent list` on `w`'s socket and answers it on
+    // `slow`'s only after ten seconds; and one whose listing answers only
+    // after ten seconds; each call bounded at one.
+    let scratch = Scratch::new("herdr-agents-unread");
+    let scripted = scratch.path("herdr");
+    fs::write(
+        &scripted,
+        r#"#!/bin/sh
+case "$1 $2" in
+  "session list")
+    [ -n "$SLOW_LISTING" ] && sleep 10
+    echo '{"sessions":[{"name":"w","running":true,"socket_path":"/nowhere/w.sock"},{"name":"slow","running":true,"socket_path":"/nowhere/slow.sock"}]}' ;;
+  "agent list")
+    case "$HERDR_SOCKET_PATH" in */slow.sock) sleep 10 ;; esac
+    echo '{"error":{"code":"internal_error","message":"the server broke"}}'
+    exit 1 ;;
+esac
+"#,
+    )
+    .expect("the stand-in herdr");
+    fs::set_permissions(&scripted, fs::Permissions::from_mode(0o755))
+        .expect("the stand-in herdr made executable");
+    let profile = Herdr::new(Server::Session(SESSION.into()), scratch.path("records"))
+        .with_program(&scripted)
+        .with_bound(Duration::from_secs(1))
+        .with_session_home(scratch.path("home"));
+    assert_eq!(
+        profile.agents_in(Some("w")),
+        AgentsIn::Unread {
+            reason: "herdr refused (internal_error): the server broke".into()
+        }
+    );
+    let began = Instant::now();
+    let slow = profile.agents_in(Some("slow"));
+    assert!(
+        matches!(&slow, AgentsIn::Unread { reason } if reason.contains("did not answer within 1 seconds")),
+        "the agents of a server that does not answer gave {slow:?}"
+    );
+    assert!(
+        began.elapsed() < Duration::from_secs(3),
+        "agents_in waited {:?} on herdr",
+        began.elapsed()
+    );
+    let silent = scratch.path("silent-herdr");
+    fs::write(
+        &silent,
+        format!(
+            "#!/bin/sh\nSLOW_LISTING=1 exec {} \"$@\"\n",
+            scripted.display()
+        ),
+    )
+    .expect("the silent herdr");
+    fs::set_permissions(&silent, fs::Permissions::from_mode(0o755))
+        .expect("the silent herdr made executable");
+    let listing = profile.clone().with_program(&silent).agents_in(Some("w"));
+    assert!(
+        matches!(&listing, AgentsIn::Unread { reason } if reason.contains("did not answer within 1 seconds")),
+        "the agents of a part whose listing does not answer gave {listing:?}"
+    );
 }
