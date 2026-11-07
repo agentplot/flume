@@ -330,6 +330,11 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
             lines.push(format!("    waiting: {waiting}"));
         }
     }
+    if place.worktree == Some(false) {
+        lines.push(base_place_line(
+            place.on_branch.as_deref().unwrap_or_default(),
+        ));
+    }
     if let Some(waiting) = &place.waiting_on {
         lines.push(waiting_line(waiting, place.stalled));
     }
@@ -435,6 +440,22 @@ fn source_line(source: &SourceStatus) -> String {
         None => line.push_str(&format!(": {}", source.kinds.join(", "))),
     }
     line
+}
+
+/// A base place's line: it has no worktree, and the places live on its
+/// branch, which it waits on while any is (56, 202, 203).
+fn base_place_line(on_branch: &[flume_seams::PlaceId]) -> String {
+    if on_branch.is_empty() {
+        return "  no worktree; no place on its branch is live".into();
+    }
+    format!(
+        "  no worktree; waits on the places on its branch: {}",
+        on_branch
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
 }
 
 /// What a place waits on its caller for, since when, and its words; a
@@ -2867,6 +2888,33 @@ mod tests {
             person(&inbox),
             "research--one talk lost, and flume left the agent the terminal brought back in its pane; read: flume status /d/places/1/research--one"
         );
+    }
+
+    #[test]
+    fn a_base_place_says_it_has_no_worktree_and_what_is_on_its_branch() {
+        // 56, 202, 203: a base place's status in the person's form; any
+        // other place's says nothing of a worktree.
+        let base = PlaceStatus {
+            worktree: Some(false),
+            on_branch: Some(vec![
+                PlaceId::new("/d/places/1/change--one"),
+                PlaceId::new("/d/places/1/change--two"),
+            ]),
+            ..a_place()
+        };
+        assert!(place_lines(&base).contains(
+            &"  no worktree; waits on the places on its branch: /d/places/1/change--one, /d/places/1/change--two"
+                .to_string()
+        ));
+        let alone = PlaceStatus {
+            on_branch: Some(vec![]),
+            ..base
+        };
+        assert!(place_lines(&alone)
+            .contains(&"  no worktree; no place on its branch is live".to_string()));
+        assert!(!place_lines(&a_place())
+            .iter()
+            .any(|line| line.contains("worktree")));
     }
 
     #[test]
