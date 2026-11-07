@@ -67,12 +67,14 @@ branch requires:
 | `check-live` | the walkthroughs with the pinned Claude Code under herdr (`crates/flume/tests/profiles/live/`) | no branch: run by hand in the devenv shell, `FLUME_LIVE_CLAUDE_CODE_OAUTH_TOKEN=<token> devenv shell -- moon run flume:live`, the token a test account's from `claude setup-token` |
 
 Run suites through sluice, so the agents on this host take turns under
-its bound: once your work is committed, `sluice exec main` for the
-gate's checks, and while iterating `sluice exec main -- moon run
-<project>:<task>`. The projects are those `.moon/workspace.yml` lists:
+its bound. `sluice exec main` runs the gate's checks, which a change's
+verify stage runs once and no task of a change runs (record 0054);
+while iterating, `sluice exec main -- moon run <project>:<task>`. The
+projects are those `.moon/workspace.yml` lists:
 `seams`, `core`, `fakes`, `conformance` and `flume` (the crates under
-`crates/`), `plugin-claude` (`plugins/claude`), `plugin-herdr` (`plugins/herdr`), `site` and `root`. A quick, narrow call, `cargo check` or one unit test,
-is fine to run directly. `devenv shell -- moon run :#check-fast` runs
+`crates/`), `plugin-claude` (`plugins/claude`), `plugin-herdr` (`plugins/herdr`), `site` and `root`. A task's own check runs as the task
+names it, and beside it a quick, narrow call, `cargo check` or one unit
+test, is fine to run directly. `devenv shell -- moon run :#check-fast` runs
 the fast layer, `:#check-tools` the tools layer; `site-build` and
 `prose` run one each, `lint` the workspace's clippy, `disk` what `target/` has grown to, and `moon run
 <crate>:test` one crate's tests (`seams`, `core`, `fakes`,
