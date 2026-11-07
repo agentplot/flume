@@ -50,15 +50,15 @@
     accounts = [
       {
         name = "work-1";
-        program = "claude";
-        env.CLAUDE_CONFIG_DIR = "$HOME/.claude-work-1";
+        program = "scribe";
+        env.SCRIBE_HOME = "$HOME/.scribe-work-1";
         agents = 4;
         usage = "~/.local/state/usage/work-1.json";
       }
       {
         name = "work-2";
-        program = "claude";
-        env.CLAUDE_CONFIG_DIR = "~/.claude-work-2";
+        program = "scribe";
+        env.SCRIBE_HOME = "~/.scribe-work-2";
       }
     ];
   };
@@ -73,7 +73,7 @@
         mode = "edits";
         keep_open = "30m";
         instructions = "Say \"done\" when the tasks are ticked.";
-        programs.claude = {
+        programs.scribe = {
           file = "people-settings.json";
           settings = {
             cleanupPeriodDays = 30;
@@ -103,7 +103,7 @@
         };
         stages.code = {
           model = "sonnet";
-          mode.claude = "acceptEdits";
+          mode.scribe = "ask-first";
         };
       };
       # No declaration names it, and flume's reader passes over it.
@@ -131,7 +131,7 @@
   agents = {
     model = "opus";
     keep_open = "1h";
-    programs.claude.settings.theme = "dark";
+    programs.scribe.settings.theme = "dark";
     streams.work.effort = "high";
   };
 }

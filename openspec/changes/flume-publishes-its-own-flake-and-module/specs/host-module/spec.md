@@ -112,8 +112,8 @@ the file takes.
 
 #### Scenario: A path value
 
-- **WHEN** `nix:test` renders `settings` holding a path value at `kinds.change.agents.programs.claude.file`
-- **THEN** evaluation fails naming `services.flume.settings.kinds.change.agents.programs.claude.file` and the values the file takes
+- **WHEN** `nix:test` renders `settings` holding a path value at `kinds.change.agents.programs.scribe.file`
+- **THEN** evaluation fails naming `services.flume.settings.kinds.change.agents.programs.scribe.file` and the values the file takes
 
 ### Requirement: flume reads the rendered file whole
 

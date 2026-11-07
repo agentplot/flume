@@ -4,7 +4,7 @@
 keep_open = "1h"
 model = "opus"
 
-[agents.programs.claude.settings]
+[agents.programs.scribe.settings]
 theme = "dark"
 
 [agents.streams.work]
@@ -30,30 +30,30 @@ keep_open = "30m"
 mode = "edits"
 model = "opus"
 
-[kinds.change.agents.programs.claude]
+[kinds.change.agents.programs.scribe]
 file = "people-settings.json"
 
-[kinds.change.agents.programs.claude.settings]
+[kinds.change.agents.programs.scribe.settings]
 cleanupPeriodDays = 30
 includeCoAuthoredBy = false
 mixed = ["a", { b = 1 }, [2]]
 sampleRate = 0.5
 
-[[kinds.change.agents.programs.claude.settings.hooks.Stop]]
+[[kinds.change.agents.programs.scribe.settings.hooks.Stop]]
 matcher = ""
 
-[[kinds.change.agents.programs.claude.settings.hooks.Stop.hooks]]
+[[kinds.change.agents.programs.scribe.settings.hooks.Stop.hooks]]
 command = "true"
 type = "command"
 
-[kinds.change.agents.programs.claude.settings.permissions]
+[kinds.change.agents.programs.scribe.settings.permissions]
 allow = ["Bash(git status)", "Read"]
 
 [kinds.change.agents.stages.code]
 model = "sonnet"
 
 [kinds.change.agents.stages.code.mode]
-claude = "acceptEdits"
+scribe = "ask-first"
 
 [kinds.research]
 label = "inception"
@@ -65,18 +65,18 @@ threshold = 90
 [[pools.work.accounts]]
 agents = 4
 name = "work-1"
-program = "claude"
+program = "scribe"
 usage = "~/.local/state/usage/work-1.json"
 
 [pools.work.accounts.env]
-CLAUDE_CONFIG_DIR = "$HOME/.claude-work-1"
+SCRIBE_HOME = "$HOME/.scribe-work-1"
 
 [[pools.work.accounts]]
 name = "work-2"
-program = "claude"
+program = "scribe"
 
 [pools.work.accounts.env]
-CLAUDE_CONFIG_DIR = "~/.claude-work-2"
+SCRIBE_HOME = "~/.scribe-work-2"
 
 [repos."acme/acme"]
 stream = "work"

@@ -1450,15 +1450,15 @@ fn the_modules_files_read_whole() {
         vec![
             Account {
                 name: "work-1".into(),
-                program: "claude".into(),
-                env: BTreeMap::from([("CLAUDE_CONFIG_DIR".into(), "$HOME/.claude-work-1".into())]),
+                program: "scribe".into(),
+                env: BTreeMap::from([("SCRIBE_HOME".into(), "$HOME/.scribe-work-1".into())]),
                 agents: Some(4),
                 usage: Some("~/.local/state/usage/work-1.json".into()),
             },
             Account {
                 name: "work-2".into(),
-                program: "claude".into(),
-                env: BTreeMap::from([("CLAUDE_CONFIG_DIR".into(), "~/.claude-work-2".into())]),
+                program: "scribe".into(),
+                env: BTreeMap::from([("SCRIBE_HOME".into(), "~/.scribe-work-2".into())]),
                 agents: None,
                 usage: None,
             },
@@ -1506,15 +1506,15 @@ fn the_modules_files_read_whole() {
         change.every_stage.instructions.as_deref(),
         Some("Say \"done\" when the tasks are ticked.")
     );
-    let claude = &change.every_stage.programs["claude"];
-    let file = claude.file.as_ref().expect("the program's named file");
+    let scribe = &change.every_stage.programs["scribe"];
+    let file = scribe.file.as_ref().expect("the program's named file");
     assert_eq!(file.written, "people-settings.json");
     assert_eq!(
         file.keys,
         BTreeMap::from([("spinnerTipsEnabled".to_string(), serde_json::json!(false))])
     );
     assert_eq!(
-        claude.settings,
+        scribe.settings,
         BTreeMap::from([
             ("cleanupPeriodDays".to_string(), serde_json::json!(30)),
             (
@@ -1538,8 +1538,8 @@ fn the_modules_files_read_whole() {
     assert_eq!(
         code.mode,
         Some(ModeSetting::Programs(BTreeMap::from([(
-            "claude".to_string(),
-            "acceptEdits".to_string()
+            "scribe".to_string(),
+            "ask-first".to_string()
         )])))
     );
     assert_eq!(
@@ -1555,7 +1555,7 @@ fn the_modules_files_read_whole() {
     assert_eq!(config.every_agent.model.as_deref(), Some("opus"));
     assert_eq!(config.every_agent.keep_open.as_deref(), Some("1h"));
     assert_eq!(
-        config.every_agent.programs["claude"].settings,
+        config.every_agent.programs["scribe"].settings,
         BTreeMap::from([("theme".to_string(), serde_json::json!("dark"))])
     );
     assert_eq!(

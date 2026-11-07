@@ -43,6 +43,6 @@ let
 in
 {
   mistyped = text { streams.work.agents = "five"; };
-  path = text { kinds.change.agents.programs.claude.file = ./every-key.nix; };
+  path = text { kinds.change.agents.programs.scribe.file = ./every-key.nix; };
   unknownSystem = (evaluated elsewhere { }).package.outPath;
 }

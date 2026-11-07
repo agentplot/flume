@@ -66,8 +66,8 @@ named="A path value"
 fresh
 fails path
 expect "$named" "settings holding a path evaluate" [ "$status" -ne 0 ]
-expect "$named" "its failure names no services.flume.settings.kinds.change.agents.programs.claude.file: $err" \
-  says "$err" "services.flume.settings.kinds.change.agents.programs.claude.file"
+expect "$named" "its failure names no services.flume.settings.kinds.change.agents.programs.scribe.file: $err" \
+  says "$err" "services.flume.settings.kinds.change.agents.programs.scribe.file"
 expect "$named" "its failure names not the values the file takes: $err" \
   says "$err" "strings, booleans, integers, floats, lists and tables"
 

@@ -19,8 +19,8 @@ let
     ) "${name}'s settings render ${builtins.toJSON text}, not nix/tests/files/${name}.toml";
 
   # every-key's settings with a path where a program's file is named.
-  path = lib.recursiveUpdate every { kinds.change.agents.programs.claude.file = ./every-key.nix; };
-  pathAt = "services.flume.settings.kinds.change.agents.programs.claude.file";
+  path = lib.recursiveUpdate every { kinds.change.agents.programs.scribe.file = ./every-key.nix; };
+  pathAt = "services.flume.settings.kinds.change.agents.programs.scribe.file";
   refused = toml.refusals path;
 in
 {
