@@ -48,6 +48,11 @@ pub fn every() -> Vec<Cited> {
             .map(Scenario::cited),
     );
     every.extend(
+        merge_queue::base_place_scenarios::<FakeMergeQueueHarness>()
+            .iter()
+            .map(Scenario::cited),
+    );
+    every.extend(
         store::scenarios::<FakeStoreHarness>()
             .iter()
             .map(Scenario::cited),

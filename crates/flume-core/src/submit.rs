@@ -214,7 +214,7 @@ impl Engine {
             SubmissionRead::Found { submission } => Some(submission.id),
             SubmissionRead::None | SubmissionRead::CouldNotRead { .. } => None,
         };
-        match queue.submit(&place.place_ref(), &head) {
+        match queue.submit(&place.place_ref(), &SubmitHead::Worktree { head }) {
             Submitted::Submitted { submission } => {
                 self.submitted(id, Some(&submission), None, before)
             }

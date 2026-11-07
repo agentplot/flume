@@ -153,7 +153,7 @@ impl Agent for StandInAgent {
 struct StandInQueue;
 
 impl MergeQueue for StandInQueue {
-    fn submit(&self, _place: &PlaceRef, _head: &Revision) -> Submitted {
+    fn submit(&self, _place: &PlaceRef, _head: &SubmitHead) -> Submitted {
         Submitted::Refused {
             reason: "the stand-in queue takes nothing".into(),
         }
@@ -180,6 +180,14 @@ impl MergeQueue for StandInQueue {
             },
             Err(reason) => BaseRevision::Refused { reason },
         }
+    }
+    fn open(&self, _repository: &str, _branch: &str, _base: &str) -> BranchOpened {
+        BranchOpened::Refused {
+            reason: "the stand-in queue opens nothing".into(),
+        }
+    }
+    fn close(&self, _repository: &str, _branch: &str, _into: &str) -> BranchClosed {
+        BranchClosed::Gone
     }
 }
 
@@ -215,7 +223,7 @@ impl HoldingQueue {
 }
 
 impl MergeQueue for HoldingQueue {
-    fn submit(&self, place: &PlaceRef, _head: &Revision) -> Submitted {
+    fn submit(&self, place: &PlaceRef, _head: &SubmitHead) -> Submitted {
         Self::record(&format!("submit {}", place.branch));
         Submitted::Submitted {
             submission: Self::submission(&place.branch),
@@ -252,6 +260,12 @@ impl MergeQueue for HoldingQueue {
     }
     fn base_revision(&self, repository: &str, base: &str) -> BaseRevision {
         StandInQueue.base_revision(repository, base)
+    }
+    fn open(&self, repository: &str, branch: &str, base: &str) -> BranchOpened {
+        StandInQueue.open(repository, branch, base)
+    }
+    fn close(&self, repository: &str, branch: &str, into: &str) -> BranchClosed {
+        StandInQueue.close(repository, branch, into)
     }
 }
 

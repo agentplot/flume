@@ -1,7 +1,8 @@
 use crate::{lock, FakeGit, Log};
 use flume_seams::{
-    BaseRevision, Inbox, MergeQueue, PassedOver, PlaceRef, ReadAcross, Revision, Stepped,
-    Submission, SubmissionOutcome, SubmissionRead, SubmissionState, Submitted,
+    BaseRevision, BranchClosed, BranchOpened, Inbox, MergeQueue, PassedOver, PlaceRef, ReadAcross,
+    Revision, Stepped, Submission, SubmissionOutcome, SubmissionRead, SubmissionState, SubmitHead,
+    Submitted,
 };
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -58,6 +59,13 @@ struct Requested {
 /// over by read-submission and the inbox, with its words, and decides
 /// nothing of the others; the outcomes of submissions to it stay pending
 /// until it reads again (99, 133). It removes nothing of a place (113).
+///
+/// It opens and closes the branches it lands on for base places, as a
+/// test scripts it or else by its own reading of the fake git, logged as
+/// `open <branch> from <base>` and `close <branch> into <base>`; a branch
+/// it opened is one it lands on. A submission by name, logged as `submit
+/// <branch> named`, is decided in its record alone, its inbox giving
+/// nothing for it (133, 203, 205, 206).
 pub struct FakeMergeQueue {
     git: Arc<FakeGit>,
     state: Mutex<QueueState>,
@@ -81,6 +89,12 @@ struct QueueState {
     /// The words of each branch it cannot read, by repository and branch.
     refused: BTreeMap<(String, String), String>,
     moves_on_its_own: bool,
+    /// The answer scripted for each branch's open, by repository and
+    /// branch.
+    opens: BTreeMap<(String, String), BranchOpened>,
+    /// The answer scripted for each branch's close, by repository and
+    /// branch.
+    closes: BTreeMap<(String, String), BranchClosed>,
     next: u64,
     next_request: u64,
 }
@@ -136,6 +150,26 @@ impl FakeMergeQueue {
     /// nothing, and a test runs each round with `run_round`.
     pub fn moves_on_its_own(&self) {
         lock(&self.state).moves_on_its_own = true;
+    }
+
+    /// Open of `branch` answers `answer` from now on, as given, making
+    /// nothing; unscripted, open makes the branch at its base's revision,
+    /// and refuses a branch already present or a base it cannot read
+    /// (205).
+    pub fn answer_open(&self, repository: &str, branch: &str, answer: BranchOpened) {
+        lock(&self.state)
+            .opens
+            .insert((repository.into(), branch.into()), answer);
+    }
+
+    /// Close of `branch` answers `answer` from now on, as given, removing
+    /// nothing; unscripted, close removes the branch, keeps one with a
+    /// submission open or a commit its base lacks in its words, and
+    /// answers gone where there is none (204, 206).
+    pub fn answer_close(&self, repository: &str, branch: &str, answer: BranchClosed) {
+        lock(&self.state)
+            .closes
+            .insert((repository.into(), branch.into()), answer);
     }
 
     /// A hand's submission of `branch` to `target`, in `state`.
@@ -306,6 +340,22 @@ impl FakeMergeQueue {
         }
     }
 
+    /// Where `base` lives, as `base_revision` answers it, unlogged.
+    fn where_base(&self, repository: &str, base: &str) -> BaseRevision {
+        if let Some(answer) = lock(&self.state)
+            .bases
+            .get(&(repository.to_string(), base.to_string()))
+        {
+            return answer.clone();
+        }
+        match self.git.branch_head(repository, base) {
+            Some(revision) => BaseRevision::At { revision },
+            None => BaseRevision::Refused {
+                reason: format!("no branch {base} in {repository}"),
+            },
+        }
+    }
+
     /// Decides an open submission by its plan, and leaves its outcome in
     /// its place's inbox.
     fn settle(&self, repository: &str, submission: &Submission) {
@@ -365,9 +415,20 @@ impl FakeMergeQueue {
 }
 
 impl MergeQueue for FakeMergeQueue {
-    fn submit(&self, place: &PlaceRef, head: &Revision) -> Submitted {
-        self.log
-            .push(format!("submit {} {head} {}", place.branch, place.base));
+    fn submit(&self, place: &PlaceRef, head: &SubmitHead) -> Submitted {
+        // A submission by name comes from no worktree, so its outcome is
+        // left in no place's inbox (133, 203).
+        let (branch, location) = match head {
+            SubmitHead::Worktree { head } => {
+                self.log
+                    .push(format!("submit {} {head} {}", place.branch, place.base));
+                (place.branch.clone(), Some(place.location.clone()))
+            }
+            SubmitHead::Branch { branch, .. } => {
+                self.log.push(format!("submit {branch} named"));
+                (branch.clone(), None)
+            }
+        };
         let mut queue = lock(&self.state);
         if let Some(reason) = &queue.unreadable {
             return Submitted::Refused {
@@ -386,7 +447,7 @@ impl MergeQueue for FakeMergeQueue {
             let submission = Self::record(
                 &mut queue,
                 &place.repository,
-                &place.branch,
+                &branch,
                 &place.base,
                 SubmissionState::Conflict {
                     files: files.clone(),
@@ -401,7 +462,7 @@ impl MergeQueue for FakeMergeQueue {
             };
         }
         if let Plan::Request { then, to_place } = plan {
-            let key = (place.repository.clone(), place.branch.clone());
+            let key = (place.repository.clone(), branch.clone());
             let number = match queue.requests.get(&key) {
                 Some(open) => open.number.clone(),
                 None => {
@@ -415,7 +476,7 @@ impl MergeQueue for FakeMergeQueue {
                     number: number.clone(),
                     target: place.base.clone(),
                     location: place.location.clone(),
-                    plan: Some((*then, to_place)),
+                    plan: Some((*then, to_place && location.is_some())),
                 },
             );
             return Submitted::Requested { request: number };
@@ -423,14 +484,12 @@ impl MergeQueue for FakeMergeQueue {
         let submission = Self::record(
             &mut queue,
             &place.repository,
-            &place.branch,
+            &branch,
             &place.base,
             SubmissionState::Waiting,
             None,
         );
-        queue
-            .plans
-            .insert(submission.id.clone(), (plan, Some(place.location.clone())));
+        queue.plans.insert(submission.id.clone(), (plan, location));
         Submitted::Submitted { submission }
     }
 
@@ -523,17 +582,82 @@ impl MergeQueue for FakeMergeQueue {
 
     fn base_revision(&self, repository: &str, base: &str) -> BaseRevision {
         self.log.push(format!("base_revision {repository} {base}"));
-        if let Some(answer) = lock(&self.state)
-            .bases
-            .get(&(repository.to_string(), base.to_string()))
+        self.where_base(repository, base)
+    }
+
+    fn open(&self, repository: &str, branch: &str, base: &str) -> BranchOpened {
+        self.log.push(format!("open {branch} from {base}"));
         {
-            return answer.clone();
+            let queue = lock(&self.state);
+            if let Some(reason) = &queue.unreadable {
+                return BranchOpened::Refused {
+                    reason: reason.clone(),
+                };
+            }
+            if let Some(answer) = queue
+                .opens
+                .get(&(repository.to_string(), branch.to_string()))
+            {
+                return answer.clone();
+            }
         }
-        match self.git.branch_head(repository, base) {
-            Some(revision) => BaseRevision::At { revision },
-            None => BaseRevision::Refused {
-                reason: format!("no branch {base} in {repository}"),
+        if self.git.branch_exists(repository, branch) {
+            return BranchOpened::Refused {
+                reason: format!("{branch} already exists in {repository}"),
+            };
+        }
+        let revision = match self.where_base(repository, base) {
+            BaseRevision::At { revision } => revision,
+            BaseRevision::Refused { reason } => return BranchOpened::Refused { reason },
+            BaseRevision::Unlanded => match self.git.branch_head(repository, base) {
+                Some(revision) => revision,
+                None => {
+                    return BranchOpened::Refused {
+                        reason: format!("no branch {base} in {repository}"),
+                    }
+                }
             },
+        };
+        self.git.set_branch(repository, branch, &revision);
+        BranchOpened::Made { revision }
+    }
+
+    fn close(&self, repository: &str, branch: &str, into: &str) -> BranchClosed {
+        self.log.push(format!("close {branch} into {into}"));
+        let key = (repository.to_string(), branch.to_string());
+        {
+            let queue = lock(&self.state);
+            if let Some(reason) = &queue.unreadable {
+                return BranchClosed::Kept {
+                    reason: reason.clone(),
+                };
+            }
+            if let Some(answer) = queue.closes.get(&key) {
+                return answer.clone();
+            }
+            if let Some(open) = queue
+                .submissions
+                .get(&key)
+                .into_iter()
+                .flatten()
+                .find(|submission| submission.state.open())
+            {
+                return BranchClosed::Kept {
+                    reason: format!("{branch} has submission #{} open", open.id),
+                };
+            }
         }
+        if !self.git.branch_exists(repository, branch) {
+            return BranchClosed::Gone;
+        }
+        let lacking = self.git.lacking(repository, branch, into);
+        if !lacking.is_empty() {
+            let commits: Vec<String> = lacking.iter().map(ToString::to_string).collect();
+            return BranchClosed::Kept {
+                reason: format!("{branch} holds {} that {into} lacks", commits.join(", ")),
+            };
+        }
+        self.git.delete_branch(repository, branch);
+        BranchClosed::Removed
     }
 }

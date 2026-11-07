@@ -351,8 +351,8 @@ location is known, and then:
    read.
 3. **Held state, then the branch (core.17).** The document is written
    `Making`. Then `MergeQueue::open(repository, branch, base)` asks the
-   merge queue to make the branch. `Opened::Made { revision }` gives the
-   revision it was made at, kept as `base_revision`. `Opened::Refused {
+   merge queue to make the branch. `BranchOpened::Made { revision }` gives the
+   revision it was made at, kept as `base_revision`. `BranchOpened::Refused {
    reason }` refuses the launch with the merge queue's words and removes
    the document, nothing else made.
 4. **Live, with nothing started.** The place goes `Live` with no
@@ -487,7 +487,7 @@ then removes the held document as any place's once its ends are
 delivered (62):
 
 ```rust
-pub enum Closed {
+pub enum BranchClosed {
     Removed,
     /// The merge queue kept the branch: a submission open on it, or
     /// work of it its base lacks, in the merge queue's words (204, 206).
@@ -496,7 +496,7 @@ pub enum Closed {
 }
 ```
 
-`Closed::Kept` is recorded as `BranchRemoved::Refused { reason }`, a new
+`BranchClosed::Kept` is recorded as `BranchRemoved::Refused { reason }`, a new
 variant, named once in the answer to the act that removed the place, and
 a launch that would make the branch again is refused while it stands
 (3, 67). flume never runs `git branch -D` on a base place's branch:
@@ -516,11 +516,11 @@ The merge-queue seam (B.6) gains:
 ```rust
 /// open: the branch made at its base's current revision as one the
 /// merge queue lands on (205).
-fn open(&self, repository: &str, branch: &str, base: &str) -> Opened;
+fn open(&self, repository: &str, branch: &str, base: &str) -> BranchOpened;
 /// close: the branch removed into the branch its work landed in (206).
-fn close(&self, repository: &str, branch: &str, into: &str) -> Closed;
+fn close(&self, repository: &str, branch: &str, into: &str) -> BranchClosed;
 
-pub enum Opened {
+pub enum BranchOpened {
     Made { revision: Revision },
     Refused { reason: String },
 }
@@ -529,7 +529,10 @@ pub enum Opened {
 and `submit` takes a `SubmitHead`. The terminal seam loses `watch`,
 with nothing in its place, and its show's `Clues` gain `line` (decision
 2). The store seam's host documents gain the watch (decision 1). The
-place seam is unchanged.
+place seam is unchanged. The answers are `BranchOpened` and
+`BranchClosed`, since `flume-seams` re-exports every seam's types side
+by side and the terminal seam's open and close already answer `Opened`
+and `Closed`.
 
 The sluice profile (C.6):
 

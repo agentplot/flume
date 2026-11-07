@@ -2949,6 +2949,32 @@ fn submit_holds_no_wait() {
 }
 
 #[test]
+fn what_a_submission_sends() {
+    round_trips(SubmitHead::Worktree {
+        head: Revision::new("c5"),
+    });
+    round_trips(SubmitHead::Branch {
+        branch: "train/a".into(),
+        revision: Revision::new("c6"),
+    });
+}
+
+#[test]
+fn a_base_places_branch_opened_and_closed() {
+    round_trips(BranchOpened::Made {
+        revision: Revision::new("c1"),
+    });
+    round_trips(BranchOpened::Refused {
+        reason: "train/a already exists".into(),
+    });
+    round_trips(BranchClosed::Removed);
+    round_trips(BranchClosed::Kept {
+        reason: "train/a holds c7 that main lacks".into(),
+    });
+    round_trips(BranchClosed::Gone);
+}
+
+#[test]
 fn the_inbox_and_its_outcomes() {
     let outcomes = vec![
         SubmissionOutcome::Landed {
@@ -3106,6 +3132,9 @@ fn the_place_seams_answers() {
     round_trips(BranchRemoved::Gone);
     round_trips(BranchRemoved::Kept {
         commits: vec![Revision::new("c4")],
+    });
+    round_trips(BranchRemoved::Refused {
+        reason: "train/a has submission #4 open".into(),
     });
 }
 

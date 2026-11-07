@@ -56,13 +56,17 @@
 //! (11, 12, 20, 79, C.1, C.6). The profile reads no `[tests]` key and no
 //! `.prototools` for a place: the readiness, `sluice release` as the
 //! teardown and the remote the policy lands the base on are declared for
-//! the resolver to hand the place profile (core.3).
+//! the resolver to hand the place profile (core.3). A base place's
+//! branch is not yet opened, closed or submitted by name through sluice:
+//! open answers refused, close keeps the branch, and a submit naming a
+//! branch is refused, each saying so (203, 205, 206).
 
 use crate::git::Git;
 use crate::shell;
 use flume_seams::{
-    BaseRevision, Inbox, MergeQueue, PassedOver, PlaceRef, ReadAcross, ReadyStep, Revision,
-    Stepped, Submission, SubmissionOutcome, SubmissionRead, SubmissionState, Submitted,
+    BaseRevision, BranchClosed, BranchOpened, Inbox, MergeQueue, PassedOver, PlaceRef, ReadAcross,
+    ReadyStep, Revision, Stepped, Submission, SubmissionOutcome, SubmissionRead, SubmissionState,
+    SubmitHead, Submitted,
 };
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -571,7 +575,12 @@ fn base_at(repository: &str, base: &str) -> Option<Revision> {
 }
 
 impl MergeQueue for Sluice {
-    fn submit(&self, place: &PlaceRef, _head: &Revision) -> Submitted {
+    fn submit(&self, place: &PlaceRef, head: &SubmitHead) -> Submitted {
+        if let SubmitHead::Branch { branch, .. } = head {
+            return Submitted::Refused {
+                reason: format!("submitting {branch} by name through sluice is not yet built"),
+            };
+        }
         let args = ["submit", place.base.as_str(), "--no-wait", "--json"];
         let (success, stdout, stderr) = match self.run(Path::new(&place.location), &args) {
             Ok(output) => output,
@@ -764,6 +773,18 @@ impl MergeQueue for Sluice {
                 revision: Revision::new(revision),
             },
             Err(reason) => BaseRevision::Refused { reason },
+        }
+    }
+
+    fn open(&self, _repository: &str, branch: &str, _base: &str) -> BranchOpened {
+        BranchOpened::Refused {
+            reason: format!("opening {branch} through sluice is not yet built"),
+        }
+    }
+
+    fn close(&self, _repository: &str, branch: &str, _into: &str) -> BranchClosed {
+        BranchClosed::Kept {
+            reason: format!("closing {branch} through sluice is not yet built"),
         }
     }
 }

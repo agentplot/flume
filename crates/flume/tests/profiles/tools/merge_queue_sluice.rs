@@ -34,6 +34,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+/// What a place submits from its worktree at `head`.
+fn from_worktree(head: &Revision) -> SubmitHead {
+    SubmitHead::Worktree { head: head.clone() }
+}
+
 const POLICY: &str =
     "[tests]\nrunner = \"command\"\ncommand = \"sh check.sh\"\n\n[branches.main]\n";
 
@@ -358,6 +363,13 @@ impl MergeQueueHarness for Harness {
         ));
         other.into()
     }
+
+    fn branch_head(&self, _repository: &str, branch: &str) -> Option<Revision> {
+        let head = self
+            .repository
+            .git(&["branch", "--list", branch, "--format=%(objectname)"]);
+        (!head.is_empty()).then(|| Revision::new(head))
+    }
 }
 
 #[test]
@@ -377,7 +389,7 @@ fn a_submission_from_a_herdr_panes_hook_names_the_place_and_no_session() {
         .with_env("HERDR_ENV", Some("1"))
         .with_env("TMUX", Some("/nowhere/tmux,1,0"))
         .with_env("TMUX_PANE", Some("%1"));
-    let Submitted::Submitted { submission } = seam.submit(&place, &head) else {
+    let Submitted::Submitted { submission } = seam.submit(&place, &from_worktree(&head)) else {
         panic!("the submit was refused");
     };
     assert_eq!(submission.state, SubmissionState::Waiting, "the answer");
@@ -399,7 +411,7 @@ fn a_failed_entry_is_collected_once_with_sluices_notice() {
     let harness = Harness::new();
     let (place, head) = harness.place();
     harness.will_fail("test x failed");
-    harness.seam.submit(&place, &head);
+    harness.seam.submit(&place, &from_worktree(&head));
     harness.decide("fix/one");
     let Inbox::Outcomes { outcomes, .. } = harness.seam.inbox(&place) else {
         panic!("the inbox could not be read");
@@ -427,7 +439,10 @@ fn every_branch_asked_at_once_is_read_from_one_overview_and_one_status_of_each_b
     let (one, head) = harness.place();
     let two = Harness::worktree(&harness.repository, "fix/two", "fix--two", "two.rs");
     let two_head = Revision::new(git(Path::new(&two.location), &["rev-parse", "HEAD"]));
-    let submitted = |place: &PlaceRef, head: &Revision| match harness.seam.submit(place, head) {
+    let submitted = |place: &PlaceRef, head: &Revision| match harness
+        .seam
+        .submit(place, &from_worktree(head))
+    {
         Submitted::Submitted { submission } => submission.id,
         other => panic!("the submit gave {other:?}"),
     };
@@ -490,7 +505,7 @@ fn every_branch_asked_at_once_is_read_from_one_overview_and_one_status_of_each_b
 fn a_queue_nothing_drives_is_decided_by_the_settles_steps() {
     let harness = Harness::new();
     let (place, head) = harness.place();
-    harness.seam.submit(&place, &head);
+    harness.seam.submit(&place, &from_worktree(&head));
     let deadline = Instant::now() + Duration::from_secs(90);
     loop {
         assert_eq!(
@@ -540,7 +555,7 @@ fn a_step_beside_a_live_driver_does_nothing_and_answers() {
         .process_group(0)
         .spawn()
         .expect("sluice run starts");
-    harness.seam.submit(&place, &head);
+    harness.seam.submit(&place, &from_worktree(&head));
     let began = Instant::now();
     let stepped = harness.seam.step(&place.repository, "main");
     let took = began.elapsed();
@@ -571,7 +586,7 @@ fn a_conflicts_base_revision_and_words_are_sluices() {
     let harness = Harness::new();
     let (place, head) = harness.place();
     let base = harness.on_main("work.rs", "the base's own\n");
-    harness.seam.submit(&place, &head);
+    harness.seam.submit(&place, &from_worktree(&head));
     harness.decide("fix/one");
     let record = harness.record("fix/one").expect("sluice's entry");
     let Inbox::Outcomes { outcomes, .. } = harness.seam.inbox(&place) else {
@@ -619,7 +634,7 @@ fn a_conflict_sluice_answers_at_the_submit_is_its_outcome_never_a_refusal() {
         .seam
         .clone()
         .with_env("PATH", Some(&path.to_string_lossy()));
-    let answer = seam.submit(&place, &head);
+    let answer = seam.submit(&place, &from_worktree(&head));
     let record = harness.record("fix/one").expect("sluice's entry");
     assert_eq!(record["state"], "conflict", "{record}");
     let Submitted::Decided {
@@ -680,7 +695,7 @@ fn a_settle_beside_the_stand_ins_submit_collects_nothing_its_answer_delivers() {
         .clone()
         .with_env("PATH", Some(&path.to_string_lossy()));
     let (answer, collected) = std::thread::scope(|scope| {
-        let submit = scope.spawn(|| seam.submit(&place, &head));
+        let submit = scope.spawn(|| seam.submit(&place, &from_worktree(&head)));
         let mut collected = vec![];
         while !submit.is_finished() {
             seam.step(&place.repository, "main");
@@ -735,7 +750,7 @@ fn a_pull_request_with_no_entry_is_held_and_the_entry_taken_in_from_it_is_read_t
         .with_env("PATH", Some(&path.to_string_lossy()));
     let request = super::walk::PULL_REQUEST.to_string();
     assert_eq!(
-        seam.submit(&place, &head),
+        seam.submit(&place, &from_worktree(&head)),
         Submitted::Requested {
             request: request.clone()
         }
@@ -806,7 +821,7 @@ fn a_branch_whose_records_sluice_cannot_read_is_passed_over_and_the_landing_coll
     // place's landing on main is collected once (133).
     let harness = Harness::new();
     let (place, head) = harness.place();
-    harness.seam.submit(&place, &head);
+    harness.seam.submit(&place, &from_worktree(&head));
     let other = harness.refuse_another(&place);
     let records = harness
         .repository

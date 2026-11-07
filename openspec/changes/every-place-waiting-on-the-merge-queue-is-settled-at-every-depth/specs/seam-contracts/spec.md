@@ -59,7 +59,7 @@ document is, a host state written before reading as holding none (73,
 
 ### Requirement: The types of a base place and the watch
 
-`flume-seams` SHALL hold `SubmitHead`, `Opened`, `Closed`,
+`flume-seams` SHALL hold `SubmitHead`, `BranchOpened`, `BranchClosed`,
 `BranchRemoved::Refused`, `HostKey::Watch`, `Watched` and the line
 `Clues` carries, each written and read back by its round trip, a
 document written before reading as it did (61, 139, 202 to 206 and

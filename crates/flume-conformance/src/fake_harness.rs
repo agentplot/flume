@@ -984,6 +984,10 @@ impl MergeQueueHarness for FakeMergeQueueHarness {
         );
         other.into()
     }
+
+    fn branch_head(&self, repository: &str, branch: &str) -> Option<Revision> {
+        self.git.branch_head(repository, branch)
+    }
 }
 
 #[derive(Default)]
