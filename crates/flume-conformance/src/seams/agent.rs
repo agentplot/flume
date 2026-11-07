@@ -288,7 +288,7 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
         },
         Scenario {
             name: "agent: effort takes each word its program takes and refuses any other naming it and the words taken, every word where its profile names no way to give one, and names the variable its program reads over it",
-            cites: &["197", "88", "170"],
+            cites: &["197", "88"],
             run: effort_takes_its_programs_words::<H>,
         },
         Scenario {

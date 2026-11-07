@@ -23,7 +23,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "agent effort: a declaration whose effort is a table of programs refuses the launch, naming the table's effort, and nothing is made",
-            cites: &["4", "8", "172", "197"],
+            cites: &["4", "8", "197"],
             run: a_table_refused,
         },
         Scenario {
