@@ -11,7 +11,7 @@ mod print;
 
 use clap::{Args, Parser, Subcommand};
 use flume_core::{Answer, Engine, KindsLock, LockOf, Retry, WaitFor};
-use flume_seams::{AgentState, HoldOn, Launch, PlaceId, Reading, Seconds, StopKind};
+use flume_seams::{read_span, AgentState, HoldOn, Launch, PlaceId, Reading, Seconds, StopKind};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -333,11 +333,14 @@ struct LaunchArgs {
     #[arg(long, value_name = "TIME")]
     stall_after: Option<String>,
     /// One setting of every stage's agent, or of one stage's (32): the
-    /// field one of program, model, effort, instructions, beside, session
-    /// and mode, `effort` its program's own word for how hard its model
-    /// works, `session` the terminal's session its agents open in, the
-    /// mode one of plan, ask, edits and full, or `mode.<program>` for one
-    /// program's entry of a mode (107, 162, 169, 197).
+    /// field one of program, model, effort, instructions, beside, session,
+    /// mode and keep_open, `effort` its program's own word for how hard its
+    /// model works, `session` the terminal's session its agents open in,
+    /// the mode one of plan, ask, edits and full, or `mode.<program>` for
+    /// one program's entry of a mode, and `keep_open` how long the agent
+    /// is kept open for an answer once it stops short, as `<n>`, `<n>s`,
+    /// `<n>m` or `<n>h`, one time for every program, an hour where no
+    /// layer gives one (107, 162, 169, 197, 198).
     #[arg(long, value_name = "[STAGE.]FIELD=VALUE")]
     agent: Vec<String>,
     /// The stream the place runs in, one the host's configuration
@@ -500,7 +503,7 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             within,
         } => {
             let place = named(place)?;
-            let within = within.as_deref().map(seconds).transpose()?;
+            let within = within.as_deref().map(read_span).transpose()?;
             build()?.tell(&place, words, within)
         }
         Command::Stop(forced) => build_for(forced, &named, build, Engine::stop)?,
@@ -567,7 +570,7 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
                 Some(stage) => WaitFor::Stage(stage.clone()),
                 None => WaitFor::Submission,
             };
-            let timeout = timeout.as_deref().map(seconds).transpose()?;
+            let timeout = timeout.as_deref().map(read_span).transpose()?;
             let core = build()?;
             let recipient = recipient_of(&core, recipient)?;
             core.wait(&place, &of, &recipient, timeout)
@@ -704,30 +707,10 @@ fn launch_of(args: &LaunchArgs, given: Option<&Path>) -> Result<Launch, String> 
         hold_words,
         priority: args.priority.unwrap_or(0),
         recipients: args.recipient.clone(),
-        stall_after: args.stall_after.as_deref().map(seconds).transpose()?,
+        stall_after: args.stall_after.as_deref().map(read_span).transpose()?,
         stream: args.stream.clone(),
         intent: args.intent.clone(),
     })
-}
-
-/// A time given as `<n>`, `<n>s`, `<n>m` or `<n>h`, in seconds.
-fn seconds(given: &str) -> Result<Seconds, String> {
-    let (number, unit) = match given.char_indices().last() {
-        Some((at, unit)) if unit.is_ascii_alphabetic() => (&given[..at], unit),
-        _ => (given, 's'),
-    };
-    let scale = match unit {
-        's' => 1,
-        'm' => 60,
-        'h' => 60 * 60,
-        _ => 0,
-    };
-    number
-        .parse::<Seconds>()
-        .ok()
-        .filter(|_| scale > 0)
-        .map(|number| number * scale)
-        .ok_or_else(|| format!("{given} is no time: it is <n>, <n>s, <n>m or <n>h"))
 }
 
 /// Reads the place's current agent, as status gives it, until it is
@@ -757,16 +740,6 @@ fn until_quiet(core: &Engine, place: &PlaceId, within: Duration) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_time_in_seconds() {
-        assert_eq!(seconds("90"), Ok(90));
-        assert_eq!(seconds("90s"), Ok(90));
-        assert_eq!(seconds("10m"), Ok(600));
-        assert_eq!(seconds("1h"), Ok(3600));
-        assert!(seconds("soon").is_err());
-        assert!(seconds("5d").is_err());
-    }
 
     #[test]
     fn words_that_are_no_command_are_for_the_error_stream() {

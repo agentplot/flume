@@ -5,15 +5,16 @@
 
 use flume_core::{
     group_name, percentage, AgentStatus, Answer, HostStatus, OwnStatus, PlaceStatus, PoolStatus,
-    Queued, ReadingStatus, Reserves, SessionWait, SourceStatus, StageStatus, StandingFound,
-    StandingStatus, StreamOpened, StreamStatus, Tidied, TitleFrom, WindowOutcome, Woke,
+    Queued, ReadingStatus, Reserves, SessionAnswer, SessionWait, SourceStatus, StageStatus,
+    StandingFound, StandingStatus, StreamOpened, StreamStatus, Tidied, TitleFrom, WindowOutcome,
+    Woke,
 };
 use flume_seams::{
-    AccountFrom, Act, BaseFrom, CarryCause, ConfigLayer, ConfigValue, Conversation, Given, HoldOn,
-    HostConfiguration, IntentKey, Kept, KindFrom, LabelHeld, LiveProcess, LocalLayer, Made,
-    NamedBy, NamedSession, Phase, ProfileHeld, Readiness, SessionFrom, SessionHeld, StreamHeld,
-    SubmissionRead, UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch, LAUNCH_SOURCE,
-    OWN_SOURCE, REPO_SOURCE,
+    AccountFrom, Act, BaseFrom, CarryCause, ClosedBy, ConfigLayer, ConfigValue, Conversation,
+    Given, HoldOn, HostConfiguration, IntentKey, Kept, KindFrom, LabelHeld, LiveProcess,
+    LocalLayer, Made, NamedBy, NamedSession, Phase, ProfileHeld, Readiness, SessionFrom,
+    SessionHeld, StreamHeld, SubmissionRead, UncarriedStart, UnsettledStart, WaitingOn, Waits,
+    Watch, LAUNCH_SOURCE, OWN_SOURCE, REPO_SOURCE,
 };
 use serde_json::{json, Value};
 
@@ -100,7 +101,7 @@ pub fn person(answer: &Answer) -> String {
                     "{}--{} {}; read: flume status {}",
                     collected.kind,
                     collected.name,
-                    flume_core::what_ended(&collected.end.end.of),
+                    flume_core::end_words(&collected.end.end.of),
                     collected.place
                 ));
             }
@@ -346,6 +347,7 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
     }
     if let Some(waiting) = &place.waiting_on {
         lines.push(waiting_line(waiting, place.stalled));
+        lines.extend(kept_open_line(waiting));
     }
     if let Some(wait) = &place.waits_on_session {
         lines.push(session_wait_line(wait));
@@ -495,6 +497,34 @@ fn waiting_line(waiting: &WaitingOn, stalled: bool) -> String {
         _ => {}
     }
     line
+}
+
+/// For a place waiting on an answer, its agent kept open for it and until
+/// when, or when and why it was let go and whether it is ended, left in
+/// its pane or to be ended once quiet; none for any other move, and for
+/// an answer whose agent was never kept open (130, 198).
+fn kept_open_line(waiting: &WaitingOn) -> Option<String> {
+    if let Some(until) = waiting.open_until {
+        return Some(format!(
+            "    its agent kept open for the answer until {until}: retry with --words, or tell it"
+        ));
+    }
+    let closed = waiting.closed?;
+    let why = match closed.by {
+        ClosedBy::Time => "its time passed",
+        ClosedBy::AgentEnded => "its agent ended",
+        ClosedBy::AccountSpent => "its account spent",
+        ClosedBy::Stopped => "its caller stopped it",
+    };
+    let ended = match (closed.ended_at, closed.left_in_pane) {
+        (Some(at), _) => format!("and ended at {at}"),
+        (None, true) => "and left in its pane".to_string(),
+        (None, false) => "and ended once quiet".to_string(),
+    };
+    Some(format!(
+        "    its agent let go at {}, {why}, {ended}: retry with --words",
+        closed.at
+    ))
 }
 
 /// A stage waiting for room while a process runs the conversation its
@@ -1095,6 +1125,9 @@ fn stage_lines(stage: &StageStatus) -> Vec<String> {
         line.push_str(&format!(", refused: {setting}"));
     }
     let mut lines = vec![line];
+    for answer in &stage.answers {
+        lines.push(answer_line(answer));
+    }
     for made in stage.end.iter().flat_map(|end| &end.made) {
         let line = match made {
             Made::Thing(thing) => json!(thing).to_string(),
@@ -1103,6 +1136,22 @@ fn stage_lines(stage: &StageStatus) -> Vec<String> {
         lines.push(format!("    made: {line}"));
     }
     lines
+}
+
+/// An answer a stage's start took in its session: the act it came by,
+/// when it was received, and the question then the answer (42, 56).
+fn answer_line(answer: &SessionAnswer) -> String {
+    let received = answer
+        .answer
+        .session
+        .map(|handed| format!(", received at {}", handed.received_at))
+        .unwrap_or_default();
+    format!(
+        "    answered by {}{received}: asked {}; answered {}",
+        word(json!(answer.answer.act)),
+        answer.question.as_deref().unwrap_or_default(),
+        answer.answer.words
+    )
 }
 
 /// The host's facts, what its terminal's configuration lacks for flume's
@@ -1400,10 +1449,10 @@ mod tests {
         StreamStatus, TitleFrom, TitleHeld, WindowStatus,
     };
     use flume_seams::{
-        AccountFrom, AccountHeld, AccountMove, AgentState, Declared, EndHeld, EndOf, Given, Layer,
-        ModeBegan, MoveOn, MoveWhy, NamedBy, Phase, PlaceId, ProfileHeld, Reading, ReadyStep,
-        Reserved, SessionRuns, StageEnd, StageState, Strategy, StreamFrom, StreamHeld, Unsettled,
-        View, ViewHeld,
+        AccountFrom, AccountHeld, AccountMove, AgentState, AnswerHeld, Declared, EndHeld, EndOf,
+        Given, Handed, Layer, ModeBegan, MoveOn, MoveWhy, NamedBy, Phase, PlaceId, ProfileHeld,
+        Reading, ReadyStep, Reserved, SessionClosed, SessionRuns, StageEnd, StageState, Strategy,
+        StreamFrom, StreamHeld, Unsettled, View, ViewHeld,
     };
     use std::collections::BTreeMap;
 
@@ -3128,15 +3177,18 @@ mod tests {
                     start: 1,
                     state: StageState::Lost,
                     quiet_from: None,
-                    end: StageEnd {
+                    answered: 0,
+                    end: Box::new(StageEnd {
                         left_in_pane: true,
                         ..StageEnd::default()
-                    },
+                    }),
                 },
                 read_at: 54_000,
                 deliveries: vec![],
+                answer: None,
             },
             pending_for: vec!["ops".into()],
+            open_until: None,
         };
         let place = PlaceStatus {
             agent: Some(AgentStatus {
@@ -3174,6 +3226,207 @@ mod tests {
         assert_eq!(
             person(&inbox),
             "research--one talk lost, and flume left the agent the terminal brought back in its pane; read: flume status /d/places/1/research--one"
+        );
+    }
+
+    /// A place waiting on a retry of code for its answer since 1000, the
+    /// question asked, its agent kept open until `open_until` or let go
+    /// as `closed` records.
+    fn asking(open_until: Option<u64>, closed: Option<SessionClosed>) -> PlaceStatus {
+        PlaceStatus {
+            waiting_on: Some(WaitingOn {
+                act: Act::Retry,
+                stage: Some("code".into()),
+                why: Waits::Answer,
+                since: Some(1000),
+                words: Some("Which file holds the log?".into()),
+                open_until,
+                closed,
+            }),
+            ..a_place()
+        }
+    }
+
+    /// The lines of `place` from its move's on.
+    fn from_the_move(place: &PlaceStatus) -> Vec<String> {
+        let lines = place_lines(place);
+        let at = lines
+            .iter()
+            .position(|line| line.starts_with("  waits on its caller"))
+            .expect("the move's line");
+        lines[at..].iter().take(2).cloned().collect()
+    }
+
+    const ASKS: &str =
+        "  waits on its caller to retry code (answer) since 1000: Which file holds the log?";
+
+    #[test]
+    fn an_agent_kept_open() {
+        // 130, 198: the move's line, then until when its agent is kept
+        // open for the answer and how to give it.
+        assert_eq!(
+            from_the_move(&asking(Some(4600), None)),
+            vec![
+                ASKS.to_string(),
+                "    its agent kept open for the answer until 4600: retry with --words, or tell it"
+                    .to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_agent_let_go_and_ended() {
+        // 130, 198, S104: let go by its time, ended in the same settle.
+        let closed = SessionClosed {
+            at: 4600,
+            by: ClosedBy::Time,
+            ended_at: Some(4600),
+            left_in_pane: false,
+        };
+        assert_eq!(
+            from_the_move(&asking(None, Some(closed))),
+            vec![
+                ASKS.to_string(),
+                "    its agent let go at 4600, its time passed, and ended at 4600: retry with --words"
+                    .to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_agent_let_go_and_to_be_ended_once_quiet() {
+        // 31, 146, 198: let go by its account spent while it works, to be
+        // ended once a settle reads it quiet.
+        let closed = SessionClosed {
+            at: 2200,
+            by: ClosedBy::AccountSpent,
+            ended_at: None,
+            left_in_pane: false,
+        };
+        assert_eq!(
+            from_the_move(&asking(None, Some(closed)))[1],
+            "    its agent let go at 2200, its account spent, and ended once quiet: retry with --words"
+        );
+    }
+
+    #[test]
+    fn an_agent_stopped_by_its_caller() {
+        // 51, 198: a caller's stop lets it go, its agent ended by the stop.
+        let closed = SessionClosed {
+            at: 1500,
+            by: ClosedBy::Stopped,
+            ended_at: Some(1500),
+            left_in_pane: false,
+        };
+        assert_eq!(
+            from_the_move(&asking(None, Some(closed)))[1],
+            "    its agent let go at 1500, its caller stopped it, and ended at 1500: retry with --words"
+        );
+    }
+
+    #[test]
+    fn a_bare_agent_left_in_its_pane() {
+        // 77, 198; core.10: a conversation's agent brought back bare in its
+        // pane lets it go as ended, and is left there.
+        let closed = SessionClosed {
+            at: 1800,
+            by: ClosedBy::AgentEnded,
+            ended_at: None,
+            left_in_pane: true,
+        };
+        assert_eq!(
+            from_the_move(&asking(None, Some(closed)))[1],
+            "    its agent let go at 1800, its agent ended, and left in its pane: retry with --words"
+        );
+    }
+
+    #[test]
+    fn a_move_with_no_agent_kept_open_gives_no_line_for_one() {
+        // 130: a stop-short whose terminal hands a running agent no words
+        // gives its move alone.
+        let place = asking(None, None);
+        let lines = place_lines(&place);
+        assert!(lines.contains(&ASKS.to_string()), "{lines:#?}");
+        assert!(
+            !lines.iter().any(|line| line.contains("its agent")),
+            "{lines:#?}"
+        );
+    }
+
+    #[test]
+    fn two_answers() {
+        // 42, 56: each answer code's start took in its session on a line of
+        // its own beneath the stage, by its act, when it was received, the
+        // question and the answer.
+        let answer = |question: &str, words: &str, act, at| SessionAnswer {
+            question: Some(question.into()),
+            answer: AnswerHeld {
+                words: words.into(),
+                act,
+                at,
+                session: Some(Handed {
+                    sent_at: at,
+                    received_at: at + 5,
+                }),
+            },
+        };
+        let stage = StageStatus {
+            name: "code".into(),
+            state: StageState::Begun,
+            starts: 1,
+            end: None,
+            refused_part: None,
+            refused_setting: None,
+            conversation: false,
+            group: None,
+            answers: vec![
+                answer("Which file holds the log?", "notes.md", Act::Retry, 1200),
+                answer("Which test covers it?", "the walkthrough", Act::Tell, 2400),
+            ],
+        };
+        assert_eq!(
+            stage_lines(&stage),
+            vec![
+                "  stage code: begun, started 1 times".to_string(),
+                "    answered by retry, received at 1205: asked Which file holds the log?; answered notes.md".to_string(),
+                "    answered by tell, received at 2405: asked Which test covers it?; answered the walkthrough".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_stop_shorts_end_kept_open_in_the_inbox() {
+        // 43, 198: the inbox gives a stop-short's end in the notice's
+        // words, until when its agent is kept open among them.
+        let end = EndHeld {
+            of: EndOf::Stage {
+                stage: "code".into(),
+                start: 1,
+                state: StageState::EndedShort,
+                quiet_from: None,
+                answered: 0,
+                end: Box::new(StageEnd {
+                    words: Some("Which file holds the log?".into()),
+                    open_until: Some(4600),
+                    ..StageEnd::default()
+                }),
+            },
+            read_at: 1000,
+            deliveries: vec![],
+            answer: None,
+        };
+        let inbox = Answer::Inbox {
+            recipient: "ops".into(),
+            ends: vec![flume_core::Collected {
+                place: PlaceId::new("/d/places/1/fix--one"),
+                kind: "fix".into(),
+                name: "one".into(),
+                end: EndStatus::of(&end, &["ops".to_string()]),
+            }],
+        };
+        assert_eq!(
+            person(&inbox),
+            "fix--one code needs an answer, its agent kept open for the answer until 4600; read: flume status /d/places/1/fix--one"
         );
     }
 
@@ -3255,6 +3508,7 @@ mod tests {
                 number: Some("2".into()),
                 title: Some("Two".into()),
             }),
+            answers: vec![],
         };
         assert_eq!(
             stage_lines(&stage),
@@ -3700,6 +3954,8 @@ mod tests {
             why: Waits::OnHold,
             since: Some(54_000),
             words: Some("Wait until the release is cut.".into()),
+            open_until: None,
+            closed: None,
         };
         assert_eq!(
             waiting_line(&held, false),
@@ -3728,6 +3984,8 @@ mod tests {
                 "New MCP server found in .mcp.json: docs\n\u{1b}[1m\u{276f} 1. Use this and all future MCP servers\u{1b}[0m"
                     .into(),
             ),
+            open_until: None,
+            closed: None,
         };
         assert_eq!(
             waiting_line(&dialog, false),

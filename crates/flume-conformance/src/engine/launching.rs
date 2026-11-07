@@ -341,6 +341,8 @@ fn the_first_stage_on_hold(_: &()) -> Outcome {
             why: Waits::OnHold,
             since: Some(now),
             words: Some(words.into()),
+            open_until: None,
+            closed: None,
         }),
         "the move the place waits on"
     );

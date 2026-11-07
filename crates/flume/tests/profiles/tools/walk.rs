@@ -18,9 +18,15 @@
 //! scratch home with no multiplexer's session, no flume, sluice or Claude
 //! Code session of the caller's, no credential and no forge (core.6,
 //! core.22, core.29): the remote is a directory, and sluice's checkouts
-//! keep their scratch in the walkthrough's own folder. A walkthrough
-//! under herdr keeps its home behind a short link, so the sockets of its
-//! sessions fit, and its sessions' servers are stopped when it ends.
+//! keep their scratch in the walkthrough's own folder. A walkthrough may
+//! run under the pinned herdr instead (design 10): its agents in panes of
+//! flume's own herdr session, started headless on the walkthrough's
+//! scratch home, which it keeps behind a short link so the sockets of its
+//! sessions fit, each start of the stand-in acting its own script, and
+//! its sessions' servers stopped when it ends; and a test may start a
+//! herdr server of its own, on a scratch socket and home, to run the
+//! stand-in in one of its panes. Every herdr call a test makes is bounded
+//! (core.29).
 
 use crate::common::*;
 use flume::profiles::place::git_worktree;
@@ -95,6 +101,9 @@ pub struct Walk {
     /// The stand-in's account's `CLAUDE_CONFIG_DIR`, none for the
     /// check-live layer, whose configuration names its own account.
     account: Option<PathBuf>,
+    /// The folder the stand-in reads each start's script from, which its
+    /// account gives as `STAND_IN_SCRIPTS`, on a host under herdr.
+    scripts: Option<PathBuf>,
 }
 
 impl Walk {
@@ -158,6 +167,7 @@ impl Walk {
             shell,
             runs: std::cell::Cell::new(0),
             account,
+            scripts: None,
         };
         walk.configure("");
         walk
@@ -221,11 +231,27 @@ impl Walk {
         let mut text = text.to_string();
         if let Some(account) = &self.account {
             text.push_str(&format!(
-                "\n[streams.default]\npool = \"stand-in\"\n\n[pools.stand-in]\nstrategy = \"fill-first\"\naccounts = [{{ name = \"stand-in-1\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?}, CLAUDE_CODE_OAUTH_TOKEN = \"{STAND_IN_TOKEN}\" }} }}]\n",
-                account.display().to_string()
+                "\n[streams.default]\npool = \"stand-in\"\n\n[pools.stand-in]\nstrategy = \"fill-first\"\naccounts = [{}]\n",
+                self.stand_in_account("stand-in-1", account)
             ));
         }
         self.configure_whole(&text);
+    }
+
+    /// The stand-in's account `name` as a pool's `accounts` lists it: its
+    /// program `claude`, its `CLAUDE_CONFIG_DIR` the folder `home` and its
+    /// `CLAUDE_CODE_OAUTH_TOKEN` the walk's word, and, on a host under
+    /// herdr, `STAND_IN_SCRIPTS` the walk's folder of scripts (144).
+    pub fn stand_in_account(&self, name: &str, home: &Path) -> String {
+        let scripts = self
+            .scripts
+            .as_ref()
+            .map(|dir| format!(", STAND_IN_SCRIPTS = {:?}", dir.display().to_string()))
+            .unwrap_or_default();
+        format!(
+            "{{ name = {name:?}, program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?}, CLAUDE_CODE_OAUTH_TOKEN = \"{STAND_IN_TOKEN}\"{scripts} }} }}",
+            home.display().to_string()
+        )
     }
 
     /// The host's configuration as `text` gives it whole, its pools and
@@ -603,132 +629,6 @@ exec "$pinned" "$@"
         .expect("the stand-in for sluice made executable");
 }
 
-/// A walkthrough's host under herdr (C.5): the walk, its home a short
-/// link, so the sockets the pinned herdr binds for its sessions beneath
-/// its configuration home fit a socket's path, its sessions' servers
-/// stopped and its link removed when it is dropped.
-pub struct UnderHerdr {
-    pub walk: Walk,
-    pub link: PathBuf,
-}
-
-/// How many short links this run has made, which names the next.
-static LINKS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-
-/// The longest path a socket's address holds on this host, its closing
-/// nul left out.
-fn socket_path_limit() -> usize {
-    // SAFETY: an address of all zeros is a valid `sockaddr_un`.
-    let address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
-    address.sun_path.len() - 1
-}
-
-impl UnderHerdr {
-    /// `walk` under herdr, its home a short link in the temporary folder,
-    /// else in `/tmp` where the run may write there, whose sockets fit for
-    /// the session `longest`, the longest name it opens (core.51).
-    pub fn new(walk: Walk, longest: &str) -> UnderHerdr {
-        // The longest socket the pinned herdr binds for a session,
-        // beneath the configuration home.
-        let socket = format!("config/herdr/sessions/{longest}/herdr-client.sock");
-        let named = format!(
-            "o{}-{}",
-            std::process::id(),
-            LINKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-        );
-        let limit = socket_path_limit();
-        let fits = |folder: &Path| folder.join(&named).join(&socket).as_os_str().len() <= limit;
-        let linked = |folder: &Path| {
-            let link = folder.join(&named);
-            let _ = std::fs::remove_file(&link);
-            std::os::unix::fs::symlink(walk.home(), &link).map(|()| link)
-        };
-        let temporary = std::env::temp_dir();
-        let tmp = PathBuf::from("/tmp");
-        let link = [&temporary, &tmp]
-            .into_iter()
-            .filter(|folder| fits(folder))
-            .find_map(|folder| linked(folder).ok())
-            .unwrap_or_else(|| {
-                let socket = temporary.join(&named).join(&socket);
-                panic!(
-                    "herdr's session {longest} would bind {}, {} bytes, past the {limit} a \
-                     socket's path holds on this host, and /tmp cannot be written",
-                    socket.display(),
-                    socket.as_os_str().len()
-                )
-            });
-        UnderHerdr {
-            walk: walk.with_home(link.clone()),
-            link,
-        }
-    }
-
-    /// herdr's answer for `args` under the host's configuration home, on
-    /// the server at `socket` where one is named.
-    pub fn herdr(&self, socket: Option<&str>, args: &[&str]) -> Value {
-        let mut command = self.walk.command("herdr", &self.walk.repository.dir);
-        command.args(args).stdout(Stdio::piped());
-        if let Some(socket) = socket {
-            command.env("HERDR_SOCKET_PATH", socket);
-        }
-        let output = command.output().expect("herdr runs");
-        let answer: Value = serde_json::from_slice(&output.stdout).unwrap_or(Value::Null);
-        answer.get("result").cloned().unwrap_or(answer)
-    }
-
-    /// The sessions herdr lists running under the host's configuration
-    /// home, by name, with their sockets.
-    pub fn running(&self) -> Vec<(String, String)> {
-        self.herdr(None, &["session", "list", "--json"])["sessions"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|session| session["running"] == Value::Bool(true))
-            .filter_map(|session| {
-                Some((
-                    session["name"].as_str()?.to_string(),
-                    session["socket_path"].as_str()?.to_string(),
-                ))
-            })
-            .collect()
-    }
-
-    /// The socket of the session `name` herdr lists running under the
-    /// host's configuration home.
-    pub fn socket_of(&self, name: &str) -> String {
-        self.running()
-            .into_iter()
-            .find(|(running, _)| running == name)
-            .map(|(_, socket)| socket)
-            .unwrap_or_else(|| panic!("no session {name}: {:?}", self.running()))
-    }
-
-    /// The labels of what herdr lists of `what`, `tab` or `workspace`, on
-    /// the server at `socket`.
-    pub fn labels(&self, socket: &str, what: &str) -> Vec<String> {
-        self.herdr(Some(socket), &[what, "list"])[format!("{what}s")]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|listed| listed["label"].as_str().map(str::to_string))
-            .collect()
-    }
-}
-
-impl Drop for UnderHerdr {
-    fn drop(&mut self) {
-        for (_, socket) in self.running() {
-            let _ = self.herdr(Some(&socket), &["server", "stop"]);
-        }
-        let deadline = Instant::now() + Duration::from_secs(10);
-        while !self.running().is_empty() && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(100));
-        }
-        let _ = std::fs::remove_file(&self.link);
-    }
-}
-
 /// The walk's login shell, written into `dir` as `shell`: run as a login
 /// shell, it runs `/bin/sh` with the rest of its words and `path` for its
 /// `PATH`, so the login environment a place's steps run in names the
@@ -878,4 +778,413 @@ pub fn stage<'a>(status: &'a Value, name: &str) -> &'a Value {
         .flatten()
         .find(|stage| stage["name"] == name)
         .unwrap_or(&Value::Null)
+}
+
+/// The bound on each herdr call a test makes of its own: herdr answers a
+/// local call in milliseconds, and one that does not answer within this
+/// fails the test naming it (core.29).
+pub const HERDR_BOUND: Duration = Duration::from_secs(10);
+
+/// What the pinned herdr's call `command` answers within [`HERDR_BOUND`]:
+/// its `result` where it answers JSON holding one, else its text; its
+/// words where it refuses, or the bound named where it does not answer
+/// within it, the call then killed.
+pub fn herdr_within(command: &mut Command) -> Result<Value, String> {
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("herdr could not be run: {error}"))?;
+    let read = |pipe: Option<Box<dyn std::io::Read + Send>>| {
+        std::thread::spawn(move || {
+            let mut text = String::new();
+            if let Some(mut pipe) = pipe {
+                let _ = pipe.read_to_string(&mut text);
+            }
+            text
+        })
+    };
+    let out = read(child.stdout.take().map(|pipe| Box::new(pipe) as _));
+    let err = read(child.stderr.take().map(|pipe| Box::new(pipe) as _));
+    let began = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if began.elapsed() < HERDR_BOUND => {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!(
+                    "herdr did not answer within {} seconds",
+                    HERDR_BOUND.as_secs()
+                ));
+            }
+        }
+    };
+    let (out, err) = (
+        out.join().unwrap_or_default(),
+        err.join().unwrap_or_default(),
+    );
+    match serde_json::from_str::<Value>(out.trim()) {
+        Ok(answer) if answer.get("result").is_some() => Ok(answer["result"].clone()),
+        _ if status.success() => Ok(Value::String(out)),
+        _ => Err(format!("{out}{err}")),
+    }
+}
+
+/// The pinned herdr, by its own path, the first on the test's `PATH`.
+pub fn pinned_herdr() -> PathBuf {
+    std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|dir| dir.join("herdr"))
+        .find(|candidate| candidate.is_file())
+        .and_then(|found| found.canonicalize().ok())
+        .expect("the pinned herdr on PATH")
+}
+
+/// How many short links this run has made, which names the next.
+static LINKS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+/// A link to `target` short enough that `socket` beneath it fits a
+/// socket's path on this host: in the temporary folder where it fits
+/// there, else in `/tmp` where the run may write there; the test fails
+/// naming what lacked room where neither may hold it (core.51).
+pub fn short_link(target: &Path, socket: &str) -> PathBuf {
+    // SAFETY: an address of all zeros is a valid `sockaddr_un`.
+    let address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+    let limit = address.sun_path.len() - 1;
+    let named = format!(
+        "w{}-{}",
+        std::process::id(),
+        LINKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    );
+    let temporary = std::env::temp_dir();
+    [temporary.clone(), PathBuf::from("/tmp")]
+        .into_iter()
+        .filter(|folder| folder.join(&named).join(socket).as_os_str().len() <= limit)
+        .find_map(|folder| {
+            let link = folder.join(&named);
+            let _ = std::fs::remove_file(&link);
+            std::os::unix::fs::symlink(target, &link)
+                .ok()
+                .map(|()| link)
+        })
+        .unwrap_or_else(|| {
+            let socket = temporary.join(&named).join(socket);
+            panic!(
+                "herdr's socket would be {}, {} bytes, past the {limit} a socket's path holds on \
+                 this host, and /tmp cannot be written",
+                socket.display(),
+                socket.as_os_str().len()
+            )
+        })
+}
+
+/// A herdr server of the test's own, headless on a scratch socket with a
+/// scratch home, its panes' shell `/bin/sh` and its `PATH` herdr's own
+/// folder and the system's, so no herdr session of the host's is touched
+/// and no `HERDR_*` of the caller's reaches it; stopped, its panes with
+/// it, when dropped (core.29).
+pub struct HerdrServer {
+    pub scratch: Scratch,
+    socket: PathBuf,
+    link: PathBuf,
+    child: Option<Child>,
+}
+
+impl HerdrServer {
+    pub fn start(label: &str) -> HerdrServer {
+        let scratch = Scratch::new(label);
+        std::fs::create_dir_all(scratch.path("home")).expect("the server's home");
+        let link = short_link(&scratch.root, "s");
+        let socket = link.join("s");
+        let program = pinned_herdr();
+        let child = Command::new(&program)
+            .arg("server")
+            .env_clear()
+            .env(
+                "PATH",
+                format!(
+                    "{}:/usr/bin:/bin",
+                    program.parent().expect("herdr's folder").display()
+                ),
+            )
+            .env("HOME", scratch.path("home"))
+            .env("SHELL", "/bin/sh")
+            .env("TERM", "xterm-256color")
+            .env("LANG", "en_US.UTF-8")
+            .env("HERDR_SOCKET_PATH", &socket)
+            .current_dir(scratch.path("home"))
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("herdr's server starts");
+        let server = HerdrServer {
+            scratch,
+            socket,
+            link,
+            child: Some(child),
+        };
+        let began = Instant::now();
+        while server.try_herdr(&["workspace", "list"]).is_err() {
+            assert!(
+                began.elapsed() < Duration::from_secs(20),
+                "herdr's server did not answer"
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        server
+    }
+
+    /// herdr's answer to `args` on this server, within the bound.
+    pub fn try_herdr(&self, args: &[&str]) -> Result<Value, String> {
+        let mut command = Command::new(pinned_herdr());
+        for (name, _) in std::env::vars_os() {
+            if name.to_string_lossy().starts_with("HERDR_") {
+                command.env_remove(name);
+            }
+        }
+        herdr_within(
+            command
+                .args(args)
+                .env("HERDR_SOCKET_PATH", &self.socket)
+                .env("HOME", self.scratch.path("home")),
+        )
+    }
+
+    /// herdr's answer to `args` on this server, which it must give.
+    pub fn herdr(&self, args: &[&str]) -> Value {
+        self.try_herdr(args)
+            .unwrap_or_else(|words| panic!("herdr {}: {words}", args.join(" ")))
+    }
+
+    /// A pane of a new workspace in `cwd`: its id.
+    pub fn pane_in(&self, cwd: &Path) -> String {
+        let made = self.herdr(&[
+            "workspace",
+            "create",
+            "--label",
+            "stand-in",
+            "--cwd",
+            &cwd.to_string_lossy(),
+        ]);
+        made["root_pane"]["pane_id"]
+            .as_str()
+            .unwrap_or_else(|| panic!("no pane in {made}"))
+            .to_string()
+    }
+
+    /// The pane as herdr reads it.
+    pub fn pane(&self, pane: &str) -> Value {
+        self.herdr(&["pane", "get", pane])["pane"].clone()
+    }
+
+    /// The text typed into the pane's agent as flume's herdr profile sends
+    /// it: ctrl+c, then `agent prompt` (95).
+    pub fn prompt(&self, pane: &str, text: &str) {
+        self.herdr(&["agent", "send-keys", pane, "ctrl+c"]);
+        self.herdr(&["agent", "prompt", pane, text]);
+    }
+}
+
+impl Drop for HerdrServer {
+    fn drop(&mut self) {
+        let _ = self.try_herdr(&["server", "stop"]);
+        if let Some(mut child) = self.child.take() {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while child.try_wait().ok().flatten().is_none() && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        let _ = std::fs::remove_file(&self.link);
+    }
+}
+
+/// A walkthrough's host under the pinned herdr (C.5; design 10): the
+/// walk, its home a short link so the sockets the pinned herdr binds for
+/// its sessions beneath its configuration home fit a socket's path, every
+/// herdr call it makes itself bounded and passing the session's socket
+/// (core.29), and each session's server running under its home stopped,
+/// its panes with it, and its link removed when it is dropped. Made by
+/// [`Walk::under_herdr`], it runs its agents in panes of flume's own herdr
+/// session, whose server flume's herdr profile starts headless on the
+/// walkthrough's scratch home, never the host's; the stand-in first on the
+/// panes' `PATH` as `claude`, through the login environment the walk's
+/// shell gives; and the walkthrough's account giving `STAND_IN_SCRIPTS`,
+/// the walk's folder of each start's script, beside its scratch
+/// `CLAUDE_CONFIG_DIR` and token.
+pub struct UnderHerdr {
+    pub walk: Walk,
+    pub link: PathBuf,
+}
+
+impl std::ops::Deref for UnderHerdr {
+    type Target = Walk;
+
+    fn deref(&self) -> &Walk {
+        &self.walk
+    }
+}
+
+impl Walk {
+    /// A walkthrough's host under the pinned herdr, its agents in flume's
+    /// own session.
+    pub fn under_herdr(label: &str) -> UnderHerdr {
+        let mut walk = Walk::made(label, true);
+        let scripts = walk.repository.scratch.path("scripts");
+        std::fs::create_dir_all(&scripts).expect("the scripts' folder");
+        walk.scripts = Some(scripts);
+        let host = UnderHerdr::new(walk, own_session());
+        host.configure("", "");
+        host
+    }
+}
+
+impl UnderHerdr {
+    /// `walk` under herdr, its home a short link whose sockets fit for the
+    /// session `longest`, the longest name it opens (core.51).
+    pub fn new(walk: Walk, longest: &str) -> UnderHerdr {
+        // The longest socket the pinned herdr binds for a session,
+        // beneath the configuration home.
+        let socket = format!("config/herdr/sessions/{longest}/herdr-client.sock");
+        let link = short_link(walk.home(), &socket);
+        UnderHerdr {
+            walk: walk.with_home(link.clone()),
+            link,
+        }
+    }
+
+    /// The host's configuration: `[host]` naming herdr with `host`'s keys
+    /// beside, then `rest`, with the stand-in's pool of one account.
+    pub fn configure(&self, host: &str, rest: &str) {
+        self.walk
+            .configure(&format!("[host]\nmultiplexer = \"herdr\"\n{host}\n{rest}"));
+    }
+
+    /// The script the stand-in acts at the start `start` of the stage
+    /// `stage`: its runs, each a list of acts, the first taking the start's
+    /// prompt and each later one the next prompt typed into its session.
+    pub fn script(&self, stage: &str, start: u32, runs: Value) {
+        let file = self.scripts().join(format!("{stage}-{start}.json"));
+        std::fs::write(file, runs.to_string()).expect("the stand-in's script");
+    }
+
+    /// The prompts the stand-in took at the start `start` of `stage`, in
+    /// order, as its log keeps them.
+    pub fn prompts(&self, stage: &str, start: u32) -> Vec<String> {
+        self.log(stage, start)
+            .lines()
+            .filter_map(|line| line.strip_prefix("stand-in: took the prompt: "))
+            .map(|prompt| serde_json::from_str(prompt).expect("a prompt as JSON"))
+            .collect()
+    }
+
+    /// The stand-in's log at the start `start` of `stage`, empty where no
+    /// agent of it ran.
+    pub fn log(&self, stage: &str, start: u32) -> String {
+        std::fs::read_to_string(self.scripts().join(format!("{stage}-{start}.log")))
+            .unwrap_or_default()
+    }
+
+    fn scripts(&self) -> &Path {
+        self.walk.scripts.as_deref().expect("a host under herdr")
+    }
+
+    /// herdr's answer to `args` under the host's configuration home, on
+    /// the server at `socket` where one is named, within the bound: its
+    /// JSON where it answers JSON, else its text, or its words where it
+    /// refuses or does not answer.
+    pub fn try_herdr(&self, socket: Option<&str>, args: &[&str]) -> Result<Value, String> {
+        let mut command = self.walk.command("herdr", &self.walk.repository.dir);
+        command.args(args);
+        if let Some(socket) = socket {
+            command.env("HERDR_SOCKET_PATH", socket);
+        }
+        herdr_within(&mut command).map(|answer| match answer {
+            Value::String(text) => serde_json::from_str(&text).unwrap_or(Value::String(text)),
+            answer => answer,
+        })
+    }
+
+    /// herdr's answer to `args` as [`UnderHerdr::try_herdr`] gives it, or
+    /// null where herdr refused or did not answer within the bound.
+    pub fn herdr(&self, socket: Option<&str>, args: &[&str]) -> Value {
+        self.try_herdr(socket, args).unwrap_or(Value::Null)
+    }
+
+    /// The sessions herdr lists running under the host's configuration
+    /// home, by name, with their sockets.
+    pub fn running(&self) -> Vec<(String, String)> {
+        self.herdr(None, &["session", "list", "--json"])["sessions"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|session| session["running"] == Value::Bool(true))
+            .filter_map(|session| {
+                Some((
+                    session["name"].as_str()?.to_string(),
+                    session["socket_path"].as_str()?.to_string(),
+                ))
+            })
+            .collect()
+    }
+
+    /// The socket of the session `name` herdr lists running under the
+    /// host's configuration home.
+    pub fn socket_of(&self, name: &str) -> String {
+        self.running()
+            .into_iter()
+            .find(|(running, _)| running == name)
+            .map(|(_, socket)| socket)
+            .unwrap_or_else(|| panic!("no session {name}: {:?}", self.running()))
+    }
+
+    /// The labels of what herdr lists of `what`, `tab` or `workspace`, on
+    /// the server at `socket`.
+    pub fn labels(&self, socket: &str, what: &str) -> Vec<String> {
+        self.herdr(Some(socket), &[what, "list"])[format!("{what}s")]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|listed| listed["label"].as_str().map(str::to_string))
+            .collect()
+    }
+
+    /// The panes of flume's own session, as herdr lists them.
+    pub fn panes(&self) -> Vec<Value> {
+        let Some((_, socket)) = self
+            .running()
+            .into_iter()
+            .find(|(name, _)| name == own_session())
+        else {
+            return vec![];
+        };
+        self.herdr(Some(&socket), &["pane", "list"])["panes"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+    }
+}
+
+/// The name of flume's own herdr session.
+fn own_session() -> &'static str {
+    flume::profiles::terminal::herdr::SESSION
+}
+
+impl Drop for UnderHerdr {
+    fn drop(&mut self) {
+        for (_, socket) in self.running() {
+            let _ = self.try_herdr(Some(&socket), &["server", "stop"]);
+        }
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !self.running().is_empty() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let _ = std::fs::remove_file(&self.link);
+    }
 }

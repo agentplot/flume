@@ -11,10 +11,12 @@
 //! `[kinds.<kind>.agents]` and `[repos."<repository>".kinds.<kind>.agents]`
 //! tables, each naming one stage's by a further `.stages.<stage>` table,
 //! give a kind's agents in every repository and in one their `model`,
-//! `effort`, `instructions` and `mode`, each kept as written, an effort
-//! its program's own word, a mode one of flume's four or a table of
-//! programs whose entries are strings (32, 162, 169, 197, C.7; records
-//! 0017, 0020, 0024, 0044); a
+//! `effort`, `instructions`, `mode` and `keep_open`, each kept as
+//! written, an effort its program's own word, a mode one of flume's four
+//! or a table of programs whose entries are strings, and `keep_open`, how
+//! long an agent is kept open for an answer, one time for every program,
+//! `<n>`, `<n>s`, `<n>m` or `<n>h` (32, 162, 169, 197, 198, C.7; records
+//! 0017, 0020, 0024, 0044, 0046); a
 //! repository's key has a leading `~` read as the home, so it names the
 //! repository by its location as a launch does. Its
 //! `[repos."<repository>".agents]` gives the same for every kind in one
@@ -74,10 +76,11 @@
 
 use crate::profiles::kinds::weir::source_fault;
 use flume_seams::{
-    is_address, Account, ConfigLayer, ConfigValue, HostConfiguration, HostSource, HostSourceRead,
-    KindSessions, KindSettings, LabelFrom, LabelHeld, LocalLayer, NamedBy, PinnedKey, Pool,
-    PoolFrom, PoolNamed, ProfileHeld, RoleRun, Settings, Share, StageSession, StandingAgent,
-    Strategy, Stream, StreamDisplay, StreamFrom, StreamHeld, View, ViewHeld, DEFAULT_STREAM, SET,
+    is_address, read_span, Account, ConfigLayer, ConfigValue, HostConfiguration, HostSource,
+    HostSourceRead, KindSessions, KindSettings, LabelFrom, LabelHeld, LocalLayer, NamedBy,
+    PinnedKey, Pool, PoolFrom, PoolNamed, ProfileHeld, RoleRun, Settings, Share, StageSession,
+    StandingAgent, Strategy, Stream, StreamDisplay, StreamFrom, StreamHeld, View, ViewHeld,
+    DEFAULT_STREAM, SET,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -1648,13 +1651,13 @@ fn refuse(table: &Table, at: &str, whose: &str, names: &[&str]) -> Result<(), St
     ))
 }
 
-/// One agents table's `model`, `effort`, `instructions`, `mode` and
-/// `programs`, each as written, the effort a string, its program's own
-/// word, which the agent's profile takes or refuses (197), the mode read
-/// as a declaration's is (162, 169), and
-/// `programs` by flume's one reader of them, a file read by
-/// [`host_file`] (195); any other key, `stages` among them, is not a
-/// setting of the host's (32, C.7; record 0020).
+/// One agents table's `model`, `effort`, `instructions`, `mode`,
+/// `keep_open` and `programs`, each as written, the effort a string, its
+/// program's own word, which the agent's profile takes or refuses (197),
+/// the mode read as a declaration's is (162, 169), `keep_open` by
+/// [`keep_open_of`] (198), and `programs` by flume's one reader of them, a
+/// file read by [`host_file`] (195); any other key, `stages` among them,
+/// is not a setting of the host's (32, C.7; record 0020).
 fn agent_settings(table: &Table, at: &str, directory: &Path) -> Result<Settings, String> {
     let text = |name: &str| match table.get(name) {
         None => Ok(None),
@@ -1677,8 +1680,30 @@ fn agent_settings(table: &Table, at: &str, directory: &Path) -> Result<Settings,
         instructions: text("instructions")?,
         mode,
         programs,
+        keep_open: keep_open_of(table, at)?,
         ..Settings::default()
     })
+}
+
+/// An agents table's `keep_open` at `at`, how long its agents are kept
+/// open for an answer: a string [`read_span`] takes, kept as written,
+/// none where the table gives none; any other value, a table of programs
+/// among them, refused naming the table and the key, since it is flume's
+/// one time for every program (32, 198, C.7).
+fn keep_open_of(table: &Table, at: &str) -> Result<Option<String>, String> {
+    match table.get("keep_open") {
+        None => Ok(None),
+        Some(Value::String(written)) => read_span(written)
+            .map(|_| Some(written.clone()))
+            .map_err(|reason| format!("{at}.keep_open: {reason}")),
+        Some(Value::Table(_)) => Err(format!(
+            "{at}.keep_open is one time for every program, never a table of programs: \
+             it is <n>, <n>s, <n>m or <n>h"
+        )),
+        Some(_) => Err(format!(
+            "{at}.keep_open is not a string: it is <n>, <n>s, <n>m or <n>h"
+        )),
+    }
 }
 
 /// A settings file a host's agents table names at `written`, read on the
@@ -1897,6 +1922,129 @@ mod tests {
             refused.contains("kinds.change.agents") && refused.contains("model"),
             "{refused}"
         );
+    }
+
+    #[test]
+    fn a_keep_open_for_a_kind_and_for_one_stage() {
+        // 32, 198, C.7: the store-profile spec's "A time for a kind and
+        // for one stage", each kept as written, in the managed layer and
+        // the local one over it.
+        let text = "[kinds.change.agents]\nkeep_open = \"30m\"\n\
+             [kinds.change.agents.stages.verify]\nkeep_open = \"0\"\n";
+        let config = HostConfig::parse(text).unwrap();
+        let change = &config.kinds["change"];
+        assert_eq!(change.every_stage.keep_open.as_deref(), Some("30m"));
+        assert_eq!(change.stages["verify"].keep_open.as_deref(), Some("0"));
+        let config = HostConfig::layers(
+            text,
+            Some("[kinds.change.agents.stages.verify]\nkeep_open = \"90s\"\n"),
+        )
+        .unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        let change = &config.kinds["change"];
+        assert_eq!(change.every_stage.keep_open.as_deref(), Some("30m"));
+        assert_eq!(change.stages["verify"].keep_open.as_deref(), Some("90s"));
+        assert_eq!(
+            value_at(&config, "kinds.change.agents.stages.verify.keep_open"),
+            Some(("\"90s\"".into(), ConfigLayer::Local))
+        );
+    }
+
+    #[test]
+    fn a_keep_open_for_a_stream_and_for_every_agent() {
+        // 32, 143, 198, C.7: the store-profile spec's "A time for a stream
+        // and for every agent", and a repository's for every kind and for
+        // one kind, each as written.
+        let config = HostConfig::parse(
+            "[streams.work]\n\
+             [agents.streams.work]\nkeep_open = \"10m\"\n\
+             [agents]\nkeep_open = \"45m\"\n\
+             [repos.\"/r\".agents]\nkeep_open = \"2h\"\n\
+             [repos.\"/r\".kinds.fix.agents.stages.code]\nkeep_open = \"5m\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            config.streams_agents["work"].keep_open.as_deref(),
+            Some("10m")
+        );
+        assert_eq!(config.every_agent.keep_open.as_deref(), Some("45m"));
+        assert_eq!(config.repos_agents["/r"].keep_open.as_deref(), Some("2h"));
+        assert_eq!(
+            config.repos["/r"]["fix"].stages["code"]
+                .keep_open
+                .as_deref(),
+            Some("5m")
+        );
+        let config = HostConfig::layers(
+            "[streams.work]\n[agents]\nkeep_open = \"45m\"\n",
+            Some("[agents]\nkeep_open = \"15m\"\n[agents.streams.work]\nkeep_open = \"1h\"\n"),
+        )
+        .unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        assert_eq!(config.every_agent.keep_open.as_deref(), Some("15m"));
+        assert_eq!(
+            config.streams_agents["work"].keep_open.as_deref(),
+            Some("1h")
+        );
+    }
+
+    #[test]
+    fn a_keep_open_in_another_form_is_refused() {
+        // C.7: the store-profile spec's "A time in another form", named by
+        // its table and key with the forms it takes; a local one so
+        // refused leaves the local layer untaken, naming why.
+        let forms = "<n>, <n>s, <n>m or <n>h";
+        for (text, named) in [
+            (
+                "[kinds.fix.agents]\nkeep_open = \"an hour\"\n",
+                "kinds.fix.agents.keep_open",
+            ),
+            (
+                "[kinds.fix.agents.stages.code]\nkeep_open = \"+5m\"\n",
+                "kinds.fix.agents.stages.code.keep_open",
+            ),
+            ("[agents]\nkeep_open = 3600\n", "agents.keep_open"),
+        ] {
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(
+                refused.contains(named) && refused.contains(forms),
+                "{text}: {refused}"
+            );
+        }
+        let config = HostConfig::layers(
+            "[agents]\nkeep_open = \"1h\"\n",
+            Some("[kinds.fix.agents]\nkeep_open = \"an hour\"\n"),
+        )
+        .unwrap();
+        let LocalLayer::NotTaken { fault, .. } = &config.configuration.local else {
+            panic!("the local layer taken: {:?}", config.configuration.local);
+        };
+        let fault = fault.as_deref().unwrap_or_default();
+        assert!(fault.contains("kinds.fix.agents.keep_open"), "{fault}");
+        assert_eq!(config.every_agent.keep_open.as_deref(), Some("1h"));
+        assert!(!config.kinds.contains_key("fix"), "the managed layer alone");
+    }
+
+    #[test]
+    fn a_keep_open_table_of_programs_is_refused() {
+        // 198, C.7: the store-profile spec's "A table of programs": one
+        // time for every program, never a table.
+        for (text, named) in [
+            (
+                "[agents]\nkeep_open = { agent = \"1h\" }\n",
+                "agents.keep_open",
+            ),
+            (
+                "[repos.\"/r\".kinds.fix.agents.stages.code.keep_open]\nagent = \"1h\"\n",
+                "repos.\"/r\".kinds.fix.agents.stages.code.keep_open",
+            ),
+        ] {
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(
+                refused.contains(named) && refused.contains("one time for every program"),
+                "{text}: {refused}"
+            );
+        }
     }
 
     #[test]

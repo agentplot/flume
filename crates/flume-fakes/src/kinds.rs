@@ -333,7 +333,7 @@ impl Kinds for FakeKinds {
             KindsRead::Read { kinds, agents, .. } => KindsRead::Read {
                 kinds,
                 settings: given,
-                agents: every_kind.unwrap_or(agents),
+                agents: every_kind.map_or(agents, Box::new),
             },
             refused => refused,
         })
@@ -549,6 +549,6 @@ fn read(kinds: Vec<Kind>) -> KindsRead {
     KindsRead::Read {
         kinds,
         settings: BTreeMap::new(),
-        agents: Settings::default(),
+        agents: Box::default(),
     }
 }

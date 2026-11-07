@@ -504,12 +504,37 @@ pub enum Cache {
 }
 
 /// An end of a place as status gives it: what ended and what was read of
-/// it, each delivery, and the recipients it stands pending for (43).
+/// it, the answer that answered a stop-short once one did, each delivery,
+/// and the recipients it stands pending for (42, 43).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EndStatus {
     #[serde(flatten)]
     pub end: EndHeld,
     pub pending_for: Vec<String>,
+    /// For a stop-short's end, the time its agent was kept open for the
+    /// answer until when the end was read; none where it was not kept
+    /// open, and for every other end (43, 198).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub open_until: Option<Seconds>,
+}
+
+impl EndStatus {
+    /// The end `end` as status gives it to a place whose recipients are
+    /// `recipients` (43, 198).
+    pub fn of(end: &EndHeld, recipients: &[String]) -> EndStatus {
+        EndStatus {
+            end: end.clone(),
+            pending_for: end.pending(recipients),
+            open_until: match &end.of {
+                EndOf::Stage {
+                    state: StageState::EndedShort,
+                    end,
+                    ..
+                } => end.open_until,
+                _ => None,
+            },
+        }
+    }
 }
 
 /// An end the inbox collected: the place it is of, by its location and
@@ -1011,6 +1036,22 @@ pub struct StageStatus {
     /// head when status is asked (56, 58, 142).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<GroupStatus>,
+    /// Each answer the stage's current start took in its session, in the
+    /// order it took them, each with the question it answered (42, 56,
+    /// 198).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub answers: Vec<SessionAnswer>,
+}
+
+/// An answer a stage's start took in its session: the stop-short's words
+/// it answered, whole, and the answer's words, the act it came by, when
+/// flume took it and when it was sent and received there (42, 54, 56,
+/// 198).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionAnswer {
+    pub question: Option<String>,
+    #[serde(flatten)]
+    pub answer: AnswerHeld,
 }
 
 impl StageStatus {
@@ -1187,8 +1228,8 @@ pub struct AgentSettings {
     pub settings: Settings,
     pub env: BTreeMap<String, String>,
     /// Each setting's layer and value as written, by `program`, `model`,
-    /// `instructions` or `env.<NAME>`, an environment variable's value
-    /// [`flume_seams::SET`] and its layer `account`.
+    /// `instructions`, `mode`, `keep_open` or `env.<NAME>`, an environment
+    /// variable's value [`flume_seams::SET`] and its layer `account`.
     #[serde(default)]
     pub from: BTreeMap<String, Given>,
 }

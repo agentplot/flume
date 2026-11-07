@@ -5,9 +5,11 @@
 //! in the pinned release's program, a fresh clone's place equipped by the
 //! pinned sluice, the walkthroughs, the built binary with the stand-in
 //! for Claude Code (design 18), among them a standing agent under the
-//! pinned herdr taking a fix's end (132), and a stream's view opened
-//! through the binary under the pinned herdr (S90, S91). Built only with
-//! the `tools` feature.
+//! pinned herdr taking a fix's end (132), a stream's view opened through
+//! the binary under the pinned herdr (S90, S91), and the agent kept open
+//! for its answer through the binary under the pinned herdr, the
+//! stand-in in its panes (S4, S104, S105). Built only with the `tools`
+//! feature.
 
 #[path = "../../common/mod.rs"]
 mod common;
@@ -15,6 +17,7 @@ mod common;
 mod claude_words;
 mod merge_queue_sluice;
 mod open;
+mod open_sessions;
 mod place_git_worktree;
 mod stand_in;
 mod terminal_herdr;

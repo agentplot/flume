@@ -57,6 +57,7 @@ launched ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
   branch fix/the-parser-reads-tabs from main, head 84130b3cd2adae9a0ac2117884849d513da80181
   stage code: starting, started 1 times
   agent flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:1 (claude): unknown
+    keep_open = 1h (from default)
     program = claude (from default)
     run: cd ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs && FLUME_AGENT=flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:1 FLUME_PLACE=~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs FLUME_SECRET=3c1a… FLUME_STAGE=code claude --plugin-dir ~/.local/share/flume/plugins/claude/0.0.0-5d294893e56e 'You are the code stage of the fix the-parser-reads-tabs, …'
   the deliverable is missing

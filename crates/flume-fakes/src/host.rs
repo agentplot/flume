@@ -18,16 +18,22 @@ use std::sync::{Arc, Condvar, Mutex};
 /// its kinds with where their files and its lock lie, the runs and the
 /// standing agents it names for roles' addresses, each apart from the
 /// other, the recipient the calling command's environment names, the
-/// host user's login
-/// environment, and an exclusive room lock. It reads no configuration
-/// file and no reading's file (106, 184).
+/// host user's login environment, an exclusive room lock, and what
+/// another process does while a command sleeps. It reads no
+/// configuration file and no reading's file (106, 184).
 pub struct FakeHost {
     state: Mutex<HostState>,
     room: Arc<Room>,
+    /// What runs at the next sleep, once, as another process acts while a
+    /// command of flume's sleeps on the clock.
+    asleep: Mutex<Vec<Asleep>>,
     pub log: Log,
     /// The lines written to the host's log (139).
     pub logged: Log,
 }
+
+/// What another process does while a command sleeps.
+type Asleep = Box<dyn FnOnce() + Send>;
 
 /// A multiplexer, a view and a terminal app, each named or not.
 #[derive(Clone, Default)]
@@ -144,6 +150,7 @@ impl Default for FakeHost {
                 configuration: HostConfiguration::default(),
             }),
             room: Arc::default(),
+            asleep: Mutex::default(),
             log: Log::default(),
             logged: Log::default(),
         }
@@ -153,6 +160,13 @@ impl Default for FakeHost {
 impl FakeHost {
     pub fn advance(&self, seconds: Seconds) {
         lock(&self.state).now += seconds;
+    }
+
+    /// `then` runs once, at the next sleep, once the clock has moved: as
+    /// another process acts while a command of flume's sleeps on the
+    /// clock, a settle an agent's quiet started among them (121, 198).
+    pub fn at_next_sleep(&self, then: impl FnOnce() + Send + 'static) {
+        lock(&self.asleep).push(Box::new(then));
     }
 
     /// A file written at the clock's now.
@@ -482,6 +496,10 @@ impl Host for FakeHost {
     fn sleep(&self, seconds: Seconds) {
         self.log.push(format!("sleep {seconds}"));
         self.advance(seconds);
+        let asleep = std::mem::take(&mut *lock(&self.asleep));
+        for then in asleep {
+            then();
+        }
     }
 
     fn secret(&self) -> Secret {
