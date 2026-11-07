@@ -76,6 +76,19 @@ pub fn missing(answer: &str, json: &Value) -> Vec<String> {
         .collect()
 }
 
+/// An answer handed to a session, taken by a retry (42, 54).
+fn answered() -> AnswerHeld {
+    AnswerHeld {
+        words: "the queue".into(),
+        act: Act::Retry,
+        at: 300,
+        session: Some(Handed {
+            sent_at: 301,
+            received_at: 305,
+        }),
+    }
+}
+
 fn settings() -> Settings {
     Settings {
         program: Some("agent".into()),
@@ -163,8 +176,13 @@ fn place_status() -> PlaceStatus {
             starts: 2,
             end: Some(StageEnd {
                 left_in_pane: true,
-                open_until: None,
-                closed: None,
+                open_until: Some(3720),
+                closed: Some(SessionClosed {
+                    at: 3720,
+                    by: ClosedBy::Time,
+                    ended_at: None,
+                    left_in_pane: true,
+                }),
                 head: Some(Revision::new("c3")),
                 report: Some("/s/conclusion.md".into()),
                 words: Some("which design?".into()),
@@ -190,6 +208,10 @@ fn place_status() -> PlaceStatus {
                 number: Some("2".into()),
                 title: Some("Two".into()),
             }),
+            answers: vec![SessionAnswer {
+                question: Some("which design?".into()),
+                answer: answered(),
+            }],
         }],
         current: Some("code".into()),
         agent: Some(AgentStatus {
@@ -296,8 +318,13 @@ fn place_status() -> PlaceStatus {
             why: Waits::Answer,
             since: Some(120),
             words: Some("which design?".into()),
-            open_until: None,
-            closed: None,
+            open_until: Some(3720),
+            closed: Some(SessionClosed {
+                at: 3720,
+                by: ClosedBy::Time,
+                ended_at: Some(3720),
+                left_in_pane: true,
+            }),
         }),
         stalled: true,
         waits_on_session: Some(SessionWait {
@@ -409,9 +436,10 @@ fn place_status() -> PlaceStatus {
                         at: 111,
                         by: DeliveredBy::Notice,
                     }],
-                    answer: None,
+                    answer: Some(answered()),
                 },
                 pending_for: vec![],
+                open_until: Some(3720),
             },
             EndStatus {
                 end: EndHeld {
@@ -424,6 +452,7 @@ fn place_status() -> PlaceStatus {
                     answer: None,
                 },
                 pending_for: vec!["operator".into()],
+                open_until: None,
             },
             EndStatus {
                 end: EndHeld {
@@ -440,6 +469,7 @@ fn place_status() -> PlaceStatus {
                     answer: None,
                 },
                 pending_for: vec!["operator".into()],
+                open_until: None,
             },
         ],
         role: Some("madswan/planner".into()),
@@ -1292,6 +1322,33 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].agent.conversation.cause",
             "status.places[].agent.left_in_pane",
             "status.places[].stages[].end.left_in_pane",
+            "status.places[].stages[].end.open_until",
+            "status.places[].stages[].end.closed",
+            "status.places[].stages[].end.closed.at",
+            "status.places[].stages[].end.closed.by",
+            "status.places[].stages[].end.closed.left_in_pane",
+            "status.places[].stages[].answers",
+            "status.places[].stages[].answers[].act",
+            "status.places[].stages[].answers[].at",
+            "status.places[].stages[].answers[].question",
+            "status.places[].stages[].answers[].session",
+            "status.places[].stages[].answers[].session.received_at",
+            "status.places[].stages[].answers[].session.sent_at",
+            "status.places[].stages[].answers[].words",
+            "status.places[].ends[].open_until",
+            "status.places[].ends[].answer",
+            "status.places[].ends[].answer.act",
+            "status.places[].ends[].answer.at",
+            "status.places[].ends[].answer.session",
+            "status.places[].ends[].answer.session.received_at",
+            "status.places[].ends[].answer.session.sent_at",
+            "status.places[].ends[].answer.words",
+            "status.places[].waiting_on.open_until",
+            "status.places[].waiting_on.closed",
+            "status.places[].waiting_on.closed.at",
+            "status.places[].waiting_on.closed.by",
+            "status.places[].waiting_on.closed.ended_at",
+            "status.places[].waiting_on.closed.left_in_pane",
             "status.places[].waits_on_session",
             "status.places[].waits_on_session.processes",
             "status.places[].waits_on_session.processes[].pid",

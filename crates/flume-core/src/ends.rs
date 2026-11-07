@@ -18,14 +18,33 @@ use crate::{Engine, Step};
 use flume_seams::*;
 use std::collections::BTreeMap;
 
-/// The one line a notice is: the place, what ended, and the command that
-/// reads it whole (43, design 2).
+/// The one line a notice is: the place, what ended, until when a
+/// stop-short's agent is kept open for its answer, and the command that
+/// reads it whole (43, 198, design 2).
 pub fn notice(place: &PlaceRecord, of: &EndOf) -> String {
     let short = place.short();
     format!(
         "flume: {short} {}; read: flume status {short}",
-        what_ended(of)
+        end_words(of)
     )
+}
+
+/// What ended, in the words a notice and the inbox give it: what ended,
+/// and for a stop-short whose agent was kept open for its answer when it
+/// was read, until when (43, 198).
+pub fn end_words(of: &EndOf) -> String {
+    let what = what_ended(of);
+    match of {
+        EndOf::Stage {
+            state: StageState::EndedShort,
+            end,
+            ..
+        } => match end.open_until {
+            Some(until) => format!("{what}, its agent kept open for the answer until {until}"),
+            None => what,
+        },
+        _ => what,
+    }
 }
 
 /// What ended, in the words a notice gives it, a repetition's end naming

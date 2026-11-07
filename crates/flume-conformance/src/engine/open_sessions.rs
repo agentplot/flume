@@ -167,6 +167,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: unsettled_after_a_retry,
         },
         Scenario {
+            name: "end delivery: a code agent stopping short needing an answer at t, on a terminal that hands a running agent words, has its end delivered to ops giving its agent kept open until t and one hour, in the JSON form and in the notice's words",
+            cites: &["43", "42"],
+            run: the_notice_of_a_question,
+        },
+        Scenario {
             name: "end delivery: a caller's wait on code, having delivered its stop-short, waits again once it answered in code's session: the wait does not answer the stop-short as a read, and answers code's next end once it is read",
             cites: &["43", "42"],
             run: waiting_again_after_an_answer,
@@ -175,7 +180,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
 }
 
 /// The question every asking agent here stops short with.
-const QUESTION: &str = "Which file holds the log?";
+pub(super) const QUESTION: &str = "Which file holds the log?";
 
 /// The question and `answer` as a retry's prompt and an answer handed to
 /// a session give them (42, 49).
@@ -184,7 +189,7 @@ fn asked(answer: &str) -> String {
 }
 
 /// The act was taken.
-fn taken(answer: &flume_core::Answer) -> Outcome {
+pub(super) fn taken(answer: &flume_core::Answer) -> Outcome {
     match answer.refusal() {
         Some(reason) => Err(format!("the act was refused: {reason}")),
         None => Ok(()),
@@ -281,7 +286,7 @@ fn answered_in_session(
 }
 
 /// The fix `name`'s code start `start`.
-fn code(name: &str, start: u32) -> Identity {
+pub(super) fn code(name: &str, start: u32) -> Identity {
     World::identity("fix", name, "code", start)
 }
 
@@ -297,7 +302,7 @@ fn secret(world: &World, id: &PlaceId, index: usize) -> Result<String, String> {
 
 /// The agent `who` of the place's stage at `index` stops short with
 /// `words` as `kind`, taken; the time it stopped short.
-fn stops_short(
+pub(super) fn stops_short(
     world: &World,
     id: &PlaceId,
     index: usize,
@@ -318,7 +323,7 @@ fn stops_short(
 
 /// The fix `name` launched, its code agent stopped short with
 /// [`QUESTION`] and settled; the place and the time it stopped short.
-fn asking(world: &World, name: &str) -> Result<(PlaceId, Seconds), String> {
+pub(super) fn asking(world: &World, name: &str) -> Result<(PlaceId, Seconds), String> {
     let id = fix_begun(world, name)?;
     let at = stops_short(
         world,
@@ -1414,6 +1419,52 @@ fn unsettled_after_a_retry(_: &()) -> Outcome {
     ensure!(
         prompt.contains(&format!("{UNSETTLED}\n\n{}", asked("notes.md"))),
         "flume's words, then the question and the answer, are not in {prompt}"
+    );
+    Ok(())
+}
+
+fn the_notice_of_a_question(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    let (id, at) = asking_for(&world, "one", &["ops"])?;
+    let until = at + KEEP_OPEN;
+    let ends: Vec<_> = world
+        .status(&id)?
+        .ends
+        .into_iter()
+        .filter(|end| words_of(&end.end).as_deref() == Some(QUESTION))
+        .collect();
+    let read: Vec<(Option<Seconds>, Vec<String>, Vec<String>)> = ends
+        .iter()
+        .map(|end| {
+            (
+                end.open_until,
+                end.end
+                    .deliveries
+                    .iter()
+                    .map(|delivery| delivery.recipient.clone())
+                    .collect(),
+                end.pending_for.clone(),
+            )
+        })
+        .collect();
+    ensure_eq!(
+        read,
+        vec![(Some(until), vec!["ops".to_string()], vec![])],
+        "code's stop-short: until when its agent is kept open, whom it was delivered to, and whom it is pending for"
+    );
+    let json = serde_json::to_value(&ends[0]).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        json["open_until"].clone(),
+        serde_json::json!(until),
+        "until when its agent is kept open, in the JSON form"
+    );
+    ensure_eq!(
+        world.terminal.notices("ops"),
+        vec![format!(
+            "flume: fix--one code needs an answer, its agent kept open for the answer until {until}; read: flume status fix--one"
+        )],
+        "the notices to ops"
     );
     Ok(())
 }

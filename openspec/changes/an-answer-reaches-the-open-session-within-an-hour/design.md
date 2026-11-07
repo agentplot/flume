@@ -536,7 +536,9 @@ The person's form of status prints the move's line as now, then one of:
 Each answer prints on a line of its own, with the act it came by, when
 it was received, and the question and the answer. A stop-short's notice
 (`ends.rs`) adds "its agent kept open for the answer until <time>"
-where its end gives one. Times print as status prints every time.
+where its end gives one, and the inbox's line for the end, which gives
+the notice's words, adds it too. Times print as status prints every
+time.
 
 ### 9. Held state
 

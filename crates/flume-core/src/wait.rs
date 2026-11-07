@@ -152,10 +152,7 @@ impl Engine {
         Ok(Some(Answer::Waited {
             place: place.clone(),
             recipient: recipient.into(),
-            end: Some(EndStatus {
-                pending_for: end.pending(&answered.place.recipients),
-                end: end.clone(),
-            }),
+            end: Some(EndStatus::of(end, &answered.place.recipients)),
             delivered,
         }))
     }
@@ -202,10 +199,7 @@ impl Engine {
                             at: now,
                             by: DeliveredBy::Inbox,
                         });
-                        collected.push(EndStatus {
-                            pending_for: end.pending(&held.place.recipients),
-                            end: end.clone(),
-                        });
+                        collected.push(EndStatus::of(end, &held.place.recipients));
                     }
                     if collected.is_empty() {
                         Step::Keep(collected)

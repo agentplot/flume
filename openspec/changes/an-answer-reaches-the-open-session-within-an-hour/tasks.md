@@ -45,7 +45,7 @@ of the test's own.
 
 ## 6. Status and the end's notice
 
-- [ ] 6.1 Give `WaitingOn`'s `open_until` and `closed`, `StageStatus`'s `answers` and `EndStatus`'s `open_until` and `answer` in the JSON form, and print them in the person's form of status and in a stop-short's notice as design 8 words them (design 8; 43, 56, 130, 198; core.14). True when `sluice exec main -- moon run core:test conformance:test flume:test` passes with `engine/place_status.rs` gaining the place-status spec's other three scenarios, `engine/open_sessions.rs` the end-delivery spec's "The notice of a question", and `print.rs` unit tests of an agent kept open, one let go and ended, one let go and to be ended once quiet, one stopped by its caller, a bare agent left in its pane, and two answers.
+- [x] 6.1 Give `WaitingOn`'s `open_until` and `closed`, `StageStatus`'s `answers` and `EndStatus`'s `open_until` and `answer` in the JSON form, and print them in the person's form of status and in a stop-short's notice as design 8 words them (design 8; 43, 56, 130, 198; core.14). True when `sluice exec main -- moon run core:test conformance:test flume:test` passes with `engine/place_status.rs` gaining the place-status spec's other three scenarios, `engine/open_sessions.rs` the end-delivery spec's "The notice of a question", and `print.rs` unit tests of an agent kept open, one let go and ended, one let go and to be ended once quiet, one stopped by its caller, a bare agent left in its pane, and two answers.
 - [ ] 6.2 Run the checks of the projects this group touched. True when `sluice exec main -- moon run core:format core:lint core:test conformance:format conformance:lint conformance:test flume:format flume:lint flume:test` passes.
 
 ## 7. The walkthroughs under herdr

@@ -672,6 +672,7 @@ fn a_retry_after_a_stop_short(_: &()) -> Outcome {
     world.settle(&id);
     let second = code_start(&world, &id)?;
     let question = "Which schema does task 2.1 mean?";
+    let asked = world.host.now();
     let answer = world.engine.needs(
         &second.identity.to_string(),
         &second.secret.0,
@@ -696,10 +697,10 @@ fn a_retry_after_a_stop_short(_: &()) -> Outcome {
         "the group the end names"
     );
     ensure!(
-        world.terminal.notices("ops").contains(
-            &"flume: change--plan code on group 2. Two needs an answer; read: flume status change--plan"
-                .to_string()
-        ),
+        world.terminal.notices("ops").contains(&format!(
+            "flume: change--plan code on group 2. Two needs an answer, its agent kept open for the answer until {}; read: flume status change--plan",
+            asked + flume_core::KEEP_OPEN
+        )),
         "the notice of the stop-short: {:?}",
         world.terminal.notices("ops")
     );

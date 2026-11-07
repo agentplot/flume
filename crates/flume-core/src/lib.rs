@@ -44,7 +44,7 @@ mod wake;
 pub use accounts::{FRESH, THRESHOLD};
 pub use acts::Retry;
 pub use answer::*;
-pub use ends::{notice, what_ended};
+pub use ends::{end_words, notice, what_ended};
 pub use held::Step;
 pub use kinds_lock::{KindsLock, LockOf};
 pub use line::NOT_ITS_AGENT;
