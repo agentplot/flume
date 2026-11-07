@@ -17,7 +17,9 @@ read as one at each command, and its agents' settings at each agent's
 start ([two layers](/flume/guides/agent-settings/#two-layers)):
 
 - `config.toml`, the managed layer, written by whoever manages the
-  host. A file that is not there is an empty one. A file flume cannot
+  host, whole by flume's Nix module on a host that installs flume
+  with Nix ([install with Nix](/flume/install/#install-with-nix)). A
+  file that is not there is an empty one. A file flume cannot
   read makes every command refuse, naming its fault.
 - `config.local.toml`, the local layer, read over the managed one key
   by key. It sets only a stream's `agents`, `priority`, `session` and
