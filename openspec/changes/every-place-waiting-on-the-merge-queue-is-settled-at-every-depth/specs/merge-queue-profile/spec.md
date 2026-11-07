@@ -6,8 +6,9 @@ The sluice profile SHALL answer open by `sluice branch create <branch>
 --from <base> --json` and close by `sluice branch delete <branch>
 --into <base> --json`, each run in the repository with every
 multiplexer's session stripped and `GIT_TERMINAL_PROMPT=0`: exit 0 its
-answer, exit 1 a branch gone, exit 2 a refusal or a branch kept in its
-`error.message` (205, 206, C.6; sluice 104, 105).
+answer, exit 1 a branch gone where sluice names that branch, exit 2 or
+any other a refusal or a branch kept in its `error.message` (205, 206,
+C.6; sluice 104, 105).
 
 #### Scenario: A branch the policy names no table for
 

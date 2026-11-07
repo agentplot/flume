@@ -543,7 +543,7 @@ The sluice profile (C.6):
 | operation | sluice |
 |---|---|
 | open | `sluice branch create <branch> --from <base> --json`, run in the repository; its answer's revision; exit 2 a refusal in its `error.message` |
-| close | `sluice branch delete <branch> --into <base> --json`, run in the repository; exit 1 gone, exit 2 kept with its words |
+| close | `sluice branch delete <branch> --into <base> --json`, run in the repository; exit 1 gone where its words name the branch itself, and kept otherwise, since it exits 1 too for an `--into` it cannot find; exit 2 kept with its words |
 | submit, a branch | `sluice submit <base> --head <branch> --no-wait --json`, run in the repository; answered as any submit; its outcome read-submission's, the entry whose `from.head` is the branch |
 
 Each runs with every multiplexer's session stripped and
