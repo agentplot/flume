@@ -1307,3 +1307,218 @@ fn the_room_lock_is_exclusive_between_processes() {
     assert!(child.wait().unwrap().success());
     assert!(Path::new(&host.room_lock()).is_file());
 }
+
+/// The files the flake's module renders, under `nix/tests/files`: each
+/// read whole by flume's own reader of the host's configuration, its named
+/// files read beside it in a scratch folder (the host-module spec; the
+/// change flume-publishes-its-own-flake-and-module, design 7 and 11).
+#[test]
+fn the_modules_files_read_whole() {
+    let files = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../nix/tests/files");
+    let scratch = Scratch::new("module-files");
+    std::fs::write(
+        scratch.path("people-settings.json"),
+        "{ \"spinnerTipsEnabled\": false }\n",
+    )
+    .unwrap();
+    let mut read = BTreeMap::new();
+    for entry in std::fs::read_dir(&files).expect("nix/tests/files") {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let config = HostConfig::parse_in(&text, &scratch.root)
+            .unwrap_or_else(|fault| panic!("nix/tests/files/{name} reads with a fault: {fault}"));
+        read.insert(name, config);
+    }
+    assert_eq!(
+        read.keys().map(String::as_str).collect::<Vec<_>>(),
+        ["empty.toml", "every-key.toml"]
+    );
+    assert_eq!(read["empty.toml"], HostConfig::default());
+
+    // every-key.nix's settings, under the names the file gives each key.
+    let config = &read["every-key.toml"];
+    assert_eq!(config.agents, Some(8));
+    assert_eq!(config.terminal.as_deref(), Some("printed"));
+    assert_eq!(config.view, Some(View::Terminal));
+    assert_eq!(config.terminal_app.as_deref(), Some("printed"));
+    assert_eq!(config.pool.as_deref(), Some("work"));
+    assert_eq!(
+        config
+            .streams
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        ["default", "personal", "work"]
+    );
+    assert_eq!(config.streams["personal"], Stream::default());
+    let work = &config.streams["work"];
+    assert_eq!(work.agents, Some(5));
+    assert_eq!(work.priority, 10);
+    assert_eq!(work.pool.as_deref(), Some("work"));
+    assert_eq!(work.session.as_deref(), Some("work"));
+    assert_eq!(work.multiplexer.as_deref(), Some("printed"));
+    assert_eq!(work.view, Some(View::App));
+    assert_eq!(work.terminal_app.as_deref(), Some("printed"));
+    assert_eq!(work.title.as_deref(), Some("Work"));
+    assert_eq!(
+        work.labels,
+        BTreeMap::from([
+            (
+                "construction".to_string(),
+                Share {
+                    reserve: 2,
+                    keep_free: 0,
+                    unknown: vec![],
+                }
+            ),
+            (
+                "operation".to_string(),
+                Share {
+                    reserve: 2,
+                    keep_free: 1,
+                    unknown: vec![],
+                }
+            ),
+        ])
+    );
+    assert_eq!(
+        work.kinds,
+        BTreeMap::from([(
+            "research".to_string(),
+            KindSessions {
+                session: Some("work-design".into()),
+                stages: BTreeMap::from([(
+                    "review".to_string(),
+                    StageSession {
+                        session: Some("work-review".into()),
+                        unknown: vec![],
+                    }
+                )]),
+                unknown: vec![],
+            }
+        )])
+    );
+
+    let pool = &config.pools["work"];
+    assert_eq!(config.pools.keys().collect::<Vec<_>>(), ["work"]);
+    assert_eq!(pool.strategy, Strategy::MostLeft);
+    assert_eq!(pool.threshold, Some(90));
+    assert_eq!(
+        pool.accounts,
+        vec![
+            Account {
+                name: "work-1".into(),
+                program: "claude".into(),
+                env: BTreeMap::from([("CLAUDE_CONFIG_DIR".into(), "$HOME/.claude-work-1".into())]),
+                agents: Some(4),
+                usage: Some("~/.local/state/usage/work-1.json".into()),
+            },
+            Account {
+                name: "work-2".into(),
+                program: "claude".into(),
+                env: BTreeMap::from([("CLAUDE_CONFIG_DIR".into(), "~/.claude-work-2".into())]),
+                agents: None,
+                usage: None,
+            },
+        ]
+    );
+
+    let fork = format!("{}/Code/upstream-fork", home());
+    let acme = "acme/acme".to_string();
+    assert_eq!(
+        config.streams_named.kind,
+        BTreeMap::from([("change".to_string(), "work".to_string())])
+    );
+    assert_eq!(
+        config.streams_named.repository,
+        BTreeMap::from([
+            (acme.clone(), "work".to_string()),
+            (fork.clone(), "personal".to_string()),
+        ])
+    );
+    assert_eq!(
+        config.streams_named.repository_kind,
+        BTreeMap::from([((acme.clone(), "fix".to_string()), "personal".to_string())])
+    );
+    assert_eq!(
+        config.labels_named.kind,
+        BTreeMap::from([
+            ("change".to_string(), "construction".to_string()),
+            ("research".to_string(), "inception".to_string()),
+        ])
+    );
+    assert_eq!(
+        config.labels_named.repository_kind,
+        BTreeMap::from([((acme.clone(), "fix".to_string()), "operation".to_string())])
+    );
+
+    let change = &config.kinds["change"];
+    assert_eq!(change.every_stage.model.as_deref(), Some("opus"));
+    assert_eq!(change.every_stage.effort.as_deref(), Some("high"));
+    assert_eq!(
+        change.every_stage.mode,
+        Some(ModeSetting::Flume(Mode::Edits))
+    );
+    assert_eq!(change.every_stage.keep_open.as_deref(), Some("30m"));
+    assert_eq!(
+        change.every_stage.instructions.as_deref(),
+        Some("Say \"done\" when the tasks are ticked.")
+    );
+    let claude = &change.every_stage.programs["claude"];
+    let file = claude.file.as_ref().expect("the program's named file");
+    assert_eq!(file.written, "people-settings.json");
+    assert_eq!(
+        file.keys,
+        BTreeMap::from([("spinnerTipsEnabled".to_string(), serde_json::json!(false))])
+    );
+    assert_eq!(
+        claude.settings,
+        BTreeMap::from([
+            ("cleanupPeriodDays".to_string(), serde_json::json!(30)),
+            (
+                "hooks".to_string(),
+                serde_json::json!({ "Stop": [{ "matcher": "", "hooks": [{ "type": "command", "command": "true" }] }] })
+            ),
+            ("includeCoAuthoredBy".to_string(), serde_json::json!(false)),
+            (
+                "mixed".to_string(),
+                serde_json::json!(["a", { "b": 1 }, [2]])
+            ),
+            (
+                "permissions".to_string(),
+                serde_json::json!({ "allow": ["Bash(git status)", "Read"] })
+            ),
+            ("sampleRate".to_string(), serde_json::json!(0.5)),
+        ])
+    );
+    let code = &change.stages["code"];
+    assert_eq!(code.model.as_deref(), Some("sonnet"));
+    assert_eq!(
+        code.mode,
+        Some(ModeSetting::Programs(BTreeMap::from([(
+            "claude".to_string(),
+            "acceptEdits".to_string()
+        )])))
+    );
+    assert_eq!(
+        config.kinds.keys().collect::<Vec<_>>(),
+        ["change"],
+        "research's table gives no agents"
+    );
+    assert_eq!(config.repos_agents[&acme].effort.as_deref(), Some("medium"));
+    let fix = &config.repos[&acme]["fix"];
+    assert_eq!(fix.every_stage.effort.as_deref(), Some("low"));
+    assert_eq!(fix.stages["code"].model.as_deref(), Some("sonnet"));
+    assert_eq!(config.repos[&fork], BTreeMap::new());
+    assert_eq!(config.every_agent.model.as_deref(), Some("opus"));
+    assert_eq!(config.every_agent.keep_open.as_deref(), Some("1h"));
+    assert_eq!(
+        config.every_agent.programs["claude"].settings,
+        BTreeMap::from([("theme".to_string(), serde_json::json!("dark"))])
+    );
+    assert_eq!(
+        config.streams_agents["work"].effort.as_deref(),
+        Some("high")
+    );
+}
