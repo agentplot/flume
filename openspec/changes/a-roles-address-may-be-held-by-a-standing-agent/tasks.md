@@ -23,7 +23,7 @@ host configuration a test names is a scratch file of the test's own.
 ## 3. The host's configuration
 
 - [x] 3.1 Have `role_runs` in `crates/flume/src/host/config.rs` read an entry giving `agent` as a standing agent's, with an optional `session` and `stream`, into the configuration's standing entries, and the real host's `standing()` give them; and make the configuration unreadable, naming the address, for `agent` beside `kind`, for `agent` beside `repository`, `priority`, `base` or `brief`, naming the key, for `session` with no `agent`, and for an `agent` or `session` empty or not a string; the module's doc naming the keys (design 1; 3, 132, C.7; core.45). True when `sluice exec main -- moon run flume:test` passes with `config.rs` tests of the role-waking spec's "A standing agent's entry read", "A standing agent and a kind", "A run's key beside a standing agent" and "A session with no agent", and every existing configuration test passing unchanged.
-- [ ] 3.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run flume:format flume:lint flume:test` passes.
+- [x] 3.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run flume:format flume:lint flume:test` passes.
 
 ## 4. The core
 
