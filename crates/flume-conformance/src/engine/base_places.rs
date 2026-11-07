@@ -18,7 +18,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     vec![
         Scenario {
             name: "base places: a base place launched on main has its branch opened after its held state is written, nothing made at its location, no readiness and no agent, and waits on its caller with no worktree",
-            cites: &["202", "205", "S110", "9", "10", "11", "70", "165", "78"],
+            cites: &["202", "205", "S110", "9", "10", "11", "70", "78"],
             run: a_base_place_launched_on_main,
         },
         Scenario {
