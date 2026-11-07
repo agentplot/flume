@@ -282,7 +282,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   `engine/caller_waits.rs` holds the caller-waits spec's scenarios of a
   stall, of the role a question named, of its own stream and another's,
   and of a stall recorded before, and every existing scenario passes.
-- [ ] 6.2 Have `Engine::hold` take the waiting move, `HoldOn::Waiting`,
+- [x] 6.2 Have `Engine::hold` take the waiting move, `HoldOn::Waiting`,
   with its words and an optional bound, a later hold replacing them,
   refused on a place that waits on no move of its caller's. Have
   `read_stall` read a place held so as not stalled until the bound
