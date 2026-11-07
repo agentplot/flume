@@ -52,4 +52,4 @@ test names is a scratch directory or file of the test's own.
 ## 7. Coverage and the gate
 
 - [x] 7.1 Have the suite's clause list read the statement at the revision task 1.1 fitted, `c94c496` or a later one of blueprints main, holding 197 and S103, and cite 197 and S103 from this change's scenarios, so neither is named unbuilt (clause-coverage spec; 106). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes.
-- [ ] 7.2 Run the gate's checks over the change as it stands. True when `sluice exec main` passes.
+- [x] 7.2 Run the gate's checks over the change as it stands. True when `sluice exec main` passes.
