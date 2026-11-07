@@ -19,7 +19,7 @@ change this list in the commit that adopts it.
 #### Scenario: The clauses listed
 
 - **WHEN** the suite's list is read
-- **THEN** it names the revision of agentplot/blueprints main that holds record 0054's acceptance, 9371cda, or the later one of main the build read; Parts A and B hold every clause that revision states, 193, 202 to 206, 208 and 209 among them where it states them; the scenarios run as that revision holds them, S119 among them, and skip only what it skips; and it names as unbuilt what it named before this change and each clause and scenario of that revision another change has not yet built, by that change, S93, S94, S98, S99, S109 to S112 and S118 among them where that revision holds them, and nothing of S119
+- **THEN** it names the revision of agentplot/blueprints main that holds record 0052's amendment, 207 and S113 to S117 among it, or the later one of main the build read; Parts A and B hold every clause that revision states, 207 in Part B; the scenarios run as that revision holds them, S113 to S117 among them; and it names as unbuilt what it named before this change and each clause and scenario of that revision another change has not yet built, by that change, S109 to S112 among them where that revision holds them, and nothing of 207 or S113 to S117
 
 ### Requirement: Every scenario cites its clauses
 
@@ -48,7 +48,7 @@ and SHALL fail naming any of those a scenario cites.
 #### Scenario: The suite as this change leaves it
 
 - **WHEN** the coverage check runs over the suite as this change lands it
-- **THEN** it passes: every clause of Parts A and B, I1 to I8 and every scenario the list holds but those named as unbuilt is cited, S119 by this change's scenario
+- **THEN** it passes: every clause of Parts A and B, I1 to I8 and every scenario the list holds but those named as unbuilt is cited, 207 and S113 to S117 by this change's scenarios
 
 ### Requirement: Seam scenarios run against any profile
 
