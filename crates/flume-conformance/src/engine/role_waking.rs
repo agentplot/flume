@@ -899,7 +899,9 @@ fn planner_stands(world: &World) {
 
 /// The notice a fix's code delivered is sent as.
 fn code_delivered(name: &str) -> String {
-    format!("flume: fix--{name} code delivered; read: flume status fix--{name}")
+    format!(
+        "flume: fix--{name} (mend it) code delivered [stage/code/1/delivered]; read: flume status fix--{name}"
+    )
 }
 
 /// A fix named `name` for the planner, delivered with its submission
@@ -1478,7 +1480,7 @@ fn a_standing_door(_: &()) -> Outcome {
             .terminal
             .notices(&at)
             .iter()
-            .any(|text| text.contains("fix--one stalled: ")),
+            .any(|text| text.contains("fix--one (mend it) stalled: ")),
         "the stall in east-operator's pane: {:?}",
         world.terminal.notices(&at)
     );
@@ -1702,7 +1704,7 @@ fn a_planners_run_is_lost(_: &()) -> Outcome {
     ensure_eq!(
         world.terminal.notices("east/operator"),
         vec![
-            "flume: turn--east-planner stalled: a retry of plan; read: flume status turn--east-planner"
+            "flume: turn--east-planner stalled: a retry of plan [stall/1000000]; read: flume inbox"
                 .to_string()
         ],
         "the notices into the operator's run's pane"

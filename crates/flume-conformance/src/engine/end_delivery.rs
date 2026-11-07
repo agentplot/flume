@@ -19,7 +19,7 @@
 use super::caller_waits::{asks_in_east, construct_asks};
 use super::carried_conversations::{talk, talking};
 use super::role_waking::answerer_behind;
-use super::settling::deliver_fix;
+use super::settling::{deliver_fix, write_change};
 use super::stage_runs::east_and_west;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -146,6 +146,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_held_question_in_the_inbox,
         },
         Scenario {
+            name: "end delivery: a stop-short's notice is one line naming the place, its brief's first line cut at 60 characters, construct needing an answer, its key and flume inbox",
+            cites: &["43", "S94", "95"],
+            run: a_stop_shorts_notice,
+        },
+        Scenario {
+            name: "end delivery: a delivery's notice names its key and flume status",
+            cites: &["43", "95"],
+            run: a_deliverys_notice,
+        },
+        Scenario {
             name: "end delivery: two inboxes at once deliver each end once",
             cites: &["43", "75"],
             run: two_inboxes_at_once,
@@ -228,9 +238,22 @@ fn ends(world: &World, id: &PlaceId) -> Result<Vec<EndStatus>, String> {
     Ok(world.status(id)?.ends)
 }
 
-/// The notice a place's end is sent as.
-fn notice(name: &str, what: &str) -> String {
-    format!("flume: fix--{name} {what}; read: flume status fix--{name}")
+/// The notice a fix `name`'s end is sent as: its brief, what ended, its
+/// key and the command that reads it, `flume inbox` where the place waits
+/// on its caller's move and `flume status` otherwise (43; design 9).
+fn notice(name: &str, what: &str, key: &str, read: &str) -> String {
+    format!("flume: fix--{name} (mend it) {what} [{key}]; read: {read}")
+}
+
+/// The notice of a fix `name`'s code delivered at its first start, which
+/// waits on no move of its caller's.
+fn delivered(name: &str) -> String {
+    notice(
+        name,
+        "code delivered",
+        "stage/code/1/delivered",
+        &format!("flume status fix--{name}"),
+    )
 }
 
 /// The tidied documents standing on the host.
@@ -253,7 +276,7 @@ fn a_delivery_and_its_record(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![notice("one", "code delivered")],
+        vec![delivered("one")],
         "the notices to ops"
     );
     let ends = ends(&world, &id)?;
@@ -306,7 +329,12 @@ fn an_agent_killed(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![notice("one", "code lost")],
+        vec![notice(
+            "one",
+            "code lost",
+            "stage/code/1/lost",
+            "flume inbox"
+        )],
         "the notices to ops"
     );
     let ends = ends(&world, &id)?;
@@ -357,7 +385,7 @@ fn a_landing_and_a_failure(_: &()) -> Outcome {
     ] {
         let sent = notices
             .iter()
-            .filter(|text| **text == notice("one", &what))
+            .filter(|text| text.starts_with(&format!("flume: fix--one (mend it) {what} [")))
             .count();
         let once = if what == "code delivered" { 2 } else { 1 };
         ensure_eq!(sent, once, "notices of {what}");
@@ -397,7 +425,7 @@ fn a_recipient_asking(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![notice("one", "code delivered")],
+        vec![delivered("one")],
         "the notices once ops asks nothing"
     );
     Ok(())
@@ -440,7 +468,7 @@ fn a_recipient_away_and_back(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![notice("one", "code delivered")],
+        vec![delivered("one")],
         "the notices once ops is back"
     );
     Ok(())
@@ -1044,7 +1072,7 @@ fn a_standing_agent_waiting(_: &()) -> Outcome {
     let id = delivered_for_planner(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![notice("one", "code delivered")],
+        vec![delivered("one")],
         "the notices to the standing agent"
     );
     ensure_eq!(
@@ -1090,7 +1118,7 @@ fn a_standing_agent_asking(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![notice("one", "code delivered")],
+        vec![delivered("one")],
         "the notices once it waits"
     );
     Ok(())
@@ -1157,7 +1185,7 @@ fn an_agent_revived_under_its_name(_: &()) -> Outcome {
     let one = delivered_for_planner(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&first),
-        vec![notice("one", "code delivered")],
+        vec![delivered("one")],
         "the first agent's notices"
     );
     world.terminal.remove_agent(&first);
@@ -1169,7 +1197,7 @@ fn an_agent_revived_under_its_name(_: &()) -> Outcome {
     world.settle(&one);
     ensure_eq!(
         world.terminal.notices(&revived),
-        vec![notice("two", "code delivered")],
+        vec![delivered("two")],
         "the revived agent's notices"
     );
     ensure_eq!(
@@ -1202,7 +1230,7 @@ fn the_session_from_the_addresss_stream(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         other.notices(&at),
-        vec![notice("one", "code delivered")],
+        vec![delivered("one")],
         "the notices in w's terminal"
     );
     ensure!(
@@ -1237,7 +1265,7 @@ fn the_default_streams_own_session(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![notice("one", "code delivered")],
+        vec![delivered("one")],
         "the notices in the terminal's own part"
     );
     ensure!(
@@ -1343,7 +1371,7 @@ fn a_lost_talk_with_a_bare_agent(_: &()) -> Outcome {
     ensure_eq!(
         notices,
         vec![
-            "flume: research--one talk lost, and flume left the agent the terminal brought back in its pane; read: flume status research--one"
+            "flume: research--one (weigh the options) talk lost, and flume left the agent the terminal brought back in its pane [stage/talk/1/lost]; read: flume inbox"
                 .to_string()
         ],
         "the notices to ops"
@@ -1360,7 +1388,10 @@ fn a_lost_talk_with_no_agent(_: &()) -> Outcome {
     ensure!(!end.left_in_pane, "talk's lost end says an agent was left");
     ensure_eq!(
         notices,
-        vec!["flume: research--one talk lost; read: flume status research--one".to_string()],
+        vec![
+            "flume: research--one (weigh the options) talk lost [stage/talk/1/lost]; read: flume inbox"
+                .to_string()
+        ],
         "the notices to ops"
     );
     Ok(())
@@ -1541,5 +1572,83 @@ fn a_held_question_in_the_inbox(_: &()) -> Outcome {
             "the hold {read} inbox gives"
         );
     }
+    Ok(())
+}
+
+/// A brief whose first line runs past what a notice gives of it.
+const LONG_BRIEF: &str = "Every question a place asks reaches someone who answers it, whichever stream asked\n\nThe rest of the brief.";
+
+/// [`LONG_BRIEF`]'s first line as a notice gives it: cut at 60
+/// characters, the ellipsis saying where.
+const CUT_BRIEF: &str = "Every question a place asks reaches someone who answers it,…";
+
+/// The change `every-question` launched for `ops` with [`LONG_BRIEF`] and
+/// begun.
+fn every_question(world: &World) -> Result<PlaceId, String> {
+    let mut change = launch("change", "every-question", Some(LONG_BRIEF));
+    change.recipients = vec!["ops".into()];
+    launched(&world.engine.launch(&change))?;
+    let id = World::id("change", "every-question");
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "construct"),
+        Some(StageState::Begun),
+        "construct"
+    );
+    Ok(id)
+}
+
+fn a_stop_shorts_notice(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    let id = every_question(&world)?;
+    let construct = World::identity("change", "every-question", "construct", 1);
+    let secret = world
+        .held(&id)
+        .and_then(|held| held.stages[0].start.clone())
+        .ok_or("no start")?
+        .secret;
+    let asked = world.host.now();
+    let answer = world.engine.needs(
+        &construct.to_string(),
+        &secret.0,
+        "Which design does the brief mean?\nThe brief names two.",
+        StopKind::NeedsAnswer,
+    );
+    ensure!(answer.refusal().is_none(), "the stop-short: {answer:?}");
+    world.settle(&id);
+    ensure!(
+        CUT_BRIEF.trim_end_matches('…').chars().count() <= 60,
+        "the brief given is longer than 60 characters"
+    );
+    let notices = world.terminal.notices("ops");
+    ensure_eq!(
+        notices,
+        vec![format!(
+            "flume: change--every-question ({CUT_BRIEF}) construct needs an answer, its agent kept open for the answer until {} [stage/construct/1/ended-short]; read: flume inbox",
+            asked + flume_core::KEEP_OPEN
+        )],
+        "the notices to ops"
+    );
+    ensure!(
+        notices.iter().all(|notice| !notice.contains('\n')),
+        "a notice of more than one line"
+    );
+    Ok(())
+}
+
+fn a_deliverys_notice(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    let id = every_question(&world)?;
+    write_change(&world, "every-question");
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.notices("ops"),
+        vec![format!(
+            "flume: change--every-question ({CUT_BRIEF}) construct delivered [stage/construct/1/delivered]; read: flume status change--every-question"
+        )],
+        "the notices to ops"
+    );
     Ok(())
 }

@@ -47,7 +47,12 @@ happens:
 Each end is delivered **once** to each recipient, inside the settle
 that reads it, as a one-line notice through the terminal into the
 recipient's own pane, such as
-`flume: fix--the-parser-reads-tabs code delivered [stage/code/1/delivered]; read: flume status fix--the-parser-reads-tabs`. flume records on the place that it was
+`flume: fix--the-parser-reads-tabs (The parser drops a tab after a quote.) code delivered [stage/code/1/delivered]; read: flume status fix--the-parser-reads-tabs`.
+The notice names the place, the first line of its brief cut at 60
+characters, what ended, the end's key, and the command that reads it
+whole: `flume inbox` where the place now waits on a move of its
+caller's, which gives the question and how to answer it, and
+`flume status <place>` otherwise. flume records on the place that it was
 delivered, to whom and when. A recipient asking a question, or one the
 terminal cannot read or find, gets nothing typed into its pane; the end stays
 **pending** for a later settle, a wait or the inbox. Under the printed
@@ -197,7 +202,7 @@ Its stage still reads ended short, waiting on its answer. Its notice
 says until when:
 
 ```text
-flume: chore--tidy-the-readme code needs an answer, its agent kept open for the answer until 1793291441; read: flume status chore--tidy-the-readme
+flume: chore--tidy-the-readme (Say what the parser reads.) code needs an answer, its agent kept open for the answer until 1793291441 [stage/code/1/ended-short]; read: flume inbox
 ```
 
 While it is kept open, the agent holds the host's room, its stream's

@@ -345,7 +345,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   exec main -- moon run core:test conformance:test flume:test` passes,
   with the end-delivery spec's scenarios of the inbox in
   `engine/end_delivery.rs`.
-- [ ] 8.2 Have `notice` name the place, its brief's first line cut at 60
+- [x] 8.2 Have `notice` name the place, its brief's first line cut at 60
   characters, the end, its key, and `flume inbox` for an end that waits
   on a move or `flume status <place>` for any other (design 9; 43;
   core.11). True when `sluice exec main -- moon run core:test

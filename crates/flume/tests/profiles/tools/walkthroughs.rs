@@ -2960,7 +2960,9 @@ fn a_standing_agent_under_herdr_takes_a_fixs_end_through_the_binary() {
         .until(&place, "its end taken by the standing agent", |_| {
             !took().is_empty()
         });
-    let notice = "flume: fix--one code delivered; read: flume status fix--one".to_string();
+    // The submission is held, so the place waits on its caller's move and
+    // the notice points at the inbox (43; design 9).
+    let notice = "flume: fix--one (fix the parser) code delivered [stage/code/1/delivered]; read: flume inbox".to_string();
     assert_eq!(took(), vec![notice.clone()], "what the standing agent took");
     host.walk.settle(&place);
     assert_eq!(took(), vec![notice], "taken again at the next settle");

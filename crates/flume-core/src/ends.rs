@@ -22,15 +22,45 @@ use crate::{Engine, Step};
 use flume_seams::*;
 use std::collections::BTreeMap;
 
-/// The one line a notice is: the place, what ended, until when a
-/// stop-short's agent is kept open for its answer, and the command that
-/// reads it whole (43, 198, design 2).
-pub fn notice(place: &PlaceRecord, of: &EndOf) -> String {
+/// How much of a brief's first line a notice gives (43; design 9).
+pub const NOTICE_BRIEF: usize = 60;
+
+/// The one line a notice is: the place, its brief's first line cut at
+/// [`NOTICE_BRIEF`] characters, what ended, until when a stop-short's
+/// agent is kept open for its answer, the end's key, and the command that
+/// reads it whole: `flume inbox` where the place, as `held` gives it when
+/// the notice is sent, waits on a move of its caller's, which gives the
+/// question and how to answer it, and `flume status <place>` otherwise.
+/// It names no fact to act on blindly, and no question's words, which
+/// are many lines (43, 198; core.11, core.25; design 9).
+pub fn notice(held: &HeldState, of: &EndOf) -> String {
+    let place = &held.place;
     let short = place.short();
+    let brief = place
+        .brief_line()
+        .map(|line| format!(" ({})", cut(line, NOTICE_BRIEF)))
+        .unwrap_or_default();
+    let read = if held.waiting.is_some() {
+        "flume inbox".to_string()
+    } else {
+        format!("flume status {short}")
+    };
     format!(
-        "flume: {short} {}; read: flume status {short}",
-        end_words(of)
+        "flume: {short}{brief} {} [{}]; read: {read}",
+        end_words(of),
+        of.end_key()
     )
+}
+
+/// `line` cut at `at` characters, an ellipsis saying where it was cut.
+fn cut(line: &str, at: usize) -> String {
+    let mut chars = line.chars();
+    let head: String = chars.by_ref().take(at).collect();
+    if chars.next().is_none() {
+        head
+    } else {
+        format!("{}…", head.trim_end())
+    }
 }
 
 /// What ended, in the words a notice and the inbox give it: what ended,
@@ -149,7 +179,7 @@ impl Engine {
                 if !claimed {
                     continue;
                 }
-                let why = match terminal.send_to(&at, &notice(&held.place, &end.of)) {
+                let why = match terminal.send_to(&at, &notice(&held, &end.of)) {
                     ToSession::Sent => continue,
                     ToSession::NotFound => format!("no session is named {at}"),
                     ToSession::Refused { reason } => reason,
