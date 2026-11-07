@@ -56,7 +56,11 @@
 //! key, the layer and the file, never the value, making nothing (S101; 4,
 //! 157, 195); a fork's attribution is the host's for every stage of a
 //! fix and a chore, a repository's its own `[agents]`' and a third's its
-//! account's, each landing (S102; 32, 195, C.2, C.7); a host's source's
+//! account's, each landing (S102; 32, 195, C.2, C.7); a repository's kind
+//! whose agents table gives `xhigh`, launched with `max` for its review,
+//! starts its code agent by `--effort xhigh`, from `kind`, and its review's
+//! by `--effort max`, from `launch`, each stand-in beginning there, and
+//! lands (S103; 32, 197); a host's source's
 //! kind, locked by `flume kinds lock --host --hash`, runs and lands, a
 //! second version added and its source's file renamed over, the next
 //! launch running it and the place launched before landing on its own
@@ -2492,6 +2496,98 @@ fn a_forks_attribution_is_the_hosts_a_repositorys_its_own_and_another_its_accoun
     );
     until_landed(&plain, &place);
     assert_eq!(plain.on_remote("plain.rs").as_deref(), Some("fixed\n"));
+}
+
+/// A repository's own kind that lands, code then review, each stage's
+/// agent committing, its agents table giving every stage the effort
+/// `xhigh` (S103; 158, 197).
+const BUMP: &str = r#"[kinds.bump]
+version = 1
+branch = "bump"
+starts_unready = true
+lands = true
+
+[kinds.bump.agents]
+effort = "xhigh"
+
+[[kinds.bump.stages]]
+name = "code"
+prompt = "prompts/bump.md"
+deliverables = ["commits"]
+agents = [{}]
+
+[[kinds.bump.stages]]
+name = "review"
+prompt = "prompts/bump.md"
+deliverables = ["commits"]
+agents = [{}]
+on_fail = "code"
+"#;
+
+/// The place's agent's effort, as status gives it and as the person's
+/// form prints it on the agent's line and among its settings: the word,
+/// its layer, passed as written and not read back (56, 197).
+fn effort_is(walk: &Walk, place: &str, word: &str, layer: &str) {
+    let status = walk.status(place);
+    assert_eq!(
+        (
+            &status["agent"]["effort"],
+            &status["agent"]["settings"]["from"]["effort"]
+        ),
+        (
+            &json!({ "word": word, "layer": layer, "passed": word, "read_back": false }),
+            &json!({ "layer": layer, "value": word })
+        ),
+        "{status}"
+    );
+    let person = walk.person(&["status", place]);
+    for said in [
+        format!(", at the effort {word} (from {layer}) passed as {word}, not read back"),
+        format!("effort = {word} (from {layer})"),
+    ] {
+        assert!(person.contains(&said), "{said} in {person}");
+    }
+}
+
+#[test]
+fn a_kinds_effort_and_a_launchs_for_review_start_each_agent_at_its_own_and_the_place_lands() {
+    // S103, 32, 197: the repository's kind `bump` gives `effort = "xhigh"`
+    // for every stage in `[kinds.bump.agents]`, and the launch gives
+    // `--agent review.effort=max`. Code's agent is printed with
+    // `--effort xhigh` and its stand-in begins at `xhigh`, status naming
+    // it from `kind`; review's with `--effort max`, from `launch`, a
+    // stage's own before every stage's; and the place lands.
+    let walk = Walk::new("walk-effort");
+    walk.repository
+        .write(".config/prompts/bump.md", "Bump {{name}}: {{brief}}\n");
+    the_repository_gives(&walk, BUMP);
+    let place = walk.launch(
+        "bump",
+        "parser",
+        &["--brief", "bump the parser", "--agent", "review.effort=max"],
+    );
+    let printed = walk.printed(&place);
+    assert!(printed.contains(" --effort xhigh "), "{printed}");
+    effort_is(&walk, &place, "xhigh", "kind");
+    let out = walk.agent(&place, commits("parser.rs", "fn parse() {}\n"));
+    assert!(out.contains("stand-in: effort xhigh\n"), "{out}");
+
+    walk.until(&place, "review started", |status| {
+        status["current"] == "review" && status["agent"]["printed"].is_string()
+    });
+    let printed = walk.printed(&place);
+    assert!(printed.contains(" --effort max "), "{printed}");
+    effort_is(&walk, &place, "max", "launch");
+    let out = walk.agent(&place, commits("review.md", "reviewed\n"));
+    assert!(out.contains("stand-in: effort max\n"), "{out}");
+    until_landed(&walk, &place);
+    assert_eq!(
+        (
+            walk.on_remote("parser.rs").as_deref(),
+            walk.on_remote("review.md").as_deref()
+        ),
+        (Some("fn parse() {}\n"), Some("reviewed\n"))
+    );
 }
 
 /// Writes acme's `review@<version>` in `kinds_dir`: one code stage whose
