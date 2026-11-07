@@ -16,7 +16,7 @@ use super::repeating_stages::{branch, code_begun, GROUPS};
 use super::settling::{change_at_verify, construct_begun, fix_begun};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Act, Retry, WaitFor, Waits, KEEP_OPEN};
+use flume_core::{Act, Retry, WaitFor, Waits, ANSWER_RECORDED_WITHIN, KEEP_OPEN};
 use flume_seams::*;
 
 pub fn scenarios() -> Vec<Scenario<()>> {
@@ -130,6 +130,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "answer: a tell to a place whose code waits on an answer once its agent was let go is refused with nothing typed, naming the retry that answers it",
             cites: &["42", "53"],
             run: a_tell_once_the_agent_is_let_go,
+        },
+        Scenario {
+            name: "answer: a second stop-short from code's asking agent kept open while code still reads ended short, no act having handed it an answer, waits ten seconds for one to be recorded and is refused, code still waiting on its first answer",
+            cites: &["41", "42", "53"],
+            run: a_second_stop_short_with_no_answer_handed,
         },
         Scenario {
             name: "let go: a retry of code with notes.md once its agent was let go by its time and ended starts code's second start, a fresh agent whose prompt carries the question, then the answer",
@@ -1120,6 +1125,34 @@ fn a_tell_once_the_agent_is_let_go(_: &()) -> Outcome {
         world.terminal.log.count("send"),
         sendings,
         "the sendings after the tell"
+    );
+    waits_on_answer(&world, &id, "code", at)
+}
+
+fn a_second_stop_short_with_no_answer_handed(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, at) = asking(&world, "one")?;
+    let before = world.host.now();
+    let answer = world.engine().needs(
+        &code("one", 1).to_string(),
+        &secret(&world, &id, 0)?,
+        "And its text?",
+        StopKind::NeedsAnswer,
+    );
+    let reason = refused(&answer)?;
+    ensure!(
+        reason.contains("is not running"),
+        "the refusal's words: {reason}"
+    );
+    ensure_eq!(
+        world.host.now() - before,
+        ANSWER_RECORDED_WITHIN,
+        "how long the stop-short waited for an answer to be recorded"
+    );
+    ensure_eq!(
+        end_of(&world, &id, "code")?.words,
+        Some(QUESTION.to_string()),
+        "code's end's words"
     );
     waits_on_answer(&world, &id, "code", at)
 }

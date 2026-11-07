@@ -10,8 +10,14 @@
 use crate::prompt::group_text;
 use crate::reading::find_group;
 use crate::start::Starts;
-use crate::{Act, Answer, Engine, Step, KEEP_OPEN};
+use crate::{Act, Answer, Engine, Step, KEEP_OPEN, POLL};
 use flume_seams::*;
+
+/// How long a stop-short its agent makes in its session after taking an
+/// answer waits for the act that handed it the answer to record it: that
+/// act reads the answer received every [`POLL`] seconds and records it at
+/// once (42, 53; design 4).
+pub const ANSWER_RECORDED_WITHIN: Seconds = 2 * POLL;
 
 impl Engine {
     /// The place and stage index whose live current start `identity`
@@ -35,7 +41,10 @@ impl Engine {
     /// open for the answer until now and the start's `keep_open`, where
     /// the terminal its start opened in hands a running agent words, and
     /// records that time on the end; none is kept open otherwise (53, 95,
-    /// 198, C.5).
+    /// 198, C.5). A stop-short from an agent kept open, its stage still
+    /// ended short, first waits for the act that handed it an answer to
+    /// record it, as [`Engine::once_answered`] reads it, and is refused
+    /// where none does (42, 53).
     pub fn needs(&self, identity: &str, secret: &str, words: &str, kind: StopKind) -> Answer {
         self.settle_attended();
         let Some((held, index)) = self.current_start(identity) else {
@@ -43,10 +52,19 @@ impl Engine {
                 "no live agent of a place's current stage is {identity}"
             ));
         };
-        let start = held.stages[index].start.clone().expect("a live start");
-        if start.secret.0 != secret {
+        if held.stages[index]
+            .start
+            .as_ref()
+            .is_none_or(|start| start.secret.0 != secret)
+        {
             return Answer::refused(format!("the secret is not {identity}'s start's"));
         }
+        let Some((held, index)) = self.once_answered(identity, held, index) else {
+            return Answer::refused(format!(
+                "no live agent of a place's current stage is {identity}"
+            ));
+        };
+        let start = held.stages[index].start.clone().expect("a live start");
         let agent = self.agent(&start.program);
         let folder = self.store.folder(&held.place.id);
         if self.state_of(agent.as_deref(), &folder, &start) == AgentState::Stopped {
@@ -82,6 +100,33 @@ impl Engine {
             return Answer::refused(format!("the stage of {identity} is not running"));
         }
         self.acted(Act::Needs, &id)
+    }
+
+    /// The place and stage index of the live current start `identity`
+    /// names, `held` and `index` as first read, once an answer its agent
+    /// took in its session is recorded: while its stage still reads ended
+    /// short and its agent kept open, the agent stops short again only on
+    /// words handed to it, which the act that handed them records within
+    /// [`POLL`] seconds of reading them received, so the place is read
+    /// again each second, for up to [`ANSWER_RECORDED_WITHIN`], until its
+    /// stage runs again or its agent is no longer kept open; none where the
+    /// start is no longer the place's live current one (42, 53; design 4).
+    fn once_answered(
+        &self,
+        identity: &str,
+        held: HeldState,
+        index: usize,
+    ) -> Option<(HeldState, usize)> {
+        let began = self.host.now();
+        let (mut held, mut index) = (held, index);
+        while held.stages[index].state == StageState::EndedShort
+            && self.kept_open(&held).is_some()
+            && self.host.now().saturating_sub(began) < ANSWER_RECORDED_WITHIN
+        {
+            self.host.sleep(1);
+            (held, index) = self.current_start(identity)?;
+        }
+        Some((held, index))
     }
 
     /// Whether the terminal the start opened its agent in hands a running

@@ -354,6 +354,20 @@ received, or not delivered within the bound, the act is refused with
 the tell's words. Nothing more is typed, nothing is recorded, and the
 stage still waits on its answer (53, 54).
 
+The act reads the answer received every five seconds (`POLL`), so the
+agent can stop short again in its session before the act's write: its
+stage still reads ended short. `Engine::needs`, given a stop-short from
+the start's agent while its stage reads ended short and its agent is
+kept open, reads the place again each second for up to ten seconds
+(`ANSWER_RECORDED_WITHIN`, twice `POLL`) until the act's write carries
+the stage on, and then takes the stop-short as an end of its own. Where
+no write comes, as where a person typed into the pane with no act of
+flume's, it is refused as a stop-short from a stage not running (41,
+42). The path not taken was writing the answer as being handed before
+it is typed, so the agent's own received ack could carry the stage on:
+it adds held state for a window of seconds. The walkthroughs found the
+window, the stand-in stopping short again within it (decision 10).
+
 Two acts carry an answer:
 
 - **A retry** naming the stage with words, as the current stage or by
@@ -584,7 +598,7 @@ gains three things, each named in its doc comment:
 and home as `terminal_herdr.rs` starts one, the stand-in first on the
 panes' `PATH`, and the walkthrough's account giving `STAND_IN_SCRIPTS`
 beside its scratch `CLAUDE_CONFIG_DIR` and token. Every herdr call is
-bounded and passes the recorded server's socket (core.29). The
+bounded and passes the server's socket (core.29). The
 walkthroughs in `crates/flume/tests/profiles/tools/open_sessions.rs`
 run on that host in `flume:tools`, each a fix:
 
