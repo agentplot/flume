@@ -1,6 +1,6 @@
 //! The stand-in for Claude Code in the walkthroughs (design 18): the
-//! program the printed command runs as `claude`, first on the walkthrough's
-//! `PATH`, in the place. It acts as the pinned Claude Code, 2.1.296, acts
+//! program the printed command, or herdr's agent start, runs as `claude`,
+//! first on the walkthrough's `PATH`, in the place. It acts as the pinned Claude Code, 2.1.296, acts
 //! for flume's plugin: it writes a transcript in that release's shape, runs
 //! the hooks the plugin's `hooks/hooks.json` names under `--plugin-dir`, as
 //! that release runs them (the exec form with no shell, the hook's input on
@@ -9,7 +9,8 @@
 //! credentials that release keeps from every process it starts, a refusal
 //! read from `permissionDecision` or exit 2, a prompt or a stop blocked by
 //! `decision` or exit 2), and in place of a model acts the script `STAND_IN_SCRIPT`
-//! names, one run's acts as a JSON array, each a tool call:
+//! names, one run's acts as a JSON array, or several runs as an array of
+//! such arrays, each act a tool call:
 //!
 //! - `{"bash": "<line>"}`: Bash, the line run by `sh -c` in the place
 //!   with the prompt in `STAND_IN_PROMPT`, unless PreToolUse refuses it;
@@ -78,6 +79,40 @@
 //! record as it exits, as that release does at its process's exit, and a
 //! process killed leaves it.
 //!
+//! Where `STAND_IN_SCRIPTS` names a directory, the stand-in reads its
+//! script from `<stage>-<n>.json` there in place of `STAND_IN_SCRIPT`'s,
+//! `<stage>` its `FLUME_STAGE` and `<n>` the start's number, the last word
+//! of its `FLUME_AGENT`, so each start acts its own (design 10); a start
+//! the directory holds no script of acts none. It then keeps its log at
+//! `<stage>-<n>.log` beside the script: each line it prints, each prompt
+//! it took among them, as `took the prompt: <the prompt as JSON>`, so a
+//! walkthrough reads what reached the session.
+//!
+//! The first run's prompt is the command's argument, as the printed
+//! command passes it; where the command passes none, as a terminal that
+//! types the prompt into the agent starts it, it is the first prompt typed
+//! into its terminal. A prompt is typed into its terminal as the pinned
+//! herdr's `agent prompt` types it: its text, a newline within it typed as
+//! one, then the enter that submits it, a ctrl+c clearing whatever was
+//! typed before it, as that release clears its input; the terminal's input
+//! is read so, a key at a time, unechoed, ctrl+c no signal, while the
+//! session runs, and given back as it was at its end. Where another run
+//! follows a turn, the session stays open once the turn ends, and the next
+//! prompt typed into its terminal makes the next run's acts, as a person's
+//! next prompt makes that release's next turn. Where no run follows, or
+//! no prompt comes, its input ended, the session ends; under the printed
+//! command no prompt is typed into it, so a script of one run acts as a
+//! single prompt does (37, 38, 53, 54).
+//!
+//! Where it runs in a herdr pane, `HERDR_PANE_ID` and `HERDR_BIN_PATH` in
+//! its environment, it reports its state to herdr as herdr's reading of
+//! that release's screen gives it: `idle` once its session started and
+//! waits for its prompt, `working` from the moment it takes a prompt until
+//! the turn ends, and `idle` once it has, by `pane report-agent <pane>
+//! --source flume-stand-in --agent claude --state <state>` run with the
+//! pane's own `HERDR_*` left out and bounded at five seconds, in the
+//! states the pinned herdr, 0.9.5, names (core.29).
+//!
 //! The prompt is submitted as given, or, where `STAND_IN_PASTE_TAG` names
 //! a four-hex-digit id, inside the paste tags that release wraps a pasted
 //! prompt in where the account's features turn them on.
@@ -85,11 +120,12 @@
 //! A prompt UserPromptSubmit blocked is held back, as that release holds
 //! it back: no act is made and no turn taken, and the session ends.
 //! Otherwise the turn ends: Stop, once more with `stop_hook_active` where
-//! the hook blocked it, or StopFailure where a `fail` act ended it, and the
-//! session ends, as a person leaves the printed
-//! command's session, with SessionEnd. Each act is printed on standard
-//! output as one line; the exit status is 1 where an act failed that no
-//! hook refused. It never reaches a model, an account or the network.
+//! the hook blocked it, or StopFailure where a `fail` act ended it, and,
+//! where no run follows or a `fail` act ended it, the session ends, as a
+//! person leaves the printed command's session, with SessionEnd. Each act
+//! is printed on standard output as one line; the exit status is 1 where
+//! an act failed that no hook refused. It never reaches a model, an
+//! account or the network.
 
 use flume::host::process::listed;
 use flume::profiles::agent::claude::live::{proc_start, SESSIONS};
@@ -135,16 +171,12 @@ fn main() {
             given => prompt = Some(given.to_string()),
         }
     }
-    let script = std::env::var("STAND_IN_SCRIPT")
-        .ok()
-        .and_then(|file| std::fs::read_to_string(file).ok())
-        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
-        .unwrap_or(json!([]));
+    let runs = runs(&script());
     let mut mode = match mode.as_deref() {
         None | Some("manual") => "default".to_string(),
         Some(passed) => passed.to_string(),
     };
-    for act in script.as_array().into_iter().flatten() {
+    for act in runs.iter().flatten() {
         if let Some(name) = act["unset"].as_str() {
             std::env::remove_var(name);
         }
@@ -174,11 +206,170 @@ fn main() {
     });
     let mut session = Session::new(cwd, plugin, mode, resumed);
     let record = session.name_running();
-    let failed = session.run(prompt.as_deref(), &script);
+    let typed = Typed::taken();
+    let failed = session.run(prompt, &runs, typed.as_ref());
+    drop(typed);
     if let Some(record) = record {
         let _ = std::fs::remove_file(record);
     }
     std::process::exit(i32::from(failed));
+}
+
+/// The script: `<stage>-<n>.json` in the directory `STAND_IN_SCRIPTS`
+/// names, by the start's `FLUME_STAGE` and the number its `FLUME_AGENT`
+/// ends in, its log kept beside it as `<stage>-<n>.log`; else the file
+/// `STAND_IN_SCRIPT` names. No acts where neither gives a script.
+fn script() -> Value {
+    let file = match std::env::var_os("STAND_IN_SCRIPTS")
+        .map(PathBuf::from)
+        .filter(|dir| dir.is_dir())
+    {
+        Some(dir) => {
+            let stage = std::env::var("FLUME_STAGE").unwrap_or_default();
+            let agent = std::env::var("FLUME_AGENT").unwrap_or_default();
+            let start = agent.rsplit(':').next().unwrap_or_default();
+            let _ = LOG.set(dir.join(format!("{stage}-{start}.log")));
+            Some(dir.join(format!("{stage}-{start}.json")))
+        }
+        None => std::env::var_os("STAND_IN_SCRIPT").map(PathBuf::from),
+    };
+    file.and_then(|file| std::fs::read_to_string(file).ok())
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .unwrap_or(json!([]))
+}
+
+/// The script's runs, each a list of acts: each array of an array of
+/// arrays, or the array of acts whole as the one run.
+fn runs(script: &Value) -> Vec<Vec<Value>> {
+    let items = script.as_array().cloned().unwrap_or_default();
+    if items.first().is_some_and(Value::is_array) {
+        items
+            .into_iter()
+            .map(|run| run.as_array().cloned().unwrap_or_default())
+            .collect()
+    } else {
+        vec![items]
+    }
+}
+
+/// The file the stand-in keeps its log in, where its script was read by
+/// its start.
+static LOG: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// The terminal the session reads its typed prompts from: its standard
+/// input, where that is a terminal, read a key at a time, unechoed, ctrl+c
+/// a key rather than a signal and enter its own key, its settings given
+/// back when the session ends.
+struct Typed {
+    saved: libc::termios,
+}
+
+impl Typed {
+    /// The standard input taken to read typed prompts from, none where it
+    /// is no terminal.
+    fn taken() -> Option<Typed> {
+        // SAFETY: an all-zero `termios` is a valid value for `tcgetattr`
+        // to fill.
+        let mut saved: libc::termios = unsafe { std::mem::zeroed() };
+        // SAFETY: standard input's descriptor, and a `termios` to fill.
+        if unsafe { libc::isatty(0) } != 1 || unsafe { libc::tcgetattr(0, &mut saved) } != 0 {
+            return None;
+        }
+        let mut keys = saved;
+        keys.c_lflag &= !(libc::ICANON | libc::ECHO | libc::ISIG | libc::IEXTEN);
+        keys.c_iflag &= !(libc::ICRNL | libc::INLCR | libc::IGNCR | libc::IXON);
+        keys.c_cc[libc::VMIN] = 1;
+        keys.c_cc[libc::VTIME] = 0;
+        // SAFETY: standard input's descriptor, and the settings to take.
+        unsafe { libc::tcsetattr(0, libc::TCSANOW, &keys) };
+        Some(Typed { saved })
+    }
+
+    /// The next prompt typed: the keys up to the enter that submits it,
+    /// those before a ctrl+c cleared, an enter with nothing typed taking
+    /// nothing; none once the input ends.
+    fn next(&self) -> Option<String> {
+        let mut line: Vec<u8> = vec![];
+        let mut stdin = std::io::stdin().lock();
+        let mut key = [0u8; 1];
+        loop {
+            match stdin.read(&mut key) {
+                Ok(0) => return None,
+                Ok(_) => match key[0] {
+                    b'\r' if line.is_empty() => {}
+                    b'\r' => return Some(String::from_utf8_lossy(&line).into_owned()),
+                    0x03 => line.clear(),
+                    byte => line.push(byte),
+                },
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(_) => return None,
+            }
+        }
+    }
+}
+
+impl Drop for Typed {
+    fn drop(&mut self) {
+        // SAFETY: standard input's descriptor, and the settings it had.
+        unsafe { libc::tcsetattr(0, libc::TCSANOW, &self.saved) };
+    }
+}
+
+/// The herdr pane the stand-in runs in, by `HERDR_PANE_ID`, and the herdr
+/// that runs it, by `HERDR_BIN_PATH`; none outside a herdr pane.
+struct Pane {
+    id: String,
+    herdr: PathBuf,
+}
+
+impl Pane {
+    fn here() -> Option<Pane> {
+        let id = std::env::var("HERDR_PANE_ID")
+            .ok()
+            .filter(|id| !id.is_empty())?;
+        let herdr = std::env::var_os("HERDR_BIN_PATH").filter(|bin| !bin.is_empty())?;
+        Some(Pane {
+            id,
+            herdr: herdr.into(),
+        })
+    }
+
+    /// The state reported to herdr as its reading of the pinned release's
+    /// screen gives it, with the pane's own `HERDR_*` left out, bounded at
+    /// five seconds.
+    fn report(&self, state: &str) {
+        let spawned = Command::new(&self.herdr)
+            .args(["pane", "report-agent", &self.id])
+            .args(["--source", "flume-stand-in", "--agent", "claude"])
+            .args(["--state", state])
+            .env_remove("HERDR_PANE_ID")
+            .env_remove("HERDR_TAB_ID")
+            .env_remove("HERDR_WORKSPACE_ID")
+            .env_remove("HERDR_ENV")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+        let Ok(mut child) = spawned else {
+            say(&format!("herdr could not be told {state}"));
+            return;
+        };
+        let began = Instant::now();
+        loop {
+            match child.try_wait() {
+                Ok(Some(_)) => return,
+                Ok(None) if began.elapsed() < Duration::from_secs(5) => {
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                _ => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    say(&format!("herdr was not told {state} within five seconds"));
+                    return;
+                }
+            }
+        }
+    }
 }
 
 /// The prompt as the session submits it: as given, or where
@@ -300,6 +491,11 @@ struct Session {
     mode: String,
     /// Whether the session is one resumed.
     resumed: bool,
+    /// The records written, which number each record's id and its
+    /// message's.
+    records: u32,
+    /// The herdr pane it runs in, if any, to which it reports its state.
+    pane: Option<Pane>,
 }
 
 impl Session {
@@ -357,6 +553,8 @@ impl Session {
             calls,
             mode,
             resumed: is_resumed,
+            records: calls,
+            pane: Pane::here(),
         }
     }
 
@@ -397,9 +595,10 @@ impl Session {
         Some(path)
     }
 
-    /// The session: its start, the prompt, the script's acts, the stop
-    /// and the end. Whether an act failed.
-    fn run(&mut self, prompt: Option<&str>, script: &Value) -> bool {
+    /// The session: its start, then each run's turn, its prompt the
+    /// command's `prompt` for the first where it passes one and otherwise
+    /// the next typed into `typed`, then the end. Whether an act failed.
+    fn run(&mut self, prompt: Option<String>, runs: &[Vec<Value>], typed: Option<&Typed>) -> bool {
         if let Some(dir) = self.transcript.parent() {
             std::fs::create_dir_all(dir).expect("the transcript's folder");
         }
@@ -412,7 +611,45 @@ impl Session {
         ));
         self.hook("SessionStart", json!({ "source": source }), None);
         let mut failed = false;
+        let mut given = prompt;
+        for (at, acts) in runs.iter().enumerate() {
+            let prompt = match given.take() {
+                Some(prompt) => Some(prompt),
+                None => {
+                    if at == 0 {
+                        self.report("idle");
+                    }
+                    typed.and_then(Typed::next)
+                }
+            };
+            if prompt.is_none() && at > 0 {
+                break;
+            }
+            match self.turn(prompt.as_deref(), acts) {
+                Turn::Ended(acted) => failed |= !acted,
+                Turn::Over => return failed,
+            }
+        }
+        self.hook("SessionEnd", json!({ "reason": "prompt_input_exit" }), None);
+        say("session ended");
+        failed
+    }
+
+    /// The state reported to herdr where the stand-in runs in a herdr
+    /// pane.
+    fn report(&self, state: &str) {
+        if let Some(pane) = &self.pane {
+            pane.report(state);
+        }
+    }
+
+    /// One turn: `prompt` submitted, the run's `acts` made and the turn's
+    /// stop; with no prompt, the stop alone, as a session given none.
+    fn turn(&mut self, prompt: Option<&str>, acts: &[Value]) -> Turn {
+        let mut acted = true;
         if let Some(prompt) = prompt {
+            self.report("working");
+            say(&format!("took the prompt: {}", json!(prompt)));
             self.prompt = prompt.to_string();
             let submitted = submitted(prompt);
             self.queued(&submitted);
@@ -421,16 +658,16 @@ impl Session {
                 say(&format!("prompt blocked: {reason}"));
                 self.hook("SessionEnd", json!({ "reason": "prompt_input_exit" }), None);
                 say("session ended");
-                return failed;
+                return Turn::Over;
             }
             self.user(json!(submitted));
-            for act in script.as_array().into_iter().flatten() {
+            for act in acts {
                 if let Some(failure) = act.get("fail") {
                     self.fail(failure);
-                    return failed;
+                    return Turn::Over;
                 }
                 if !self.act(act) {
-                    failed = true;
+                    acted = false;
                 }
             }
         }
@@ -455,9 +692,9 @@ impl Session {
                 _ => break,
             }
         }
-        self.hook("SessionEnd", json!({ "reason": "prompt_input_exit" }), None);
-        say("session ended");
-        failed
+        say("the turn ended");
+        self.report("idle");
+        Turn::Ended(acted)
     }
 
     /// The turn ended by the API's failure, as 2.1.296 ends one: its words
@@ -469,7 +706,7 @@ impl Session {
         let mut record = self.record(
             "assistant",
             json!({
-                "id": format!("msg_stand_in_{}", self.calls),
+                "id": format!("msg_stand_in_{}", self.records + 1),
                 "model": "<synthetic>",
                 "role": "assistant",
                 "type": "message",
@@ -793,7 +1030,7 @@ impl Session {
 
     fn assistant(&mut self, content: Value, stop: &str) {
         let message = json!({
-            "id": format!("msg_stand_in_{}", self.calls),
+            "id": format!("msg_stand_in_{}", self.records + 1),
             "model": "stand-in",
             "role": "assistant",
             "type": "message",
@@ -815,7 +1052,8 @@ impl Session {
 
     /// A conversation record in the release's shape, chained to the last.
     fn record(&mut self, kind: &str, message: Value) -> Value {
-        let uuid = format!("{}-{:04}-{}", &self.id[..8], self.calls, kind.len());
+        self.records += 1;
+        let uuid = format!("{}-{:04}-{}", &self.id[..8], self.records, kind.len());
         let mut fields = BTreeMap::new();
         fields.insert("parentUuid", json!(self.parent));
         fields.insert("isSidechain", json!(false));
@@ -839,6 +1077,13 @@ impl Session {
             .expect("the transcript");
         writeln!(file, "{record}").expect("a transcript line");
     }
+}
+
+/// How a turn came out: ended, whether its acts were made, and the
+/// session open for another; or the session over with it.
+enum Turn {
+    Ended(bool),
+    Over,
 }
 
 /// What the hooks of one event answered.
@@ -894,6 +1139,17 @@ fn now() -> String {
     )
 }
 
+/// The line printed, and kept in the log where the script was read by its
+/// start.
 fn say(line: &str) {
     println!("stand-in: {line}");
+    if let Some(log) = LOG.get() {
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log)
+        {
+            let _ = writeln!(file, "stand-in: {line}");
+        }
+    }
 }

@@ -594,11 +594,15 @@ gains three things, each named in its doc comment:
   the session.
 
 `walk.rs` gains a host under the pinned herdr: `[host] multiplexer =
-"herdr"`, a headless herdr server on the walkthrough's scratch socket
-and home as `terminal_herdr.rs` starts one, the stand-in first on the
-panes' `PATH`, and the walkthrough's account giving `STAND_IN_SCRIPTS`
-beside its scratch `CLAUDE_CONFIG_DIR` and token. Every herdr call is
-bounded and passes the server's socket (core.29). The
+"herdr"`, its agents in panes of flume's own herdr session, whose
+server the herdr profile starts headless on the walkthrough's scratch
+home, behind a short link so its socket fits, as `open.rs`'s host and
+the live walkthroughs start one; the stand-in first on the panes'
+`PATH`; and the walkthrough's account giving `STAND_IN_SCRIPTS` beside
+its scratch `CLAUDE_CONFIG_DIR` and token. The stand-in's own tests run
+it in a pane of a headless herdr server of the test's own, on a scratch
+socket and home, as `terminal_herdr.rs` starts one. Every herdr call a
+test makes is bounded and passes the server's socket (core.29). The
 walkthroughs in `crates/flume/tests/profiles/tools/open_sessions.rs`
 run on that host in `flume:tools`, each a fix:
 
