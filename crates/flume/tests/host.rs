@@ -110,6 +110,33 @@ fn the_history_scenarios_pass_against_git() {
     });
 }
 
+/// origin's URL as the configuration holds it, where a host's
+/// `url.<base>.insteadOf` rewrites it to a bare remote on the host, so a
+/// repository's address turns on the origin its clone names and not on
+/// the host's rewriting rules (143, C.7).
+#[test]
+fn a_rewritten_origin_is_read_as_configured() {
+    let repository = Repository::new("rewritten");
+    let bare = repository.bare_remote();
+    let origin = "git@github.com:acme/acme.git";
+    repository.git(&["remote", "add", "origin", origin]);
+    repository.git(&[
+        "config",
+        &format!("url.{}.insteadOf", bare.to_string_lossy()),
+        origin,
+    ]);
+    assert_eq!(
+        repository.git(&["remote", "get-url", "origin"]),
+        bare.to_string_lossy(),
+        "git rewrites the origin it reaches"
+    );
+    assert_eq!(
+        GitHistory.origin_url(&repository.name()),
+        Some(origin.to_string()),
+        "the origin as configured"
+    );
+}
+
 #[test]
 fn a_head_reads_none_for_a_branch_that_does_not_exist() {
     let repository = Repository::new("no-branch");
