@@ -60,7 +60,7 @@ Every scenario added cites its clauses as data (106).
 ## 5. The sluice profile's forecast
 
 - [x] 5.1 Have the sluice profile answer forecast by `sluice submit <base> --check --head <branch> --json` in the repository as design 3 and the merge-queue-profile spec have it, its answer read of the pinned sluice 0.71.0, passing `--check` to no submit; unit-test its reading of a clear answer, a conflict with and without entries ahead, and a refusal, the spec's "A conflict's words" among them (210, C.6; core.6). True when `devenv shell -- cargo test -p flume --lib profiles::merge_queue::sluice` passes.
-- [ ] 5.2 Add the merge-queue-profile spec's "A base place's branch forecast over a scratch repository" to `crates/flume/tests/profiles/tools/merge_queue_sluice.rs` against the pinned sluice, and give its harness 2.4's move of a base so the seam's base place scenarios, "Clear, then in conflict" among them, run against sluice too (203, 210; sluice 64). True when `devenv shell -- cargo test -p flume --features tools --test tools merge_queue_sluice` passes.
+- [x] 5.2 Add the merge-queue-profile spec's "A base place's branch forecast over a scratch repository" to `crates/flume/tests/profiles/tools/merge_queue_sluice.rs` against the pinned sluice, and give its harness 2.4's move of a base so the seam's base place scenarios, "Clear, then in conflict" among them, run against sluice too (203, 210; sluice 64). True when `devenv shell -- cargo test -p flume --features tools --test tools merge_queue_sluice` passes.
 
 ## 6. The guide and the clause list
 

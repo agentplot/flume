@@ -678,6 +678,125 @@ fn a_base_places_branch_over_a_scratch_repository() {
 }
 
 #[test]
+fn a_base_places_branch_forecast_over_a_scratch_repository() {
+    // The merge-queue-profile spec's "A base place's branch forecast over
+    // a scratch repository": sluice lands main and `train/*` on a stand-in
+    // origin; flume opens `train/a`, a fix lands a change to README.md on
+    // it, and the forecast of `train/a` onto main is clear at main's
+    // revision; a change to README.md lands on main, and the next is in
+    // conflict on README.md at main's new revision, meeting main itself.
+    // Neither leaves an entry of `train/a` in main's records (203, 210;
+    // sluice 64).
+    let harness = Harness::with_policy(TRAINS_ON_ORIGIN);
+    let repository = harness.repository.name();
+    let remote = harness.repository.bare_remote();
+    harness
+        .repository
+        .git(&["remote", "add", "origin", &remote.to_string_lossy()]);
+    harness.repository.git(&["fetch", "--quiet", "origin"]);
+    let on_origin = |branch: &str| {
+        let line = git(
+            &harness.repository.dir,
+            &[
+                "ls-remote",
+                &remote.to_string_lossy(),
+                &format!("refs/heads/{branch}"),
+            ],
+        );
+        line.split_whitespace().next().map(Revision::new)
+    };
+    let BranchOpened::Made { .. } = harness.seam.open(&repository, "train/a", "main") else {
+        panic!("train/a was not opened");
+    };
+    // A place on `from`, cut where the origin holds it, landing a change
+    // to README.md written `text` on it.
+    let lands = |name: &str, from: &str, text: &str| {
+        harness
+            .repository
+            .git(&["fetch", "--quiet", "origin", from]);
+        let location = harness.repository.dir.join("places").join(name);
+        harness.repository.git(&[
+            "worktree",
+            "add",
+            "--quiet",
+            "-b",
+            name,
+            &location.to_string_lossy(),
+            &format!("origin/{from}"),
+        ]);
+        fs::write(location.join("README.md"), text).expect("the work written");
+        git(&location, &["add", "README.md"]);
+        git(&location, &["commit", "--quiet", "-m", name]);
+        let place = PlaceRef {
+            repository: repository.clone(),
+            location: location.to_string_lossy().into(),
+            branch: name.into(),
+            base: from.into(),
+        };
+        let head = Revision::new(git(&location, &["rev-parse", "HEAD"]));
+        let Submitted::Submitted { .. } = harness.seam.submit(&place, &from_worktree(&head)) else {
+            panic!("{name}'s submit to {from} was refused");
+        };
+        let landed = stepped_until_decided(&harness.seam, &repository, from, name);
+        assert!(
+            matches!(landed.state, SubmissionState::Landed { .. }),
+            "{name} came to {landed:?}"
+        );
+    };
+    let no_entry = || {
+        let status = harness.sluice(
+            &harness.repository.dir,
+            &["status", "main", "--all", "--json"],
+        );
+        let entries: Vec<&Value> = status["submissions"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|record| {
+                record["from"]["head"] == "train/a" || record["from"]["worktree"] == "train/a"
+            })
+            .collect();
+        assert!(entries.is_empty(), "train/a's entries on main: {entries:?}");
+    };
+
+    lands("fix-a", "train/a", "the branch's own\n");
+    let head = on_origin("train/a").expect("train/a on the origin");
+    let main = on_origin("main").expect("main on the origin");
+    assert_eq!(
+        harness.seam.forecast(&repository, "train/a", "main"),
+        Forecast::Clear {
+            head: head.clone(),
+            onto: main,
+        },
+        "the forecast while the two merge"
+    );
+    no_entry();
+
+    lands("other", "main", "the base's own\n");
+    let main = on_origin("main").expect("main on the origin");
+    match harness.seam.forecast(&repository, "train/a", "main") {
+        Forecast::Conflict {
+            head: at,
+            onto,
+            files,
+            with,
+            words,
+        } => {
+            assert_eq!(at, head, "the head forecast");
+            assert_eq!(onto, main, "main's new revision");
+            assert_eq!(files, vec!["README.md".to_string()], "the files contested");
+            assert!(with.is_empty(), "a conflict with main met {with:?}");
+            assert!(
+                words.contains("README.md") && words.contains(&main.0),
+                "the words: {words}"
+            );
+        }
+        other => panic!("the forecast once main moved: {other:?}"),
+    }
+    no_entry();
+}
+
+#[test]
 fn an_open_of_a_branch_the_policy_names_no_table_for_is_refused_in_sluices_words() {
     let harness = Harness::new();
     let repository = harness.repository.name();
