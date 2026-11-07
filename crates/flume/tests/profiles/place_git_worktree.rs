@@ -6,8 +6,10 @@
 //! clone's main worktree or beside a bare repository's worktrees read and
 //! removed where it stands (record 0027), a place readied at the revision
 //! its launch read through the resolver over a stand-in for sluice,
-//! nothing of a readiness kept in the place's git directory, and a base
-//! place launched and tidied through the core with only its location
+//! nothing of a readiness kept in the place's git directory, nothing left
+//! at a removed place's location or in its empty group folder whatever
+//! git could not delete or a process wrote there (record 0057), and a
+//! base place launched and tidied through the core with only its location
 //! asked of the profile. No sluice runs here: the pinned one equips a
 //! place in the tools layer.
 
@@ -904,6 +906,140 @@ fn the_main_worktree_is_never_removed() {
     };
     assert!(matches!(profile.remove(&main), Removed::Refused { .. }));
     assert!(repository.dir.join("README").is_file());
+}
+
+/// The group folder of a place's location, `places/<id>` under flume's
+/// own data directory.
+fn group(place: &PlaceRef) -> PathBuf {
+    Path::new(&place.location)
+        .parent()
+        .expect("the place's group folder")
+        .to_path_buf()
+}
+
+/// What a devenv shell entered in a place writes there, ignored by every
+/// worktree of `repository` through its common git directory's exclude:
+/// `.devenv/state/prek`, and `.moon/cache/outputs` a link to a folder
+/// outside the place holding `archive`. The folder linked to.
+fn devenv_writes(repository: &Repository, location: &Path) -> PathBuf {
+    let exclude = repository.dir.join(".git/info/exclude");
+    std::fs::create_dir_all(exclude.parent().unwrap()).unwrap();
+    std::fs::write(&exclude, ".devenv/\n.moon/\n").unwrap();
+    let outputs = repository.scratch.path("moon-outputs");
+    std::fs::create_dir_all(&outputs).unwrap();
+    std::fs::write(outputs.join("archive"), "shared\n").unwrap();
+    std::fs::create_dir_all(location.join(".devenv/state/prek")).unwrap();
+    std::fs::create_dir_all(location.join(".moon/cache")).unwrap();
+    std::os::unix::fs::symlink(&outputs, location.join(".moon/cache/outputs")).unwrap();
+    outputs
+}
+
+#[test]
+fn a_place_git_half_removes_leaves_no_folder() {
+    // `git worktree remove` drops its entry of a place and fails where it
+    // cannot delete what the place holds, here a folder of ignored state
+    // it may not write in; what stands goes with the place, and its group
+    // folder once empty (62; record 0057).
+    let repository = Repository::new("half-removed");
+    let profile = profile(PlaceData::default(), &repository.scratch);
+    let place = made(&profile, &repository, "half");
+    let location = Path::new(&place.location);
+    let outputs = devenv_writes(&repository, location);
+    let stuck = location.join(".devenv/state/stuck");
+    std::fs::create_dir_all(&stuck).unwrap();
+    std::fs::write(stuck.join("state"), "kept\n").unwrap();
+    std::fs::set_permissions(&stuck, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+    assert_eq!(profile.remove(&place), Removed::Removed);
+    assert!(!location.exists(), "the place's folder still stands");
+    assert!(
+        !group(&place).exists(),
+        "the empty group folder still stands"
+    );
+    assert!(own(&repository.scratch).join("places").is_dir());
+    assert_eq!(profile.read(&place), PlaceRead::Gone);
+    assert!(
+        outputs.join("archive").is_file(),
+        "a link was followed out of the place"
+    );
+}
+
+#[test]
+fn what_a_process_wrote_at_a_gone_places_location_goes() {
+    // A process that wrote into a place as its worktree went, a devenv
+    // shell's `.devenv` and `.moon` among it, leaves a folder git holds no
+    // worktree for: the place reads gone, and its remove takes the folder
+    // and the empty group folder, never what a link points at (62; record
+    // 0057).
+    let repository = Repository::new("gone-written");
+    let profile = profile(PlaceData::default(), &repository.scratch);
+    let place = made(&profile, &repository, "written");
+    repository.git(&["worktree", "remove", &place.location]);
+    let location = Path::new(&place.location);
+    let outputs = devenv_writes(&repository, location);
+    assert_eq!(profile.read(&place), PlaceRead::Gone);
+
+    assert_eq!(profile.remove(&place), Removed::Removed);
+    assert!(!location.exists(), "the place's folder still stands");
+    assert!(
+        !group(&place).exists(),
+        "the empty group folder still stands"
+    );
+    assert!(
+        outputs.join("archive").is_file(),
+        "a link was followed out of the place"
+    );
+    assert_eq!(
+        profile.remove(&place),
+        Removed::Removed,
+        "a remove repeated"
+    );
+}
+
+#[test]
+fn a_group_folder_holding_another_place_stays() {
+    let repository = Repository::new("group-kept");
+    let profile = profile(PlaceData::default(), &repository.scratch);
+    let gone = made(&profile, &repository, "gone");
+    let stays = made(&profile, &repository, "stays");
+    assert_eq!(group(&gone), group(&stays));
+    devenv_writes(&repository, Path::new(&gone.location));
+
+    assert_eq!(profile.remove(&gone), Removed::Removed);
+    assert!(!Path::new(&gone.location).exists());
+    assert!(
+        group(&stays).is_dir(),
+        "the group folder of a live place went"
+    );
+    assert!(matches!(profile.read(&stays), PlaceRead::Live { .. }));
+}
+
+#[test]
+fn a_worktree_another_repository_holds_at_a_places_location_is_kept() {
+    // What stands at a gone place's location goes only where no git holds
+    // a worktree there.
+    let repository = Repository::new("held-elsewhere");
+    let other = Repository::new("held-elsewhere-other");
+    let profile = profile(PlaceData::default(), &repository.scratch);
+    let location = profile
+        .location(&repository.name(), "fix--held")
+        .expect("the place's location");
+    other.git(&["worktree", "add", "--quiet", "-b", "theirs", &location]);
+    let place = PlaceRef {
+        repository: repository.name(),
+        location: location.clone(),
+        branch: "fix/held".into(),
+        base: "main".into(),
+    };
+    assert_eq!(profile.read(&place), PlaceRead::Gone);
+
+    match profile.remove(&place) {
+        Removed::Refused { words, .. } => {
+            assert!(words.contains("git still holds"), "{words}")
+        }
+        other => panic!("another repository's worktree was {other:?}"),
+    }
+    assert!(Path::new(&location).join("README").is_file());
 }
 
 /// The profile, each call of the place seam named in `asked` before it

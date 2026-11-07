@@ -14,7 +14,9 @@
 //! its common git directory's as its agents' identities name it (C.4). A
 //! place is read and removed at the location it was made at, wherever
 //! that is, one an earlier flume made at `<repository>/places/` among
-//! them.
+//! them. Once git holds no worktree there, what still stands at the
+//! location goes, and the `places/<id>` folder with it once it holds no
+//! place (62; record 0057).
 //!
 //! The readiness, the teardown and where the base lives are the merge
 //! queue profile's to declare; the binary's resolver hands them to this
@@ -35,9 +37,11 @@ use flume_seams::{
     BranchRemoved, Holds, MakeOutcome, Place, PlaceRead, PlaceRef, Readiness, ReadyStep, Removed,
     Revision,
 };
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 /// A reading of what a step printed, whether it passed, on its output and
 /// on its errors, as the readiness's steps, each with its outcome and
@@ -170,6 +174,11 @@ pub const NAME: &str = "git-worktree";
 /// holds keeps it (81, 65).
 const REMOVE_STEP: &str = "git worktree remove";
 
+/// How many times what stands at a gone place's location is removed
+/// before the place is kept, so a process writing there as it goes does
+/// not keep it on one race (record 0057).
+const CLEARS: usize = 3;
+
 /// Where the place `place`, `<kind>--<name>`, of `repository` is made
 /// (3, C.1; record 0027): under `own`, flume's own data directory, at
 /// `places/<id>/<place>`, the id the repository's, of its common git
@@ -278,6 +287,101 @@ impl GitWorktree {
             (Ok((passed, stdout, stderr)), None) => {
                 vec![itself(passed, &format!("{stdout}{stderr}"))]
             }
+        }
+    }
+}
+
+impl GitWorktree {
+    /// What stands at the location of a place git holds no worktree for
+    /// removed, the place's own folder with it, and then its group
+    /// folder, `places/<id>` under flume's own data directory, once that
+    /// holds no other place (62; record 0057): the `.devenv` or `.moon` a
+    /// process wrote there while `git worktree remove` deleted it, or
+    /// what that removal could not delete. A `.git` file whose git
+    /// directory still stands is a worktree git knows, and is refused.
+    fn left(&self, place: &PlaceRef) -> Removed {
+        let location = Path::new(&place.location);
+        if let Some(gitdir) = linked(location) {
+            return Removed::Refused {
+                step: REMOVE_STEP.into(),
+                words: format!(
+                    "{} is the worktree of {}, which git still holds",
+                    place.location,
+                    gitdir.display()
+                ),
+            };
+        }
+        if let Err(words) = clear(location) {
+            return Removed::Refused {
+                step: REMOVE_STEP.into(),
+                words,
+            };
+        }
+        if let (Some(own), Some(group)) = (&self.own, location.parent()) {
+            if group.parent().map(canonical) == Some(canonical(&own.join("places"))) {
+                // Only an empty folder goes: another place's keeps it.
+                let _ = std::fs::remove_dir(group);
+            }
+        }
+        Removed::Removed
+    }
+}
+
+/// The git directory a `.git` file at `location` names, where it still
+/// stands.
+fn linked(location: &Path) -> Option<PathBuf> {
+    let text = std::fs::read_to_string(location.join(".git")).ok()?;
+    let gitdir = location.join(text.trim().strip_prefix("gitdir:")?.trim());
+    gitdir.exists().then_some(gitdir)
+}
+
+/// `location` removed with all it holds, never following a link, each
+/// folder in it made writable where a removal is refused, and removed
+/// again while a process writing there races it, `CLEARS` times in all.
+fn clear(location: &Path) -> Result<(), String> {
+    let mut last = String::new();
+    for attempt in 0..CLEARS {
+        let Ok(metadata) = location.symlink_metadata() else {
+            return Ok(());
+        };
+        if attempt > 0 {
+            std::thread::sleep(Duration::from_millis(100));
+            writable(location);
+        }
+        let removed = if metadata.is_dir() {
+            std::fs::remove_dir_all(location)
+        } else {
+            std::fs::remove_file(location)
+        };
+        match removed {
+            Ok(()) => return Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => last = error.to_string(),
+        }
+    }
+    Err(format!(
+        "what stands at {} could not be removed: {last}",
+        location.display()
+    ))
+}
+
+/// Every folder at and under `path` given its owner's write, read and
+/// search, never through a link.
+fn writable(path: &Path) {
+    let Ok(metadata) = path.symlink_metadata() else {
+        return;
+    };
+    if !metadata.is_dir() {
+        return;
+    }
+    let mut permissions = metadata.permissions();
+    if permissions.mode() & 0o700 != 0o700 {
+        permissions.set_mode(permissions.mode() | 0o700);
+        let _ = std::fs::set_permissions(path, permissions);
+    }
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            writable(&entry.path());
         }
     }
 }
@@ -446,9 +550,11 @@ impl Place for GitWorktree {
         match self.read(place) {
             PlaceRead::Gone => {
                 // A worktree whose directory is gone leaves git's entry of
-                // it, which goes too.
+                // it, which goes too, and what stands at its location
+                // once git holds no worktree there goes with the place
+                // (62; record 0057).
                 let _ = Git::at(&place.repository).text(&["worktree", "prune"]);
-                return Removed::Removed;
+                return self.left(place);
             }
             PlaceRead::CouldNotRead { reason } => return refused(reason),
             PlaceRead::Live { holds, .. } if holds.any() => {
@@ -485,9 +591,20 @@ impl Place for GitWorktree {
                 };
             }
         }
-        match Git::at(&place.repository).text(&["worktree", "remove", &place.location]) {
-            Ok(_) => Removed::Removed,
-            Err(words) => refused(words),
+        // `git worktree remove` that fails once it began deleting has
+        // dropped its entry of the place all the same, leaving the folder
+        // with whatever it could not delete or a process wrote into it
+        // meanwhile: the place is gone to git, and what stands goes as a
+        // gone place's (62; record 0057).
+        let removed = Git::at(&place.repository).text(&["worktree", "remove", &place.location]);
+        match (removed, self.entry(&place.repository, &place.location)) {
+            (_, Err(reason)) => refused(reason),
+            (Err(words), Ok(Some(_))) => refused(words),
+            (Ok(_), Ok(Some(_))) => refused(format!(
+                "git still holds a worktree at {} once it removed it",
+                place.location
+            )),
+            (_, Ok(None)) => self.left(place),
         }
     }
 

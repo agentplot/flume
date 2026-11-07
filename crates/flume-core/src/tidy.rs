@@ -5,7 +5,9 @@
 //! while the merge queue cannot be read; what the terminal made for it
 //! is tidied, kept where what flume did not make holds it (137, 138);
 //! a place whose kind holds a conversation is kept while a process runs
-//! its last conversation start's session (207; core.18);
+//! its last conversation start's session (207; core.18); a place read
+//! gone is removed all the same, so its location holds nothing of it
+//! (62; record 0057);
 //! its held state and folder go last, its document alone kept apart from
 //! a live place's while an end of it stands pending (43, 62). A base
 //! place has no worktree to remove and no teardown to run: its branch is
@@ -134,19 +136,22 @@ impl Engine {
                     );
                 }
             }
+            // A place read gone, its worktree gone to its repository, is
+            // still removed through the place seam, so nothing of it stands
+            // at its location (62; record 0057); a base place has none.
             match if base {
-                PlaceRead::Gone
+                None
             } else {
-                bound.place.read(&at)
+                Some(bound.place.read(&at))
             } {
-                PlaceRead::Gone => {}
-                PlaceRead::CouldNotRead { reason } => {
+                None => {}
+                Some(PlaceRead::CouldNotRead { reason }) => {
                     return self.keep(id, Kept::Unreadable { reason }, tidied)
                 }
-                PlaceRead::Live { holds, .. } if holds.any() => {
+                Some(PlaceRead::Live { holds, .. }) if holds.any() => {
                     return self.keep(id, Kept::Holds { holds }, tidied)
                 }
-                PlaceRead::Live { .. } => {
+                Some(PlaceRead::Live { .. } | PlaceRead::Gone) => {
                     if let Removed::Refused { step, words } = bound.place.remove(&at) {
                         return self.keep(id, Kept::Teardown { step, words }, tidied);
                     }
