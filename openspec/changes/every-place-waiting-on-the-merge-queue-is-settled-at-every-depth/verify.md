@@ -105,5 +105,27 @@ each test it names is in the tree:
 
 ## Beside the change
 
-Main is still at `9a838ee1`, which the branch holds, so a submission
-meets no conflict.
+While the gate ran, main moved from `9a838ee1` to `b1f6a617` by landing
+#147, an-answer-reaches-the-open-session-within-an-hour. `git
+merge-tree` finds this branch conflicting with it in seven files:
+
+- `crates/flume-conformance/src/clauses.rs`
+- `crates/flume-conformance/src/engine/mod.rs`
+- `crates/flume-core/src/acts.rs`
+- `crates/flume-core/src/status.rs`
+- `crates/flume-fakes/tests/fakes.rs`
+- `crates/flume/src/commands/print.rs`
+- `site/src/content/docs/reference/state.md`
+
+#147's archive also modified eight of the specs this change's archive
+writes: stage-runs, place-status, end-delivery, kinds-profile,
+command-line, seam-contracts, seam-fakes and clause-coverage. Main's
+`clauses.rs` reads blueprints at `9c060ab`, and names 202 to 206, 208,
+S109 to S112 and S118 as unbuilt, by record 0051's change, which is
+this one. The merge should take `9c060ab` and name them built.
+
+None of this is a fault of the work against its change, so the change
+is archived. The submission will come back conflicting, and that takes
+the change to its send-back stage (core.27). That stage merges main,
+both sides kept, re-applies these specs over main's, and runs the gate
+again.
