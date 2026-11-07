@@ -337,7 +337,7 @@ fn read_earlier_stall(
 /// that answers it, with its words, whether it needs an answer or found
 /// work, its key and the role it named; none for any other move (41, 42,
 /// 130).
-fn stop_short_waited(held: &HeldState, waiting: &WaitingOn) -> Option<StopShortWaited> {
+pub(crate) fn stop_short_waited(held: &HeldState, waiting: &WaitingOn) -> Option<StopShortWaited> {
     if waiting.act != Act::Retry || !matches!(waiting.why, Waits::Answer | Waits::PastBound) {
         return None;
     }

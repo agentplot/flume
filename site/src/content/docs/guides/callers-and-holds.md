@@ -47,7 +47,7 @@ happens:
 Each end is delivered **once** to each recipient, inside the settle
 that reads it, as a one-line notice through the terminal into the
 recipient's own pane, such as
-`flume: fix--the-parser-reads-tabs code delivered; read: flume status fix--the-parser-reads-tabs`. flume records on the place that it was
+`flume: fix--the-parser-reads-tabs code delivered [stage/code/1/delivered]; read: flume status fix--the-parser-reads-tabs`. flume records on the place that it was
 delivered, to whom and when. A recipient asking a question, or one the
 terminal cannot read or find, gets nothing typed into its pane; the end stays
 **pending** for a later settle, a wait or the inbox. Under the printed
@@ -93,9 +93,25 @@ write, so two inboxes at once deliver each end once:
 
 ```console
 $ flume inbox --recipient me
-fix--the-parser-reads-tabs code delivered; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
+fix--the-parser-reads-tabs code delivered [stage/code/1/delivered]; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
 $ flume inbox --recipient me
 nothing pending for me
+```
+
+Beneath what it collected, the inbox gives every place that waits on
+its caller and on the recipient: one it is a recipient of, one whose
+stop-short named it, or one whose stall reached it as the answerer
+behind its stream. Each comes with the move it waits on and since when,
+the stop-short's words and key, the role it named, and a hold on the
+move. The inbox marks nothing for these, so a recipient that collected
+a question and then restarted still finds it:
+
+```console
+$ flume inbox --recipient east/ops
+nothing pending for east/ops
+change--plan (one of two designs), in east, waits on east/ops; read: flume status ~/.local/share/flume/places/f5f5e14159a8/change--plan
+  waits on its caller to retry construct (answer) since 1793287734: Which design does the brief mean?
+  its stop-short stage/construct/1/ended-short needs an answer, asking east/ops
 ```
 
 A session that starts runs it to catch up on what it missed. Reading

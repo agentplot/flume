@@ -334,6 +334,7 @@ fn a_recipient_unnamed_is_the_herdr_pane_the_command_runs_in() {
         Answer::Inbox {
             recipient: format!("herdr:w1-p2@{}", socket.display()),
             ends: vec![],
+            waiting: vec![],
         }
     );
 }

@@ -911,6 +911,35 @@ pub fn full() -> Vec<(&'static str, Answer)> {
                         end,
                     })
                     .collect(),
+                waiting: vec![WaitingPlace {
+                    place: PlaceId::new("/r/places/change--plan"),
+                    kind: "change".into(),
+                    name: "plan".into(),
+                    stream: "east".into(),
+                    brief: Some("one of two designs".into()),
+                    waiting_on: WaitingOn {
+                        act: Act::Retry,
+                        stage: Some("construct".into()),
+                        why: Waits::Answer,
+                        since: Some(100),
+                        words: Some("Which design does the brief mean?".into()),
+                        open_until: Some(3700),
+                        closed: None,
+                    },
+                    stop_short: Some(StopShortWaited {
+                        words: Some("Which design does the brief mean?".into()),
+                        needs: Some(StopKind::NeedsAnswer),
+                        key: "stage/construct/1/ended-short".parse().expect("a key"),
+                        addressee: Some("east/ops".into()),
+                    }),
+                    hold: Some(Hold {
+                        on: HoldOn::Waiting,
+                        words: Some("east-planner has it".into()),
+                        since: 160,
+                        bound: Some(3600),
+                        lapsed: None,
+                    }),
+                }],
             },
         ),
         (

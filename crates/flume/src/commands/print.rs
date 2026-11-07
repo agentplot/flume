@@ -6,8 +6,8 @@
 use flume_core::{
     group_name, percentage, AgentStatus, Answer, HostStatus, OwnStatus, PlaceStatus, PoolStatus,
     Queued, ReadingStatus, Reserves, SessionAnswer, SessionWait, SourceStatus, StageStatus,
-    StandingFound, StandingStatus, StreamOpened, StreamStatus, Tidied, TitleFrom, WindowOutcome,
-    Woke,
+    StandingFound, StandingStatus, StreamOpened, StreamStatus, Tidied, TitleFrom, WaitingPlace,
+    WindowOutcome, Woke,
 };
 use flume_seams::{
     AccountFrom, Act, AnswerHeld, BaseFrom, CarryCause, ClosedBy, ConfigLayer, ConfigValue,
@@ -93,18 +93,26 @@ pub fn person(answer: &Answer) -> String {
                 )
             }
         }),
-        Answer::Inbox { recipient, ends } => {
+        Answer::Inbox {
+            recipient,
+            ends,
+            waiting,
+        } => {
             if ends.is_empty() {
                 lines.push(format!("nothing pending for {recipient}"));
             }
             for collected in ends {
                 lines.push(format!(
-                    "{}--{} {}; read: flume status {}",
+                    "{}--{} {} [{}]; read: flume status {}",
                     collected.kind,
                     collected.name,
                     flume_core::end_words(&collected.end.end.of),
+                    collected.end.key,
                     collected.place
                 ));
+            }
+            for place in waiting {
+                lines.extend(waiting_place_lines(recipient, place));
             }
         }
         Answer::Woken {
@@ -562,6 +570,46 @@ fn waiting_line(waiting: &WaitingOn, stalled: bool) -> String {
         _ => {}
     }
     line
+}
+
+/// A place the inbox gives as waiting on `recipient`: the place, its
+/// brief's first line and its stream, then the move it waits on and since
+/// when, the stop-short the move answers by its key, whether it needs an
+/// answer or found work and the address it named, its agent kept open or
+/// let go, and the hold on the move (43, 130, 193; design 9).
+fn waiting_place_lines(recipient: &str, place: &WaitingPlace) -> Vec<String> {
+    let brief = place
+        .brief
+        .as_ref()
+        .map(|brief| format!(" ({brief})"))
+        .unwrap_or_default();
+    let mut lines = vec![
+        format!(
+            "{}--{}{brief}, in {}, waits on {recipient}; read: flume status {}",
+            place.kind, place.name, place.stream, place.place
+        ),
+        waiting_line(&place.waiting_on, false),
+    ];
+    if let Some(stop_short) = &place.stop_short {
+        let needs = match stop_short.needs {
+            Some(StopKind::FoundWork) => "found work",
+            _ => "needs an answer",
+        };
+        let mut line = format!("  its stop-short {} {needs}", stop_short.key);
+        if let Some(addressee) = &stop_short.addressee {
+            line.push_str(&format!(", asking {addressee}"));
+        }
+        match &stop_short.words {
+            Some(words) if place.waiting_on.words.as_ref() != Some(words) => {
+                line.push_str(&format!(": {words}"));
+            }
+            _ => {}
+        }
+        lines.push(line);
+    }
+    lines.extend(kept_open_line(&place.waiting_on));
+    lines.extend(place.hold.as_ref().map(hold_line));
+    lines
 }
 
 /// A hold's line: what it holds, since when and its words; for the move
@@ -1617,8 +1665,8 @@ mod tests {
     use flume_seams::{
         AccountFrom, AccountHeld, AccountMove, AgentState, AnswerHeld, Declared, EndHeld, EndOf,
         Given, Handed, Layer, ModeBegan, MoveOn, MoveWhy, NamedBy, Phase, PlaceId, ProfileHeld,
-        Reading, ReadyStep, Reserved, SessionClosed, SessionRuns, StageEnd, StageState, Strategy,
-        StreamFrom, StreamHeld, Unsettled, View, ViewHeld,
+        Reading, ReadyStep, Reserved, SessionClosed, SessionRuns, StageEnd, StageState,
+        StopShortWaited, Strategy, StreamFrom, StreamHeld, Unsettled, View, ViewHeld,
     };
     use std::collections::BTreeMap;
 
@@ -3593,10 +3641,11 @@ mod tests {
                 name: "one".into(),
                 end,
             }],
+            waiting: vec![],
         };
         assert_eq!(
             person(&inbox),
-            "research--one talk lost, and flume left the agent the terminal brought back in its pane; read: flume status /d/places/1/research--one"
+            "research--one talk lost, and flume left the agent the terminal brought back in its pane [stage/talk/1/lost]; read: flume status /d/places/1/research--one"
         );
     }
 
@@ -3803,10 +3852,64 @@ mod tests {
                 name: "one".into(),
                 end: EndStatus::of(&end, &["ops".to_string()]),
             }],
+            waiting: vec![],
         };
         assert_eq!(
             person(&inbox),
-            "fix--one code needs an answer, its agent kept open for the answer until 4600; read: flume status /d/places/1/fix--one"
+            "fix--one code needs an answer, its agent kept open for the answer until 4600 [stage/code/1/ended-short]; read: flume status /d/places/1/fix--one"
+        );
+    }
+
+    #[test]
+    fn a_place_waiting_in_the_inbox() {
+        // 43, 130, 193, design 9: the inbox gives a place waiting on its
+        // recipient with its brief's first line and stream, the move and
+        // since when, the stop-short by its key and the role it asked, its
+        // agent kept open, and the hold on the move.
+        let inbox = Answer::Inbox {
+            recipient: "east/ops".into(),
+            ends: vec![],
+            waiting: vec![WaitingPlace {
+                place: PlaceId::new("/d/places/1/change--plan"),
+                kind: "change".into(),
+                name: "plan".into(),
+                stream: "east".into(),
+                brief: Some("one of two designs".into()),
+                waiting_on: WaitingOn {
+                    act: Act::Retry,
+                    stage: Some("construct".into()),
+                    why: Waits::Answer,
+                    since: Some(100),
+                    words: Some("Which design does the brief mean?".into()),
+                    open_until: Some(3700),
+                    closed: None,
+                },
+                stop_short: Some(StopShortWaited {
+                    words: Some("Which design does the brief mean?".into()),
+                    needs: Some(StopKind::NeedsAnswer),
+                    key: "stage/construct/1/ended-short".parse().unwrap(),
+                    addressee: Some("east/ops".into()),
+                }),
+                hold: Some(Hold {
+                    on: HoldOn::Waiting,
+                    words: Some("east-planner has it".into()),
+                    since: 160,
+                    bound: Some(3600),
+                    lapsed: None,
+                }),
+            }],
+        };
+        assert_eq!(
+            person(&inbox),
+            [
+                "nothing pending for east/ops",
+                "change--plan (one of two designs), in east, waits on east/ops; read: flume status /d/places/1/change--plan",
+                "  waits on its caller to retry construct (answer) since 100: Which design does the brief mean?",
+                "  its stop-short stage/construct/1/ended-short needs an answer, asking east/ops",
+                "    its agent kept open for the answer until 3700: retry with --words, or tell it",
+                "  the move it waits on on hold since 160, for 3600 seconds: east-planner has it",
+            ]
+            .join("\n")
         );
     }
 

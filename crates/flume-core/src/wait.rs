@@ -17,7 +17,8 @@
 //! environment's, else the role a role's run serves, else the calling
 //! session as the terminal names it, as a launch's (7, 132).
 
-use crate::{Answer, Collected, EndStatus, Engine, Step};
+use crate::held::stop_short_waited;
+use crate::{Answer, Collected, EndStatus, Engine, Step, WaitingPlace};
 use flume_seams::*;
 
 /// How often a wait reads the host's state again (design 9).
@@ -173,13 +174,17 @@ impl Engine {
 
     /// Collects every end pending for `recipient` of every place on the
     /// host, each recorded delivered by the inbox in the write that reads
-    /// it; an act on places, so under a terminal that keeps no watch it
-    /// settles every place first (43, 119; design 9).
+    /// it, and gives every place that waits on its caller and on
+    /// `recipient`, marking nothing for it; an act on places, so under a
+    /// terminal that keeps no watch it settles every place first (43, 119,
+    /// 130, 193; design 9).
     pub fn inbox(&self, recipient: &str) -> Answer {
         self.settle_attended();
         let mut ends = vec![];
+        let mut waiting = vec![];
         for read in self.store.read_every() {
             let held = read.state;
+            waiting.extend(waits_on(&held, recipient));
             if !held
                 .ends
                 .iter()
@@ -221,8 +226,46 @@ impl Engine {
         Answer::Inbox {
             recipient: recipient.into(),
             ends,
+            waiting,
         }
     }
+}
+
+/// The place `held` as the inbox gives it waiting on `recipient`: where it
+/// waits on its caller, and `recipient` is a recipient of it, was named by
+/// the stop-short the move answers, or was given a stall of the move as the
+/// answerer behind its stream; none otherwise (43, 130, 193; design 9).
+fn waits_on(held: &HeldState, recipient: &str) -> Option<WaitingPlace> {
+    let on = &held.waiting.as_ref()?.on;
+    let place = &held.place;
+    let stop_short = stop_short_waited(held, on);
+    let named = stop_short
+        .as_ref()
+        .and_then(|stop_short| stop_short.addressee.as_deref())
+        == Some(recipient);
+    // A stall of this move, not of one the place made before it: its
+    // since is the move's, or a lapsed hold's after it (130).
+    let answered = held.ends.iter().any(|end| {
+        matches!(
+            &end.of,
+            EndOf::Stall { since, answerer: Some(answerer), .. }
+                if answerer == recipient && on.since.is_none_or(|from| *since >= from)
+        )
+    });
+    let reached = place.recipients.iter().any(|named| named == recipient);
+    if !(reached || named || answered) {
+        return None;
+    }
+    Some(WaitingPlace {
+        place: PlaceId::new(place.location.clone()),
+        kind: place.kind.name.clone(),
+        name: place.name.clone(),
+        stream: place.stream.name.clone(),
+        brief: place.brief_line().map(str::to_string),
+        waiting_on: on.clone(),
+        stop_short,
+        hold: held.waiting_hold().cloned(),
+    })
 }
 
 /// The key of the newest end of what a wait waits on: of the stage's

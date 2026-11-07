@@ -879,6 +879,16 @@ impl PlaceRecord {
     pub fn short(&self) -> String {
         format!("{}--{}", self.kind.name, self.name)
     }
+
+    /// The first line of its brief that holds anything, trimmed; none
+    /// where it has no brief or a blank one (43; design 9).
+    pub fn brief_line(&self) -> Option<&str> {
+        self.brief
+            .as_deref()?
+            .lines()
+            .map(str::trim)
+            .find(|line| !line.is_empty())
+    }
 }
 
 /// Where a place stands as a whole.

@@ -337,7 +337,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 ## 8. What a restarted recipient sees
 
-- [ ] 8.1 Have `Engine::inbox` answer `waiting` beside `ends`: every
+- [x] 8.1 Have `Engine::inbox` answer `waiting` beside `ends`: every
   place that waits on its caller and that the recipient is a recipient
   of, was named by the stop-short it waits on, or was given a stall of
   as the answerer, with what the end-delivery spec names. It marks

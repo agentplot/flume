@@ -16,11 +16,14 @@
 //! does not declare leaving it pending, and nothing of where the agent
 //! was is kept (132, 143, 190, C.7; core.28).
 
+use super::caller_waits::{asks_in_east, construct_asks};
 use super::carried_conversations::{talk, talking};
+use super::role_waking::answerer_behind;
 use super::settling::deliver_fix;
+use super::stage_runs::east_and_west;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Answer, EndStatus, WaitFor};
+use flume_core::{Act, Answer, EndStatus, WaitFor, WaitingPlace, Waits};
 use flume_fakes::Plan;
 use flume_seams::*;
 use std::sync::{Arc, Mutex};
@@ -121,6 +124,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "end delivery: a restarted recipient collects by the inbox every end pending for it, each delivered once, and status or another's inbox marks nothing",
             cites: &["43", "57"],
             run: collected_after_a_restart,
+        },
+        Scenario {
+            name: "end delivery: a question collected by the inbox, then a restart: the next inbox collects nothing and gives the place waiting on a retry of construct, since the stop-short, with its words and key",
+            cites: &["43", "130", "S94"],
+            run: a_question_collected_then_a_restart,
+        },
+        Scenario {
+            name: "end delivery: the inbox of the role a stop-short named gives the place waiting on it, naming the role as the stop-short's addressee",
+            cites: &["43", "41", "193"],
+            run: the_inbox_of_the_role_asked,
+        },
+        Scenario {
+            name: "end delivery: the inbox of the answerer a stall was given to gives the place waiting, though the answerer is not among its recipients",
+            cites: &["43", "130", "193"],
+            run: the_answerers_waiting_places,
+        },
+        Scenario {
+            name: "end delivery: the inbox gives a held question with the hold's words, since when and its bound, and the next inbox gives it the same",
+            cites: &["43", "130"],
+            run: a_held_question_in_the_inbox,
         },
         Scenario {
             name: "end delivery: two inboxes at once deliver each end once",
@@ -884,6 +907,11 @@ fn collected_after_a_restart(_: &()) -> Outcome {
             vec![("ops".to_string(), DeliveredBy::Inbox)],
             "the deliveries"
         );
+        ensure_eq!(
+            collected.end.key.to_string(),
+            "stage/code/1/delivered",
+            "the end's key"
+        );
     }
     for name in ["one", "two"] {
         let status = world.status(&World::id("fix", name))?;
@@ -1335,5 +1363,183 @@ fn a_lost_talk_with_no_agent(_: &()) -> Outcome {
         vec!["flume: research--one talk lost; read: flume status research--one".to_string()],
         "the notices to ops"
     );
+    Ok(())
+}
+
+/// The places the inbox gave as waiting on its recipient.
+fn waiting(answer: &Answer) -> Result<Vec<WaitingPlace>, String> {
+    match answer {
+        Answer::Inbox { waiting, .. } => Ok(waiting.clone()),
+        other => Err(format!("the inbox answered {other:?}")),
+    }
+}
+
+/// The key of construct's first start, ended short.
+fn construct_short() -> EndKey {
+    "stage/construct/1/ended-short".parse().expect("a key")
+}
+
+fn a_question_collected_then_a_restart(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, asked) = construct_asks(&world, "plan", &["ops"], None)?;
+    let first = world.engine().inbox("ops");
+    ensure_eq!(
+        collected(&first)?,
+        vec!["change--plan construct needs an answer".to_string()],
+        "what ops collected first"
+    );
+    let before = world.held(&id);
+    let again = world.engine().inbox("ops");
+    ensure!(collected(&again)?.is_empty(), "the restart collected again");
+    ensure_eq!(world.held(&id), before, "the second inbox wrote the place");
+    let waits = waiting(&again)?;
+    ensure_eq!(waits.len(), 1, "the places waiting on ops: {waits:?}");
+    let place = &waits[0];
+    ensure_eq!(
+        (
+            place.place.clone(),
+            place.kind.as_str(),
+            place.name.as_str(),
+            place.brief.as_deref()
+        ),
+        (id.clone(), "change", "plan", Some("plan it")),
+        "the place"
+    );
+    ensure_eq!(
+        (
+            place.waiting_on.act,
+            place.waiting_on.stage.as_deref(),
+            place.waiting_on.why
+        ),
+        (Act::Retry, Some("construct"), Waits::Answer),
+        "the move"
+    );
+    ensure!(
+        place.waiting_on.since.is_some_and(|since| since >= asked),
+        "since when: {:?}",
+        place.waiting_on.since
+    );
+    let stop_short = place.stop_short.clone().ok_or("no stop-short")?;
+    ensure_eq!(
+        (
+            stop_short.words.as_deref(),
+            stop_short.needs,
+            stop_short.key,
+            stop_short.addressee
+        ),
+        (
+            Some("Which design does the brief mean?"),
+            Some(StopKind::NeedsAnswer),
+            construct_short(),
+            None
+        ),
+        "the stop-short"
+    );
+    ensure!(place.hold.is_none(), "a hold given: {:?}", place.hold);
+    ensure!(
+        waiting(&world.engine().inbox("planner"))?.is_empty(),
+        "another recipient's inbox gives the place"
+    );
+    Ok(())
+}
+
+fn the_inbox_of_the_role_asked(_: &()) -> Outcome {
+    let world = World::new();
+    east_and_west(&world);
+    answerer_behind(&world, "east");
+    let (id, _) = asks_in_east(&world, &["east/planner"], Some("ops"))?;
+    let waits = waiting(&world.engine.inbox("east/ops"))?;
+    let place = waits.iter().find(|place| place.place == id).ok_or(format!(
+        "east/ops's inbox gives no waiting place: {waits:?}"
+    ))?;
+    ensure_eq!(
+        place
+            .stop_short
+            .as_ref()
+            .and_then(|stop_short| stop_short.addressee.clone()),
+        Some("east/ops".to_string()),
+        "the stop-short's addressee"
+    );
+    ensure_eq!(place.stream.as_str(), "east", "the place's stream");
+    ensure!(
+        waiting(&world.engine.inbox("east/design"))?
+            .iter()
+            .all(|place| place.place != id),
+        "a role neither asked nor a recipient is given the place"
+    );
+    Ok(())
+}
+
+fn the_answerers_waiting_places(_: &()) -> Outcome {
+    let world = World::new();
+    east_and_west(&world);
+    answerer_behind(&world, "east");
+    world.terminal.add_session("ops", AgentState::Waiting);
+    world.host.set_recipient(None);
+    world.terminal.set_session(Some("ops"));
+    let (id, _) = asks_in_east(&world, &[], None)?;
+    ensure!(
+        waiting(&world.engine.inbox("east/operator"))?
+            .iter()
+            .all(|place| place.place != id),
+        "the answerer is given a place that has not stalled"
+    );
+    world.host.advance(STALL_AFTER);
+    world.settle(&id);
+    let held = world.held(&id).ok_or("no place")?;
+    ensure!(
+        !held.place.recipients.contains(&"east/operator".to_string()),
+        "the answerer is a recipient: {:?}",
+        held.place.recipients
+    );
+    let waits = waiting(&world.engine.inbox("east/operator"))?;
+    let place = waits.iter().find(|place| place.place == id).ok_or(format!(
+        "the answerer's inbox gives no waiting place: {waits:?}"
+    ))?;
+    ensure_eq!(
+        place
+            .stop_short
+            .as_ref()
+            .map(|stop_short| stop_short.key.clone()),
+        Some(construct_short()),
+        "the stop-short's key"
+    );
+    Ok(())
+}
+
+fn a_held_question_in_the_inbox(_: &()) -> Outcome {
+    let world = World::new();
+    east_and_west(&world);
+    answerer_behind(&world, "east");
+    let (id, _) = asks_in_east(&world, &["east/planner"], None)?;
+    world.host.advance(60);
+    let held_at = world.host.now();
+    let words = "east-planner has it";
+    let answer = world
+        .engine
+        .hold(&id, HoldOn::Waiting, words, Some(60 * 60));
+    ensure!(
+        answer.refusal().is_none(),
+        "the hold was refused: {answer:?}"
+    );
+    let due = Some(Hold {
+        on: HoldOn::Waiting,
+        words: Some(words.into()),
+        since: held_at,
+        bound: Some(60 * 60),
+        lapsed: None,
+    });
+    for read in ["the first", "the next"] {
+        let waits = waiting(&world.engine.inbox("east/planner"))?;
+        let place = waits
+            .iter()
+            .find(|place| place.place == id)
+            .ok_or(format!("{read} inbox gives no waiting place: {waits:?}"))?;
+        ensure_eq!(
+            place.hold.clone(),
+            due.clone(),
+            "the hold {read} inbox gives"
+        );
+    }
     Ok(())
 }

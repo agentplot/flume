@@ -54,10 +54,14 @@ pub enum Answer {
     },
     /// Every end pending for the recipient that the inbox collected and
     /// delivered, of every place on the host, tidied places kept for
-    /// their ends among them (43, design 9).
+    /// their ends among them, and every place that waits on its caller
+    /// and on this recipient, which marks nothing (43, 130, 193; design
+    /// 9).
     Inbox {
         recipient: String,
         ends: Vec<Collected>,
+        #[serde(default)]
+        waiting: Vec<WaitingPlace>,
     },
     /// A wake of a role's address: its run launched, or the run that
     /// stands for it, live or waiting, and nothing made (132).
@@ -556,6 +560,34 @@ pub struct Collected {
     pub kind: String,
     pub name: String,
     pub end: EndStatus,
+}
+
+/// A place the inbox gives as waiting on its recipient: one that waits on
+/// its caller and that the recipient is a recipient of, was named by the
+/// stop-short it waits on, or was given a stall of as the answerer behind
+/// its stream; given whether anything of it was delivered or not, and
+/// marked nothing for (43, 130, 193; design 9).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WaitingPlace {
+    pub place: PlaceId,
+    pub kind: String,
+    pub name: String,
+    pub stream: String,
+    /// The first line of its brief, none where it has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub brief: Option<String>,
+    /// The move it waits on, since when and its words, and for an answer
+    /// whether its agent is kept open for it and until when (130, 198).
+    pub waiting_on: WaitingOn,
+    /// The stop-short the move answers, with its words, whether it needs
+    /// an answer or found work, its key and the address it named; none
+    /// where the move answers none (41, 42).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stop_short: Option<StopShortWaited>,
+    /// The hold on the move, with its words, since when and its bound,
+    /// while it holds; none where none does (130).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hold: Option<Hold>,
 }
 
 /// The host's agents running, its bound, the room left and the stages

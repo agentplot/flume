@@ -211,7 +211,7 @@ recipient, on every place of the host:
 
 ```console
 $ flume inbox --recipient me
-fix--the-parser-reads-tabs code delivered; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
+fix--the-parser-reads-tabs code delivered [stage/code/1/delivered]; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
 $ flume inbox --recipient me
 nothing pending for me
 $ flume status

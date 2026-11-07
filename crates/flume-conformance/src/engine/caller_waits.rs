@@ -820,7 +820,7 @@ fn a_long_queue(_: &()) -> Outcome {
 /// ended short needing an answer, naming the role `to` where given;
 /// gives the place and when it asked. The streams `east` and `west` and
 /// acme's runs are as [`east_and_west`] declares them (41, 132, 193).
-fn asks_in_east(
+pub fn asks_in_east(
     world: &World,
     recipients: &[&str],
     to: Option<&str>,
@@ -851,7 +851,7 @@ fn asks_in_east(
 /// The place's stall bound passed, the place settled, then every place of
 /// the host settled twice, so a run the stall woke is up and its notice
 /// lands (130, 132).
-fn stall_and_settle(world: &World, id: &PlaceId) {
+pub fn stall_and_settle(world: &World, id: &PlaceId) {
     world.host.advance(STALL_AFTER);
     world.settle(id);
     world.engine().settle(None);
