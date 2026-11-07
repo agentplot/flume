@@ -16,6 +16,7 @@ mod clues;
 mod deliver;
 mod end;
 mod ends;
+mod fixes;
 mod held;
 mod kinds_lock;
 mod launch;
@@ -264,7 +265,7 @@ mod tests {
     use flume_seams::{Binding, Declared, Kind, KindSettings, PlaceId, Readiness, Revision};
     use std::collections::BTreeMap;
 
-    fn record(binding: Binding) -> PlaceRecord {
+    pub(crate) fn record(binding: Binding) -> PlaceRecord {
         PlaceRecord {
             id: PlaceId::new("/r/places/fix--one"),
             repository: "/r".into(),

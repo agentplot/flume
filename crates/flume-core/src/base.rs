@@ -7,6 +7,7 @@
 //! is submitted by name on its caller's retry once none of them is live,
 //! and its outcome is read from the merge queue's record of its branch.
 
+use crate::fixes::{decide, Found};
 use crate::{Engine, Step};
 use flume_seams::*;
 
@@ -135,11 +136,15 @@ impl Engine {
 
     /// The settle's forecast of a base place whose kind names a fix, once
     /// at each settle of it: asked of the merge queue while it is live, no
-    /// place on its branch is being made or live and its submission is not
-    /// open, and held with when it was read only where its outcome, its
-    /// head or its base's revision changed. A forecast that could not be
-    /// read fails nothing, and the next settle asks again; a settle of
-    /// another place never asks it (46, 203, 208, 210; core.13, core.17).
+    /// fix of its is written live, no place on its branch is being made or
+    /// live and its submission is not open, and held with when it was read
+    /// only where its outcome, its head or its base's revision changed. A
+    /// forecast in conflict with the base itself launches its fix, decided
+    /// in the write that holds it; one in conflict only with entries queued
+    /// ahead launches nothing. A forecast that could not be read fails
+    /// nothing, and the next settle asks again; a settle of another place
+    /// never asks it; and a fix written live whose place does not stand is
+    /// launched in its stead (46, 203, 208, 210; core.13, core.17).
     pub(crate) fn forecast_base(&self, id: &PlaceId) {
         let Some(read) = self.store.read(id) else {
             return;
@@ -149,32 +154,48 @@ impl Engine {
         if held.phase != Phase::Live || !base_place(&place.kind) || place.fixes_as.is_none() {
             return;
         }
-        if held.fixes.iter().any(|fix| fix.ended == FixEnded::Live)
-            || !self.on_branch(place).is_empty()
-            || submission_open(&held)
-        {
+        if self.live_fix(id, &held) || !self.on_branch(place).is_empty() || submission_open(&held) {
             return;
         }
         let Some(queue) = self.bound(place).ok().and_then(|bound| bound.merge_queue) else {
             return;
         };
         let forecast = queue.forecast(&place.repository, &place.branch, &place.base);
+        let found = match &forecast {
+            Forecast::Conflict {
+                head,
+                onto,
+                files,
+                with,
+                words,
+            } if with.is_empty() => Some(Found::forecast(place, head, onto, files, words)),
+            _ => None,
+        };
         let now = self.host.now();
-        self.update(id, |held| {
-            if held.phase != Phase::Live
-                || held
-                    .forecast
-                    .as_ref()
-                    .is_some_and(|was| same_forecast(&was.forecast, &forecast))
-            {
-                return Step::Keep(());
+        let limit = self.defaults.send_backs;
+        let place_of = self.fix_place_of(&held);
+        let number = self.update(id, |held| {
+            if held.phase != Phase::Live {
+                return Step::Keep(None);
             }
-            held.forecast = Some(ForecastHeld {
-                at: now,
-                forecast: forecast.clone(),
-            });
-            Step::Write(())
+            if !held
+                .forecast
+                .as_ref()
+                .is_some_and(|was| same_forecast(&was.forecast, &forecast))
+            {
+                held.forecast = Some(ForecastHeld {
+                    at: now,
+                    forecast: forecast.clone(),
+                });
+            }
+            let number = found
+                .as_ref()
+                .and_then(|found| decide(held, found, limit, now, &place_of));
+            Step::Write(number)
         });
+        if let (Some(Some(number)), Some(found)) = (number, &found) {
+            self.launch_fix(id, number, Some(found));
+        }
     }
 
     /// The head of a base place's branch where the merge queue says it

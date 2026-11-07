@@ -156,6 +156,36 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["17", "203", "210"],
             run: a_forecast_that_could_not_be_read,
         },
+        Scenario {
+            name: "base places: a base place's failed submission, its kind naming mend, is delivered once to ops and launches mend--spring-1 inside the settle that reads it, its brief asking it to make the branch pass main's checks over the merge queue's words; no agent starts in the base place",
+            cites: &["1", "43", "112", "203", "I6"],
+            run: a_failed_submission_launches_mend,
+        },
+        Scenario {
+            name: "base places: a base place's conflicting submission, its kind naming mend, launches mend--spring-1, its brief asking it to merge main's revision tested against in, resolving README.md, over the merge queue's words naming both",
+            cites: &["112", "203"],
+            run: a_conflicting_submission_launches_mend,
+        },
+        Scenario {
+            name: "base places: a forecast in conflict only with an entry queued ahead launches nothing, and once the entry lands and the forecast conflicts with main, the next settle launches mend--spring-1",
+            cites: &["203", "210", "46"],
+            run: a_conflict_with_an_entry_queued_ahead,
+        },
+        Scenario {
+            name: "base places: a forecast conflict of a base place waiting on its caller in east at priority 4 launches mend--spring-1 on its branch inside a settle of every place, in east at priority 4, delivering to ops from its base place, holding its base place, its number and the forecast as its cause",
+            cites: &["9", "15", "43", "70", "143", "147", "202", "203", "S120"],
+            run: a_forecast_conflict_launches_mend,
+        },
+        Scenario {
+            name: "base places: a forecast conflict's fix is briefed to merge main at the revision forecast into the branch, resolving the files contested, before anything else, over the merge queue's words",
+            cites: &["112", "203"],
+            run: the_brief_of_a_forecast_conflicts_fix,
+        },
+        Scenario {
+            name: "base places: S120, a base place whose changes landed is forecast in conflict at the host's watch once main lands a change to README.md, its fix launched for it with the merge queue's words, landed on its branch, the next forecast clear, and the caller's retry lands the base place",
+            cites: &["S120", "23", "43", "130", "203", "208", "210"],
+            run: s120_a_base_place_forecast_in_conflict_launches_its_fix,
+        },
     ]
 }
 
@@ -1316,6 +1346,352 @@ fn a_forecast_that_could_not_be_read(_: &()) -> Outcome {
             .map(|held| held.forecast),
         Some(torn),
         "the forecast held"
+    );
+    Ok(())
+}
+
+/// The base place `train--spring`'s fix `number`, a place of `mend`.
+fn mend_fix(number: u32) -> PlaceId {
+    World::id("mend", &format!("spring-{number}"))
+}
+
+/// The merge queue's words for a conflict of `train/spring` on
+/// `README.md` with `with`, at main's revision `onto`, in the lines a
+/// conflicting submission's words carry (112, 210).
+fn conflict_words(with: &str, onto: &Revision) -> String {
+    format!(
+        "would conflict: README.md with {with}\n\nThe files contested: README.md.\nThe base's revision the merge queue tested against: {onto}."
+    )
+}
+
+/// The fake merge queue forecasting `train/spring` at its head in conflict
+/// on `README.md` with main's revision, meeting `with` queued ahead, none
+/// where it meets main itself: the head and the revision.
+fn forecast_conflict(world: &World, with: &[&str]) -> Result<(Revision, Revision), String> {
+    let head = world
+        .git
+        .branch_head(REPOSITORY, "train/spring")
+        .ok_or("no train/spring")?;
+    let onto = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
+    let met = with.first().copied().unwrap_or("main");
+    world.queue.answer_forecast(
+        REPOSITORY,
+        "train/spring",
+        Forecast::Conflict {
+            head: head.clone(),
+            onto: onto.clone(),
+            files: vec!["README.md".into()],
+            with: with.iter().map(|entry| entry.to_string()).collect(),
+            words: conflict_words(met, &onto),
+        },
+    );
+    Ok((head, onto))
+}
+
+/// The fake merge queue forecasting `train/spring` clear onto main.
+fn forecast_clear(world: &World) -> Result<(), String> {
+    let head = world
+        .git
+        .branch_head(REPOSITORY, "train/spring")
+        .ok_or("no train/spring")?;
+    let onto = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
+    world
+        .queue
+        .answer_forecast(REPOSITORY, "train/spring", Forecast::Clear { head, onto });
+    Ok(())
+}
+
+/// The fix `number` of `train--spring` run through: its agent commits on
+/// its branch and delivers, and it lands on `train/spring` and is tidied.
+fn mend_lands(world: &World, number: u32) -> Result<(), String> {
+    let fix = mend_fix(number);
+    let name = format!("spring-{number}");
+    world.settle(&fix);
+    world.commit(&format!("mend/{name}"), &["README.md"]);
+    world
+        .agent
+        .set_own_work(&World::identity("mend", &name, "code", 1), Reading::No);
+    world.settle(&fix);
+    ensure!(
+        world.held(&fix).is_none(),
+        "mend--{name} did not land and go: {:?}",
+        world.held(&fix).map(|held| held.phase)
+    );
+    Ok(())
+}
+
+/// The brief a fix was launched with.
+fn brief_of(world: &World, fix: &PlaceId) -> Result<String, String> {
+    world
+        .held(fix)
+        .ok_or_else(|| format!("{fix} was not launched"))?
+        .place
+        .brief
+        .ok_or_else(|| format!("{fix} has no brief"))
+}
+
+fn a_failed_submission_launches_mend(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    let words = "the check test failed on main: 2 of 46";
+    world
+        .queue
+        .plan_submits(vec![flume_fakes::Plan::Fail(words.into())]);
+    retry_submission(&world, &spring)?;
+    world.engine().settle(None);
+    let brief = brief_of(&world, &mend_fix(1))?;
+    ensure_eq!(
+        brief,
+        format!(
+            "Make train/spring pass the checks of main that failed on its submission.\n\n{words}"
+        ),
+        "the fix's brief"
+    );
+    let failures = world
+        .terminal
+        .notices("ops")
+        .into_iter()
+        .filter(|text| text.contains("submission failed"))
+        .count();
+    ensure_eq!(failures, 1, "the notices of the failure to ops");
+    ensure!(
+        world
+            .terminal
+            .log
+            .of("open")
+            .iter()
+            .all(|call| !call.contains("train--spring")),
+        "an agent opened in the base place"
+    );
+    ensure_eq!(
+        world.status(&spring)?.waits_on,
+        Some(flume_core::WaitsOn::Places),
+        "whom the base place waits on"
+    );
+    Ok(())
+}
+
+fn a_conflicting_submission_launches_mend(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    world.commit("main", &["README.md"]);
+    let tested = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
+    world.queue.plan_submits(vec![flume_fakes::Plan::Conflict(
+        vec!["README.md".into()],
+        "README.md conflicts with main".into(),
+    )]);
+    retry_submission(&world, &spring)?;
+    world.engine().settle(None);
+    let brief = brief_of(&world, &mend_fix(1))?;
+    let (line, words) = brief.split_once("\n\n").ok_or("a brief of one line")?;
+    ensure_eq!(
+        line,
+        format!("Take main at {tested} into train/spring, whose submission conflicted with it on README.md: merge that revision in and commit it, resolving the files contested, before anything else."),
+        "the brief's first line"
+    );
+    ensure!(
+        words.contains("README.md") && words.contains(&tested.to_string()),
+        "the merge queue's words name neither README.md nor {tested}: {words}"
+    );
+    Ok(())
+}
+
+fn a_conflict_with_an_entry_queued_ahead(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    forecast_conflict(&world, &["#7"])?;
+    world.engine().settle(None);
+    ensure!(
+        world.held(&mend_fix(1)).is_none(),
+        "a fix was launched for a conflict with an entry ahead"
+    );
+    let held = world.held(&spring).ok_or("no base place")?;
+    ensure!(
+        matches!(
+            held.forecast.map(|held| held.forecast),
+            Some(Forecast::Conflict { with, .. }) if with == vec!["#7".to_string()]
+        ),
+        "the forecast held is no conflict with #7"
+    );
+    ensure!(held.fixes.is_empty(), "fixes: {:?}", held.fixes);
+    world.commit("main", &["README.md"]);
+    forecast_conflict(&world, &[])?;
+    world.engine().settle(None);
+    ensure!(
+        world.held(&mend_fix(1)).is_some(),
+        "mend--spring-1 was not launched"
+    );
+    Ok(())
+}
+
+fn a_forecast_conflict_launches_mend(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_stream("east", Some(Stream::default()));
+    world.terminal.add_session("ops", AgentState::Waiting);
+    world
+        .kinds
+        .set_kinds(REPOSITORY, vec![train_naming("mend", None), mend()]);
+    launched(&world.engine.launch(&Launch {
+        priority: 4,
+        stream: Some("east".into()),
+        ..spring_launch()
+    }))?;
+    let spring = World::id("train", "spring");
+    world.commit("main", &["README.md"]);
+    let (head, onto) = forecast_conflict(&world, &[])?;
+    world.engine().settle(None);
+    let fix = world
+        .held(&mend_fix(1))
+        .ok_or("mend--spring-1 was not launched")?;
+    let place = &fix.place;
+    ensure_eq!(
+        (place.base.as_str(), place.branch.as_str()),
+        ("train/spring", "mend/spring-1"),
+        "the fix's base and branch"
+    );
+    ensure_eq!(place.stream.name, "east", "the fix's stream");
+    ensure_eq!(fix.priority, 4, "the fix's priority");
+    ensure_eq!(
+        (place.recipients.clone(), place.recipients_from.clone()),
+        (vec!["ops".to_string()], Some(RecipientsFrom::BasePlace)),
+        "the fix's recipients"
+    );
+    ensure_eq!(
+        place.fix_of,
+        Some(FixOf {
+            place: spring.clone(),
+            number: 1,
+            cause: FixCause::Forecast { head, onto },
+        }),
+        "the base place the fix holds"
+    );
+    let base = world.held(&spring).ok_or("no base place")?;
+    ensure!(
+        matches!(
+            base.fixes.as_slice(),
+            [BaseFix {
+                number: 1,
+                ended: FixEnded::Live,
+                ..
+            }]
+        ),
+        "the base place's fixes: {:?}",
+        base.fixes
+    );
+    ensure!(
+        world.engine().list(false).refusal().is_none(),
+        "the list refused"
+    );
+    Ok(())
+}
+
+fn the_brief_of_a_forecast_conflicts_fix(_: &()) -> Outcome {
+    let world = World::new();
+    spring_mended(&world, None)?;
+    world.commit("main", &["README.md"]);
+    let (_, onto) = forecast_conflict(&world, &[])?;
+    world.engine().settle(None);
+    let brief = brief_of(&world, &mend_fix(1))?;
+    ensure_eq!(
+        brief,
+        format!(
+            "Take main at {onto} into train/spring, which the merge queue forecast to conflict with it on README.md: merge that revision in and commit it, resolving the files contested, before anything else.\n\n{}",
+            conflict_words("main", &onto)
+        ),
+        "the fix's brief"
+    );
+    Ok(())
+}
+
+fn s120_a_base_place_forecast_in_conflict_launches_its_fix(_: &()) -> Outcome {
+    let world = World::new();
+    let watch = || world.engine().settle_every(30);
+    let spring = spring_mended(&world, Some(2))?;
+    for name in ["one", "two"] {
+        change_working(&world, name, "train/spring")?;
+        world.commit(&format!("change/{name}"), &["README.md"]);
+        change_lands(&world, name)?;
+    }
+    forecast_clear(&world)?;
+    watch();
+    ensure_eq!(
+        world.status(&spring)?.waits_on,
+        Some(flume_core::WaitsOn::Caller),
+        "whom it waits on once its changes landed"
+    );
+    world.commit("main", &["README.md"]);
+    let (_, onto) = forecast_conflict(&world, &[])?;
+    watch();
+    let fix = mend_fix(1);
+    let held = world
+        .held(&fix)
+        .ok_or("its fix was not launched at the watch")?;
+    ensure!(
+        held.place
+            .brief
+            .as_deref()
+            .is_some_and(|brief| brief.ends_with(&conflict_words("main", &onto))),
+        "the fix's brief carries no words of the merge queue's: {:?}",
+        held.place.brief
+    );
+    ensure_eq!(
+        held.place
+            .fix_of
+            .as_ref()
+            .map(|of| (of.place.clone(), of.number)),
+        Some((spring.clone(), 1)),
+        "the base place the fix names"
+    );
+    ensure_eq!(
+        held.place.stream.name,
+        world
+            .held(&spring)
+            .ok_or("no base place")?
+            .place
+            .stream
+            .name,
+        "the fix's stream"
+    );
+    mend_lands(&world, 1)?;
+    ensure!(
+        world
+            .terminal
+            .notices("ops")
+            .iter()
+            .any(|text| text.starts_with("flume: mend--spring-1 ")),
+        "ops was delivered nothing of the fix"
+    );
+    forecast_clear(&world)?;
+    watch();
+    let status = world.status(&spring)?;
+    ensure_eq!(
+        status.waits_on,
+        Some(flume_core::WaitsOn::Caller),
+        "whom it waits on once its fix landed"
+    );
+    ensure!(
+        matches!(
+            world.held(&spring).ok_or("no base place")?.fixes.as_slice(),
+            [BaseFix {
+                number: 1,
+                ended: FixEnded::Landed { .. },
+                ..
+            }]
+        ),
+        "the base place's fixes"
+    );
+    ensure!(
+        world
+            .queue
+            .submissions(REPOSITORY, "train/spring")
+            .is_empty(),
+        "the base place was submitted by a settle"
+    );
+    retry_submission(&world, &spring)?;
+    watch();
+    ensure!(
+        world.held(&spring).is_none(),
+        "the base place did not land and go"
     );
     Ok(())
 }
