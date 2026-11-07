@@ -371,7 +371,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 ## 9. The command line and the walkthroughs
 
-- [ ] 9.1 Add `flume needs --to <role or address>`, `flume hold …
+- [x] 9.1 Add `flume needs --to <role or address>`, `flume hold …
   --waiting [--for <time>]`, `flume retry … --answers <key>` and `flume
   tell … --answers <key>` to the command line, with their help naming
   the clauses, `needs --to`'s

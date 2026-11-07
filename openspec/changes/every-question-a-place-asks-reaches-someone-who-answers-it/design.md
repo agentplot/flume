@@ -1084,12 +1084,13 @@ Rejected:
 ### 7. A hold on the waiting move
 
 A caller may hold the move the place waits on, with words saying who
-makes it and how, and an optional bound:
+makes it and how, and an optional bound in the forms `--stall-after`
+takes, `<n>`, `<n>s`, `<n>m` or `<n>h`:
 
 ```sh
 flume hold <place> "madswan-planner has it" --waiting --for 1h
 flume hold <place> "passed to madswan/design" --waiting --for 1h
-flume hold <place> "on the user's card req_01K…" --waiting --for 1d
+flume hold <place> "on the user's card req_01K…" --waiting --for 24h
 ```
 
 This is a hold as 130 already has them, with its words and since when,

@@ -814,7 +814,7 @@ fn asked(answer: &str) -> String {
 /// answer, naming `ops`, and was settled, its agent kept open for the
 /// launch's `keep_open` where one is given; the place and when it stopped
 /// short (41, 198).
-fn asks_ops(world: &World, keep_open: Option<&str>) -> Result<(PlaceId, Seconds), String> {
+pub fn asks_ops(world: &World, keep_open: Option<&str>) -> Result<(PlaceId, Seconds), String> {
     let (id, identity, secret) = super::stage_runs::construct_in_east_kept(world, keep_open)?;
     let at = world.host.now();
     taken(&world.engine.needs_to(
