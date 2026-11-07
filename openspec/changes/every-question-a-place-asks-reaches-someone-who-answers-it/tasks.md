@@ -237,7 +237,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 ## 5. A question addressed to its role
 
-- [ ] 5.1 Have the way to stop short in a rendered prompt list each
+- [x] 5.1 Have the way to stop short in a rendered prompt list each
   address the agent may name, with its `answers` words: every address
   the host's sources declare with `answers`, but the place's own role's
   where it is a role's run, the place's own stream's first by the role
