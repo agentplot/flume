@@ -293,12 +293,12 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   conformance:test` passes, with the caller-waits spec's scenarios of
   the hold and its lapse, S98's engine part named
   `s98_the_users_question_held_and_lapsed`.
-- [ ] 6.3 Have status give a hold on the waiting move with its words,
+- [x] 6.3 Have status give a hold on the waiting move with its words,
   since when, its bound or that it lapsed, and a stall's stop-short with
   its addressee (56, 130; core.14). True when `sluice exec main -- moon
   run core:test conformance:test flume:test` passes, with `print.rs`'s
   tests of both forms.
-- [ ] 6.4 Run the checks of the projects this group touched. True when
+- [x] 6.4 Run the checks of the projects this group touched. True when
   `sluice exec main -- moon run seams:format seams:lint seams:test
   core:format core:lint core:test conformance:format conformance:lint
   conformance:test flume:format flume:lint flume:test` passes.
