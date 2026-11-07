@@ -458,7 +458,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   plugin-claude:format plugin-claude:validate plugin-claude:test
   site:prose site:build root:format root:adrs root:changes root:specs`
   passes.
-- [ ] 11.3 Have every requirement this change modifies stay under the
+- [x] 11.3 Have every requirement this change modifies stay under the
   strict check's length once archived, splitting one that grows past it
   into an added requirement of its own with the scenarios that show it.
   True when `openspec archive
