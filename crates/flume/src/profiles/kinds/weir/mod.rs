@@ -4,7 +4,9 @@
 //! (core.4). The format's fields are mapped onto the seam's types, every
 //! section the format does not name is ignored (23), and a declaration
 //! weir refuses is answered as could not be read, naming every field that
-//! fails (84). A kind's `agents` table, and a `[kinds.<kind>]` table that
+//! fails (84). A kind that lands and declares `stages = []` is mapped to a
+//! kind with no stages, which weir refuses on a kind that does not land
+//! (18, 202; weir 51, 57). A kind's `agents` table, and a `[kinds.<kind>]` table that
 //! gives settings to a kind declared elsewhere, are weir's too: each is
 //! mapped onto the seam's settings for every stage and for each stage it
 //! names, the latter returned apart from the kinds (32, C.2; weir 52,
