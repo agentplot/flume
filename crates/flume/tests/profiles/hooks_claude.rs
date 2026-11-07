@@ -1246,6 +1246,203 @@ fn a_session_the_operator_started() {
     assert_eq!(host.state(), before, "a hook wrote outside flume's agent");
 }
 
+/// The pane herdr's environment names in a session flume did not start,
+/// on a server whose socket nothing listens on: herdr is asked nothing to
+/// name the session (7, C.5).
+fn pane_env(host: &Host, pane: &str) -> Vec<(String, String)> {
+    vec![
+        ("HERDR_PANE_ID".into(), pane.into()),
+        (
+            "HERDR_SOCKET_PATH".into(),
+            host.path("no-herdr.sock").to_string_lossy().into_owned(),
+        ),
+    ]
+}
+
+/// The session herdr's environment names for `pane`, as flume names it.
+fn pane_session(host: &Host, pane: &str) -> String {
+    format!("herdr:{pane}@{}", host.path("no-herdr.sock").display())
+}
+
+/// The fix `fix--one` launched for the recipient `recipient` beside the
+/// test's caller, its code agent started and its prompt received, stopped
+/// short asking which file holds the log, and the place settled, so it
+/// waits on a retry of code; then the host's configuration names herdr as
+/// its terminal, whose environment names the calling session, the fix's
+/// start keeping the terminal it recorded.
+fn asks_for(host: &Host, recipient: &str) -> Agent {
+    let agent = host.launch_with("fix", &["--recipient", recipient]);
+    host.hook(&agent, "session-start", json!({ "source": "startup" }));
+    first_prompt(host, &agent, None);
+    let env = agent.env();
+    let env: Vec<(&str, &str)> = env
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+        .collect();
+    let asked = host.flume(&["needs", "Which file holds the log?", "--json"], &env, "");
+    assert_eq!(asked.code, 0, "the stop-short: {}", asked.out);
+    let settled = host.flume(&["settle", &agent.place, "--json"], &[], "");
+    assert_eq!(settled.code, 0, "the settle: {}", settled.out);
+    let status = host.status(&agent.place);
+    assert_eq!(
+        status["places"][0]["waiting_on"]["why"], "answer",
+        "{status}"
+    );
+    std::fs::write(
+        host.path("config/flume/config.toml"),
+        "[host]\nterminal = \"herdr\"\n",
+    )
+    .expect("the configuration");
+    agent
+}
+
+/// The added context SessionStart gave, where it gave any.
+fn context(ran: &Ran) -> Option<String> {
+    if ran.out.trim().is_empty() {
+        return None;
+    }
+    let output = ran.json();
+    assert_eq!(
+        output["hookSpecificOutput"]["hookEventName"], "SessionStart",
+        "{output}"
+    );
+    Some(
+        output["hookSpecificOutput"]["additionalContext"]
+            .as_str()
+            .expect("the added context")
+            .to_string(),
+    )
+}
+
+/// SessionStart run in a session flume did not start, in herdr's pane
+/// `pane`, `more` over its environment, with the fixture's input.
+fn session_start_in(host: &Host, agent: &Agent, pane: &str, more: &[(&str, &str)]) -> Ran {
+    let mut env = pane_env(host, pane);
+    env.extend(
+        more.iter()
+            .map(|(name, value)| (name.to_string(), value.to_string())),
+    );
+    let input: Value = serde_json::from_str(
+        &fixture_text("session-start-another-session.json")
+            .replace("__TRANSCRIPT__", &agent.transcript.to_string_lossy())
+            .replace("__CWD__", &host.repository.dir.to_string_lossy()),
+    )
+    .expect("the fixture's JSON");
+    host.hook_in(agent, "session-start", input, &env)
+}
+
+/// The plugin's own fixture `name`, as Claude Code 2.1.296 hands a hook
+/// its input.
+fn fixture_text(name: &str) -> String {
+    std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../plugins/claude/tests/fixtures")
+            .join(name),
+    )
+    .expect("the plugin's fixture")
+}
+
+#[test]
+fn a_restarted_pane() {
+    // S94, 43, C.4, design 9: a session flume did not start, begun again
+    // in the pane its place's end was delivered to, is given at its start
+    // the place, the stop-short's words, its key and the three ways on;
+    // the inbox it ran is the pane's, so the end it collected before stays
+    // collected and the place waits as it did.
+    let host = Host::new("restarted-pane");
+    let session = pane_session(&host, "w1-p2");
+    let agent = asks_for(&host, &session);
+    let collected = host.flume(&["inbox", "--recipient", &session, "--json"], &[], "");
+    assert_eq!(collected.code, 0, "the inbox: {}", collected.out);
+    assert_eq!(
+        collected.json()["inbox"]["ends"].as_array().map(Vec::len),
+        Some(1),
+        "{}",
+        collected.out
+    );
+    let ran = session_start_in(&host, &agent, "w1-p2", &[]);
+    let words = context(&ran).unwrap_or_else(|| panic!("no context given: {}", ran.out));
+    for said in [
+        &session,
+        "fix--one (fix the parser), in the stream default, waits on a retry of code",
+        "Its stop-short stage/code/1/ended-short needs an answer:",
+        "  Which file holds the log?",
+        "- answer it, naming its key: flume retry fix--one --stage code --answers stage/code/1/ended-short --words \"<answer>\"",
+        "- hold the move with your words, saying who has it: flume hold fix--one \"<words>\" --waiting --for <time>",
+        "- leave it: once it stalls, the answerer behind its stream has it.",
+    ] {
+        assert!(words.contains(said), "{said:?} not in:\n{words}");
+    }
+    assert!(
+        !words.contains("Ends delivered to this session now"),
+        "an end collected twice:\n{words}"
+    );
+}
+
+#[test]
+fn an_end_pending_for_the_pane_collected_at_its_start() {
+    // 43, C.4, design 9: an end still pending for the pane is collected by
+    // SessionStart's inbox, given with its key, and delivered.
+    let host = Host::new("pending-for-pane");
+    let session = pane_session(&host, "w1-p2");
+    let agent = asks_for(&host, &session);
+    let ran = session_start_in(&host, &agent, "w1-p2", &[]);
+    let words = context(&ran).unwrap_or_else(|| panic!("no context given: {}", ran.out));
+    assert!(
+        words.contains(
+            "- fix--one code needs an answer [stage/code/1/ended-short]; read: flume status fix--one"
+        ),
+        "{words}"
+    );
+    let again = host.flume(&["inbox", "--recipient", &session, "--json"], &[], "");
+    assert_eq!(
+        again.json()["inbox"]["ends"].as_array().map(Vec::len),
+        Some(0),
+        "collected again: {}",
+        again.out
+    );
+}
+
+#[test]
+fn nothing_waits_on_the_session() {
+    // 43, C.4: SessionStart in a session nothing is pending for and
+    // nothing waits on gives nothing, and exits 0.
+    let host = Host::new("nothing-waits");
+    let agent = asks_for(&host, &pane_session(&host, "w1-p2"));
+    let ran = session_start_in(&host, &agent, "w9-p9", &[]);
+    assert_eq!(context(&ran), None, "{}", ran.out);
+}
+
+#[test]
+fn a_recipient_in_the_environment() {
+    // 43, C.4, design 9: SessionStart collects as the session the
+    // terminal names, never as the environment's recipient, so the end
+    // pending for that recipient stays pending for it.
+    let host = Host::new("recipient-in-env");
+    let agent = asks_for(&host, "planner");
+    let ran = session_start_in(&host, &agent, "w9-p9", &[("FLUME_RECIPIENT", "planner")]);
+    assert_eq!(context(&ran), None, "{}", ran.out);
+    let status = host.status(&agent.place);
+    let ends = status["places"][0]["ends"].as_array().expect("ends");
+    assert!(
+        ends.iter().any(|end| end["pending_for"]
+            .as_array()
+            .is_some_and(|named| named.contains(&json!("planner")))),
+        "the end is not pending for planner: {status}"
+    );
+}
+
+#[test]
+fn flume_unreachable_at_a_sessions_start() {
+    // 43, C.4: where the host's configuration cannot be read, SessionStart
+    // in a session flume did not start gives nothing and exits 0.
+    let host = Host::new("unreachable");
+    let agent = asks_for(&host, &pane_session(&host, "w1-p2"));
+    std::fs::write(host.path("config/flume/config.toml"), "[host\n").expect("the configuration");
+    let ran = session_start_in(&host, &agent, "w1-p2", &[]);
+    assert_eq!(context(&ran), None, "{}", ran.out);
+}
+
 #[test]
 fn the_status_line_of_a_code_agent() {
     // In a code agent's session the hook prints the place's line asked

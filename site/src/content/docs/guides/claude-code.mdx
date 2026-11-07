@@ -88,7 +88,8 @@ the variable Claude Code reads over it.
 
 Each hook runs `flume hook <event>` and always exits 0. In a session
 flume did not start, one with no `FLUME_AGENT` and `FLUME_SECRET`,
-every hook does nothing.
+every hook does nothing but SessionStart ([a session of your
+own](#a-session-of-your-own)).
 
 | Hook | What flume does with it |
 |---|---|
@@ -104,6 +105,29 @@ every hook does nothing.
 
 A subagent's hooks take no ack, and the guard refuses its commands as
 its agent's.
+
+### A session of your own
+
+In a session flume did not start, SessionStart runs `flume inbox` as
+the session the multiplexer names, the pane it runs in under herdr, and
+never as `FLUME_RECIPIENT` or a role's address, so your session never
+collects a role's ends. Where the inbox holds anything, the hook gives
+it to the agent as the session's added context: each end it collected,
+and each place waiting on your session with its question, the
+question's key, whether its agent is kept open and until when, and the
+three ways on:
+
+- answer it naming the key, by `flume retry <place> --stage <stage>
+  --answers <key> --words "<answer>"`, or, while its agent is kept
+  open, `flume tell <place> --answers <key> "<answer>"`;
+- hold the move with your words, `flume hold <place> "<words>"
+  --waiting --for <time>`;
+- or leave it, and once the place stalls the answerer behind its stream
+  has it.
+
+Where nothing waits, under the printed command, which names no
+session, or where flume cannot be reached, it gives nothing. It holds
+up the start no longer than its 20 seconds' timeout.
 
 Beside the command hooks the plugin carries one hooks module,
 `hooks/line.ts`, which pins the place's line under the prompt ([the

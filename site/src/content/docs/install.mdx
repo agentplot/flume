@@ -134,8 +134,9 @@ release, update the marketplace, then the plugin:
 ```
 
 `/launch <brief>` then chooses a kind and a name with you and runs
-`flume launch`. The plugin also serves `flume status` over MCP. Its
-hooks do nothing in a session flume did not start.
+`flume launch`. The plugin also serves `flume status` over MCP. In a
+session flume did not start, its hooks do nothing but SessionStart,
+which gives the session what waits on it.
 
 ## The repository
 

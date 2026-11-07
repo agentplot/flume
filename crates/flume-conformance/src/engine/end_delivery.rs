@@ -156,6 +156,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_deliverys_notice,
         },
         Scenario {
+            name: "end delivery: a session's own inbox collects as the session the terminal names, never as the address its environment names, and gives none where no terminal names one",
+            cites: &["43", "7", "190"],
+            run: a_sessions_own_inbox,
+        },
+        Scenario {
+            name: "end delivery: a restarted session's words give the place, the question, its key, its agent kept open and the three ways on, and nothing where nothing waits",
+            cites: &["43", "130", "198", "S94"],
+            run: a_restarted_sessions_words,
+        },
+        Scenario {
             name: "end delivery: two inboxes at once deliver each end once",
             cites: &["43", "75"],
             run: two_inboxes_at_once,
@@ -1649,6 +1659,69 @@ fn a_deliverys_notice(_: &()) -> Outcome {
             "flume: change--every-question ({CUT_BRIEF}) construct delivered [stage/construct/1/delivered]; read: flume status change--every-question"
         )],
         "the notices to ops"
+    );
+    Ok(())
+}
+
+fn a_sessions_own_inbox(_: &()) -> Outcome {
+    let world = World::new();
+    east_and_west(&world);
+    answerer_behind(&world, "east");
+    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    let (id, _) = asks_in_east(&world, &["east/planner"], None)?;
+    world.host.set_recipient(Some("east/planner"));
+    world.terminal.set_session(None);
+    ensure!(
+        world.engine.session_inbox().is_none(),
+        "an inbox where no terminal names the session"
+    );
+    world.terminal.set_session(Some("ops"));
+    let answer = world.engine.session_inbox().ok_or("no inbox")?;
+    ensure!(
+        matches!(&answer, Answer::Inbox { recipient, ends, waiting }
+            if recipient == "ops" && ends.is_empty() && waiting.is_empty()),
+        "the session's inbox: {answer:?}"
+    );
+    let stop_short = ends(&world, &id)?
+        .into_iter()
+        .find(|end| matches!(end.end.of, EndOf::Stage { .. }))
+        .ok_or("no stop-short")?;
+    ensure!(
+        stop_short.pending_for.contains(&"east/planner".to_string()),
+        "the stop-short is no longer pending for east/planner: {:?}",
+        stop_short.pending_for
+    );
+    Ok(())
+}
+
+fn a_restarted_sessions_words(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.set_session(Some("ops"));
+    world.host.set_recipient(None);
+    let (_, asked) = construct_asks(&world, "plan", &["ops"], None)?;
+    collected(&world.engine().inbox("ops"))?;
+    let answer = world.engine.session_inbox().ok_or("no inbox")?;
+    let words = flume_core::session_words(&answer).ok_or("no words")?;
+    let until = asked + flume_core::KEEP_OPEN;
+    for said in [
+        "what waits on it, ops, from `flume inbox`".to_string(),
+        "change--plan (plan it), in the stream default, waits on a retry of construct".to_string(),
+        "Its stop-short stage/construct/1/ended-short needs an answer:".to_string(),
+        "  Which design does the brief mean?".to_string(),
+        format!("Its agent is kept open for the answer until {until}."),
+        "- answer it, naming its key: flume retry change--plan --stage construct --answers stage/construct/1/ended-short --words \"<answer>\"".to_string(),
+        "  or, while its agent is kept open: flume tell change--plan --answers stage/construct/1/ended-short \"<answer>\"".to_string(),
+        "- hold the move with your words, saying who has it: flume hold change--plan \"<words>\" --waiting --for <time>".to_string(),
+        "- leave it: once it stalls, the answerer behind its stream has it.".to_string(),
+    ] {
+        ensure!(words.contains(&said), "{said:?} not in the words:\n{words}");
+    }
+    world.terminal.set_session(Some("lead"));
+    let nothing = world.engine.session_inbox().ok_or("no inbox")?;
+    ensure_eq!(
+        flume_core::session_words(&nothing),
+        None,
+        "the words where nothing waits"
     );
     Ok(())
 }

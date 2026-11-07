@@ -55,7 +55,7 @@ pub use prompt::{group_name, way_to_stop_short, ONE_WAY_TO_ASK};
 pub use start_record::{
     variable_digest, AGENT_VARIABLE, PLACE_VARIABLE, STAGE_VARIABLE, TERMINALS_OWN,
 };
-pub use wait::{WaitFor, WAIT_POLL};
+pub use wait::{session_words, WaitFor, WAIT_POLL};
 
 use flume_seams::{
     Agent, Binding, Change, History, Host, MergeQueue, Place, PlaceRecord, Resolver, Seconds,

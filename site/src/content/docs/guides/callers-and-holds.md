@@ -119,8 +119,11 @@ change--plan (one of two designs), in east, waits on east/ops; read: flume statu
   its stop-short stage/construct/1/ended-short needs an answer, asking east/ops
 ```
 
-A session that starts runs it to catch up on what it missed. Reading
-`flume status` delivers nothing.
+A session that starts runs it to catch up on what it missed. Under
+herdr, flume's Claude Code plugin does that at a session's start, as the
+pane the session runs in, and hands the agent what the inbox gives
+([a session of your own](/flume/guides/claude-code/#a-session-of-your-own)).
+Reading `flume status` delivers nothing.
 
 ## Holds
 

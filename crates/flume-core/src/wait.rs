@@ -18,7 +18,7 @@
 //! session as the terminal names it, as a launch's (7, 132).
 
 use crate::held::stop_short_waited;
-use crate::{Answer, Collected, EndStatus, Engine, Step, WaitingPlace};
+use crate::{end_words, Answer, Collected, EndStatus, Engine, Step, WaitingPlace};
 use flume_seams::*;
 
 /// How often a wait reads the host's state again (design 9).
@@ -229,6 +229,163 @@ impl Engine {
             waiting,
         }
     }
+}
+
+impl Engine {
+    /// The inbox run as the calling session the terminal names, never as
+    /// the caller's environment's recipient or a role's run's address, so a
+    /// person's session never takes a role's ends; none where no terminal
+    /// the host binds names one, as under the printed command (43, 190,
+    /// C.4; design 9).
+    pub fn session_inbox(&self) -> Option<Answer> {
+        let session = self.caller_session()?;
+        Some(self.inbox(&session))
+    }
+}
+
+/// The words a session flume did not start is given at its start, as its
+/// added context, from the inbox it ran there: each end the inbox
+/// collected, and each place that waits on the session with the
+/// question, its key, its agent kept open and until when, and the three
+/// ways on: answer it with the key, by a retry or, while its agent is kept
+/// open, a tell; hold the move with words; or leave it to the answerer
+/// behind its stream at its stall. None where the inbox gives nothing (43,
+/// 130, 193, 198, C.4; design 9).
+pub fn session_words(answer: &Answer) -> Option<String> {
+    let Answer::Inbox {
+        recipient,
+        ends,
+        waiting,
+    } = answer
+    else {
+        return None;
+    };
+    if ends.is_empty() && waiting.is_empty() {
+        return None;
+    }
+    let mut lines = vec![format!(
+        "flume, at this session's start: what waits on it, {recipient}, from `flume inbox`."
+    )];
+    if !ends.is_empty() {
+        lines.push(String::new());
+        lines.push("Ends delivered to this session now:".into());
+        for collected in ends {
+            let short = format!("{}--{}", collected.kind, collected.name);
+            lines.push(format!(
+                "- {short} {} [{}]; read: flume status {short}",
+                end_words(&collected.end.end.of),
+                collected.end.key
+            ));
+        }
+    }
+    for place in waiting {
+        lines.push(String::new());
+        lines.extend(waiting_words(place));
+    }
+    Some(lines.join("\n"))
+}
+
+/// One waiting place in [`session_words`]: what it waits on and since
+/// when, the question by its key, its agent kept open or let go, its hold,
+/// and the three ways on (130, 198; design 9).
+fn waiting_words(place: &WaitingPlace) -> Vec<String> {
+    let short = format!("{}--{}", place.kind, place.name);
+    let on = &place.waiting_on;
+    let brief = place
+        .brief
+        .as_ref()
+        .map(|brief| format!(" ({brief})"))
+        .unwrap_or_default();
+    let since = on
+        .since
+        .map(|since| format!(" since {since}"))
+        .unwrap_or_default();
+    let mut lines = vec![format!(
+        "{short}{brief}, in the stream {}, waits on {}{since}.",
+        place.stream,
+        on.move_words()
+    )];
+    match &place.stop_short {
+        Some(stop_short) => {
+            let needs = match stop_short.needs {
+                Some(StopKind::FoundWork) => "found work",
+                _ => "needs an answer",
+            };
+            let asking = stop_short
+                .addressee
+                .as_ref()
+                .map(|addressee| format!(", asking {addressee}"))
+                .unwrap_or_default();
+            lines.push(format!(
+                "Its stop-short {} {needs}{asking}:",
+                stop_short.key
+            ));
+            let words = stop_short.words.as_deref().unwrap_or("(no words)");
+            lines.extend(words.lines().map(|line| format!("  {line}")));
+        }
+        None => {
+            if let Some(words) = &on.words {
+                lines.push(format!("Its words: {words}"));
+            }
+        }
+    }
+    if let Some(until) = on.open_until {
+        lines.push(format!(
+            "Its agent is kept open for the answer until {until}."
+        ));
+    } else if let Some(closed) = &on.closed {
+        lines.push(format!(
+            "Its agent kept open for the answer was let go at {}; a retry starts a fresh agent with the question and the answer.",
+            closed.at
+        ));
+    }
+    if let Some(hold) = &place.hold {
+        let bound = hold
+            .bound
+            .map(|bound| format!(" for {bound} seconds"))
+            .unwrap_or_default();
+        lines.push(format!(
+            "The move is on hold since {}{bound}: {}",
+            hold.since,
+            hold.words.as_deref().unwrap_or("(no words)")
+        ));
+    }
+    lines.push("Ways on:".into());
+    let answers = place
+        .stop_short
+        .as_ref()
+        .filter(|_| on.why == Waits::Answer);
+    match (answers, on.act, on.stage.as_deref()) {
+        (Some(stop_short), _, Some(stage)) => {
+            lines.push(format!(
+                "- answer it, naming its key: flume retry {short} --stage {stage} --answers {} --words \"<answer>\"",
+                stop_short.key
+            ));
+            if on.open_until.is_some() {
+                lines.push(format!(
+                    "  or, while its agent is kept open: flume tell {short} --answers {} \"<answer>\"",
+                    stop_short.key
+                ));
+            }
+        }
+        (_, Act::Done, _) => lines.push(format!("- make the move: flume done {short}")),
+        (_, Act::Answer, _) => {
+            lines.push("- make the move: answer the dialog in its agent's own pane".into());
+        }
+        (_, _, Some(stage)) => {
+            lines.push(format!(
+                "- make the move: flume retry {short} --stage {stage}"
+            ));
+        }
+        (_, _, None) => {
+            lines.push(format!("- make the move: flume retry {short} --submission"));
+        }
+    }
+    lines.push(format!(
+        "- hold the move with your words, saying who has it: flume hold {short} \"<words>\" --waiting --for <time>"
+    ));
+    lines.push("- leave it: once it stalls, the answerer behind its stream has it.".into());
+    lines
 }
 
 /// The place `held` as the inbox gives it waiting on `recipient`: where it
