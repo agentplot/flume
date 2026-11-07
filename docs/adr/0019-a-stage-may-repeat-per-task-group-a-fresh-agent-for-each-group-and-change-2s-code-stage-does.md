@@ -11,7 +11,7 @@ decision-makers:
 
 Status: accepted by the user, 2026-10-29, in their design session ("Yes, write it and plan the build"), on how a change's code stage builds a change of many task groups without one agent holding all of it.
 
-Amended in part by record 0054, proposed on 2026-11-06, once it is accepted: flume's own change at version 3, the newest, codes a change with one agent, each task checked by its own check and the repository's whole checks run once, at verify; change@2's repeating code stage is kept for places launched at it and repositories that lock it, and the repeat field stays the format's.
+Amended in part by record 0054, accepted on 2026-11-06: flume's own change at version 3, the newest, codes a change with one agent, each task checked by its own check and the repository's whole checks run once, at verify; change@2's repeating code stage is kept for places launched at it and repositories that lock it, and the repeat field stays the format's.
 
 Amended 2026-10-29 by record 0022, accepted by the user: flume's own change@1 and change@2 are both kept, side by side, each a package of its own; a launch that names no version takes the version its repository's lock records, else change@2, the newest; and a repository picks change@1 by locking `flume/change@1`, a launch by naming `change@1`. The versioning below, under which flume's own `change` moved to version 2 outright and a repository wanting change@1 declared it itself, no longer holds.
 

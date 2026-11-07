@@ -1,7 +1,7 @@
 ---
 number: 54
 title: A change is coded by one agent, each task checked by its own check, and the repository's whole checks run once, at verify
-status: proposed
+status: accepted
 date: 2026-11-06
 decision-makers:
 - Chuck Swanberg
@@ -10,7 +10,7 @@ decision-makers:
 
 # A change is coded by one agent, each task checked by its own check, and the repository's whole checks run once, at verify
 
-Status: proposed to the user on 2026-11-06, as `briefs.15` has it; accepted only on their yes.
+Status: accepted by the user on 2026-11-06, in agentplot-design's pane: "yes to 54".
 
 Amends record 0019 in part, and record 0022 where it names change@2 the newest, each marked so where it stands.
 
@@ -40,8 +40,7 @@ Option 1.
 
 ### Consequences
 
-- Clauses 22, 154 and 157 and C.2's list of flume's own kinds and its kinds table are amended, and S119 added, each marked proposed, at agentplot/blueprints.
+- Clauses 22, 154 and 157 and C.2's list of flume's own kinds and its kinds table are amended, and S119 added, at agentplot/blueprints.
 - Places already launched at change@2 keep their per-group agents and the checks their constructs wrote.
 - A long change's one coding agent may fill its conversation and compact, which record 0019 was made to avoid. Changes are written small enough for one agent to code.
 - The repositories' planning rules that each task names its verification say it is the narrowest check that shows the task done, never the repository's whole checks.
-- No unit is queued from this record while it is proposed.
