@@ -2,6 +2,7 @@
 //! section 11 where it has one, and each citing its clauses as data.
 
 pub mod account_pools;
+pub mod agent_effort;
 pub mod agent_modes;
 pub mod agent_settings;
 pub mod answers;
@@ -57,6 +58,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(host_queue::scenarios());
     every.extend(agent_settings::scenarios());
     every.extend(agent_modes::scenarios());
+    every.extend(agent_effort::scenarios());
     every.extend(end_delivery::scenarios());
     every.extend(caller_waits::scenarios());
     every.extend(made_things::scenarios());

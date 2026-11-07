@@ -1,5 +1,5 @@
 //! What a launch's words give the core (2 to 8, 32, 70, 107, 130, 162,
-//! 195; design 5a, 16a): each `--agent [<stage>.]<field>=<value>` one
+//! 195, 197; design 5a, 16a): each `--agent [<stage>.]<field>=<value>` one
 //! setting of every stage's agent or one stage's,
 //! `[<stage>.]mode.<program>=<value>` one entry of its mode's table of
 //! programs, `[<stage>.]programs.<program>.settings.<key>=<value>` one of a
@@ -17,10 +17,11 @@ use serde_json::Value as Json;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-/// The fields `--agent` sets (32, 107, 162, 195).
-const FIELDS: [&str; 7] = [
+/// The fields `--agent` sets (32, 107, 162, 195, 197).
+const FIELDS: [&str; 8] = [
     "program",
     "model",
+    "effort",
     "instructions",
     "beside",
     "session",
@@ -30,7 +31,7 @@ const FIELDS: [&str; 7] = [
 
 /// The settings `--agent` gives, as its refusals name them.
 const SETTINGS: &str =
-    "the settings are program, model, instructions, beside, session and mode, or mode.<program> for one program's entry of a mode, and programs, programs.<program>.settings.<key> for one of a program's own settings and programs.<program>.file for its settings file";
+    "the settings are program, model, effort, instructions, beside, session and mode, or mode.<program> for one program's entry of a mode, and programs, programs.<program>.settings.<key> for one of a program's own settings and programs.<program>.file for its settings file";
 
 /// Sets the one setting `given` names, `[<stage>.]<field>=<value>`, in
 /// `every_stage` or in its stage's entry of `stages` (7, 32); a mode's
@@ -63,6 +64,7 @@ pub fn agent(
     match field {
         "program" => settings.program = text,
         "model" => settings.model = text,
+        "effort" => settings.effort = text,
         "instructions" => settings.instructions = text,
         "beside" => settings.beside = text,
         "session" => settings.session = text,
@@ -245,6 +247,28 @@ mod tests {
         assert_eq!(every.instructions.as_deref(), Some("be brief"));
         assert_eq!(stages["verify"].model.as_deref(), Some("sonnet"));
         assert_eq!(stages["code"].instructions.as_deref(), Some("a=b"));
+    }
+
+    #[test]
+    fn an_effort_for_every_stage_and_for_one() {
+        // 7, 32, 197: `effort=high` for every stage and `verify.effort=max`
+        // for one, each its program's own word kept as written.
+        let (every, stages) = given(&["effort=high", "verify.effort=max"]).unwrap();
+        assert_eq!(every.effort.as_deref(), Some("high"));
+        assert_eq!(stages["verify"].effort.as_deref(), Some("max"));
+        assert_eq!(stages["verify"].model, None);
+    }
+
+    #[test]
+    fn a_refusal_names_the_effort_among_the_settings() {
+        // 7, 32: words naming no setting are refused naming the words, and
+        // the settings `--agent` gives, `effort` among them.
+        let refused = given(&["colour=blue"]).unwrap_err();
+        assert!(refused.contains("colour"), "{refused}");
+        assert!(
+            refused.contains("program, model, effort, instructions"),
+            "{refused}"
+        );
     }
 
     #[test]
