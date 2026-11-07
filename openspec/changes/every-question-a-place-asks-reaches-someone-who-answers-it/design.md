@@ -1204,6 +1204,26 @@ who gave it the recipient the command acts as where it names none:
 `$FLUME_RECIPIENT`, the role of the run it runs in, or the terminal's
 session.
 
+**Two answers at once are taken once.** A plain read of the key, then
+handing the words, then recording them, would let two answers checked
+together both be typed: the hand waits up to ten minutes for the agent
+to wait again (53), and the second's check lands in that time. So an
+answer claims its stop-short's end by compare-and-set before it is
+typed into the agent kept open, and before a fresh agent is started to
+carry one that names its key (75). The claim is taken only while the
+place waits on that stop-short, its end holds no answer and no other
+answer's claim holds. A second answer that finds a claim is refused with
+nothing typed, naming who gives the first and when it was claimed. The
+record clears the claim, and the command lets it go where its answer is
+not recorded, a hand the agent did not take among them. A claim holds
+for the hand's bound and five minutes past it, so one left by a command
+ended mid-hand lapses and a later answer may take the stop-short. An
+answer with no key that a fresh agent carries claims nothing, and is
+taken as today. The path not taken was to record the answer before
+handing it and take it back where the hand failed: a record that is
+taken back reads, between the two writes, as an answer the agent never
+had.
+
 ### 9. What a restarted recipient sees
 
 **The inbox gives what waits on it.** `flume inbox`'s answer keeps its

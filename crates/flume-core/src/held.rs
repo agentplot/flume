@@ -182,6 +182,7 @@ fn record_ends(next: &mut HeldState, now: Seconds) {
                 read_at: now,
                 deliveries: vec![],
                 answer: None,
+                claim: None,
             });
         }
     }
@@ -313,6 +314,7 @@ pub(crate) fn read_stall(
             read_at: now,
             deliveries: vec![],
             answer: None,
+            claim: None,
         });
     }
 }

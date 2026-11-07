@@ -3682,6 +3682,7 @@ mod tests {
                 read_at: 54_000,
                 deliveries: vec![],
                 answer: None,
+                claim: None,
             },
             key: "stage/talk/1/lost".parse().unwrap(),
             pending_for: vec!["ops".into()],
@@ -3921,6 +3922,7 @@ mod tests {
             read_at: 1000,
             deliveries: vec![],
             answer: None,
+            claim: None,
         };
         let inbox = Answer::Inbox {
             recipient: "ops".into(),
@@ -4216,6 +4218,7 @@ mod tests {
                 read_at: 3700,
                 deliveries: vec![],
                 answer: None,
+                claim: None,
             },
             key: "stall/3700".parse().unwrap(),
             pending_for: vec!["east/planner".into()],
@@ -4273,6 +4276,7 @@ mod tests {
                     by: Some("east/ops".into()),
                     key: Some("stage/construct/1/ended-short".parse().unwrap()),
                 }),
+                claim: None,
             },
             key: "stage/construct/1/ended-short".parse().unwrap(),
             pending_for: vec![],

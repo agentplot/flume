@@ -528,6 +528,14 @@ place waits on now:
 refused: the stop-short stage/construct/1/ended-short of the place ~/.local/share/flume/places/f5f5e14159a8/change--plan was answered by east/ops at 1793288012: The second design.; an answer is taken once, and it waits on no move of its caller's now
 ```
 
+Two answers given at once are taken once as well. Before an answer is
+typed into the agent kept open, or before a fresh agent is started to
+carry one that names its key, flume claims the stop-short for it. A
+second answer that finds the claim is refused with nothing typed,
+naming who gives the first and when it was claimed. The claim goes once
+the first answer is recorded, or once the agent did not take it, so a
+later answer is then taken.
+
 A key naming another stage than the retry's, or an answer with no
 words, is refused too, and a key in any other form is refused naming
 the forms. The answer so taken is recorded on the stop-short's end

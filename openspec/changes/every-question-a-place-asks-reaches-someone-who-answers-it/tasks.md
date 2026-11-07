@@ -509,3 +509,19 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   the site's state page naming it (verify's item 7; 56, 132, 143;
   core.14). True when `sluice exec main -- moon run core:test
   conformance:test flume:test site:prose site:build` passes.
+- [x] 12.5 Claim the answer to a stop-short by compare-and-set on its
+  end before it is handed to the agent kept open, or before a fresh
+  agent is started to carry one naming its key, refusing an answer that
+  finds another's claim with nothing typed, and letting the claim go
+  where its answer is not recorded: `EndHeld::claim`, an `AnswerClaim`
+  held for the hand's bound and five minutes past it, taken by
+  `Engine::claim_answer` and let go by its guard's drop. Have caller-acts
+  hold "An answer is claimed before it is typed" with "Two answers at
+  once", the second checked during the first's hand, and "An answer not
+  taken", seam-contracts "A stop-short's end holds the answer being
+  taken" with "A claim read back", design 8, core.54's details and the
+  site's callers-and-holds and state pages say so (verify's item 8; 42,
+  53, 75; core.54). True when `sluice exec main -- moon run seams:test
+  core:test conformance:test flume:test site:prose site:build` passes,
+  with `engine/caller_acts.rs`'s two scenarios and `round_trip.rs`'s
+  `an_answer_being_taken`, the first failing where the claim is not read.

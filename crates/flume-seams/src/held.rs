@@ -308,6 +308,27 @@ pub struct EndHeld {
     /// (42).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub answer: Option<AnswerHeld>,
+    /// For a stop-short needing an answer, the answer being taken for it
+    /// now, claimed before its words are handed to the agent kept open or
+    /// a fresh agent is started to carry them, so a second answer at once
+    /// is refused with nothing typed; gone once the answer is recorded or
+    /// not taken, and none in an end written before (42, 53, 75).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claim: Option<AnswerClaim>,
+}
+
+/// An answer being taken for a stop-short: who gives it and the key it
+/// named, as its command names them, when it was claimed, and until when
+/// the claim holds, past which a later answer may take the stop-short, as
+/// where the command that claimed it was ended before it let go (42, 75).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnswerClaim {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<EndKey>,
+    pub at: Seconds,
+    pub until: Seconds,
 }
 
 /// An answer to a stop-short: the caller's words, the act they came by,

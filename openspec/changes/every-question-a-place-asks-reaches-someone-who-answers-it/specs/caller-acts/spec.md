@@ -45,3 +45,24 @@ as before (42, 49, 53).
 
 - **WHEN** a caller retries a stage that ended short with words and no key
 - **THEN** it is taken as before, and the end records the answer with no key named
+
+### Requirement: An answer is claimed before it is typed
+
+An answer handed to the agent kept open, and one naming its key that a
+fresh agent carries, SHALL first claim its stop-short's end by
+compare-and-set, taken only while the place waits on that stop-short,
+no answer is recorded on it and no other answer's claim holds, and SHALL
+let the claim go where its answer is not recorded. An answer that finds
+another's claim SHALL be refused, naming who gives that answer and when
+it was claimed, and SHALL end, start and type nothing (42, 53, 75;
+core.54).
+
+#### Scenario: Two answers at once
+
+- **WHEN** the run of `east/ops` retries construct naming its key while the agent kept open has not yet waited for input, and a retry from the pane `ops` naming the same key is checked meanwhile
+- **THEN** the second is refused naming the answer `east/ops` gives, nothing of it is typed, and once the agent waits the first reaches its session and is recorded, no claim left on the end (75)
+
+#### Scenario: An answer not taken
+
+- **WHEN** an answer naming the key is refused because the agent kept open does not wait for input within the hand's bound
+- **THEN** nothing is typed, the end holds no claim, and a later answer naming the key is taken

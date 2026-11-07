@@ -30,7 +30,7 @@
 use crate::acts::{asked, Answering};
 use crate::reading::AgentReading;
 use crate::start::Starts;
-use crate::{Answer, Engine, Step};
+use crate::{Answer, Engine, Step, TELL_BOUND};
 use flume_seams::*;
 
 impl Engine {
@@ -72,6 +72,20 @@ impl Engine {
     ) -> Answer {
         let at = self.host.now();
         let question = kept.end.words.clone().unwrap_or_default();
+        // The answer claimed on its stop-short before anything is typed, so
+        // a second answer at once finds the claim and is refused with
+        // nothing typed; let go when this returns where the answer was not
+        // recorded, as where the agent did not take it (42, 53, 75).
+        let key = EndKey::Stage {
+            stage: kept.stage.clone(),
+            start: kept.start.n,
+            state: StageState::EndedShort,
+            answered: kept.start.answered,
+        };
+        let _claimed = match self.claim_answer(id, &key, answering, bound.unwrap_or(TELL_BOUND)) {
+            Ok(claimed) => claimed,
+            Err(reason) => return Answer::refused(reason),
+        };
         let handed = match self.hand(id, &kept.start, &asked(&question, words), bound) {
             Ok(handed) => handed,
             Err(reason) => return Answer::refused(reason),
@@ -115,6 +129,7 @@ impl Engine {
                     by: answering.by.clone(),
                     key: answering.key.clone(),
                 });
+                end.claim = None;
                 let stage = &mut held.stages[kept.index];
                 if let Some(start) = stage.start.as_mut() {
                     start.live = true;

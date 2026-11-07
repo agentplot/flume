@@ -126,6 +126,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_tell_naming_an_answered_key,
         },
         Scenario {
+            name: "answer: a second retry naming the same key, checked while the first answer is being handed to the agent kept open, is refused naming the answer being taken by east/ops, nothing of it typed, and the first is recorded with no claim left",
+            cites: &["42", "53", "75"],
+            run: two_answers_to_one_key_at_once,
+        },
+        Scenario {
+            name: "answer: an answer the agent kept open does not take, as it does not wait for input within the hand's bound, is refused with nothing typed and lets its claim go, so a later answer naming the key is taken",
+            cites: &["42", "53", "75"],
+            run: an_answer_not_taken_lets_its_claim_go,
+        },
+        Scenario {
             name: "answer: construct, retried with an answer, delivers and code starts; a late retry naming construct's first stop-short's key is refused naming the move the place waits on now, none, and code goes on",
             cites: &["42", "49", "50"],
             run: an_answer_after_the_place_moved_on,
@@ -1001,6 +1011,129 @@ fn a_tell_naming_an_answered_key(_: &()) -> Outcome {
         world.terminal.sent_to(&construct(1)).len(),
         sent,
         "the words sent to construct's agent"
+    );
+    Ok(())
+}
+
+/// The claim on construct's first stop-short, as its end holds it.
+fn claim_on(world: &World, id: &PlaceId) -> Result<Option<AnswerClaim>, String> {
+    let held = world.held(id).ok_or("no held state")?;
+    Ok(held
+        .ends
+        .iter()
+        .find(|end| end.of.end_key() == construct_key(0))
+        .ok_or("no end keyed stage/construct/1/ended-short")?
+        .claim
+        .clone())
+}
+
+/// The caller-acts spec's "Two answers at once": `east/ops`'s answer is
+/// claimed on the stop-short before it is handed, so `ops`'s, whose key
+/// is checked while the agent has not yet waited for the first, finds the
+/// claim and is refused with nothing typed (42, 53, 75; core.54).
+fn two_answers_to_one_key_at_once(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, _) = asks_ops(&world, None)?;
+    world.host.advance(10 * 60);
+    let at = world.host.now();
+    world.terminal.set_state(&construct(1), AgentState::Working);
+    let sent = world.terminal.sent_to(&construct(1)).len();
+    let second: Arc<Mutex<Option<Answer>>> = Arc::default();
+    let (other, place, into, terminal) = (
+        world.engine(),
+        id.clone(),
+        second.clone(),
+        world.terminal.clone(),
+    );
+    world.host.at_next_sleep(move || {
+        let answer = other.retry_answering(
+            &place,
+            Retry::Stage("construct".into()),
+            Some("2.3".into()),
+            false,
+            &answering(Some(construct_key(0)), "ops"),
+        );
+        *into.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(answer);
+        terminal.set_state(&construct(1), AgentState::Waiting);
+    });
+    taken(&world.engine.retry_answering(
+        &id,
+        Retry::Stage("construct".into()),
+        Some(READ.into()),
+        false,
+        &answering(Some(construct_key(0)), "east/ops"),
+    ))?;
+    let second = second
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take()
+        .ok_or("the second answer was not given during the first's hand")?;
+    let reason = refused(&second)?;
+    ensure!(
+        reason.contains("is being taken") && reason.contains("east/ops"),
+        "the refusal names not the answer being taken by east/ops: {reason}"
+    );
+    ensure_eq!(
+        world.terminal.sent_to(&construct(1))[sent..].to_vec(),
+        vec![asked(READ)],
+        "the words sent to construct's agent during the two answers"
+    );
+    let answer = answer_on(&world, &id, &construct_key(0))?.ok_or("no answer recorded")?;
+    ensure_eq!(
+        (
+            answer.words.as_str(),
+            answer.by.as_deref(),
+            answer.key,
+            answer.at,
+            answer.session.is_some()
+        ),
+        (READ, Some("east/ops"), Some(construct_key(0)), at, true),
+        "the answer the stop-short's end holds"
+    );
+    ensure_eq!(claim_on(&world, &id)?, None, "the claim once recorded");
+    Ok(())
+}
+
+/// The caller-acts spec's "An answer not taken": the agent kept open does
+/// not wait for input within the hand's bound, so the hand types nothing
+/// and the answer is refused; its claim is let go, and the next answer
+/// naming the key is taken (42, 53, 75).
+fn an_answer_not_taken_lets_its_claim_go(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, _) = asks_ops(&world, None)?;
+    world.host.advance(10 * 60);
+    world.terminal.set_state(&construct(1), AgentState::Working);
+    let reason = refused(&world.engine.retry_answering(
+        &id,
+        Retry::Stage("construct".into()),
+        Some("2.3".into()),
+        false,
+        &answering(Some(construct_key(0)), "ops"),
+    ))?;
+    ensure!(
+        reason.contains("nothing was typed"),
+        "the refusal says not that nothing was typed: {reason}"
+    );
+    ensure_eq!(claim_on(&world, &id)?, None, "the claim once refused");
+    ensure_eq!(
+        answer_on(&world, &id, &construct_key(0))?,
+        None,
+        "the answer the stop-short's end holds once refused"
+    );
+    world.terminal.set_state(&construct(1), AgentState::Waiting);
+    world.host.advance(60);
+    let at = world.host.now();
+    taken(&world.engine.retry_answering(
+        &id,
+        Retry::Stage("construct".into()),
+        Some(READ.into()),
+        false,
+        &answering(Some(construct_key(0)), "east/ops"),
+    ))?;
+    ensure_eq!(
+        answer_on(&world, &id, &construct_key(0))?,
+        Some(by_ops(Act::Retry, at, Some(construct_key(0)), true)),
+        "the answer the stop-short's end holds"
     );
     Ok(())
 }

@@ -598,6 +598,7 @@ fn ends() -> Vec<EndHeld> {
                 },
             ],
             answer: None,
+            claim: None,
         },
         EndHeld {
             of: EndOf::Stage {
@@ -616,6 +617,7 @@ fn ends() -> Vec<EndHeld> {
             read_at: 170,
             deliveries: vec![],
             answer: None,
+            claim: None,
         },
         EndHeld {
             of: EndOf::Submission {
@@ -633,6 +635,7 @@ fn ends() -> Vec<EndHeld> {
                 by: DeliveredBy::Wait,
             }],
             answer: None,
+            claim: None,
         },
         EndHeld {
             of: EndOf::Stall {
@@ -651,6 +654,7 @@ fn ends() -> Vec<EndHeld> {
             read_at: 490,
             deliveries: vec![],
             answer: None,
+            claim: None,
         },
     ]
 }
@@ -2209,6 +2213,7 @@ fn two_answers() -> HeldState {
             by: DeliveredBy::Notice,
         }],
         answer: Some(answer),
+        claim: None,
     };
     state.ends = vec![
         stop_short(
@@ -2247,6 +2252,40 @@ fn two_answers() -> HeldState {
 }
 
 #[test]
+fn an_answer_being_taken() {
+    // The seam-contracts spec's "A claim read back": a stop-short's end
+    // claimed by an answer being handed to its session:
+    // who gives it, the key it named, when and until when, each read back
+    // as written, and an end written before reading as unclaimed (42, 75).
+    let mut state = two_answers();
+    state.ends[1].answer = None;
+    state.ends[1].claim = Some(AnswerClaim {
+        by: Some("east/ops".into()),
+        key: Some("stage/code/2/ended-short/1".parse().expect("a key")),
+        at: 500,
+        until: 1400,
+    });
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(
+        json["ends"][1]["claim"],
+        serde_json::json!({
+            "by": "east/ops",
+            "key": "stage/code/2/ended-short/1",
+            "at": 500,
+            "until": 1400,
+        })
+    );
+    let mut written_before = serde_json::to_value(&state.ends[0]).expect("an end as JSON");
+    written_before
+        .as_object_mut()
+        .expect("an object")
+        .remove("claim");
+    let read: EndHeld = serde_json::from_value(written_before).expect("an end written before");
+    assert_eq!(read.claim, None);
+}
+
+#[test]
 fn two_answers_in_one_session() {
     // The seam-contracts spec's "Two answers": each field reads back as
     // written, and the two ends key apart (43, 75).
@@ -2266,6 +2305,7 @@ fn two_answers_in_one_session() {
         })
     );
     assert_eq!(json["ends"][1]["answer"]["act"], "tell");
+    assert!(json["ends"][0].get("claim").is_none(), "none unclaimed");
     assert_ne!(state.ends[0].of.key(), state.ends[1].of.key());
     assert!(!state.ends[0].same(&state.ends[1].of));
     // An answer taken by no session, as a retry past the time gives none.

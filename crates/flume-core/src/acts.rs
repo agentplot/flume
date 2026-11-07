@@ -243,6 +243,17 @@ impl Engine {
                 return self.answer(place, &kept, words, Act::Retry, None, answering);
             }
         }
+        // An answer naming its key, carried by a fresh agent: claimed on
+        // its stop-short before any agent is ended or started, so a second
+        // answer at once is refused, and let go where it is not recorded
+        // (42, 49, 75).
+        let _claimed = match &answering.key {
+            Some(key) => match self.claim_answer(place, key, answering, TELL_BOUND) {
+                Ok(claimed) => Some(claimed),
+                Err(reason) => return Answer::refused(reason),
+            },
+            None => None,
+        };
         if let Some(reason) = self.working(place) {
             return Answer::refused(reason);
         }
@@ -295,6 +306,7 @@ impl Engine {
                     .find(|end| end.answer.is_none() && end.of.end_key() == *key)
                 {
                     end.answer = Some(answer.clone());
+                    end.claim = None;
                 }
             }
             Step::Write(())
@@ -861,6 +873,109 @@ fn keyed(
         ));
     }
     Ok(())
+}
+
+/// How long past the hand's own bound a claim on a stop-short's answer
+/// holds, the two sendings' reading of receipt among it, before a later
+/// answer may take the stop-short (38, 53, 75).
+const CLAIM_PAST_HAND: Seconds = 5 * 60;
+
+/// A claim on the answer to a stop-short, taken by compare-and-set on its
+/// end before the answer's words are typed or a fresh agent is started to
+/// carry them; let go when dropped where the answer was not recorded,
+/// which clears it (42, 53, 75).
+pub(crate) struct Claimed<'a> {
+    engine: &'a Engine,
+    place: PlaceId,
+    key: EndKey,
+    claim: AnswerClaim,
+}
+
+impl Drop for Claimed<'_> {
+    fn drop(&mut self) {
+        let Claimed {
+            engine,
+            place,
+            key,
+            claim,
+        } = self;
+        engine.update(place, |held| {
+            match held
+                .ends
+                .iter_mut()
+                .find(|end| end.of.end_key() == *key && end.claim.as_ref() == Some(claim))
+            {
+                Some(end) => {
+                    end.claim = None;
+                    Step::Write(())
+                }
+                None => Step::Keep(()),
+            }
+        });
+    }
+}
+
+impl Engine {
+    /// Claims the answer to the stop-short `key`, the one the place waits
+    /// on, for the answer `answering` gives, held for `bound` and
+    /// [`CLAIM_PAST_HAND`] past it, in one write taken only while the
+    /// stop-short is unanswered and no other answer's claim holds; refused
+    /// otherwise, as [`keyed`] refuses, or naming the answer being taken,
+    /// who gives it and since when, with nothing typed (42, 53, 75;
+    /// core.54).
+    pub(crate) fn claim_answer(
+        &self,
+        place: &PlaceId,
+        key: &EndKey,
+        answering: &Answering,
+        bound: Seconds,
+    ) -> Result<Claimed<'_>, String> {
+        let now = self.host.now();
+        let claim = AnswerClaim {
+            by: answering.by.clone(),
+            key: answering.key.clone(),
+            at: now,
+            until: now + bound + CLAIM_PAST_HAND,
+        };
+        let on_branch = self
+            .store
+            .read(place)
+            .and_then(|read| self.on_branch_count(&read.state));
+        let claimed = self.update(place, |held| {
+            if let Err(reason) = keyed(held, on_branch, place, key, None, true) {
+                return Step::Keep(Err(reason));
+            }
+            let Some(end) = held.ends.iter_mut().find(|end| end.of.end_key() == *key) else {
+                return Step::Keep(Err(format!(
+                    "the place {place} holds no stop-short {key}"
+                )));
+            };
+            if let Some(other) = end.claim.as_ref().filter(|other| now < other.until) {
+                return Step::Keep(Err(format!(
+                    "an answer to the stop-short {key} of the place {place} is being taken, given by {} at {}: an answer is taken once, and nothing was typed",
+                    other
+                        .by
+                        .as_deref()
+                        .unwrap_or("a caller that named no recipient"),
+                    other.at
+                )));
+            }
+            end.claim = Some(claim.clone());
+            Step::Write(Ok(()))
+        });
+        match claimed {
+            Some(Ok(())) => Ok(Claimed {
+                engine: self,
+                place: place.clone(),
+                key: key.clone(),
+                claim,
+            }),
+            Some(Err(reason)) => Err(reason),
+            None => Err(format!(
+                "the place {place} moved under the answer to the stop-short {key}; nothing was typed"
+            )),
+        }
+    }
 }
 
 /// A question a stop-short asked and its answer, as a retry's prompt and

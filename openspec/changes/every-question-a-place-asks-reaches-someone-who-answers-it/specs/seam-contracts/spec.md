@@ -46,3 +46,16 @@ answering roles, each type serializing to JSON and back unchanged (28,
 
 - **WHEN** the seams read `madswan/planner` and `slc-2/ops.1`
 - **THEN** each is an address, its stream `madswan` and `slc-2` and its role `planner` and `ops.1`, and a name of any other form is a session's (132, 143, 193)
+
+### Requirement: A stop-short's end holds the answer being taken
+
+A stop-short's end SHALL hold the answer being taken for it, while one
+is: who gives it and the key it named, as its command names them, when
+it was claimed and until when the claim holds, past which a later
+answer may take the stop-short. An end written before SHALL read as
+claimed by none (42, 75).
+
+#### Scenario: A claim read back
+
+- **WHEN** held state whose stop-short's end is claimed by an answer of `east/ops` naming its key is written and read back, and an end written before with no claim is read
+- **THEN** it reads back equal, the claim's `by`, `key`, `at` and `until` as written, and the end written before reads claimed by none (42, 75)

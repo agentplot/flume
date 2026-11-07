@@ -138,7 +138,13 @@ key the answer named, left out where it named none; and `session`,
 where the agent kept open took it. That holds `sent_at`, when flume
 last typed it, and `received_at`, when the agent's own record read it
 received. Every retry with words of the stage whose stop-short the
-place waits on records the answer, a fresh agent's with no `session`. A start keeps `answered`, how many answers its agent took
+place waits on records the answer, a fresh agent's with no `session`.
+While an answer is being typed into the agent kept open, or one naming
+its key starts a fresh agent, the end holds `claim`: `by` and `key` as
+an answer gives them, `at`, when it was claimed, and `until`, past which
+a later answer may take the stop-short. A second answer that finds the
+claim is refused with nothing typed, and the claim goes once the answer
+is recorded or not taken. A start keeps `answered`, how many answers its agent took
 in its session, left out while it is none. An end of a stage read after
 an answer carries `answered`, the start's count then, in its `of`, so
 each stop-short of one start is an end of its own. The start's
