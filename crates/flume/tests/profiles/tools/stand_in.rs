@@ -9,13 +9,15 @@
 //! home's `sessions/<pid>.json`, as the pinned Claude Code does, and
 //! removes the record at its exit (207). A session it is told to resume
 //! and finds no transcript of ends it as the pinned Claude Code ends
-//! (design 8; C.4). In a pane of a herdr server of the test's own it
-//! takes each prompt as the pinned herdr's `agent prompt` types it, its
-//! session kept open between a script's two runs, and reports its state,
-//! herdr reading it working while a turn runs and idle once it ends; and
-//! each start reads its own script by its stage and number from the
-//! folder `STAND_IN_SCRIPTS` names, keeping its log beside it (design 10;
-//! 37, 38, 53, 54; core.29).
+//! (design 8; C.4). It begins at the effort `--effort` passes, and, for a
+//! word outside the pinned Claude Code's five, warns as that release warns
+//! and begins at its default (197, C.4). In a pane of a herdr server of
+//! the test's own it takes each prompt as the pinned herdr's `agent
+//! prompt` types it, its session kept open between a script's two runs,
+//! and reports its state, herdr reading it working while a turn runs and
+//! idle once it ends; and each start reads its own script by its stage and
+//! number from the folder `STAND_IN_SCRIPTS` names, keeping its log beside
+//! it (design 10; 37, 38, 53, 54; core.29).
 
 use super::walk::*;
 use flume::host::process::listed;
@@ -437,4 +439,36 @@ fn each_start_reads_its_own_script_from_the_scripts_folder() {
     );
     assert!(log(3).contains("session ended"), "{}", log(3));
     assert!(!log(3).contains("Write done"), "{}", log(3));
+}
+
+#[test]
+fn the_stand_in_begins_at_the_effort_passed_and_at_its_default_for_a_word_it_does_not_know() {
+    // 197, C.4: `--effort xhigh` begins the stand-in at `xhigh`, which it
+    // names in its log; `--effort hard`, a word outside the pinned Claude
+    // Code's five, is warned of on standard error in that release's words
+    // and the session runs on at its default, as that release's does.
+    let walk = Walk::new("stand-in-effort");
+    let run = |word: &str| {
+        walk.command(env!("CARGO_BIN_EXE_flume-stand-in"), &walk.repository.dir)
+            .env("CLAUDE_CONFIG_DIR", walk.account())
+            .args(["--model", "opus", "--effort", word, "the prompt"])
+            .output()
+            .expect("the stand-in runs")
+    };
+    let taken = run("xhigh");
+    let out = String::from_utf8_lossy(&taken.stdout);
+    assert_eq!(taken.status.code(), Some(0), "{out}");
+    assert!(out.starts_with("stand-in: effort xhigh\n"), "{out}");
+    assert!(out.contains("session ended"), "{out}");
+    assert_eq!(String::from_utf8_lossy(&taken.stderr), "");
+
+    let unknown = run("hard");
+    let out = String::from_utf8_lossy(&unknown.stdout);
+    assert_eq!(unknown.status.code(), Some(0), "{out}");
+    assert!(out.starts_with("stand-in: effort default\n"), "{out}");
+    assert!(out.contains("session ended"), "{out}");
+    assert_eq!(
+        String::from_utf8_lossy(&unknown.stderr),
+        "Warning: Unknown --effort value 'hard' \u{2014} ignoring it and using the default effort. Valid values: low, medium, high, xhigh, max.\n"
+    );
 }

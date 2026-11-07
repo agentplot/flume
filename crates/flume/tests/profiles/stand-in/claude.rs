@@ -39,6 +39,14 @@
 //! file, it prints `Error: Append system prompt file not found: <file>`
 //! and exits 1 before any hook, as that release does.
 //!
+//! Where the command passes `--effort <word>`, it reads the word as that
+//! release reads it, trimmed and in lower case, `med` read as `medium`
+//! and `ultracode` kept as its own level, and prints `effort <level>`, the
+//! level it began at; any other word outside that release's five, `low`,
+//! `medium`, `high`, `xhigh` and `max`, it warns of on standard error in
+//! that release's words and begins at its default, printing `effort
+//! default` (197, C.4).
+//!
 //! Before its session starts it reads its settings as that release reads
 //! them: the `settings.json` of its configuration home, then the place's
 //! `.claude/settings.json` and `.claude/settings.local.json`, then the
@@ -143,6 +151,27 @@ const VERSION: &str = "2.1.296";
 /// The events whose input that release builds with the session's mode.
 const MODED: [&str; 4] = ["UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"];
 
+/// The efforts that release's `--effort` names, in its order.
+const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
+
+/// The level that release begins at for `--effort <word>`, as its `Wit`
+/// reads the word: trimmed and in lower case, `med` read as `medium` and
+/// `ultracode` kept as its own level; none for any other word outside its
+/// five, of which it warns on standard error, in its words, and begins at
+/// its default.
+fn began_at(word: &str) -> Option<String> {
+    let read = word.trim().to_lowercase();
+    let read = if read == "med" { "medium".into() } else { read };
+    if EFFORTS.contains(&read.as_str()) || read == "ultracode" {
+        return Some(read);
+    }
+    eprintln!(
+        "Warning: Unknown --effort value '{word}' \u{2014} ignoring it and using the default effort. Valid values: {}.",
+        EFFORTS.join(", ")
+    );
+    None
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut plugin = None;
@@ -157,6 +186,10 @@ fn main() {
             "--permission-mode" => mode = words.next().cloned(),
             "--resume" => resume = words.next().cloned(),
             "--settings" => flag = words.next().cloned(),
+            "--effort" => {
+                let level = words.next().and_then(|word| began_at(word));
+                say(&format!("effort {}", level.as_deref().unwrap_or("default")));
+            }
             "--append-system-prompt-file" => {
                 let file = words.next().cloned().unwrap_or_default();
                 if !Path::new(&file).is_file() {

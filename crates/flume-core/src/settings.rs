@@ -18,8 +18,12 @@
 //! `1h`, in the default layer (198). Its mode, where a layer gives one, is
 //! mapped by its agent profile to its program's setting, or the stage
 //! refused naming the mode, the program, the stage and the layer (162,
-//! 169); and its own settings are taken by its profile, or the stage
-//! refused naming each key with its layer and its file (195, 196).
+//! 169); its effort, where a layer gives one, taken whole as the model
+//! is, is asked of its profile, or the stage refused naming the effort,
+//! the program, the stage and the layer, and nothing is asked where no
+//! layer gives one (197); and its own settings are taken by its profile,
+//! or the stage refused naming each key with its layer and its file (195,
+//! 196).
 
 use crate::own::{fold, Table};
 use crate::{Engine, KEEP_OPEN};
@@ -37,10 +41,10 @@ use std::sync::Arc;
 type Tables = (Layer, Vec<Settings>);
 
 /// A stage's settings with each value as its layer wrote it, and the
-/// layer of each, by `program`, `model`, `mode`, `instructions`,
-/// `keep_open` or `programs.<program>.settings.<key>`, an own setting's with its file
-/// (32, 56, 195); the agent's program's own settings; and the layers
-/// they were folded from.
+/// layer of each, by `program`, `model`, `effort`, `mode`,
+/// `instructions`, `keep_open` or `programs.<program>.settings.<key>`, an
+/// own setting's with its file (32, 56, 195, 197, 198); the agent's
+/// program's own settings; and the layers they were folded from.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Resolved {
     pub settings: Settings,
@@ -230,6 +234,23 @@ fn mode_for(
     })
 }
 
+/// Whether `agent` takes `stage`'s effort as `resolved` gives it, asked
+/// only where a layer gives one; or why the stage cannot run at it,
+/// naming the effort as written, the program, the stage and the layer,
+/// with the profile's words (4, 32, 197).
+fn effort_taken(resolved: &Resolved, agent: &dyn Agent, stage: &str) -> Result<(), String> {
+    let Some(effort) = &resolved.settings.effort else {
+        return Ok(());
+    };
+    let layer = resolved.layer_of("effort");
+    let program = program_name(resolved.settings.program.as_deref().unwrap_or_default());
+    agent.effort(effort).map_err(|words| {
+        format!(
+            "the stage `{stage}`'s effort `{effort}`, from the layer `{layer}`, cannot run on `{program}`: {words}"
+        )
+    })
+}
+
 /// Settings with `beside` and `session` taken away, for a layer that does
 /// not say where in the terminal an agent runs (107, 32).
 fn placeless(mut settings: Settings) -> Settings {
@@ -378,6 +399,7 @@ impl Engine {
             let whole = [
                 ("program", &given.program),
                 ("model", &given.model),
+                ("effort", &given.effort),
                 ("instructions", &given.instructions),
                 ("keep_open", &given.keep_open),
             ];
@@ -467,8 +489,9 @@ impl Engine {
 
     /// The stage's agent at a start: its settings resolved, the agent
     /// profile that runs its program, the value it passes for its mode,
-    /// and its program's own settings, which the profile takes; or why the
-    /// stage is refused (27, 32, 169, 195).
+    /// its effort, which the profile takes, and its program's own
+    /// settings, which the profile takes; or why the stage is refused (27,
+    /// 32, 169, 195, 197).
     pub(crate) fn resolution(
         &self,
         place: &PlaceRecord,
@@ -477,6 +500,7 @@ impl Engine {
         let resolved = self.resolve(place, stage)?;
         let agent = self.agent_for(&resolved, &stage.name)?;
         let mode = mode_for(&resolved, agent.as_ref(), stage)?;
+        effort_taken(&resolved, agent.as_ref(), &stage.name)?;
         if let Some(own) = &resolved.own {
             let program = program_name(resolved.settings.program.as_deref().unwrap_or_default());
             if let Some(refused) = own_refused(agent.as_ref(), &stage.name, program, own) {

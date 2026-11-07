@@ -780,6 +780,76 @@ fn a_carried_start_scripted_to_end_before_its_word() {
 }
 
 #[test]
+fn the_agents_efforts_are_scripted() {
+    // Unscripted, the fake takes no effort, refusing every word in the
+    // seam's default words, and names no variable read over it; scripted
+    // to take `low` and `high`, it takes each and refuses any other naming
+    // it and both, names the variable scripted, its log names each effort
+    // asked, as at a launch and a start, and its command passes the
+    // effort its settings give as `--effort <word>`, and none where they
+    // give none (88, 106, 197).
+    let host = Arc::new(FakeHost::default());
+    let agent = FakeAgent::new(Arc::new(FakeTerminal::new(host)));
+    assert_eq!(agent.effort("high"), Err(no_effort("high")));
+    assert_eq!(agent.effort_variable(), None);
+
+    agent.take_efforts(&["low", "high"]);
+    agent.read_effort_over("FAKE_EFFORT");
+    assert_eq!(agent.effort("high"), Ok(()));
+    assert_eq!(agent.effort("high"), Ok(()));
+    assert_eq!(agent.effort("low"), Ok(()));
+    let words = agent.effort("med").expect_err("a word it does not take");
+    assert!(
+        words.contains("`med`") && words.contains("low") && words.contains("high"),
+        "{words}"
+    );
+    assert_eq!(agent.effort_variable(), Some("FAKE_EFFORT"));
+    assert_eq!(
+        agent.log.of("effort"),
+        vec![
+            "effort high",
+            "effort high",
+            "effort high",
+            "effort low",
+            "effort med"
+        ]
+    );
+
+    let who = identity("code", 1);
+    let command = |effort: Option<&str>| {
+        agent.command(
+            "/state/fix--one",
+            &Settings {
+                effort: effort.map(str::to_string),
+                ..Settings::default()
+            },
+            None,
+            &BTreeMap::new(),
+            None,
+            &BTreeMap::new(),
+            &place_ref(),
+            &who,
+            &Secret("s".into()),
+            "go",
+        )
+    };
+    let high = command(Some("high"));
+    assert!(
+        high.args
+            .windows(2)
+            .any(|pair| pair == ["--effort", "high"]),
+        "{:?}",
+        high.args
+    );
+    let none = command(None);
+    assert!(
+        !none.args.iter().any(|arg| arg == "--effort"),
+        "{:?}",
+        none.args
+    );
+}
+
+#[test]
 fn the_agents_own_settings_are_scripted() {
     // Unscripted, the fake reserves no key and refuses own settings in the
     // seam's default words, taking an empty entry, and its command lists

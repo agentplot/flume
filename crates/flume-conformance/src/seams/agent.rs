@@ -1,5 +1,5 @@
 //! The agent seam's scenarios (B.4, 88 to 93, 115, 116, 121, 128, 134,
-//! 135, 151, 161, 162, 169, 179, 196, 207).
+//! 135, 151, 161, 162, 169, 179, 196, 197, 207).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -80,6 +80,21 @@ pub trait AgentHarness {
     /// reads them, from a file the command lists, its arguments or its
     /// environment; none where it passes none (195, 196).
     fn own_passed(&self, command: &AgentCommand) -> Option<BTreeMap<String, serde_json::Value>>;
+
+    /// The words the profile takes as its program's effort and the
+    /// variable its program reads over it, as its program's release has
+    /// them or the harness scripted them; none of either where it keeps
+    /// the seam's defaults (197).
+    fn efforts(&self) -> Efforts;
+}
+
+/// The words a profile takes as its program's effort, each passed as
+/// written, none where it names no way to give one, and the variable its
+/// program reads over the effort, none where it names none (197).
+#[derive(Clone, Debug, Default)]
+pub struct Efforts {
+    pub words: Vec<String>,
+    pub variable: Option<&'static str>,
 }
 
 /// What a profile's live is read against: the environments under which
@@ -271,7 +286,102 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
             cites: &["195", "196", "88", "32", "128"],
             run: the_command_passes_own_settings::<H>,
         },
+        Scenario {
+            name: "agent: effort takes each word its program takes and refuses any other naming it and the words taken, every word where its profile names no way to give one, and names the variable its program reads over it",
+            cites: &["197", "88"],
+            run: effort_takes_its_programs_words::<H>,
+        },
+        Scenario {
+            name: "agent: the command passes the effort its settings give as its profile takes it, and none where they give none",
+            cites: &["197", "88"],
+            run: the_command_passes_the_effort::<H>,
+        },
     ]
+}
+
+fn effort_takes_its_programs_words<H: AgentHarness>(harness: &H) -> Outcome {
+    let efforts = harness.efforts();
+    for word in &efforts.words {
+        ensure_eq!(
+            harness.seam().effort(word),
+            Ok::<(), String>(()),
+            format!("the effort {word}")
+        );
+    }
+    let mut others = vec!["an-effort-of-no-program"];
+    if !efforts.words.iter().any(|word| word == "high") {
+        others.push("high");
+    }
+    for other in others {
+        match harness.seam().effort(other) {
+            Ok(()) => {
+                return Err(format!(
+                    "the effort {other} taken, which its program does not take"
+                ))
+            }
+            Err(words) => {
+                ensure!(
+                    words.contains(&format!("`{other}`")),
+                    "the refusal of {other} does not name it: {words}"
+                );
+                for word in &efforts.words {
+                    ensure!(
+                        words.contains(word.as_str()),
+                        "the refusal of {other} does not name {word}, which its program takes: {words}"
+                    );
+                }
+            }
+        }
+    }
+    ensure_eq!(
+        harness.seam().effort_variable(),
+        efforts.variable,
+        "the variable read over the effort"
+    );
+    Ok(())
+}
+
+fn the_command_passes_the_effort<H: AgentHarness>(harness: &H) -> Outcome {
+    let efforts = harness.efforts();
+    let who = identity("code");
+    let command = |effort: Option<&str>| {
+        harness.seam().command(
+            &harness.folder(),
+            &Settings {
+                effort: effort.map(str::to_string),
+                ..Settings::default()
+            },
+            None,
+            &BTreeMap::new(),
+            None,
+            &BTreeMap::new(),
+            &harness.place(),
+            &who,
+            &Secret("secret".into()),
+            "begin",
+        )
+    };
+    // A word passed as written, alone or as an option's value.
+    let passes = |command: &AgentCommand, word: &str| {
+        command
+            .args
+            .iter()
+            .any(|arg| arg == word || arg.ends_with(&format!("={word}")))
+    };
+    let none = command(None);
+    // A profile that names no way to give an effort is never given one:
+    // the core asks the effort first (197).
+    for word in &efforts.words {
+        ensure!(
+            passes(&command(Some(word)), word),
+            "the command passes no {word}"
+        );
+        ensure!(
+            !passes(&none, word),
+            "a command given no effort passes {word}"
+        );
+    }
+    Ok(())
 }
 
 fn live_not_read<H: AgentHarness>(harness: &H) -> Outcome {

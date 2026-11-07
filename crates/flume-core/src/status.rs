@@ -13,13 +13,36 @@ use crate::reading::{find_group, reads_change};
 use crate::settings::program_name;
 use crate::start::Starts;
 use crate::{
-    side_by_side, Act, AgentSettings, AgentStatus, Answer, Bound, EndStatus, Engine, GroupStatus,
-    ModeStatus, MoveStatus, OwnFileStatus, OwnStatus, PlaceStatus, SessionAnswer, SessionWait,
-    SourceStatus, StageStatus, SubmissionStatus, WaitingOn, Waits,
+    side_by_side, Act, AgentSettings, AgentStatus, Answer, Bound, EffortStatus, EndStatus, Engine,
+    GroupStatus, ModeStatus, MoveStatus, OwnFileStatus, OwnStatus, PlaceStatus, SessionAnswer,
+    SessionWait, SourceStatus, StageStatus, SubmissionStatus, WaitingOn, Waits,
 };
 use flume_seams::*;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+
+/// The effort `start` passed, with its layer, and `variable`, the one its
+/// program reads over it, where its account's environment names it, by
+/// its name alone; none where no layer gave an effort (56, 197; core.30).
+fn effort_status(start: &StartHeld, variable: Option<&'static str>) -> Option<EffortStatus> {
+    let word = start.settings.effort.as_ref()?;
+    let given = start.from.get("effort")?;
+    let outranked_by = variable
+        .filter(|name| {
+            start
+                .from
+                .get(&format!("env.{name}"))
+                .is_some_and(|given| given.layer == Layer::Account)
+        })
+        .map(str::to_string);
+    Some(EffortStatus {
+        word: word.clone(),
+        layer: given.layer,
+        passed: word.clone(),
+        read_back: false,
+        outranked_by,
+    })
+}
 
 /// Whether status reads a place's facts where they live: not for a place
 /// being made, gone or tidied (56, 62).
@@ -187,6 +210,7 @@ impl Engine {
             let mut notes = vec![];
             let mut read_back = false;
             let mut reserved = vec![];
+            let mut effort_variable = None;
             if let Some(agent) = self.agent(&start.program) {
                 if let Guarded::Refused { acts } = agent.guard(&folder, &start.identity) {
                     refused_acts.extend(acts);
@@ -195,6 +219,7 @@ impl Engine {
                 notes = agent.notes(&folder, &start.identity);
                 read_back = agent.mode_read_back() == Offered::Offered;
                 reserved = agent.reserved();
+                effort_variable = agent.effort_variable();
             }
             let own = start.own.as_ref().map(|own| OwnStatus {
                 passed: own.passed.clone(),
@@ -229,6 +254,7 @@ impl Engine {
                     .then(|| program_name(&start.program).to_string()),
                 read_back,
             });
+            let effort = effort_status(start, effort_variable);
             let starting = held.stages[index].state == StageState::Starting;
             AgentStatus {
                 identity: start.identity.to_string(),
@@ -264,6 +290,7 @@ impl Engine {
                     .as_ref()
                     .is_some_and(|end| end.left_in_pane),
                 own,
+                effort,
             }
         });
         let agent_state = agent.as_ref().map(|agent| agent.state);

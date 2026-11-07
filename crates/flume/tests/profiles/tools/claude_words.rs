@@ -10,11 +10,15 @@
 //! session it runs, which its live rests on (design 2 of record 0052's
 //! change), and how it takes its own settings by `--settings`, the keys
 //! the profile reserves and the `attribution` the docs give as their
-//! example (design 9 of record 0043's change). A release that
+//! example (design 9 of record 0043's change), `effortLevel` among those
+//! keys, and the efforts its `--effort` takes and the variable it reads
+//! over them (design 6 and 7 of record 0044's change). A release that
 //! changes any of them, or only renames what its minifier names in those
 //! fragments, fails here until the reading is made again. No agent runs.
 
-use flume::profiles::agent::claude::{carry, limit, live, mode, settings, withheld, wrapper};
+use flume::profiles::agent::claude::{
+    carry, effort, limit, live, mode, settings, withheld, wrapper,
+};
 use std::path::{Path, PathBuf};
 
 /// The Claude Code version `devenv.nix` pins.
@@ -143,6 +147,17 @@ fn the_pinned_release_takes_own_settings_as_the_profile_passes_them() {
     assert!(
         missing.is_empty(),
         "Claude Code {version}, at {}, does not hold the fragments its own settings' way rests on:\n{}",
+        program.display(),
+        missing.join("\n")
+    );
+}
+
+#[test]
+fn the_pinned_release_takes_the_efforts_the_profile_passes() {
+    let (missing, program, version) = missing(&effort::fragments());
+    assert!(
+        missing.is_empty(),
+        "Claude Code {version}, at {}, does not hold the fragments the effort rests on:\n{}",
         program.display(),
         missing.join("\n")
     );

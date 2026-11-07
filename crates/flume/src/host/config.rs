@@ -11,11 +11,12 @@
 //! `[kinds.<kind>.agents]` and `[repos."<repository>".kinds.<kind>.agents]`
 //! tables, each naming one stage's by a further `.stages.<stage>` table,
 //! give a kind's agents in every repository and in one their `model`,
-//! `instructions`, `mode` and `keep_open`, each kept as written, a mode
-//! one of flume's four or a table of programs whose entries are strings,
-//! and `keep_open`, how long an agent is kept open for an answer, one
-//! time for every program, `<n>`, `<n>s`, `<n>m` or `<n>h` (32, 162,
-//! 169, 198, C.7; records 0017, 0020, 0024, 0046); a
+//! `effort`, `instructions`, `mode` and `keep_open`, each kept as
+//! written, an effort its program's own word, a mode one of flume's four
+//! or a table of programs whose entries are strings, and `keep_open`, how
+//! long an agent is kept open for an answer, one time for every program,
+//! `<n>`, `<n>s`, `<n>m` or `<n>h` (32, 162, 169, 197, 198, C.7; records
+//! 0017, 0020, 0024, 0044, 0046); a
 //! repository's key has a leading `~` read as the home, so it names the
 //! repository by its location as a launch does. Its
 //! `[repos."<repository>".agents]` gives the same for every kind in one
@@ -1650,12 +1651,13 @@ fn refuse(table: &Table, at: &str, whose: &str, names: &[&str]) -> Result<(), St
     ))
 }
 
-/// One agents table's `model`, `instructions`, `mode`, `keep_open` and
-/// `programs`, each as written, the mode read as a declaration's is (162,
-/// 169), `keep_open` by [`keep_open_of`] (198), and `programs` by flume's
-/// one reader of them, a file read by [`host_file`] (195); any other key,
-/// `stages` among them, is not a setting of the host's (32, C.7; record
-/// 0020).
+/// One agents table's `model`, `effort`, `instructions`, `mode`,
+/// `keep_open` and `programs`, each as written, the effort a string, its
+/// program's own word, which the agent's profile takes or refuses (197),
+/// the mode read as a declaration's is (162, 169), `keep_open` by
+/// [`keep_open_of`] (198), and `programs` by flume's one reader of them, a
+/// file read by [`host_file`] (195); any other key, `stages` among them,
+/// is not a setting of the host's (32, C.7; record 0020).
 fn agent_settings(table: &Table, at: &str, directory: &Path) -> Result<Settings, String> {
     let text = |name: &str| match table.get(name) {
         None => Ok(None),
@@ -1674,6 +1676,7 @@ fn agent_settings(table: &Table, at: &str, directory: &Path) -> Result<Settings,
         .unwrap_or_default();
     Ok(Settings {
         model: text("model")?,
+        effort: text("effort")?,
         instructions: text("instructions")?,
         mode,
         programs,
@@ -1848,6 +1851,68 @@ mod tests {
             refused.contains("kinds.fix.agents.stages.code") && refused.contains("mode"),
             "{refused}"
         );
+    }
+
+    #[test]
+    fn an_effort_for_a_kind_and_one_for_a_repositorys_stage() {
+        // 32, 197, C.7: an effort for a kind at the host-kind layer, and
+        // one for a repository's stage at the host-repository layer, each
+        // its program's own word kept as written.
+        let config = HostConfig::parse(
+            "[kinds.fix.agents]\neffort = \"high\"\n\
+             [repos.\"/r\".kinds.fix.agents.stages.code]\neffort = \"xhigh\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            config.kinds["fix"].every_stage.effort.as_deref(),
+            Some("high")
+        );
+        let repository = &config.repos["/r"]["fix"];
+        assert_eq!(repository.every_stage, Settings::default());
+        assert_eq!(repository.stages["code"].effort.as_deref(), Some("xhigh"));
+        let scratch = Scratch::new("effort-layers");
+        let host = super::super::RealHost::new(scratch.0.join("state"), config, None);
+        let settings = flume_seams::Host::settings(&host, "/r", "fix", "default");
+        assert_eq!(
+            settings.kind.every_stage.effort.as_deref(),
+            Some("high"),
+            "the host-kind layer"
+        );
+        assert_eq!(
+            settings.repository.for_stage("code").effort.as_deref(),
+            Some("xhigh"),
+            "the host-repository layer"
+        );
+    }
+
+    #[test]
+    fn an_effort_that_is_no_word_is_refused_naming_the_table_and_effort() {
+        // 197, C.7: a number, and a table of programs until the model's
+        // is built with it, in a kind's table and every other.
+        for text in [
+            "[kinds.fix.agents]\neffort = 3\n",
+            "[kinds.fix.agents]\neffort = { agent = \"high\" }\n",
+        ] {
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(
+                refused.contains("kinds.fix.agents") && refused.contains("effort"),
+                "{text}: {refused}"
+            );
+        }
+        for (text, table) in [
+            ("[agents]\neffort = 3\n", "[agents]"),
+            (
+                "[streams.work]\n[agents.streams.work]\neffort = 3\n",
+                "[agents.streams.work]",
+            ),
+            ("[repos.\"/r\".agents]\neffort = 3\n", "agents]"),
+        ] {
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(
+                refused.contains(table) && refused.contains("effort"),
+                "{text}: {refused}"
+            );
+        }
     }
 
     #[test]
@@ -3074,6 +3139,25 @@ label = "inception"
             value_at(&config, "kinds.change.agents.instructions"),
             Some(("\"be brief\"".into(), ConfigLayer::Managed))
         );
+    }
+
+    #[test]
+    fn an_effort_for_every_agent_set_locally() {
+        // 32, 197, C.7: the local layer's effort for every agent over
+        // the managed layer's, the configuration naming the local layer
+        // as where it came from.
+        let config = HostConfig::layers(
+            "[agents]\neffort = \"medium\"\nmodel = \"opus\"\n",
+            Some("[agents]\neffort = \"high\"\n"),
+        )
+        .unwrap();
+        assert_eq!(config.every_agent.effort.as_deref(), Some("high"));
+        assert_eq!(config.every_agent.model.as_deref(), Some("opus"));
+        assert_eq!(
+            value_at(&config, "agents.effort"),
+            Some(("\"high\"".into(), ConfigLayer::Local))
+        );
+        assert_eq!(config.configuration.passed_over, vec![]);
     }
 
     #[test]
