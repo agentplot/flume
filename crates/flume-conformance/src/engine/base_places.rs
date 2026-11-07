@@ -206,6 +206,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["63", "75", "130", "203"],
             run: a_fix_dropped,
         },
+        Scenario {
+            name: "base places: a forecast conflict read once its kind's bound of 1 fix is spent launches nothing, and the base place waits on its caller with the merge queue's words and the bound spent, stalled after six minutes and delivered to ops once",
+            cites: &["23", "43", "130", "203"],
+            run: the_bound_spent,
+        },
+        Scenario {
+            name: "base places: a base place whose kind gives no bound runs flume's default for a stage's, two fixes, and a third conflict launches nothing",
+            cites: &["23", "58", "203"],
+            run: the_bound_left_out,
+        },
+        Scenario {
+            name: "base places: a fix whose launch is refused, its branch standing, counts as a fix held refused with the refusal's words, the base place waiting on its caller with them, and the same forecast launches nothing more",
+            cites: &["3", "4", "203"],
+            run: a_refused_launch,
+        },
+        Scenario {
+            name: "base places: a base place launched with mend at version 1, whose repository then declares mend at version 2, has its fix launched as repo/mend@1, refused naming it, and waits on its caller with the refusal's words",
+            cites: &["21", "154", "203"],
+            run: a_declaration_changed_after_the_launch,
+        },
     ]
 }
 
@@ -1881,6 +1901,157 @@ fn a_fix_dropped(_: &()) -> Outcome {
     ensure!(
         world.held(&mend_fix(2)).is_some(),
         "mend--spring-2 was not launched once main moved"
+    );
+    Ok(())
+}
+
+/// The words a base place waits on its caller with, none where it waits
+/// on its caller with none or on nobody.
+fn waiting_words(world: &World, place: &PlaceId) -> Result<String, String> {
+    let status = world.status(place)?;
+    ensure_eq!(
+        status.waits_on,
+        Some(flume_core::WaitsOn::Caller),
+        "whom the base place waits on"
+    );
+    Ok(status
+        .waiting_on
+        .and_then(|waiting| waiting.words)
+        .unwrap_or_default())
+}
+
+/// A conflict of `train/spring` with main forecast once main moves with
+/// a change to `README.md`, read by a settle of every place.
+fn main_moves_against(world: &World) -> Result<Revision, String> {
+    world.commit("main", &["README.md"]);
+    let (_, onto) = forecast_conflict(world, &[])?;
+    world.engine().settle(None);
+    Ok(onto)
+}
+
+fn the_bound_spent(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, Some(1))?;
+    main_moves_against(&world)?;
+    mend_lands(&world, 1)?;
+    let onto = main_moves_against(&world)?;
+    ensure!(
+        world.held(&mend_fix(2)).is_none(),
+        "a fix was launched past the bound"
+    );
+    let words = waiting_words(&world, &spring)?;
+    ensure!(
+        words.contains(&conflict_words("main", &onto))
+            && words.contains("Its kind's 1 fix was launched, as many as it allows"),
+        "its words give neither the merge queue's words nor the bound spent: {words}"
+    );
+    world.host.advance(6 * 60);
+    world.engine().settle(None);
+    world.engine().settle(None);
+    ensure!(world.status(&spring)?.stalled, "not stalled");
+    let stalls = world
+        .terminal
+        .notices("ops")
+        .into_iter()
+        .filter(|text| text.starts_with("flume: train--spring stalled"))
+        .count();
+    ensure_eq!(stalls, 1, "the stalls delivered to ops");
+    Ok(())
+}
+
+fn the_bound_left_out(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    for number in 1..=2 {
+        main_moves_against(&world)?;
+        ensure!(
+            world.held(&mend_fix(number)).is_some(),
+            "mend--spring-{number} was not launched"
+        );
+        mend_lands(&world, number)?;
+    }
+    main_moves_against(&world)?;
+    ensure!(
+        world.held(&mend_fix(3)).is_none(),
+        "a third fix was launched"
+    );
+    let words = waiting_words(&world, &spring)?;
+    ensure!(
+        words.contains("Its kind's 2 fixes were launched, as many as it allows"),
+        "its words give no bound spent: {words}"
+    );
+    Ok(())
+}
+
+fn a_refused_launch(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    let main = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
+    world.git.set_branch(REPOSITORY, "mend/spring-1", &main);
+    main_moves_against(&world)?;
+    let held = world.held(&spring).ok_or("no base place")?;
+    let reason = match held.fixes.as_slice() {
+        [BaseFix {
+            number: 1,
+            ended: FixEnded::Refused { reason },
+            ..
+        }] => reason.clone(),
+        other => return Err(format!("the base place's fixes: {other:?}")),
+    };
+    ensure!(
+        reason.contains("mend/spring-1"),
+        "the refusal names no branch: {reason}"
+    );
+    let words = waiting_words(&world, &spring)?;
+    ensure!(
+        words.contains("The fix 1, repo/mend@1, was not launched") && words.contains(&reason),
+        "its words give no refusal: {words}"
+    );
+    world.queue.log.clear();
+    world.engine().settle(None);
+    ensure_eq!(forecasts(&world).len(), 1, "the forecasts asked again");
+    ensure_eq!(
+        world.held(&spring).ok_or("no base place")?.fixes.len(),
+        1,
+        "the fixes the base place holds"
+    );
+    ensure!(
+        world.held(&mend_fix(1)).is_none() && world.held(&mend_fix(2)).is_none(),
+        "a fix was launched"
+    );
+    Ok(())
+}
+
+fn a_declaration_changed_after_the_launch(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    world.kinds.set_kinds(
+        REPOSITORY,
+        vec![
+            train_naming("mend", None),
+            Kind {
+                version: 2,
+                ..mend()
+            },
+        ],
+    );
+    main_moves_against(&world)?;
+    let held = world.held(&spring).ok_or("no base place")?;
+    let reason = match held.fixes.as_slice() {
+        [BaseFix {
+            ended: FixEnded::Refused { reason },
+            ..
+        }] => reason.clone(),
+        other => return Err(format!("the base place's fixes: {other:?}")),
+    };
+    ensure!(
+        reason.contains("repo/mend@1"),
+        "the refusal names no repo/mend@1: {reason}"
+    );
+    let words = waiting_words(&world, &spring)?;
+    ensure!(
+        words.contains(&reason),
+        "its words give no refusal: {words}"
     );
     Ok(())
 }
