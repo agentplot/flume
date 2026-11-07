@@ -201,6 +201,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["17", "74", "203"],
             run: a_launch_that_died_between_its_writing_and_its_making,
         },
+        Scenario {
+            name: "base places: a dropped fix leaves its base place waiting on its caller with words naming it dropped, and three settles of the same forecast launch nothing more; once main moves and the forecast conflicts there, the next settle launches mend--spring-2",
+            cites: &["63", "75", "130", "203"],
+            run: a_fix_dropped,
+        },
     ]
 }
 
@@ -1818,5 +1823,64 @@ fn a_launch_that_died_between_its_writing_and_its_making(_: &()) -> Outcome {
     let held = world.held(&spring).ok_or("no base place")?;
     ensure_eq!(held.fixes.len(), 1, "the fixes the base place holds");
     ensure_eq!(held.fixes[0].ended, FixEnded::Live, "the fix's end");
+    Ok(())
+}
+
+fn a_fix_dropped(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    world.commit("main", &["README.md"]);
+    forecast_conflict(&world, &[])?;
+    world.engine().settle(None);
+    let one = mend_fix(1);
+    ensure!(
+        world.held(&one).is_some(),
+        "mend--spring-1 was not launched"
+    );
+    if let Some(reason) = world.engine().drop_place(&one, true).refusal() {
+        return Err(format!("the drop of mend--spring-1 was refused: {reason}"));
+    }
+    ensure!(world.held(&one).is_none(), "the dropped fix stands");
+    for _ in 0..3 {
+        world.engine().settle(None);
+    }
+    ensure!(
+        world.held(&mend_fix(2)).is_none(),
+        "a second fix was launched for the same forecast"
+    );
+    let held = world.held(&spring).ok_or("no base place")?;
+    ensure!(
+        matches!(
+            held.fixes.as_slice(),
+            [BaseFix {
+                number: 1,
+                ended: FixEnded::Dropped,
+                ..
+            }]
+        ),
+        "the base place's fixes: {:?}",
+        held.fixes
+    );
+    let status = world.status(&spring)?;
+    ensure_eq!(
+        status.waits_on,
+        Some(flume_core::WaitsOn::Caller),
+        "whom the base place waits on"
+    );
+    let words = status
+        .waiting_on
+        .and_then(|waiting| waiting.words)
+        .unwrap_or_default();
+    ensure!(
+        words.contains("mend--spring-1") && words.contains("dropped"),
+        "its words name no dropped mend--spring-1: {words}"
+    );
+    world.commit("main", &["README.md"]);
+    forecast_conflict(&world, &[])?;
+    world.engine().settle(None);
+    ensure!(
+        world.held(&mend_fix(2)).is_some(),
+        "mend--spring-2 was not launched once main moved"
+    );
     Ok(())
 }
