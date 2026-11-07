@@ -9,6 +9,7 @@
 
 use crate::accounts::Choice;
 use crate::live::LiveRead;
+use crate::open_sessions::told;
 use crate::prompt::{asks, group_text, notes_path, render};
 use crate::room::Admit;
 use crate::start_record::start_record;
@@ -120,6 +121,15 @@ impl StartReason {
             StartReason::Resumed => "Your session was lost and goes on here, with its conversation as it stood. Anything you had running then has stopped: read the place again before you carry on.".into(),
             StartReason::Lost => "The stage's earlier agent was lost, and its conversation could not be carried, so this agent starts the stage afresh. What it committed is on the place's branch and what it left is in the place: read them and carry the stage on from there.".into(),
         }
+    }
+}
+
+impl StartReason {
+    /// flume's words for the fresh start after `start`, then the words
+    /// `start` was given and each answer it took in its session, so none
+    /// is lost with its agent (42, 146, 161).
+    pub(crate) fn after(self, held: &HeldState, start: &StartHeld) -> String {
+        then_words(self.words(), told(held, start).as_deref())
     }
 }
 

@@ -14,6 +14,7 @@
 //! ended once quiet and its stage started afresh, unless it delivered
 //! (146).
 
+use crate::open_sessions::last_answer;
 use crate::reading::{repeats_on, AgentReading, Facts};
 use crate::start::Starts;
 use crate::{Engine, Step, QUIET_LIMIT};
@@ -97,6 +98,7 @@ impl Engine {
         }
         let now = self.host.now();
         let limit = declared.quiet_limit.unwrap_or(QUIET_LIMIT);
+        let answered = last_answer(&held, index, &start);
         self.with_start(id, &identity, |start, state| {
             if start.last_head != facts.head {
                 start.last_head = facts.head.clone();
@@ -122,10 +124,14 @@ impl Engine {
                     *state = StageState::Begun;
                 }
                 if reading.state == AgentState::Working {
+                    // From the latest of the stage's beginning, the last
+                    // answer its agent took in its session, and the head's
+                    // last move (42, 118).
                     let from = start
                         .begun_at
                         .unwrap_or(start.started_at)
-                        .max(start.last_head_move);
+                        .max(start.last_head_move)
+                        .max(answered.unwrap_or_default());
                     start.past_limit = now.saturating_sub(from) >= limit;
                 }
             }

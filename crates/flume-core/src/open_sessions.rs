@@ -325,6 +325,51 @@ pub(crate) fn waits_on_answer(held: &HeldState) -> Option<&str> {
     (!found || index + 1 < held.stages.len()).then_some(stage.name.as_str())
 }
 
+/// When the start `start` of the stage at `index` last took an answer in
+/// its session, read received, as the ends `held` records give it; none
+/// where it took none (42, 118).
+pub(crate) fn last_answer(held: &HeldState, index: usize, start: &StartHeld) -> Option<Seconds> {
+    let name = &held.stages[index].name;
+    held.ends
+        .iter()
+        .filter(|end| matches!(&end.of, EndOf::Stage { stage, start: n, .. } if stage == name && *n == start.n))
+        .filter_map(|end| end.answer.as_ref()?.session)
+        .map(|handed| handed.received_at)
+        .max()
+}
+
+/// The words the start `start` of the place's stage was given and each
+/// answer it took in its session, the question then the answer, in order,
+/// as a fresh start flume makes on its own after it carries them after
+/// flume's own words; none where it was given none and took none (42, 146,
+/// 161).
+pub(crate) fn told(held: &HeldState, start: &StartHeld) -> Option<String> {
+    let Some(index) = held.index_of(&start.identity) else {
+        return start.words.clone();
+    };
+    let name = &held.stages[index].name;
+    let answers = held.ends.iter().filter_map(|end| match &end.of {
+        EndOf::Stage {
+            stage,
+            start: n,
+            end: ended,
+            ..
+        } if stage == name && *n == start.n => {
+            let answer = end
+                .answer
+                .as_ref()
+                .filter(|answer| answer.session.is_some())?;
+            Some(asked(
+                ended.words.as_deref().unwrap_or_default(),
+                &answer.words,
+            ))
+        }
+        _ => None,
+    });
+    let parts: Vec<String> = start.words.clone().into_iter().chain(answers).collect();
+    (!parts.is_empty()).then(|| parts.join("\n\n"))
+}
+
 /// A place's current stage ended short needing an answer whose end gives
 /// the time its agent is kept open until, as one read of its held state
 /// gives it.

@@ -84,8 +84,10 @@ impl Engine {
     /// The live start `start` of the stage at `index` read spent: its
     /// account recorded spent, and, once its agent is quiet and the stage
     /// has not delivered, the agent ended and the stage started again with
-    /// [`StartReason::Spent`]'s words, its wait naming `start` so the next
-    /// start may carry its conversation; true when it was. A start under
+    /// [`StartReason::Spent`]'s words, then the words `start` was given and
+    /// each answer it took in its session, which a start that carries its
+    /// conversation leaves out, its wait naming `start` so the next start
+    /// may carry its conversation; true when it was (42). A start under
     /// no account, or whose agent's record shows no usage limit, is left
     /// to the reading of its end (43, 146, 179).
     pub(crate) fn read_spent(
@@ -117,7 +119,10 @@ impl Engine {
                 return false;
             }
         }
-        let words = StartReason::Spent.words();
+        let words = self.store.read(id).map_or_else(
+            || StartReason::Spent.words(),
+            |read| StartReason::Spent.after(&read.state, start),
+        );
         {
             let _room = self.host.room();
             let order = self.queue().next_order();

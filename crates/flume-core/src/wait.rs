@@ -230,9 +230,9 @@ impl Engine {
 }
 
 /// The key of the newest end of what a wait waits on: of the stage's
-/// current start, or of the place's current submission; none where it
-/// has none yet, refused where the place has no such stage or its kind
-/// does not land.
+/// current start since the last answer it took in its session, or of the
+/// place's current submission; none where it has none yet, refused where
+/// the place has no such stage or its kind does not land.
 fn newest(held: &HeldState, of: &WaitFor) -> Result<Option<String>, String> {
     let place = &held.place.id;
     let ends = &held.ends;
@@ -241,9 +241,19 @@ fn newest(held: &HeldState, of: &WaitFor) -> Result<Option<String>, String> {
             let Some(stage) = held.stages.iter().find(|stage| &stage.name == name) else {
                 return Err(format!("the place {place} has no stage {name}"));
             };
-            let start = stage.start.as_ref().map_or(stage.starts, |start| start.n);
+            // An end of the current start read after the last answer it
+            // took in its session: a wait after an answer never answers the
+            // stop-short that answer answered (42, 43).
+            let (start, answered) = stage
+                .start
+                .as_ref()
+                .map_or((stage.starts, 0), |start| (start.n, start.answered));
             ends.iter().rev().find(|end| {
-                matches!(&end.of, EndOf::Stage { stage, start: n, .. } if stage == name && *n == start)
+                matches!(
+                    &end.of,
+                    EndOf::Stage { stage, start: n, answered: count, .. }
+                        if stage == name && *n == start && *count == answered
+                )
             })
         }
         WaitFor::Submission => {

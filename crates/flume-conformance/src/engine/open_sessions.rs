@@ -16,7 +16,7 @@ use super::repeating_stages::{branch, code_begun, GROUPS};
 use super::settling::{change_at_verify, construct_begun, fix_begun};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Act, Retry, Waits, KEEP_OPEN};
+use flume_core::{Act, Retry, WaitFor, Waits, KEEP_OPEN};
 use flume_seams::*;
 
 pub fn scenarios() -> Vec<Scenario<()>> {
@@ -145,6 +145,31 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "let go: a talk's agent kept open and stopped by its caller reads let go, stopped, at the next settle, and a retry with notes.md starts a fresh agent carrying no conversation, its prompt the question and the answer",
             cites: &["49", "51", "42"],
             run: stopped_by_its_caller,
+        },
+        Scenario {
+            name: "carried on: a code agent answered in its session stopping short again with other words records a second end of code's first start under its own key, delivered once to each recipient, the first staying delivered, and the agent is kept open for keep_open from the second stop-short",
+            cites: &["43", "74", "42"],
+            run: a_second_stop_short_in_one_session,
+        },
+        Scenario {
+            name: "carried on: a code stage begun two hours before its agent received an answer in its session, its agent then working 20 minutes with nothing delivered under a 30-minute limit, is not read working past its limit, and is read so once it has worked 30 minutes since the answer",
+            cites: &["44", "118", "42"],
+            run: limits_after_an_answer,
+        },
+        Scenario {
+            name: "carried on: a code agent answered notes.md in its session then stopping at its account's usage limit, its program carrying no conversation, is followed by code's fresh start on the pool's next account carrying flume's words, then the question and the answer",
+            cites: &["42", "146", "179"],
+            run: spent_after_an_answer,
+        },
+        Scenario {
+            name: "carried on: code's second start, its words a question and its answer, beginning without the settings it recorded is followed by a fresh start carrying flume's words, then the question and the answer",
+            cites: &["42", "161", "35"],
+            run: unsettled_after_a_retry,
+        },
+        Scenario {
+            name: "end delivery: a caller's wait on code, having delivered its stop-short, waits again once it answered in code's session: the wait does not answer the stop-short as a read, and answers code's next end once it is read",
+            cites: &["43", "42"],
+            run: waiting_again_after_an_answer,
         },
     ]
 }
@@ -311,6 +336,58 @@ fn asking(world: &World, name: &str) -> Result<(PlaceId, Seconds), String> {
     );
     Ok((id, at))
 }
+
+/// The fix `name` launched for `recipients`, none of them a session the
+/// terminal holds, so a wait delivers to them, its code agent stopped
+/// short with [`QUESTION`] and settled; the place and the time it stopped
+/// short.
+fn asking_for(
+    world: &World,
+    name: &str,
+    recipients: &[&str],
+) -> Result<(PlaceId, Seconds), String> {
+    let mut fix = launch("fix", name, Some("x"));
+    fix.recipients = recipients.iter().map(|named| named.to_string()).collect();
+    launched(&world.engine.launch(&fix))?;
+    let id = World::id("fix", name);
+    world.settle(&id);
+    let at = stops_short(
+        world,
+        &id,
+        0,
+        &code(name, 1),
+        QUESTION,
+        StopKind::NeedsAnswer,
+    )?;
+    world.settle(&id);
+    Ok((id, at))
+}
+
+/// The end a wait answers, and whether it delivered it; none where it
+/// answers none.
+fn waited(answer: &flume_core::Answer) -> Result<Option<(EndHeld, bool)>, String> {
+    match answer {
+        flume_core::Answer::Waited { end, delivered, .. } => {
+            Ok(end.clone().map(|end| (end.end, *delivered)))
+        }
+        other => Err(format!("the wait answered {other:?}")),
+    }
+}
+
+/// The words of a stage's end, as the end records them.
+fn words_of(end: &EndHeld) -> Option<String> {
+    match &end.of {
+        EndOf::Stage { end, .. } => end.words.clone(),
+        _ => None,
+    }
+}
+
+/// flume's words for a fresh start after a spent account (146).
+const SPENT: &str = "The stage's earlier agent stopped at its account's usage limit, and this agent starts the stage afresh. What it committed is on the place's branch and what it left is in the place: read them and carry the stage on from there.";
+
+/// flume's words for a fresh start after one begun without its settings
+/// (161).
+const UNSETTLED: &str = "The stage's earlier agent began without the settings its start recorded and was ended, and this agent starts the stage afresh. Anything it committed is on the place's branch and anything it left is in the place: read them and carry the stage on from there.";
 
 /// The end the place's stage `stage` holds.
 fn end_of(world: &World, id: &PlaceId, stage: &str) -> Result<StageEnd, String> {
@@ -1150,6 +1227,230 @@ fn stopped_by_its_caller(_: &()) -> Outcome {
     ensure!(
         prompt.contains(&asked("notes.md")),
         "the question then the answer are not in {prompt}"
+    );
+    Ok(())
+}
+
+fn a_second_stop_short_in_one_session(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    let (id, _) = asking_for(&world, "one", &["ops"])?;
+    taken(
+        &world
+            .engine
+            .retry(&id, Retry::Current, Some("notes.md".into()), false),
+    )?;
+    world.host.advance(5 * 60);
+    let who = code("one", 1);
+    let again = stops_short(&world, &id, 0, &who, "And its text?", StopKind::NeedsAnswer)?;
+    world.settle(&id);
+    world.settle(&id);
+    let ends = short_ends(&world, &id, "code", 1)?;
+    let read: Vec<(Option<String>, bool, Vec<String>)> = ends
+        .iter()
+        .map(|end| {
+            (
+                words_of(end),
+                end.answer.is_some(),
+                end.deliveries
+                    .iter()
+                    .map(|delivery| delivery.recipient.clone())
+                    .collect(),
+            )
+        })
+        .collect();
+    ensure_eq!(
+        read,
+        vec![
+            (Some(QUESTION.to_string()), true, vec!["ops".to_string()]),
+            (Some("And its text?".to_string()), false, vec!["ops".to_string()]),
+        ],
+        "code's first start's ends ended short: their words, whether each holds an answer, and whom each was delivered to"
+    );
+    ensure!(
+        ends[0].of.key() != ends[1].of.key(),
+        "the two ends share the key {}",
+        ends[0].of.key()
+    );
+    ensure_eq!(world.terminal.notices("ops").len(), 2, "the notices to ops");
+    ensure_eq!(
+        (
+            end_of(&world, &id, "code")?.open_until,
+            live(&world, &id, &who)?,
+            world.terminal.log.count("open")
+        ),
+        (Some(again + KEEP_OPEN), true, 1),
+        "the time code's agent is kept open until, whether it is live, and the agents opened"
+    );
+    Ok(())
+}
+
+fn limits_after_an_answer(_: &()) -> Outcome {
+    let world = World::new();
+    let id = fix_begun(&world, "one")?;
+    let who = code("one", 1);
+    world.terminal.set_state(&who, AgentState::Working);
+    world.host.advance(2 * 3600);
+    stops_short(&world, &id, 0, &who, QUESTION, StopKind::NeedsAnswer)?;
+    world.terminal.set_state(&who, AgentState::Waiting);
+    world.settle(&id);
+    taken(
+        &world
+            .engine
+            .retry(&id, Retry::Current, Some("notes.md".into()), false),
+    )?;
+    let past = |world: &World| -> Result<bool, String> {
+        Ok(world.held(&id).ok_or("no held state")?.stages[0]
+            .start
+            .clone()
+            .ok_or("code has no start")?
+            .past_limit)
+    };
+    world.terminal.set_state(&who, AgentState::Working);
+    world.host.advance(20 * 60);
+    world.settle(&id);
+    ensure!(
+        !past(&world)?,
+        "code read working past its limit 20 minutes after its answer"
+    );
+    world.host.advance(10 * 60);
+    world.settle(&id);
+    ensure!(
+        past(&world)?,
+        "code not read working past its limit 30 minutes after its answer"
+    );
+    Ok(())
+}
+
+fn spent_after_an_answer(_: &()) -> Outcome {
+    let world = World::new();
+    pool(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        vec![account("work-1", None), account("work-2", None)],
+    );
+    world.host.set_host_pool(Some("work"));
+    let id = fix_in(&world, None, "one")?;
+    let who = code("one", 1);
+    stops_short(&world, &id, 0, &who, QUESTION, StopKind::NeedsAnswer)?;
+    world.settle(&id);
+    taken(
+        &world
+            .engine
+            .retry(&id, Retry::Current, Some("notes.md".into()), false),
+    )?;
+    stops_at_limit(&world, "one", 1, Some(world.host.now() + 5 * 3600));
+    world.settle(&id);
+    ensure_eq!(
+        account_of(&world, &id, "code"),
+        on("work", "work-2"),
+        "the account code's fresh start runs on"
+    );
+    let prompt = world
+        .prompt(&id, &code("one", 2))
+        .ok_or("code's fresh start did not open")?;
+    ensure!(
+        prompt.contains(&format!("{SPENT}\n\n{}", asked("notes.md"))),
+        "flume's words, then the question and the answer, are not in {prompt}"
+    );
+    Ok(())
+}
+
+fn unsettled_after_a_retry(_: &()) -> Outcome {
+    let world = World::new();
+    pool(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        vec![Account {
+            name: "work-1".into(),
+            program: "agent".into(),
+            env: [("AGENT_HOME".to_string(), "/s/work-1".to_string())]
+                .into_iter()
+                .collect(),
+            agents: None,
+            usage: None,
+        }],
+    );
+    world.host.set_host_pool(Some("work"));
+    let id = fix_in(&world, None, "one")?;
+    stops_short(
+        &world,
+        &id,
+        0,
+        &code("one", 1),
+        QUESTION,
+        StopKind::NeedsAnswer,
+    )?;
+    world.settle(&id);
+    world.host.advance(KEEP_OPEN);
+    world.settle(&id);
+    world.agent.set_started_without(
+        &code("one", 2),
+        Unsettled {
+            missing: vec!["AGENT_HOME".into()],
+            ..Unsettled::default()
+        },
+    );
+    taken(
+        &world
+            .engine
+            .retry(&id, Retry::Current, Some("notes.md".into()), false),
+    )?;
+    world.settle(&id);
+    world.settle(&id);
+    ensure_eq!(
+        world
+            .held(&id)
+            .and_then(|held| held.stages[0].start.clone())
+            .map(|start| start.n),
+        Some(3),
+        "code's start after its second began without its settings"
+    );
+    let prompt = world
+        .prompt(&id, &code("one", 3))
+        .ok_or("code's third start did not open")?;
+    ensure!(
+        prompt.contains(&format!("{UNSETTLED}\n\n{}", asked("notes.md"))),
+        "flume's words, then the question and the answer, are not in {prompt}"
+    );
+    Ok(())
+}
+
+fn waiting_again_after_an_answer(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, _) = asking_for(&world, "one", &["ops"])?;
+    let code_stage = WaitFor::Stage("code".into());
+    let first = waited(&world.engine().wait(&id, &code_stage, "ops", Some(0)))?;
+    ensure_eq!(
+        first.map(|(end, delivered)| (words_of(&end), delivered)),
+        Some((Some(QUESTION.to_string()), true)),
+        "the first wait's end and whether it delivered it"
+    );
+    taken(
+        &world
+            .engine
+            .retry(&id, Retry::Current, Some("notes.md".into()), false),
+    )?;
+    let again = world.engine().wait(&id, &code_stage, "ops", Some(60));
+    ensure!(
+        waited(&again)?.is_none(),
+        "the wait after the answer answered {again:?}"
+    );
+    stops_short(
+        &world,
+        &id,
+        0,
+        &code("one", 1),
+        "And its text?",
+        StopKind::NeedsAnswer,
+    )?;
+    let next = waited(&world.engine().wait(&id, &code_stage, "ops", Some(0)))?;
+    ensure_eq!(
+        next.map(|(end, delivered)| (words_of(&end), delivered)),
+        Some((Some("And its text?".to_string()), true)),
+        "the wait's end once code stopped short again, and whether it delivered it"
     );
     Ok(())
 }
