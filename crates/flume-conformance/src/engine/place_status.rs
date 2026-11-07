@@ -68,17 +68,17 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "status: a place whose construct ended short waits on a retry of construct, since then, with the question whole and its agent kept open until an hour after, in the JSON form",
-            cites: &["56", "130", "42", "41"],
+            cites: &["56", "130", "42", "41", "198"],
             run: waiting_on_an_answer,
         },
         Scenario {
             name: "status: a place whose construct's agent kept open was let go by its time and ended waits on the same move since the stop-short, giving when it was let go, time, and when it was ended, in the JSON form",
-            cites: &["130", "56", "31"],
+            cites: &["130", "56", "31", "198", "S104"],
             run: its_agent_let_go,
         },
         Scenario {
             name: "status: a fix whose code took one answer by a retry and one by a tell in its first start's session gives both under code in order, each with its question, its answer, retry or tell, and when it was sent and received, in the JSON form",
-            cites: &["42", "56"],
+            cites: &["42", "56", "198"],
             run: two_answers_in_one_session,
         },
         Scenario {
@@ -163,7 +163,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "status: an agent whose keep_open only the host's table for every agent gives, 20m, gives it as written from host, in the JSON form",
-            cites: &["32", "56"],
+            cites: &["32", "56", "198"],
             run: keep_open_from_the_hosts_table_for_every_agent,
         },
         Scenario {

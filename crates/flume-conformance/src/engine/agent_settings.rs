@@ -82,27 +82,27 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "settings: the host gives a fix 10m kept open, and its code agent starts with 10m from host-kind",
-            cites: &["32"],
+            cites: &["32", "198"],
             run: keep_open_from_the_hosts_kind,
         },
         Scenario {
             name: "settings: the host gives a fix 10m kept open and the stream work 2h, and a fix in work starts with 10m from host-kind while a change in work starts with 2h from host-stream",
-            cites: &["32", "143"],
+            cites: &["32", "143", "198"],
             run: keep_open_the_hosts_kind_over_its_stream,
         },
         Scenario {
             name: "settings: a launch giving code 0 kept open over the host's 10m starts code's agent with 0 from launch",
-            cites: &["32"],
+            cites: &["32", "198"],
             run: keep_open_the_launch_over_the_host,
         },
         Scenario {
             name: "settings: no layer giving keep_open starts the agent with flume's own 1h from default",
-            cites: &["32"],
+            cites: &["32", "198"],
             run: keep_open_from_no_layer,
         },
         Scenario {
             name: "settings: the host's keep_open for every agent changing from 1h to 15m while construct works leaves construct's agent 1h and starts code's with 15m",
-            cites: &["8", "32"],
+            cites: &["8", "32", "198"],
             run: keep_open_changed_after_the_launch,
         },
     ]

@@ -245,7 +245,7 @@ pub fn scenarios<H: TerminalHarness>() -> Vec<Scenario<H>> {
         },
         Scenario {
             name: "terminal: sends says whether it hands a running agent words, and one that does not refuses every send with nothing typed",
-            cites: &["95", "53", "C.5"],
+            cites: &["95", "53", "198"],
             run: sends_says_whether_it_hands_words::<H>,
         },
     ]
