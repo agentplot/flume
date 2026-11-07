@@ -1,7 +1,7 @@
 ---
 number: 55
 title: A repository is named by its address, flume publishes its own module, and flume reads each account's usage itself
-status: proposed
+status: accepted
 date: 2026-11-06
 decision-makers:
 - Chuck Swanberg
@@ -10,7 +10,7 @@ decision-makers:
 
 # A repository is named by its address, flume publishes its own module, and flume reads each account's usage itself
 
-Status: proposed to the user on 2026-11-06, as `briefs.15` has it; accepted only on their yes.
+Status: accepted by the user on 2026-11-06, in agentplot-design's pane: "yes 55", after asking that flume stay usable without Boomdrive, which the decision's first point says.
 
 Amends records 0017, 0020 and 0043 in part where a repository is named by its folder, and record 0035 in part where the host writes an account's reading, each marked so where it stands.
 
@@ -45,4 +45,4 @@ Option 1, with flume's own module and flume's own reading of usage.
 - The statement's 143 and C.7 name a repository by its address with the folder where it has none, and 184 and C.7 say the reading is flume's own, its how open, each marked proposed, at agentplot/blueprints.
 - Boomdrive's units that give flume each clone's folder are not needed once this is built.
 - A repository whose two clones on one host share an address is one repository to flume's configuration: both take its table.
-- No unit is queued from this record while it is proposed, and none for the usage reading until its design is made.
+- No unit is queued for the usage reading until its design is made.
