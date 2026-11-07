@@ -268,7 +268,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 ## 6. The stall, and a hold on the waiting move
 
-- [ ] 6.1 Have `EndOf::Stall` carry the stop-short the place waits on,
+- [x] 6.1 Have `EndOf::Stall` carry the stop-short the place waits on,
   its words, needs, key and addressee, read with none where an earlier
   flume wrote none. Have the stall end record the answerer behind the
   place's stream as the sources declare it when `read_stall` reads it.
