@@ -57,7 +57,7 @@ None.
   given its prompt.
 - `crates/flume`: the walkthroughs' `settled_until` and the herdr host's
   `logs`.
-- `docs/`: record 0057, proposed; rule core.11's details.
+- `docs/`: record 0058, proposed; rule core.11's details.
 - No new crate, plugin or site part, so no new moon project, and no new
   dependency or tool. The statement is unchanged: 37, 38 and 43 already
   say this.

@@ -1,5 +1,5 @@
 ---
-number: 57
+number: 58
 title: A notice for a role's run waits until the run's start took its prompt
 status: proposed
 date: 2026-11-07

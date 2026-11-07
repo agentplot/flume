@@ -15,7 +15,7 @@ launch kept from sending the prompt, the hack left out of the commits.
 
 ## 3. The records
 
-- [x] 3.1 Record 0057, proposed, and rule core.11's details in `docs/architecture/core.md`. True when `sluice exec main -- moon run root:adrs` passes.
+- [x] 3.1 Record 0058, proposed, and rule core.11's details in `docs/architecture/core.md`. True when `sluice exec main -- moon run root:adrs` passes.
 
 ## 4. The gate
 
