@@ -9,11 +9,11 @@ use flume_core::{
     StandingStatus, StreamOpened, StreamStatus, Tidied, TitleFrom, WindowOutcome, Woke,
 };
 use flume_seams::{
-    AccountFrom, Act, BaseFrom, CarryCause, ConfigLayer, ConfigValue, Conversation, Given, HoldOn,
-    HostConfiguration, IntentKey, Kept, KindFrom, LabelHeld, LiveProcess, LocalLayer, Made,
-    NamedBy, NamedSession, Phase, ProfileHeld, Readiness, RecipientsFrom, SessionFrom, SessionHeld,
-    StreamAnswerer, StreamHeld, SubmissionRead, UncarriedStart, UnsettledStart, WaitingOn, Waits,
-    Watch, LAUNCH_SOURCE, OWN_SOURCE, REPO_SOURCE,
+    AccountFrom, Act, BaseFrom, CarryCause, ConfigLayer, ConfigValue, Conversation, EndOf, Given,
+    Hold, HoldOn, HostConfiguration, IntentKey, Kept, KindFrom, LabelHeld, LiveProcess, LocalLayer,
+    Made, NamedBy, NamedSession, Phase, ProfileHeld, Readiness, RecipientsFrom, SessionFrom,
+    SessionHeld, StopKind, StreamAnswerer, StreamHeld, SubmissionRead, UncarriedStart,
+    UnsettledStart, WaitingOn, Waits, Watch, LAUNCH_SOURCE, OWN_SOURCE, REPO_SOURCE,
 };
 use serde_json::{json, Value};
 
@@ -351,16 +351,7 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         lines.push(session_wait_line(wait));
     }
     for hold in &place.holds {
-        let what = match &hold.on {
-            HoldOn::Stage { stage } => stage.as_str(),
-            HoldOn::Submission => "the submission",
-            HoldOn::Waiting => "the move it waits on",
-        };
-        let mut line = format!("  {what} on hold since {}", hold.since);
-        if let Some(words) = &hold.words {
-            line.push_str(&format!(": {words}"));
-        }
-        lines.push(line);
+        lines.push(hold_line(hold));
     }
     if let Some(role) = &place.role {
         lines.push(format!("  the run of {role}"));
@@ -378,6 +369,7 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
     }
     for end in &place.ends {
         let mut line = format!("  ended: {}", flume_core::what_ended(&end.end.of));
+        line.push_str(&stall_words(&end.end.of));
         let delivered: Vec<&str> = end
             .end
             .deliveries
@@ -560,6 +552,59 @@ fn waiting_line(waiting: &WaitingOn, stalled: bool) -> String {
         _ => {}
     }
     line
+}
+
+/// A hold's line: what it holds, since when and its words; for the move
+/// the place waits on, the bound it holds for and when it lapsed, a
+/// lapsed hold holding nothing (47, 56, 130).
+fn hold_line(hold: &Hold) -> String {
+    let what = match &hold.on {
+        HoldOn::Stage { stage } => stage.as_str(),
+        HoldOn::Submission => "the submission",
+        HoldOn::Waiting => "the move it waits on",
+    };
+    let mut line = format!("  {what} on hold since {}", hold.since);
+    if let Some(bound) = hold.bound {
+        line.push_str(&format!(", for {bound} seconds"));
+    }
+    if let Some(lapsed) = hold.lapsed {
+        line.push_str(&format!(", lapsed at {lapsed}"));
+    }
+    if let Some(words) = &hold.words {
+        line.push_str(&format!(": {words}"));
+    }
+    line
+}
+
+/// What a stall carries beside the move, for its line: the words of the
+/// hold whose lapse stalled it, and the stop-short the place waits on,
+/// whether it needs an answer or found work, the role it named and its
+/// words; nothing for any other end (41, 56, 130, 193).
+fn stall_words(of: &EndOf) -> String {
+    let EndOf::Stall {
+        stop_short, lapsed, ..
+    } = of
+    else {
+        return String::new();
+    };
+    let mut words = String::new();
+    if let Some(lapsed) = lapsed {
+        words.push_str(&format!(", its hold lapsed: {lapsed}"));
+    }
+    if let Some(stop_short) = stop_short {
+        let needs = match stop_short.needs {
+            Some(StopKind::FoundWork) => "found work",
+            _ => "needs an answer",
+        };
+        words.push_str(&format!("; its stop-short {needs}"));
+        if let Some(addressee) = &stop_short.addressee {
+            words.push_str(&format!(", asking {addressee}"));
+        }
+        if let Some(said) = &stop_short.words {
+            words.push_str(&format!(", saying: {said}"));
+        }
+    }
+    words
 }
 
 /// A stage waiting for room while a process runs the conversation its
@@ -3555,6 +3600,99 @@ mod tests {
         assert_eq!(
             stage_lines(&once),
             vec!["  stage code: begun, started 2 times".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_hold_on_the_waiting_move_and_its_lapse() {
+        // 56, 130: a hold on the move the place waits on, with its words,
+        // since when and its bound, and, once lapsed, when it lapsed; in
+        // the person's form, and in the JSON form as fields.
+        let holding = Hold {
+            on: HoldOn::Waiting,
+            words: Some("east-planner has it".into()),
+            since: 100,
+            bound: Some(3600),
+            lapsed: None,
+        };
+        let lapsed = Hold {
+            lapsed: Some(3700),
+            ..holding.clone()
+        };
+        let place = PlaceStatus {
+            holds: vec![holding.clone()],
+            ..a_place()
+        };
+        assert!(place_lines(&place).contains(
+            &"  the move it waits on on hold since 100, for 3600 seconds: east-planner has it"
+                .to_string()
+        ));
+        assert_eq!(
+            hold_line(&lapsed),
+            "  the move it waits on on hold since 100, for 3600 seconds, lapsed at 3700: east-planner has it"
+        );
+        assert_eq!(
+            hold_line(&Hold {
+                bound: None,
+                ..holding.clone()
+            }),
+            "  the move it waits on on hold since 100: east-planner has it"
+        );
+        let json = serde_json::to_value(PlaceStatus {
+            holds: vec![lapsed],
+            ..a_place()
+        })
+        .expect("status as JSON");
+        assert_eq!(
+            json["holds"],
+            json!([{"on": "waiting", "words": "east-planner has it", "since": 100, "bound": 3600, "lapsed": 3700}])
+        );
+    }
+
+    #[test]
+    fn a_stall_with_its_stop_short_and_lapsed_hold() {
+        // 41, 56, 130, 193: a stall's line names the hold whose lapse
+        // stalled it and the stop-short the place waits on, with the role
+        // it named and its words; in the JSON form as fields.
+        let stall = EndStatus {
+            end: EndHeld {
+                of: EndOf::Stall {
+                    since: 3700,
+                    waiting: "a retry of construct".into(),
+                    answerer: Some("east/operator".into()),
+                    stop_short: Some(Box::new(flume_seams::StopShortWaited {
+                        words: Some("Which design does the brief mean?".into()),
+                        needs: Some(StopKind::NeedsAnswer),
+                        key: "stage construct 1 EndedShort ".into(),
+                        addressee: Some("west/design".into()),
+                    })),
+                    answerer_read: true,
+                    lapsed: Some("on the user's card".into()),
+                },
+                read_at: 3700,
+                deliveries: vec![],
+            },
+            pending_for: vec!["east/planner".into()],
+        };
+        let place = PlaceStatus {
+            ends: vec![stall.clone()],
+            ..a_place()
+        };
+        assert!(place_lines(&place).contains(
+            &"  ended: stalled: a retry of construct, its hold lapsed: on the user's card; its stop-short needs an answer, asking west/design, saying: Which design does the brief mean?; pending for east/planner"
+                .to_string()
+        ), "{:?}", place_lines(&place));
+        let json = serde_json::to_value(&stall).expect("the end as JSON");
+        assert_eq!(json["answerer"], json!("east/operator"));
+        assert_eq!(json["lapsed"], json!("on the user's card"));
+        assert_eq!(
+            json["stop_short"],
+            json!({
+                "words": "Which design does the brief mean?",
+                "needs": "needs_answer",
+                "key": "stage construct 1 EndedShort ",
+                "addressee": "west/design"
+            })
         );
     }
 
