@@ -3,9 +3,9 @@
 // its agent's state, and a change's tasks ticked. A fix lands and leaves the
 // list once tidied. The open key shows a place's pane beside its status. A
 // tell waits while its agent works and reaches it once it waits; a retry
-// with your words starts a stage that ended short again, with a fresh agent;
-// stop ends an agent that went the wrong way, and its stage waits for a
-// retry. A review, a repository's own conversation kind, waiting on you
+// with your words hands the answer to the agent kept open for it, which
+// carries its stage on; stop ends an agent that went the wrong way, and its
+// stage waits for a retry, which starts it again with a fresh agent. A review, a repository's own conversation kind, waiting on you
 // shows as a row too.
 //
 // Timeline, percent of the loop:
@@ -190,8 +190,9 @@ export function herdr(layout: Layout) {
     ],
     [],
   );
-  // fix/flaky-test: its code stage ended short, in its agent's words; a
-  // retry with your words starts it again with a fresh agent.
+  // fix/flaky-test: its code stage ended short, in its agent's words, its
+  // agent kept open; a retry with your words hands it the answer, and the
+  // same agent carries the stage on.
   row(
     "c",
     "fix/flaky-test",
@@ -204,7 +205,7 @@ export function herdr(layout: Layout) {
     [-1, 100],
     [
       ["fix · code · ended short", "warn", -1, 49],
-      ["fix · code · agent 2 · working", "ac", 49, END],
+      ["fix · code · working", "ac", 49, END],
     ],
     [[36, 62]],
   );
@@ -358,7 +359,7 @@ export function herdr(layout: Layout) {
     ["sent: the agent is waiting", "ok", 31, 34],
   ]);
   pane(
-    "agent 1 · code · ended short",
+    "agent 1 · code · kept open",
     [
       ["stopped short, in its words:", "m", 36],
       ["the test reads a CSV fixture", "t", 36],
@@ -371,9 +372,9 @@ export function herdr(layout: Layout) {
   );
   words("c", "retry fix/flaky-test, with words", "use fixtures/small.csv", 42, [42.5, 47], 49, []);
   pane(
-    "agent 2 · code · a fresh agent",
+    "agent 1 · code · same session",
     [
-      ["prompt and your words, received", "ok", 50],
+      ["your answer, received", "ok", 50],
       ["reading fixtures/small.csv", "t", 52],
       ["the test passes", "t", 56],
     ],
@@ -475,7 +476,7 @@ export function herdr(layout: Layout) {
   change("verify", ["waiting", "t"], "no report yet", 31, 33, "a3");
   change("verify", ["working", "ac"], "no report yet", 33, 36, "a4");
   fix("code, ended short", ["waiting", "t"], 36, 49, "c1");
-  fix("code, started 2 times", ["working", "ac"], 49, 62, "c2");
+  fix("code, answered", ["working", "ac"], 49, 62, "c2");
   fix("code", ["waiting", "t"], 62, 68, "e1");
   fix("code, waits on a retry", ["stopped", "bad"], 68, 83, "e2");
   fix("code, started 2 times", ["working", "ac"], 83, 96, "e3");
@@ -513,7 +514,7 @@ export function herdr(layout: Layout) {
       "fix/bump-mise in sluice, which lands, is tidied and leaves the list; fix/flaky-test, whose code stage ended short; review/parquet, a review waiting on you; and fix/lint-config, working. " +
       "Beside the selected place’s pane, its status gives the kind, the stage, the agent’s state, the deliverable and the submission. " +
       "The tell key sends check fields with commas too to change/csv-export: flume holds it while the agent works and sends it once the agent waits, and it reaches the transcript. " +
-      "The open key shows fix/flaky-test, whose agent stopped short asking which CSV its test should read; the retry key starts the stage again with a fresh agent and the words use fixtures/small.csv. " +
+      "The open key shows fix/flaky-test, whose agent stopped short asking which CSV its test should read and is kept open for the answer; the retry key hands that agent the words use fixtures/small.csv, and it carries the stage on in the same session. " +
       "The open key shows fix/lint-config, whose agent rewrote the wrong files and waits; the stop key ends it, and the stage waits; the retry key starts it again with a fresh agent and the words one root eslint.config.js.",
     still: 40,
   });

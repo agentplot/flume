@@ -69,7 +69,10 @@ merge that revision into the place's branch, resolve the files and
 commit, never to rebase.
 
 A stop-short that needs an answer, `flume needs "<words>"`, starts no
-next stage: the place waits until a retry carries the answer.
+next stage, and nor does found work from any other stage. The place
+waits until a retry carries the answer, or a tell while its agent is
+kept open for it
+([the agent kept open](/flume/guides/callers-and-holds/#the-agent-kept-open)).
 
 ## Where kinds come from
 
