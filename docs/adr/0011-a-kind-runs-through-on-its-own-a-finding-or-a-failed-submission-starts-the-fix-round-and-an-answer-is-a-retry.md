@@ -47,3 +47,42 @@ Option 2.
 - `_open.md`'s first item names this record for the verify finding; the item leaves when the record is accepted.
 - Units on the yes, Flume's first builds, each citing this record: a kind that runs through under the settle, from launch to landing, with the fix round started by a failed or conflicting submission carrying the merge queue's words; a stop-short that asks or finds, status saying which with the words, a finding from the last stage sending the place back and an ask answered by a retry whose prompt carries question and answer; and flume's own kinds as C.2 now reads, change@1 sending back to code and the code prompt taking a failed submission's or a finding's words. A review note's fix needs no unit of Flume's.
 - afterthought/crew record 0047 cites this record for its end state; crew's launches hold nothing, and its word to a place is a retry answering a stop-short or acting on a place past its bound.
+
+## Amendment, 2026-11-06: a found at its kind's own fix round waits for an answer
+
+Status: decided on 2026-11-06 by the design agent, on crew's place `fix--a-landing-in-another-hosts-queue-reads-as-in-the-queue`. Nothing in it is the user's alone: it holds to clauses 41 and 42 as they stand, narrows 131 to what this record's own reason for it says, and is cheap to change.
+
+Deciders: the design agent.
+Sources: `agentplot/blueprints:design/flume/requirements.md` on main at 734d60c, clauses 23, 41, 42, 48, 49, 112, 131 and 156 and C.2's table of flume's own kinds; `crates/flume-core/src/submit.rs` `sent_back_by` and `fix_round`, `crates/flume-core/src/status.rs` `waiting_on` and `crates/flume/src/profiles/agent/claude/mod.rs` `stop_short`, on main at 376c17c; crew's place `fix--a-landing-in-another-hosts-queue-reads-as-in-the-queue`, whose runs 1 to 3 each found a blocker outside the place and sent the place back to its own code stage, at flume main 376c17ca.
+
+### Context and problem statement
+
+This record has a found from the kind's last stage start the kind's fix round, since a verify agent checks and cannot fix, and code can. That reason holds where the fix round is a stage before the one that found, as change's code is before verify. fix@1 and chore@1 are one code stage, which is both their last stage and their fix round (C.2), and a kind whose last stage names no `on_fail` is sent back to that stage itself (23). So a found from fix's code started fix's code again, a fresh agent with the findings as its words and one going-back counted, until the kind's three ran out and the place waited past its bound. No stage before code exists to do that work: each fresh agent met the same thing and found it again. On crew's fix place, runs 1 to 3 each found a blocker outside the place and sent the place back to itself. Three agents' work bought nothing, and the caller heard of it only past the bound, as a going-back too many rather than as a question.
+
+What every agent is told adds to it. Claude Code's way to stop short offers `flume needs --found` for "work this stage cannot deliver past", which a blocker outside the place is, while clause 41 says a found is work a stage before the agent's own must do again.
+
+### Considered options
+
+1. **A found sends the place back only where the fix round is a stage before the one that found; from a last stage that is its kind's own fix round it is taken as needing an answer, as from any other stage; and every agent is told that a found is work a stage before its own must do again** (chosen).
+2. Keep sending a fix round's found back to that stage, and let the kind's bound stop it.
+3. Refuse `flume needs --found` from a stage with no fix round before it, so its agent asks instead.
+4. New versions of fix and chore whose code prompt tells the agent to ask rather than find.
+5. Send a fix round's found back to that stage once, then wait on an answer.
+
+### Decision outcome
+
+Option 1.
+
+**A found goes back only to a stage before it.** A found from the kind's last stage starts the fix round, as this record decided, where the fix round is a stage before the last. Where the last stage is the fix round, as fix's and chore's code, a repository's kind whose last stage names itself, or one whose last stage names none, the found is taken as needing an answer (42, 131). No stage starts, and the place waits on its caller's retry. Status and the end say the agent found work, with its words (core.27). The retry's prompt carries the findings with the answer (49). It counts no going-back, since only flume's own starts are goings-back (48, 112). A found from any other stage is taken so already.
+
+**Every agent is told what a found is.** The one way to stop short (28) says `flume needs --found` is for work a stage before the agent's own must do again, in the same words for every start (core.31). An agent of fix's code, with no stage before its own, reads that anything it cannot go on without is an answer it needs.
+
+**Why not the others.** Option 2 is what ran on crew's fix place: three fresh agents meet the same blocker, and the caller hears only past the bound. Option 3 refuses a stop-short whose words the caller needs, and leaves the agent to stop with nothing said (110). Option 4 changes nothing for a repository's kind whose last stage is its own fix round, and a place launched at fix@1 keeps fix@1 (21). A version of flume's own kinds keeps its content in every release (156), so fix@1's and chore@1's prompts stay as they are; the way to stop short is the agent profile's and fills their `{{needs}}`. Option 5 spends one fresh agent on the same blocker and still answers the caller late.
+
+### Consequences
+
+- Good: a fix that meets a blocker outside its place asks at once, its words reaching its recipients and status as a question's do, and no agent's work is spent finding it again.
+- Good: one reading of a kind's fix round decides the send-back, the move status gives and the bound alike.
+- Bad: a fix round's agent that found work its own stage could redo waits on its caller, where a fresh agent would have been started; the caller's retry starts that agent, with the findings.
+- The statement's 41, 48 and 131 say so (blueprints 734d60c). Rule core.27 takes it.
+- Unit: the change `a-found-at-its-kinds-own-fix-round-waits-for-an-answer`.

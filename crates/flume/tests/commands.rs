@@ -794,6 +794,23 @@ fn needs_from_outside_an_agent() {
 }
 
 #[test]
+fn needs_help() {
+    // 41, C.4: `--found`'s words name work a stage before the agent's own
+    // must do again, and none says "cannot deliver past".
+    let host = Host::new("needs-help");
+    let repository = repository("needs-help", None);
+    let help = host.flume(&repository.dir, &["needs", "--help"], &[]);
+    assert_eq!(help.code, 0, "{}", help.text);
+    let words = help.text.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        words.contains("--found The stage found work a stage before its own must do again"),
+        "--found's words: {}",
+        help.text
+    );
+    assert!(!words.contains("cannot deliver past"), "{}", help.text);
+}
+
+#[test]
 fn holds_and_recipients_at_the_launch() {
     // 7: a hold's words and a recipient named, then the variable's.
     let host = Host::new("holds");

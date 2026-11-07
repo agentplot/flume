@@ -585,7 +585,7 @@ known fields fail, naming every field that does.
 | `makes` | a list of names | what it makes besides its deliverable, each recorded as a line of `made.jsonl` | none |
 | `wait` | `true`, `false` | the stage is held before it starts until a retry names it | `false` |
 | `quiet` | a whole number then `s`, `m` or `h`, as `"45m"` | how long its agent may be quiet with nothing delivered before it is stuck | 30 minutes |
-| `on_fail` | a stage's name | read from the last stage: where a failed or conflicting submission, or found work, sends the place back | the last stage |
+| `on_fail` | a stage's name | read from the last stage: where a failed or conflicting submission sends the place back, and found work from the last stage where it names a stage before the last; found work from a last stage that names itself or none waits on an answer | the last stage |
 | `max_send_backs` | a whole number from 0 | read from the last stage: how many times the place may go back before it waits for you | 3 |
 
 [Kinds](/flume/guides/kinds/) says what each deliverable needs and how

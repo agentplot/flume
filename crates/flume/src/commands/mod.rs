@@ -137,7 +137,7 @@ enum Command {
     /// From an agent flume started: its stage cannot deliver without an
     /// answer, or found work (41, C.4).
     Needs {
-        /// The stage found work it cannot deliver past.
+        /// The stage found work a stage before its own must do again.
         #[arg(long)]
         found: bool,
         words: String,

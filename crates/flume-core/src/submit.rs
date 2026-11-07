@@ -6,8 +6,8 @@
 //! queue decided the submission as it took it in and delivered the
 //! outcome with that answer, and acted on once each: a landing makes the
 //! work over, a failure or a conflict starts the kind's fix round, as found
-//! work from its last stage does, every going-back counted together up to
-//! the kind's bound. A withdrawal, and a landing before flume
+//! work from its last stage does where the fix round is a stage before it,
+//! every going-back counted together up to the kind's bound. A withdrawal, and a landing before flume
 //! submits, are read from the merge queue's record of the branch, never
 //! one it held before the place's launch or before flume's submit (3,
 //! 99); an open submission's base is driven one round per command, and
@@ -313,9 +313,13 @@ impl Engine {
     }
 
     /// Found work from the kind's last stage starts the kind's fix round
-    /// with the findings as its words, once the agent that stopped short
-    /// is quiet and ended, so the place never has two agents (131, 30).
-    /// True when it changed something.
+    /// with the findings as its words where the fix round is a stage
+    /// before it, once the agent that stopped short is quiet and ended, so
+    /// the place never has two agents (131, 30). A found from any other
+    /// stage, and from a last stage that is its kind's own fix round, goes
+    /// back nowhere: it changes nothing here, its agent kept as any
+    /// stop-short's, and is taken as needing an answer, which a caller's
+    /// retry gives (42, 49, 131). True when it changed something.
     pub(crate) fn found_work(&self, id: &PlaceId) -> bool {
         let Some(read) = self.store.read(id) else {
             return false;
@@ -453,37 +457,65 @@ fn recorded(
     }
 }
 
-/// Whether the stage at `index` ended short having found work, as the
-/// kind's last stage, its fix round not yet started nor refused past the
-/// kind's bound (131).
-fn sent_back_by(held: &HeldState, index: usize) -> bool {
+/// Whether the stage at `index` ended short having found work that sends
+/// the place back: the kind's last stage, its fix round a stage before
+/// it, not yet started nor refused past the kind's bound. A found from
+/// any other stage, and from a last stage that is its kind's fix round,
+/// is no send-back, since no stage before it can do that work again, and
+/// is taken as needing an answer (42, 131). The settle and status read
+/// it alike, so status never says a place waits on an answer that the
+/// next settle sends back, nor the reverse.
+pub(crate) fn sent_back_by(held: &HeldState, index: usize) -> bool {
     let stage = &held.stages[index];
     held.phase == Phase::Live
         && index + 1 == held.stages.len()
+        && fix_round_of(held).is_some_and(|round| round < index)
         && stage.state == StageState::EndedShort
         && stage.end.as_ref().and_then(|end| end.needs) == Some(StopKind::FoundWork)
         && held.submission.waiting.is_none()
 }
 
-/// The kind's fix round decided in held state: the stage the kind's
-/// last stage names for a failed submission, that last stage where it
-/// names none, and every stage from it not reached again, counted as one
-/// going-back against the last stage's bound, flume's default where it
-/// sets none; past the bound, the place waits on its caller with `cause`
-/// and the words (23, 112, 130, 131). The stage to start and its words.
+/// The kind's fix round, the one reading of it the send-back, the move a
+/// place past its bound waits on and a found all take: the position of
+/// the stage the kind's last stage names for a failed submission, that
+/// last stage where it names none, and none for a kind with no stages.
+/// weir refuses a name that is no stage of the kind, so the last stage
+/// stands only where it names none (23, 112, 131; core.4).
+pub(crate) fn fix_round_of(held: &HeldState) -> Option<usize> {
+    let last = held.stages.len().checked_sub(1)?;
+    let named = held
+        .place
+        .kind
+        .stages
+        .last()
+        .and_then(|stage| stage.send_back_to.as_ref());
+    Some(
+        named
+            .and_then(|name| held.stages.iter().position(|stage| &stage.name == name))
+            .unwrap_or(last),
+    )
+}
+
+/// The kind's fix round decided in held state: the stage
+/// [`fix_round_of`] reads, and every stage from it not reached again,
+/// counted as one going-back against the last stage's bound, flume's
+/// default where it sets none; past the bound, the place waits on its
+/// caller with `cause` and the words (23, 112, 130, 131). The stage to
+/// start and its words.
 fn fix_round(
     held: &mut HeldState,
     limit: u32,
     cause: &str,
     words: &str,
 ) -> Option<(usize, String)> {
-    let last = held.place.kind.stages.last()?;
-    let allowed = last.send_back_limit.unwrap_or(limit);
-    let target = last
-        .send_back_to
-        .as_ref()
-        .and_then(|name| held.stages.iter().position(|stage| &stage.name == name))
-        .unwrap_or(held.stages.len() - 1);
+    let allowed = held
+        .place
+        .kind
+        .stages
+        .last()?
+        .send_back_limit
+        .unwrap_or(limit);
+    let target = fix_round_of(held)?;
     if held.submission.send_backs >= allowed {
         held.submission.waiting = Some(format!(
             "{cause}: {words}. The place went back {} times, as many as its kind allows",

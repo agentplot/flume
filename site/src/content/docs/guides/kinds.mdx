@@ -60,16 +60,23 @@ Nothing waits on your word unless the launch or a hold asks for it
 ([callers, holds and ends](/flume/guides/callers-and-holds/)). Three
 things send the work back to the stage the kind names for a failure,
 with words for its agent: a failed submission, a conflicting one, and
-found work from the kind's last stage, `flume needs --found`. Each
-going-back counts toward the kind's bound, three unless the last stage
-sets `max_send_backs`. Past the bound the place waits for you. A
-conflict's words name the contested files and the base revision the
-merge queue tested against. The built-in prompts tell the agent to
-merge that revision into the place's branch, resolve the files and
-commit, never to rebase.
+found work from the kind's last stage, `flume needs --found`, where the
+stage it names is one before the last, as a change's `code` is before
+its `verify`. Each going-back counts toward the kind's bound, three
+unless the last stage sets `max_send_backs`. Past the bound the place
+waits for you. A conflict's words name the contested files and the base
+revision the merge queue tested against. The built-in prompts tell the
+agent to merge that revision into the place's branch, resolve the files
+and commit, never to rebase.
 
 A stop-short that needs an answer, `flume needs "<words>"`, starts no
-next stage: the place waits until a retry carries the answer.
+next stage: the place waits until a retry carries the answer. Found
+work is work a stage before the agent's own must do again, so found
+work from any stage but the last waits the same way, and so does found
+work from a last stage whose `on_fail` names that stage itself or names
+none, as fix's and chore's `code` does: no stage before it can do the
+work again. The retry's prompt carries the findings with your answer,
+and the retry counts no going-back.
 
 ## Where kinds come from
 
@@ -179,7 +186,7 @@ complete and flume tidies it.
 | `makes` | names of what the stage makes besides its deliverable | none |
 | `wait` | the stage is held before it starts, until a retry names it | `false` |
 | `quiet` | how long its agent may be quiet with nothing delivered before status says it is stuck, as `45m` | 30 minutes |
-| `on_fail` | the stage a failed submission or found work sends the place back to, read from the last stage; that stage and every one after it run again | the last stage |
+| `on_fail` | the stage a failed submission sends the place back to, and found work from the last stage where it names a stage before the last, read from the last stage; that stage and every one after it run again. Found work from a last stage that names itself or none waits on an answer | the last stage |
 | `max_send_backs` | how many times the place may go back, read from the last stage | 3 |
 
 flume ignores every table and key it does not know, so a declaration
