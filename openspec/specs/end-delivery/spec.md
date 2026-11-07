@@ -63,7 +63,7 @@ collects it, and status SHALL give it (43, C.5).
 
 #### Scenario: Under the printed command
 
-- **WHEN** a stage ends under a fake terminal that keeps no watch and refuses send
+- **WHEN** a stage ends under a fake terminal that refuses send
 - **THEN** status gives the end pending for each recipient and the fake terminal records no send
 
 ### Requirement: A wait is by place
@@ -84,17 +84,22 @@ until such an end, or exit still waiting when its timeout passes (43).
 - **WHEN** a wait with a timeout of one minute finds nothing pending and the place's stage still runs after a minute
 - **THEN** the wait exits still waiting, with its own exit, and records nothing delivered
 
-### Requirement: A wait drives no settle where the terminal keeps watch
+### Requirement: A wait drives no settle while a caller keeps watch
 
-Under a terminal that keeps watch, a wait SHALL settle nothing and read
-only the host's state. Under one that keeps none, it SHALL settle every
-place before each reading, as every acting command does (119, 122,
-core.13).
+While a caller keeps watch over the host, a wait SHALL settle nothing
+and read only the host's state. While none does, it SHALL settle every
+place before each reading, as every acting command does, whatever
+terminal the host binds (119, 122, 208; core.13).
 
 #### Scenario: Under a watch
 
-- **WHEN** a wait follows a place under a fake terminal that keeps watch
-- **THEN** the wait makes no call to any seam but the store, and the place moves on only by the watch's settles
+- **WHEN** a wait follows a place while a caller keeps watch
+- **THEN** the wait makes no call to any seam but the store, and the place moves on only by the caller's settles
+
+#### Scenario: Attended under any terminal
+
+- **WHEN** a wait follows a place while no caller keeps watch
+- **THEN** the wait settles every place before each reading (119, 208)
 
 ### Requirement: The inbox collects what is pending
 
