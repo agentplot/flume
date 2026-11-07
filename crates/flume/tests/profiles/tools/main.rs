@@ -4,9 +4,10 @@
 //! core.29), the usage-limit words the Claude Code profile reads, found
 //! in the pinned release's program, a fresh clone's place equipped by the
 //! pinned sluice, the walkthroughs, the built binary with the stand-in
-//! for Claude Code (design 18), and a stream's view opened through the
-//! binary under the pinned herdr (S90, S91). Built only with the `tools`
-//! feature.
+//! for Claude Code (design 18), among them a standing agent under the
+//! pinned herdr taking a fix's end (132), and a stream's view opened
+//! through the binary under the pinned herdr (S90, S91). Built only with
+//! the `tools` feature.
 
 #[path = "../../common/mod.rs"]
 mod common;

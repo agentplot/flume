@@ -60,7 +60,12 @@
 //! source's kind, locked by `flume kinds lock --host --hash`, runs and
 //! lands, a second version added and its source's file renamed over, the
 //! next launch running it and the place launched before landing on its own
-//! version (design 13; 21, 154, 155, 159, 191).
+//! version (design 13; 21, 154, 155, 159, 191); and a fix whose recipient
+//! is a role's address the host's configuration gives a standing agent
+//! has its code stage's end reach that agent, a stand-in started in a
+//! session of the pinned herdr under the agent's name, as one notice,
+//! status saying where the agent lives and a wake launching nothing, no
+//! planner's place made (43, 132, C.5).
 
 use super::walk::*;
 use flume::profiles::agent::claude::carry::UNREACHED;
@@ -2682,4 +2687,201 @@ fn a_hosts_source_runs_its_locked_kind_and_a_place_keeps_its_version() {
     until_landed(&walk, &two);
     assert_eq!(walk.on_remote("two.rs").as_deref(), Some("fn two() {}\n"));
     assert!(!Path::new(&one).exists() && !Path::new(&two).exists());
+}
+
+/// A standing agent under herdr: a script run as `claude` that tells
+/// herdr it is ready, with the pane's own `HERDR_*` left out, then keeps
+/// each line it takes in `$STANDING_LOG`, what a ctrl+c before it cleared
+/// left out, as an agent a person keeps in its session takes a notice.
+const STANDING: &str = r#"#!/bin/sh
+pane="$HERDR_PANE_ID"
+env -u HERDR_PANE_ID -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID -u HERDR_ENV \
+  "$HERDR_BIN_PATH" pane report-agent "$pane" --source flume-test --agent claude --state idle >/dev/null 2>&1
+ctrl_c=$(printf '\003')
+stty -isig 2>/dev/null
+while IFS= read -r line; do
+  printf '%s\n' "${line##*"$ctrl_c"}" >> "$STANDING_LOG"
+done
+"#;
+
+/// The standing agent `name` started in the session `session` of the
+/// host's herdr, as a person keeps one: the session's server started
+/// headless, a workspace of its own whose shell reads no startup file and
+/// finds [`STANDING`] as `claude`, and `herdr agent start <name>` there;
+/// its pane, `herdr:<pane>@<socket>`, once herdr lists it, and the file it
+/// keeps what it takes in (132, C.5).
+fn standing_under_herdr(host: &UnderHerdr, session: &str, name: &str) -> (String, PathBuf) {
+    let scratch = host.walk.repository.scratch.path("standing");
+    std::fs::create_dir_all(scratch.join("bin")).expect("the standing agent's folder");
+    let write = |path: PathBuf, text: &str| {
+        std::fs::write(&path, text).expect("a script written");
+        std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .expect("the script made executable");
+        path
+    };
+    write(scratch.join("bin/claude"), STANDING);
+    let shell = write(scratch.join("shell"), "#!/bin/sh\nexec /bin/sh -i\n");
+    let log = scratch.join("took");
+    let mut server = host.walk.command("herdr", &scratch);
+    server
+        .args(["--session", session, "server"])
+        .env("SHELL", &shell)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    // Stopped through its socket when the host is dropped.
+    drop(server.spawn().expect("herdr's session server starts"));
+    let began = std::time::Instant::now();
+    let socket = loop {
+        if let Some((_, socket)) = host.running().into_iter().find(|(s, _)| s == session) {
+            break socket;
+        }
+        assert!(
+            began.elapsed() < std::time::Duration::from_secs(20),
+            "herdr's session {session} did not run"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    };
+    let made = host.herdr(
+        Some(&socket),
+        &[
+            "workspace",
+            "create",
+            "--cwd",
+            &scratch.to_string_lossy(),
+            "--env",
+            &format!("PATH={}:/usr/bin:/bin", scratch.join("bin").display()),
+            "--env",
+            &format!("SHELL={}", shell.display()),
+            "--env",
+            &format!("STANDING_LOG={}", log.display()),
+            "--label",
+            name,
+            "--no-focus",
+        ],
+    );
+    let pane = made["root_pane"]["pane_id"]
+        .as_str()
+        .unwrap_or_else(|| panic!("herdr gave no pane in {made}"))
+        .to_string();
+    host.herdr(
+        Some(&socket),
+        &[
+            "pane",
+            "wait-output",
+            &pane,
+            "--source",
+            "visible",
+            "--regex",
+            r"\S",
+            "--timeout",
+            "20000",
+        ],
+    );
+    let started = host.herdr(
+        Some(&socket),
+        &[
+            "agent",
+            "start",
+            name,
+            "--kind",
+            "claude",
+            "--pane",
+            &pane,
+            "--timeout",
+            "20000",
+        ],
+    );
+    assert_eq!(
+        started["agent"]["name"].as_str(),
+        Some(name),
+        "herdr agent start {name}: {started}"
+    );
+    (format!("herdr:{pane}@{socket}"), log)
+}
+
+#[test]
+fn a_standing_agent_under_herdr_takes_a_fixs_end_through_the_binary() {
+    // The end-delivery spec's "A standing agent under herdr through the
+    // binary" (43, 132, C.5): the default stream's terminal is herdr, where
+    // `w/planner`'s agent `w-planner` stands in the session `w`; the fix
+    // runs in `t` under the printed command, its submission held so one
+    // end is pending for the planner.
+    let host = UnderHerdr::new(Walk::new("walk-standing"), "w");
+    host.walk.configure_whole(&format!(
+        "[host]\nmultiplexer = \"herdr\"\n\n[streams.t]\nmultiplexer = \"printed\"\npool = \"stand-in\"\n\n\
+         [pools.stand-in]\nstrategy = \"fill-first\"\naccounts = [{{ name = \"stand-in-1\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?}, CLAUDE_CODE_OAUTH_TOKEN = \"{STAND_IN_TOKEN}\" }} }}]\n\n\
+         [roles.\"w/planner\"]\nagent = \"w-planner\"\nsession = \"w\"\n",
+        host.walk.account().display().to_string()
+    ));
+    let (at, took) = standing_under_herdr(&host, "w", "w-planner");
+    let took = || -> Vec<String> {
+        std::fs::read_to_string(&took)
+            .map(|text| text.lines().map(str::to_string).collect())
+            .unwrap_or_default()
+    };
+    let place = host.walk.launch(
+        "fix",
+        "one",
+        &[
+            "--brief",
+            "fix the parser",
+            "--stream",
+            "t",
+            "--recipient",
+            "w/planner",
+            "--hold-submission",
+        ],
+    );
+    host.walk
+        .agent(&place, commits("parser.rs", "fn parse() {}\n"));
+    host.walk
+        .until(&place, "its end taken by the standing agent", |_| {
+            !took().is_empty()
+        });
+    let notice = "flume: fix--one code delivered; read: flume status fix--one".to_string();
+    assert_eq!(took(), vec![notice.clone()], "what the standing agent took");
+    host.walk.settle(&place);
+    assert_eq!(took(), vec![notice], "taken again at the next settle");
+
+    let everything = host.walk.everything();
+    let places: Vec<&Value> = everything["places"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .collect();
+    assert_eq!(places.len(), 1, "a planner's place made: {everything}");
+    assert_eq!(places[0]["place"], place.as_str(), "{everything}");
+    let planner = everything["host"]["addresses"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|address| address["address"] == "w/planner")
+        .cloned()
+        .unwrap_or_else(|| panic!("status gives no w/planner: {everything}"));
+    assert_eq!(planner["run"], Value::Null, "{planner}");
+    assert_eq!(planner["pending"], json!([]), "{planner}");
+    assert_eq!(
+        planner["standing"],
+        json!({
+            "agent": "w-planner",
+            "stream": "default",
+            "session": {"name": "w", "from": "role"},
+            "terminal": "herdr",
+            "found": {"one": {"at": at, "state": "waiting"}},
+        }),
+        "{planner}"
+    );
+
+    let woken = host.walk.flume(&["wake", "w/planner"]);
+    assert_eq!(woken["held"]["address"], "w/planner", "{woken}");
+    assert_eq!(
+        woken["held"]["standing"]["found"]["one"]["at"],
+        at.as_str(),
+        "{woken}"
+    );
+    assert_eq!(
+        host.walk.everything()["places"].as_array().map(Vec::len),
+        Some(1),
+        "a planner's place made by the wake"
+    );
 }
