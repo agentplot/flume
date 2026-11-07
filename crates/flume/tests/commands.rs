@@ -1208,8 +1208,9 @@ fn one_account(host: &Host, env: &str, more: &str) {
 
 #[test]
 fn agent_settings_at_the_launch() {
-    // 7, 32: every stage's model and one stage's over it, each at the
-    // launch layer; a variable is no setting the launch gives.
+    // 7, 32, 198: every stage's model and one stage's over it, each at the
+    // launch layer, and one stage's keep_open, the others flume's own hour
+    // from the default layer; a variable is no setting the launch gives.
     let host = Host::new("agent-settings");
     let repository = repository("agent-settings", None);
     let kinds = kinds_file(&host, false);
@@ -1227,28 +1228,41 @@ fn agent_settings_at_the_launch() {
             "model=opus",
             "--agent",
             "verify.model=sonnet",
+            "--agent",
+            "code.keep_open=15m",
             "--json",
         ],
         &[],
     );
     assert_eq!(launched.code, 0, "{}", launched.text);
     let place = host.place_of(&repository, "change--one");
-    let launch = |model: &str| {
+    let launch = |model: &str, keep_open: serde_json::Value| {
         serde_json::json!({
             "model": {"layer": "launch", "value": model},
             "program": {"layer": "kind", "value": STAND_IN},
+            "keep_open": keep_open,
         })
     };
-    for (stage, model) in [
-        ("construct", "opus"),
-        ("code", "opus"),
-        ("verify", "sonnet"),
+    let default = serde_json::json!({"layer": "default", "value": "1h"});
+    let launched = serde_json::json!({"layer": "launch", "value": "15m"});
+    for (stage, model, keep_open) in [
+        ("construct", "opus", default.clone()),
+        ("code", "opus", launched),
+        ("verify", "sonnet", default),
     ] {
         let agent = current_agent(&host, &repository.dir, &place);
         assert_eq!(agent["stage"], stage, "{agent}");
         assert_eq!(agent["settings"]["model"], model, "{agent}");
         assert_eq!(agent["settings"]["env"], serde_json::json!({}), "{agent}");
-        assert_eq!(agent["settings"]["from"], launch(model), "{agent}");
+        assert_eq!(
+            agent["settings"]["keep_open"], keep_open["value"],
+            "{agent}"
+        );
+        assert_eq!(
+            agent["settings"]["from"],
+            launch(model, keep_open),
+            "{agent}"
+        );
         if stage != "verify" {
             deliver(&host, &repository.dir, &place, stage);
         }

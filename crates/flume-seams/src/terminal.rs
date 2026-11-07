@@ -293,6 +293,12 @@ pub trait Terminal: Send + Sync {
     /// typed cleared first, so no answer leaves text typed (95).
     fn send(&self, agent: &crate::Identity, text: &str) -> Sent;
 
+    /// Whether the terminal delivers text to a running agent at all, as a
+    /// tell's send does: where it does not, every send is refused with
+    /// nothing typed, and no agent is kept open for an answer (53, 95,
+    /// 198, C.5).
+    fn sends(&self) -> bool;
+
     /// The agent's state: stopped only when its program no longer runs,
     /// unknown for anything the terminal cannot classify; asking where
     /// it reads the program waiting on a person, which, before the agent

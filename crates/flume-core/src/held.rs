@@ -8,8 +8,8 @@ use crate::base::base_place;
 use crate::status::waiting_on;
 use crate::Engine;
 use flume_seams::{
-    EndHeld, EndOf, HeldState, Over, Phase, PlaceId, Seconds, StageEnd, StageState, Verdict,
-    Versioned, Waiting, Waits, Written,
+    EndHeld, EndOf, HeldState, Over, Phase, PlaceId, Seconds, StageState, Verdict, Versioned,
+    Waiting, Waits, Written,
 };
 
 /// What an act decided of a place's held state.
@@ -109,9 +109,10 @@ impl Engine {
 /// delivered, ended short, finished, lost or never begun, or stuck once
 /// what was read of it is written, with what was read; each outcome of
 /// a submission the merge queue gave, and a landing read from its
-/// record. Written in the same write as the end itself, so whatever act
-/// or settle reads an end records it, and a repeat records nothing
-/// (43, 74, 133).
+/// record. A stage's end carries the answers its start had taken in its
+/// session, so a stop-short after an answer is an end of its own (42).
+/// Written in the same write as the end itself, so whatever act or settle
+/// reads an end records it, and a repeat records nothing (43, 74, 133).
 fn record_ends(next: &mut HeldState, now: Seconds) {
     if matches!(next.phase, Phase::Tidied { .. }) {
         return;
@@ -142,7 +143,8 @@ fn record_ends(next: &mut HeldState, now: Seconds) {
             } else {
                 None
             },
-            end: stage.end.clone().unwrap_or_else(StageEnd::default),
+            answered: start.answered,
+            end: Box::new(stage.end.clone().unwrap_or_default()),
         });
     }
     let submit = next.submission.submits;
@@ -179,6 +181,7 @@ fn record_ends(next: &mut HeldState, now: Seconds) {
                 of,
                 read_at: now,
                 deliveries: vec![],
+                answer: None,
             });
         }
     }
@@ -255,6 +258,7 @@ pub(crate) fn read_stall(next: &mut HeldState, now: Seconds, on_branch: Option<u
             of,
             read_at: now,
             deliveries: vec![],
+            answer: None,
         });
     }
 }

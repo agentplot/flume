@@ -23,6 +23,7 @@ mod line;
 mod list;
 mod live;
 mod open;
+mod open_sessions;
 mod own;
 mod prompt;
 mod reading;
@@ -44,8 +45,9 @@ mod wake;
 
 pub use accounts::{FRESH, THRESHOLD};
 pub use acts::Retry;
+pub use agent_acts::ANSWER_RECORDED_WITHIN;
 pub use answer::*;
-pub use ends::{notice, what_ended};
+pub use ends::{end_words, notice, what_ended};
 pub use held::Step;
 pub use kinds_lock::{KindsLock, LockOf};
 pub use line::NOT_ITS_AGENT;
@@ -65,6 +67,15 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 /// A stage's quiet limit where its declaration sets none (44).
 pub const QUIET_LIMIT: Seconds = 30 * 60;
+
+/// How long an agent that stopped short is kept open for its answer
+/// where no layer gives a `keep_open`: flume's own one hour, the default
+/// layer's, written in whole hours (32, 198).
+pub const KEEP_OPEN: Seconds = 60 * 60;
+const _: () = assert!(
+    KEEP_OPEN.is_multiple_of(60 * 60),
+    "KEEP_OPEN is whole hours"
+);
 
 /// How long after each sending flume reads whether a prompt was
 /// received (38).

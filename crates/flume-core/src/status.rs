@@ -17,8 +17,8 @@ use crate::settings::program_name;
 use crate::start::Starts;
 use crate::{
     side_by_side, Act, AgentSettings, AgentStatus, Answer, Bound, EffortStatus, EndStatus, Engine,
-    GroupStatus, ModeStatus, MoveStatus, OwnFileStatus, OwnStatus, PlaceStatus, SessionWait,
-    SourceStatus, StageStatus, SubmissionStatus, WaitingOn, Waits,
+    GroupStatus, ModeStatus, MoveStatus, OwnFileStatus, OwnStatus, PlaceStatus, SessionAnswer,
+    SessionWait, SourceStatus, StageStatus, SubmissionStatus, WaitingOn, Waits,
 };
 use flume_seams::*;
 use std::collections::BTreeMap;
@@ -369,6 +369,7 @@ impl Engine {
                 refused_setting: stage.refused_setting.clone(),
                 conversation: declared.conversation,
                 group: change.and_then(|change| group_status(held, index, change)),
+                answers: session_answers(held, index),
             })
             .collect();
         let group = current.and_then(|index| stages[index].group.clone());
@@ -417,10 +418,7 @@ impl Engine {
             ends: held
                 .ends
                 .iter()
-                .map(|end| EndStatus {
-                    end: end.clone(),
-                    pending_for: end.pending(&place.recipients),
-                })
+                .map(|end| EndStatus::of(end, &place.recipients))
                 .collect(),
             role: held.role.clone(),
             clues: self.place_clues(held, agent_state, group.as_ref()),
@@ -536,6 +534,39 @@ pub(crate) fn group_status(
     })
 }
 
+/// Each answer the current start of the stage at `index` took in its
+/// session, in the order it took them, each with the question it
+/// answered, as the ends `held` records give them; none for a stage with
+/// no start (42, 56, 198).
+pub(crate) fn session_answers(held: &HeldState, index: usize) -> Vec<SessionAnswer> {
+    let stage = &held.stages[index];
+    let Some(start) = &stage.start else {
+        return vec![];
+    };
+    held.ends
+        .iter()
+        .filter_map(|end| match &end.of {
+            EndOf::Stage {
+                stage: name,
+                start: n,
+                state: StageState::EndedShort,
+                end: ended,
+                ..
+            } if *name == stage.name && *n == start.n => {
+                let answer = end
+                    .answer
+                    .clone()
+                    .filter(|answer| answer.session.is_some())?;
+                Some(SessionAnswer {
+                    question: ended.words.clone(),
+                    answer,
+                })
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 /// The stage of a live place that waits for room while a process runs
 /// the conversation its start would carry, or flume could not read
 /// whether one does, with what the last settle's live read and since
@@ -562,9 +593,11 @@ pub(crate) fn session_wait(held: &HeldState) -> Option<SessionWait> {
 /// The move a live place waits on its caller for, why, since when and
 /// with what words, read from its held state alone, a person's answer to
 /// the dialog its agent's program shows before it takes its prompt among
-/// them; none where it waits on nobody, its next step being flume's or an
-/// agent's, or the host's room (34, 35, 56, 70, 130). A base place's is
-/// read from its submission and `on_branch`, the count of the live
+/// them, and for an answer whether its agent is kept open for it and
+/// until when, or when and why it was let go and whether it is ended;
+/// none where it waits on nobody, its next step being flume's or an
+/// agent's, or the host's room (34, 35, 56, 70, 130, 198). A base place's
+/// is read from its submission and `on_branch`, the count of the live
 /// places on its branch (203).
 pub(crate) fn waiting_on(held: &HeldState, on_branch: Option<usize>) -> Option<WaitingOn> {
     if held.phase != Phase::Live {
@@ -583,6 +616,8 @@ pub(crate) fn waiting_on(held: &HeldState, on_branch: Option<usize>) -> Option<W
             why,
             since,
             words,
+            open_until: None,
+            closed: None,
         })
     };
     let submission = &held.submission;
@@ -663,7 +698,14 @@ pub(crate) fn waiting_on(held: &HeldState, on_branch: Option<usize>) -> Option<W
             if found && index == last {
                 return None;
             }
-            retry(Waits::Answer, end.and_then(|end| end.words.clone()))
+            let closed = end.and_then(|end| end.closed);
+            retry(Waits::Answer, end.and_then(|end| end.words.clone())).map(|on| WaitingOn {
+                open_until: end
+                    .and_then(|end| end.open_until)
+                    .filter(|_| closed.is_none()),
+                closed,
+                ..on
+            })
         }
         StageState::Lost => retry(Waits::Lost, None),
         StageState::NeverBegun => retry(Waits::NeverBegun, None),
@@ -711,6 +753,8 @@ fn base_waiting_on(held: &HeldState, on_branch: usize) -> Option<WaitingOn> {
             why,
             since,
             words,
+            open_until: None,
+            closed: None,
         })
     };
     if on_branch > 0 {

@@ -20,6 +20,7 @@ pub mod launching;
 pub mod list;
 pub mod made_things;
 pub mod open;
+pub mod open_sessions;
 pub mod own_settings;
 pub mod place_line;
 pub mod place_status;
@@ -78,5 +79,6 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(list::scenarios());
     every.extend(own_settings::scenarios());
     every.extend(base_places::scenarios());
+    every.extend(open_sessions::scenarios());
     every
 }

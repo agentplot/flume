@@ -13,7 +13,9 @@
 //! stand at the start, their own settings checked then, every other
 //! layer as the launch read it. An agent's environment is its account's
 //! alone, each value's `~` and variables read against the host user's
-//! login environment (29, 144). Its mode, where a layer gives one, is
+//! login environment (29, 144). How long it is kept open for an answer,
+//! `keep_open`, is taken whole as the model is, flume's own hour, written
+//! `1h`, in the default layer (198). Its mode, where a layer gives one, is
 //! mapped by its agent profile to its program's setting, or the stage
 //! refused naming the mode, the program, the stage and the layer (162,
 //! 169); its effort, where a layer gives one, taken whole as the model
@@ -24,7 +26,7 @@
 //! 196).
 
 use crate::own::{fold, Table};
-use crate::Engine;
+use crate::{Engine, KEEP_OPEN};
 use flume_seams::{
     Account, Agent, Deliverable, Given, Kind, KindSettings, Layer, Mode, ModeEntry, OwnFile,
     PlaceRecord, ProgramSettings, Settings, Stage,
@@ -40,9 +42,9 @@ type Tables = (Layer, Vec<Settings>);
 
 /// A stage's settings with each value as its layer wrote it, and the
 /// layer of each, by `program`, `model`, `effort`, `mode`,
-/// `instructions` or `programs.<program>.settings.<key>`, an own
-/// setting's with its file (32, 56, 195, 197); the agent's program's own
-/// settings; and the layers they were folded from.
+/// `instructions`, `keep_open` or `programs.<program>.settings.<key>`, an
+/// own setting's with its file (32, 56, 195, 197, 198); the agent's
+/// program's own settings; and the layers they were folded from.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Resolved {
     pub settings: Settings,
@@ -372,7 +374,10 @@ impl Engine {
                     sessionless(declared.every_stage.clone()),
                 ],
             ),
-            (Layer::Default, vec![self.defaults.settings.clone()]),
+            (
+                Layer::Default,
+                vec![self.defaults.settings.clone(), kept_open()],
+            ),
         ])
     }
 
@@ -396,6 +401,7 @@ impl Engine {
                 ("model", &given.model),
                 ("effort", &given.effort),
                 ("instructions", &given.instructions),
+                ("keep_open", &given.keep_open),
             ];
             for (key, value) in whole {
                 if let Some(value) = value {
@@ -506,6 +512,16 @@ impl Engine {
             agent,
             mode,
         })
+    }
+}
+
+/// flume's own table of the default layer: its one hour kept open for an
+/// answer, written as a layer writes it, `1h`, so status gives it as it
+/// gives every setting (32, 56, 198).
+fn kept_open() -> Settings {
+    Settings {
+        keep_open: Some(format!("{}h", KEEP_OPEN / (60 * 60))),
+        ..Settings::default()
     }
 }
 

@@ -22,7 +22,8 @@ impl Engine {
     /// quiet, the agent ended and, where the stage's start before it
     /// began so too, the start never begun with its end naming how,
     /// else the stage started afresh with [`StartReason::Unsettled`]'s
-    /// words, or, where the start carried its stage's conversation, with
+    /// words, then the words `start` was given and each answer it took in
+    /// its session (42), or, where the start carried its stage's conversation, with
     /// [`StartReason::Spent`]'s after the start whose agent stopped,
     /// carrying nothing; true when the stage moved (31, 35, 37, 43, 112,
     /// 146, 161, 179).
@@ -90,7 +91,7 @@ impl Engine {
             );
             (words_after(start), after_uncarried(start, why))
         } else {
-            (Some(StartReason::Unsettled.words()), None)
+            (Some(StartReason::Unsettled.after(&held, start)), None)
         };
         {
             let _room = self.host.room();

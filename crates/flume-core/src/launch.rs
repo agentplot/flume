@@ -94,7 +94,7 @@ impl Engine {
                 kinds,
                 settings,
                 agents,
-            } => (kinds, settings, agents),
+            } => (kinds, settings, *agents),
             KindsRead::CouldNotRead { reason } => {
                 return Err(format!(
                     "the kinds {} declares at {revision} could not be read: {reason}",

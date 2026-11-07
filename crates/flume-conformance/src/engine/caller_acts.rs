@@ -4,14 +4,14 @@
 use super::carried_conversations::{by_hand, retry_talk, talk, talking};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Act, Answer, Retry};
+use flume_core::{Act, Answer, Retry, KEEP_OPEN};
 use flume_seams::*;
 use std::sync::{Arc, Mutex};
 
 pub fn scenarios() -> Vec<Scenario<()>> {
     vec![
         Scenario {
-            name: "retry: a construct that ended short, retried with words, starts afresh with the question and the answer",
+            name: "retry: a construct that ended short, its agent let go and ended, retried with words, starts afresh with the question and the answer",
             cites: &["S4", "49", "50", "42"],
             run: s4_retried_with_words,
         },
@@ -132,6 +132,10 @@ fn s4_retried_with_words(_: &()) -> Outcome {
         "which design?",
         StopKind::NeedsAnswer,
     ))?;
+    // Its agent kept open for the answer is let go by its time and ended
+    // first, so the retry starts a fresh agent (198).
+    world.host.advance(KEEP_OPEN);
+    world.settle(&id);
     let words = "The design agent says: the queue.";
     taken(&world.engine.retry(
         &id,

@@ -375,6 +375,8 @@ mod tests {
                 why: Waits::Unsubmitted,
                 since: Some(10),
                 words: None,
+                open_until: None,
+                closed: None,
             },
             stalled: true,
         });
@@ -398,6 +400,8 @@ mod tests {
                 why: Waits::Unsubmitted,
                 since: Some(10),
                 words: None,
+                open_until: None,
+                closed: None,
             },
             stalled: true,
         });

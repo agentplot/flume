@@ -1,6 +1,6 @@
 ---
 title: Callers, holds and ends
-description: Who is told how a place's stages end, how flume delivers an end once or keeps it pending, flume wait and flume inbox, holds with words, stops short, retries and stalls.
+description: Who is told how a place's stages end, how flume delivers an end once or keeps it pending, flume wait and flume inbox, holds with words, stops short, the agent kept open for its answer, retries and stalls.
 sidebar:
   order: 4
 ---
@@ -33,8 +33,8 @@ happens:
 |---|---|
 | `<stage> delivered` | the stage's deliverable exists and its agent is quiet |
 | `<stage> finished` | a conversation ended by `flume finish` |
-| `<stage> needs an answer` | the agent stopped short with a question, in its words |
-| `<stage> found work` | the agent stopped short with work it cannot deliver past, in its words |
+| `<stage> needs an answer` | the agent stopped short with a question, in its words, and until when its agent is kept open for the answer |
+| `<stage> found work` | the agent stopped short with work it cannot deliver past, in its words; from a stage that is not the kind's last, until when its agent is kept open for the answer |
 | `<stage> never begun` | the agent never said it started, or never took its prompt; one that says so later goes on, its stage begun |
 | `<stage> lost` | the agent stopped with nothing delivered; a conversation's goes on in its session at a retry ([a lost conversation](#a-lost-conversation)) |
 | `<stage> stuck` | the agent stayed quiet past the stage's limit with nothing delivered |
@@ -163,19 +163,130 @@ whether it needs an answer or found work:
 ```text
   stage code: ended_short, started 2 times, saying: Which README, the root's or the parser's?
   waits on its caller to retry code (answer) since 1793287841: Which README, the root's or the parser's?
+    its agent kept open for the answer until 1793291441: retry with --words, or tell it
   ended: code needs an answer; pending for me
 ```
 
-A question starts no next stage: the place waits. Found work from the
-kind's last stage starts the kind's fix round on its own, as a failed
-submission does ([kinds](/flume/guides/kinds/#how-a-kind-runs-through)).
+A question starts no next stage: the place waits on its answer. Found
+work from the kind's last stage starts the kind's fix round on its own,
+as a failed submission does
+([kinds](/flume/guides/kinds/#how-a-kind-runs-through)). Found work
+from any other stage waits on its answer as a question does.
+
+## The agent kept open
+
+The agent that stopped short needing an answer stays open for it, for
+an hour unless its `keep_open` setting says otherwise ([how long an
+agent is kept open](/flume/guides/agent-settings/#how-long-an-agent-is-kept-open)).
+Its stage still reads ended short, waiting on its answer. Its notice
+says until when:
+
+```text
+flume: chore--tidy-the-readme code needs an answer, its agent kept open for the answer until 1793291441; read: flume status chore--tidy-the-readme
+```
+
+While it is kept open, the agent holds the host's room, its stream's
+and its account's, as a working agent does. An agent is kept open only
+where its multiplexer can type words into a running agent: under herdr,
+and never under the printed command, where its stage waits on a retry
+as before.
+
+### The answer in its session
+
+While the agent is kept open, a retry with `--words` naming its stage,
+or a tell to the place, is the stage's answer. flume hands it to the
+agent that asked, as a tell is handed: once the agent waits, read back
+as received, or sent once more. The agent reads the question and the
+answer:
+
+```text
+The question: Which README, the root's or the parser's?
+
+The answer: The root's README.
+```
+
+```console
+$ flume retry chore--tidy-the-readme --words "The root's README."
+$ flume tell chore--tidy-the-readme "The root's README."
+```
+
+Either way, the stage carries on in that session under the same start,
+with everything the agent had read and decided. No agent starts and
+none is ended, and the stage's start count does not move. flume records
+the answer on the stop-short it answered, and status gives each answer
+the stage's start took in its session beneath the stage:
+
+```text
+  stage code: begun, started 2 times
+    answered by retry, received at 1793288012: asked Which README, the root's or the parser's?; answered The root's README.
+```
+
+An answer the agent does not take within the act's bound, ten minutes
+or a tell's `--within`, is refused with nothing more typed, and the
+stage still waits on its answer.
+
+The stage then runs as any running stage does. Its quiet limit runs
+from the answer. It may stop short again: that is an end of its own,
+delivered once, and its agent is kept open again for its own time. A
+`flume wait` after an answer waits on that next end, never on the one
+the answer answered.
+
+A retry with no words is no answer: it ends the agent once quiet, or
+with `--force`, and starts a fresh one with the question alone. To have
+a fresh agent take your answer while the agent is kept open,
+`flume stop <place>` it first, then retry with your words.
+
+### Let go
+
+A settle lets the agent go, and records when and why, once the first
+of these holds:
+
+- its caller stopped it, by `flume stop`;
+- it stopped, or its session ended, as when the host or the terminal
+  restarts;
+- its account was spent, its own turn or another agent's having reached
+  the account's limit;
+- its time passed.
+
+Once the agent is quiet, flume ends it, never forced, and its room and
+its account go to whatever waits for them. The stage keeps waiting on
+its answer, and the place's wait keeps its since: a place that stalled
+is not told so again. Status says how it was let go and whether it is
+ended:
+
+```text
+  waits on its caller to retry code (answer) since 1793287841: Which README, the root's or the parser's?
+    its agent let go at 1793291441, its time passed, and ended at 1793291441: retry with --words
+```
+
+flume keeps no timer of its own. A settle reads the time passed: one
+herdr's watch runs as any agent changes state, the settle every command
+that acts runs first where no watch is kept, or your own `flume
+settle`. Until one does, status gives the agent kept open with its time
+past.
+
+Once the agent is let go, a retry with `--words` starts a fresh agent,
+whose prompt carries the question and the answer ([retrying](#retrying)).
+A tell is refused with nothing typed, naming that retry:
+
+```text
+refused: the stage code of ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme waits on an answer and its agent is no longer kept open; give the answer as a retry: flume retry ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme --words <answer>
+```
+
+A conversation's agent let go because it stopped with its host or its
+terminal goes on in its session at the retry, as [a lost
+conversation](#a-lost-conversation) does. An agent the terminal brought
+back in a conversation's pane is left there, `and left in its pane`,
+and only your `flume stop`, `drop` or `done` ends it.
 
 ## Retrying
 
 `flume retry <place>` starts the current stage again with a fresh
 agent, `--stage <stage>` another, and the stages after it run again in
-order. `--words` gives the agent your answer, after the question its
-stage stopped on:
+order. `--words` gives your answer, after the question its stage
+stopped on. While the stage's agent is kept open, the retry hands both
+to that agent instead ([the answer in its session](#the-answer-in-its-session)).
+Otherwise:
 
 ```console
 $ flume retry chore--tidy-the-readme --words "The root's README."
@@ -195,7 +306,8 @@ A retry ends the place's agent first; `--force` ends one that is not
 quiet. A retry never ends an agent whose stage has started or begun:
 it is refused, forced or not, naming the agent, and
 `flume stop <place>` ends it first. `flume retry <place> --submission`
-submits the place's head again and starts no agent. A tell is never an answer: only a retry
+submits the place's head again and starts no agent. A tell answers a
+stage only while its agent is kept open; otherwise only a retry
 restarts a stage that ended.
 
 ### A lost conversation
@@ -252,7 +364,7 @@ put never stalls.
 | `flume done <place>` | declares the work of a kind that does not land complete, and tidies the place |
 | `flume finish <place>` | ends a conversation's agent; the conversation counts as delivered |
 | `flume priority <place> <n>` | sets the place's priority in the host's queue |
-| `flume tell <place> <words>` | hands the agent your words as a prompt, once it waits |
+| `flume tell <place> <words>` | hands the agent your words as a prompt, once it waits; to a stage whose agent is kept open, they are its answer |
 
 `stop`, `drop`, `done` and `finish` end an agent only once it is
 quiet, unless you pass `--force`. Under the printed command flume

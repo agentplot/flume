@@ -173,7 +173,7 @@ impl Kinds for Weir {
                 return KindsRead::Read {
                     kinds: vec![],
                     settings: BTreeMap::new(),
-                    agents: Settings::default(),
+                    agents: Box::default(),
                 }
             }
             Err(reason) => return KindsRead::CouldNotRead { reason },
@@ -687,7 +687,7 @@ fn read(text: &str, whose: Whose, beside: Reader) -> KindsRead {
         KindsRead::Read {
             kinds,
             settings,
-            agents,
+            agents: Box::new(agents),
         }
     } else {
         KindsRead::CouldNotRead {
@@ -863,9 +863,12 @@ fn map_agents(
 /// a prompt is, so never outside the repository or the package, any part
 /// not as it reads them failing it naming the field (157, 195, C.2;
 /// core.34); an `env` fails it, naming the field, since an agent's
-/// environment is its account's alone (144, C.2), and so does a program
-/// named by a location, a `/` in it, since a location is the host's
-/// (158); every other key is the runner's, and ignored.
+/// environment is its account's alone (144, C.2), and so does a
+/// `keep_open`, since how long an agent is kept open for an answer trades
+/// the host's room and its accounts' and is the host's or the launch's to
+/// give (158, 198, C.2), and a program named by a location, a `/` in it,
+/// since a location is the host's (158); every other key is the runner's,
+/// and ignored.
 fn map_agent(agent: &Table, at: &str, beside: Reader, problems: &mut Vec<String>) -> Settings {
     let mut text = |name: &str| match agent.get(name) {
         None => None,
@@ -898,6 +901,11 @@ fn map_agent(agent: &Table, at: &str, beside: Reader, problems: &mut Vec<String>
             "{at}.env: an agent's environment is its account's to give, and no declaration gives one"
         ));
     }
+    if agent.contains_key("keep_open") {
+        problems.push(format!(
+            "{at}.keep_open: how long an agent is kept open for an answer is the host's or the launch's to give, and no declaration gives one"
+        ));
+    }
     if let Some(program) = program.as_deref().filter(|program| program.contains('/')) {
         problems.push(format!(
             "{at}.program: `{program}` names a program by a location, which is the host's, and a declaration names its program by name"
@@ -913,5 +921,8 @@ fn map_agent(agent: &Table, at: &str, beside: Reader, problems: &mut Vec<String>
         // A kind names nothing a host owns, a session among it (158).
         session: None,
         programs,
+        // Nor how long an agent is kept open for an answer, refused above
+        // (158, 198).
+        keep_open: None,
     }
 }

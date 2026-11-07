@@ -131,7 +131,8 @@ multiplexer = "herdr"
 same. With none, or `multiplexer = "printed"`, flume prints each agent's
 command, `cd` into the place and the program with its environment and
 prompt, for you to run. It can send nothing into a pane it does not
-hold, so it cannot deliver a `tell` or a notice. Ends stay pending
+hold, so it cannot deliver a `tell` or a notice, or keep an agent open
+for its answer. Ends stay pending
 until `flume wait` or `flume inbox` collects them, and the place moves
 on at each command of flume's that acts, or at a caller's watch
 ([keeping watch over the host](#keeping-watch-over-the-host)).
@@ -171,7 +172,7 @@ a command settles every place first: the host's watch does
 
 ## Places under herdr
 
-<Diagram name="herdr" caption="A tell waits while its agent works and reaches it once the agent waits. retry starts a stage that ended short again, with your words and a fresh agent; stop ends an agent that went the wrong way, and its stage waits for a retry." />
+<Diagram name="herdr" caption="A tell waits while its agent works and reaches it once the agent waits. retry with your words hands an answer to the agent kept open for it, which carries its stage on; stop ends an agent that went the wrong way, and a retry starts its stage again with a fresh agent." />
 
 flume keeps each stream's agents in herdr sessions of the stream's.
 Its own is the one its `session` names, else the one named by the
@@ -233,6 +234,25 @@ Every herdr call flume makes runs under a bound, ten seconds where the
 call states none, with the calling session's `HERDR_*` variables
 stripped and the recorded server's socket passed. A call that does not
 answer in time reads as unknown, never as an answer.
+
+### An agent kept open
+
+An agent that stops short needing an answer stays in its pane, kept
+open for the answer for its `keep_open`, an hour by default ([the agent
+kept open](/flume/guides/callers-and-holds/#the-agent-kept-open)). A
+retry with words, or a tell, to its place is typed into that pane as a
+tell is: once the agent waits, its input cleared first, read back as
+received or typed once more. The agent reads the question and the
+answer and carries its stage on in the same session, with everything
+it had read. Once its time passes, it stops or its account is spent, a
+settle lets it go and closes its pane once it is quiet, never forced.
+An agent herdr brought back in a conversation's pane after a restart is
+left as it stands.
+
+Under the printed command flume can type nothing into the session you
+ran, so it keeps no agent open. A stage that stops short waits on a
+retry, which starts a fresh agent with the question and the answer once
+the session you ran has ended.
 
 ### A session for a kind or a stage
 

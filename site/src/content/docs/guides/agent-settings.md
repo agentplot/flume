@@ -1,6 +1,6 @@
 ---
 title: Agent settings
-description: The settings each agent starts with and the eight layers they come from; the mode an agent may act in; its program's own settings, a people's settings file and a commit's tagline among them; the streams a host runs its places in, the pools of accounts its agents run under, each account's reading of its allowance and its pool's threshold, and how a start is checked against what it was given.
+description: The settings each agent starts with and the eight layers they come from; how long an agent is kept open for an answer; the mode an agent may act in; its program's own settings, a people's settings file and a commit's tagline among them; the streams a host runs its places in, the pools of accounts its agents run under, each account's reading of its allowance and its pool's threshold, and how a start is checked against what it was given.
 sidebar:
   order: 6
 ---
@@ -21,10 +21,11 @@ with the layer it came from, and the account with what chose it.
 | `instructions` | text appended to the agent's system prompt, written to a file of the start's own and passed as `--append-system-prompt-file`, so it may hold newlines |
 | `beside` | a pane the agent's pane opens beside, under herdr |
 | `mode` | how far the agent may act in its place without asking a person: one of flume's four modes, or a table of programs ([the mode](#the-mode)) |
+| `keep_open` | how long the agent is kept open for an answer once it stops short needing one, as `<n>`, `<n>s`, `<n>m` or `<n>h` ([how long an agent is kept open](#how-long-an-agent-is-kept-open)) |
 | `programs` | each program's own settings, in that program's words: a settings file and keys given inline ([a program's own settings](#a-programs-own-settings)) |
 
-`program` defaults to `claude`. Every other setting is empty unless a
-layer gives it.
+`program` defaults to `claude` and `keep_open` to `1h`. Every other
+setting is empty unless a layer gives it.
 
 ## The eight layers
 
@@ -39,7 +40,7 @@ Each setting comes from the first of these layers that gives it:
 | the host, for every agent | `host` | the host's `[agents]` |
 | the repository | `repository` | the repository's `[kinds.<kind>.agents]`, for a kind it does not declare, then its `[agents]` for every kind |
 | the kind | `kind` | the kind's own `agents` table and its stage's agent table |
-| flume's default | `default` | the program `claude`, and nothing else |
+| flume's default | `default` | the program `claude` and a `keep_open` of `1h`, and nothing else |
 
 Within a layer, a stage's own setting, in a further `.stages.<stage>`
 table, or `--agent <stage>.<field>=<value>` at the launch, comes before
@@ -49,8 +50,8 @@ layers, the tables for one kind come before the table for every kind.
 Each setting is taken whole from the first layer that gives it, and a
 program's own settings key by key ([key by key](#key-by-key)).
 
-The host's layers give `model`, `effort`, `instructions`, `mode` and
-`programs`, and never a program, since the host chooses a program by the accounts
+The host's layers give `model`, `effort`, `instructions`, `mode`,
+`keep_open` and `programs`, and never a program, since the host chooses a program by the accounts
 it pools. flume reads no other key of a host's kind tables. Its tables
 for a stream, for every agent and for all of a repository's kinds name
 no stage, since a stage's name is its kind's. Each refuses a `program`,
@@ -74,8 +75,9 @@ table.
 The host's layers are read from its configuration as it stands at each
 agent's start, and so is every file they name. Change a model in the
 host's file and retry a stage, and the next agent runs on the new model,
-with no new launch. A mode or a program's own setting changed the same
-way reaches the next agent's start the same way. Every other layer is
+with no new launch. A mode, a `keep_open` or a program's own setting
+changed the same way reaches the next agent's start the same way, and
+an agent already started keeps its own. Every other layer is
 what the launch read: a place keeps its launch's settings, its
 repository's and its kind's for its whole life. It keeps every file
 they name as the launch read it too.
@@ -92,8 +94,8 @@ flume launch --kind change --name csv-export --brief "Export the ledger as CSV."
 ```
 
 The field is one of `program`, `model`, `effort`, `instructions`,
-`beside`, `session`, `mode` and `programs`, with an optional stage
-before it. A
+`beside`, `session`, `mode`, `keep_open` and `programs`, with an
+optional stage before it. A
 setting for a stage the kind does not hold refuses the launch, naming
 the stage, and so does a field that is none of these.
 
@@ -102,6 +104,13 @@ gives one entry of a table of programs, and several such entries build
 one table: `--agent mode.claude=auto`. A mode word and a table for the
 same stage, or for every stage, refuse the launch naming both, since a
 mode is one word or one table.
+
+`keep_open=<time>` gives how long the agent is kept open for an answer,
+as `<n>`, `<n>s`, `<n>m` or `<n>h`: `--agent keep_open=3h` for an
+answer you know comes late, `--agent construct.keep_open=0` for a stage
+whose answer you'd rather a fresh agent take. Any other value refuses
+the launch, and so does `keep_open.<program>`, since it is one time for
+every program.
 
 `programs.<program>.settings.<key>=<value>` gives one of a program's
 own settings ([a program's own settings](#a-programs-own-settings)).
@@ -234,7 +243,9 @@ instructions = "Check every scenario of the change's specs, not only its tasks."
 
 A declaration gives no environment: an `env` in any agents table of a
 repository's file or a launch's declaration refuses the launch, naming
-the field. What a host's agents run under is that host's to say.
+the field. What a host's agents run under is that host's to say. A
+`keep_open` refuses the launch the same way ([how long an agent is kept
+open](#how-long-an-agent-is-kept-open)).
 
 The repository's `[agents]`, flume's own table beside `[profiles]` and
 no part of any kind, gives settings to every agent of every kind the
@@ -255,8 +266,59 @@ kind comes before its table for every kind. `[agents]` gives `program`,
 the repository declares, as the repository's layer comes before the
 kind's. A repository whose own kind should differ on a key leaves the
 key out of `[agents]` and gives it in each kind's table. A `stages`, a
-`streams`, an `env` or a `beside` in `[agents]` refuses the launch,
-naming the field. A launch's declaration is not read for it.
+`streams`, an `env`, a `keep_open` or a `beside` in `[agents]` refuses
+the launch, naming the field. A launch's declaration is not read for it.
+
+## How long an agent is kept open
+
+`keep_open` is how long an agent that stops short needing an answer is
+kept open for it ([the agent kept
+open](/flume/guides/callers-and-holds/#the-agent-kept-open)). An answer
+within that time goes into the session of the agent that asked, which
+keeps what it had read and its prompt cache, and its stage carries on
+there. Past it, flume ends the agent, freeing its room and its account,
+and a later answer starts a fresh agent with the question and the
+answer. flume's own hour is about as long as an account's prompt cache
+lives.
+
+It is `<n>`, `<n>s`, `<n>m` or `<n>h`, as `90s`, `10m` or `2h`. `0`
+keeps no agent open: the first settle after its stop-short lets it go,
+and flume ends it once quiet. Only the launch and the host's agents
+tables give it, a stage's own first in each, as for every other
+setting:
+
+```toml
+[agents.streams.work]
+keep_open = "10m"
+
+[kinds.change.agents.stages.verify]
+keep_open = "2h"
+```
+
+Here every agent in the `work` stream is kept open ten minutes, but a
+change's verify two hours, since the host's table for a kind comes
+before its table for a stream. Every other agent gets flume's hour.
+
+What an asking agent holds while it is kept open is the host's: the
+host's room, its stream's and its account's, traded against how long
+the account's prompt cache lives. Every host that runs a repository
+shares its file, and a kind travels between hosts, so neither can know
+it. A `keep_open` in any agents table of a repository's
+`.config/flume.toml` or of a kind's declaration refuses the launch,
+naming the table and the field, as
+`kinds.change.agents.keep_open: how long an agent is kept open for an
+answer is the host's or the launch's to give, and no declaration gives
+one`.
+
+It is one time for every program and passed to none, so a table of
+programs refuses the host's configuration, or the launch, naming the
+table and `keep_open`. Each start resolves it and keeps it, so a host
+that changes `keep_open` changes it from the next start on. Status
+gives it with its layer, as `keep_open = 1h (from default)`.
+
+An agent is kept open only where its multiplexer can type words into a
+running agent: under herdr, and never under the printed command
+([places and herdr](/flume/guides/places-and-herdr/#an-agent-kept-open)).
 
 ## The effort
 
@@ -702,6 +764,7 @@ whose `work` stream gives its own status line, reads:
   agent flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:1 (claude) on the account work-1 of work (from the strategy): working
     in the session work, the stream's name
     env.CLAUDE_CONFIG_DIR = <set> (from account)
+    keep_open = 1h (from default)
     program = claude (from default)
     programs.claude.settings.hooks = {…} (from host, the file /home/you/.config/agent-launcher/claude-settings.json)
     programs.claude.settings.permissions = {…} (from host, the file /home/you/.config/agent-launcher/claude-settings.json)
@@ -1425,6 +1488,7 @@ program differed and the modes asked and begun, never a value.
     its terminal herdr, the host's
     effort = high (from host-kind)
     env.CLAUDE_CONFIG_DIR = <set> (from account)
+    keep_open = 1h (from default)
     mode = edits (from host-kind)
     model = sonnet (from host-kind)
     program = claude (from default)
@@ -1442,7 +1506,8 @@ it, and each variable `env.<NAME>` from `account` as `<set>`, and its
 `mode` with the value passed and whether it was read back. Its `effort`
 gives the word passed, which nothing reads back, and the account's
 variable that outranks it where its account's `env` names one ([give it
-in the layers](#give-it-in-the-layers-not-the-account)). It gives its
+in the layers](#give-it-in-the-layers-not-the-account)), and its
+`keep_open` gives its time with its layer. It gives its
 program's own settings, each with its layer and its file ([what status
 gives](#what-status-gives)). The place lists its `moves` and each start
 in `unsettled`.
@@ -1454,6 +1519,7 @@ affinity:
 ```text
   agent flume:f5f5e14159a8:change--csv-export:verify:1 (claude) on the account work-2 of work (from the affinity for claude): working
     env.CLAUDE_CONFIG_DIR = <set> (from account)
+    keep_open = 1h (from default)
     program = claude (from default)
   moved: the intent moved for claude from work-1 to work-2 at 1793291334, work-1 spent, its agents after starting without work-1's cache
 ```
@@ -1470,6 +1536,7 @@ says why, naming the variable and never a path:
 ```text
   agent flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:2 (claude) on the account work-2 of work (from the strategy): working
     env.CLAUDE_CONFIG_DIR = <set> (from account)
+    keep_open = 1h (from default)
     program = claude (from default)
     starts afresh after start 1: the chosen account's configuration home (`CLAUDE_CONFIG_DIR`) does not reach its conversation: its `projects` folder is not the stopped account's
   moved: code moved from work-1 to work-2 at 1793291334, work-1 spent, its conversation stayed behind, its agents after starting without work-1's cache

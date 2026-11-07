@@ -66,6 +66,7 @@ file = "~/.config/agent-launcher/claude-settings.json"
 
 [agents.streams.personal]
 model = "sonnet"
+keep_open = "15m"
 
 [kinds.change.agents]
 model = "opus"
@@ -225,14 +226,19 @@ digits, `-` and `_`. A place's label is read at each start.
 ### `[kinds.<kind>.agents]`
 
 Settings for a kind's agents in every repository: `model`, `effort`,
-`instructions`, `mode` and `programs`, with
+`instructions`, `mode`, `keep_open` and `programs`, with
 `[kinds.<kind>.agents.stages.<stage>]` for one stage's. A stage's own
 setting comes before one for every stage. `model` and `instructions`
 are strings. `effort` is a string, its agent program's own word, as
 Claude Code's `low`, `medium`, `high`, `xhigh` and `max`
 ([the effort](/flume/guides/agent-settings/#the-effort)). `mode` is one of `plan`, `ask`, `edits` and `full`, or a
 table of programs whose values are strings, as `mode = { claude =
-"auto" }`. `programs` is a table of programs' own settings
+"auto" }`. `keep_open` is a string, `<n>`, `<n>s`, `<n>m` or `<n>h`:
+how long an agent is kept open for an answer once it stops short
+needing one, `0` keeping none
+([how long an agent is kept open](/flume/guides/agent-settings/#how-long-an-agent-is-kept-open)).
+It is one time for every program, never a table of programs.
+`programs` is a table of programs' own settings
 ([`programs`](#programs)). Any other key is not read.
 [Agent settings](/flume/guides/agent-settings/) gives the layers and
 [the mode](/flume/guides/agent-settings/#the-mode) what each mode
@@ -248,7 +254,7 @@ settings for the kind in every repository.
 
 Settings for every agent of every kind in one repository, named by its
 location as `[repos."<repository>"]` is: `model`, `effort`,
-`instructions`, `mode` and `programs`. It comes after the repository's tables for one
+`instructions`, `mode`, `keep_open` and `programs`. It comes after the repository's tables for one
 kind, and before the host's settings for the kind in every repository.
 It is how a host speaks for a repository it does not write to, a fork
 of another project among them
@@ -259,7 +265,7 @@ file.
 ### `[agents.streams.<stream>]`
 
 Settings for every agent of the places in one stream: `model`,
-`effort`, `instructions`, `mode` and `programs`. It comes after the host's
+`effort`, `instructions`, `mode`, `keep_open` and `programs`. It comes after the host's
 settings for a repository and for a kind, and before `[agents]`. The
 stream is one a `[streams.<stream>]` table declares, or `default`. A
 `program`, `env`, `beside` or `stages` in it, or a stream the host does
@@ -270,7 +276,7 @@ gives no setting.
 ### `[agents]`
 
 Settings for every agent on the host: `model`, `effort`,
-`instructions`, `mode` and `programs`, and `streams`, the tables above. It comes after every
+`instructions`, `mode`, `keep_open` and `programs`, and `streams`, the tables above. It comes after every
 other host table, and before the repository's and the kind's settings.
 A `program`, `env`, `beside` or `stages` in it refuses the file: the
 host chooses a program by its pools' accounts, and an agent's
@@ -330,6 +336,9 @@ flume refuses the file, naming the key, for:
 - a `mode` in an agents table that is neither one of `plan`, `ask`,
   `edits` and `full` nor a table of programs whose values are strings,
   naming the table and `mode`;
+- a `keep_open` in an agents table that is not a string of the form
+  `<n>`, `<n>s`, `<n>m` or `<n>h`, a table of programs among them,
+  naming the table and `keep_open`;
 - a `programs` in an agents table that is not a table of entries, an
   entry's key other than `file` and `settings`, or a TOML date or time
   in one, naming the key;
@@ -532,7 +541,9 @@ as one of flume's own stands over it in this repository. A
 `[kinds.<kind>]` table that holds only `agents` gives settings to a
 kind declared elsewhere, flume's own among them, and declares no kind.
 An `env` in any agents table refuses the launch, naming the field,
-since an agent's environment is its account's alone. A file an agents
+since an agent's environment is its account's alone, and so does a
+`keep_open`, since how long an agent is kept open for an answer is the
+host's or the launch's to give. A file an agents
 table names under `programs` is a file of the repository, relative to
 `.config/`, read at the same revision; one outside the repository, by
 `..`, an absolute path or a link, refuses the launch.
@@ -545,8 +556,8 @@ and flume's: `program`, `model`, `effort`, `instructions`, `mode` and
 `[profiles]`, read with the kinds at the base's current revision and
 kept as the launch read it. The repository's tables for one kind come
 before it, and it comes before a kind the repository declares. A
-`stages`, `streams`, `env` or `beside` in it refuses the launch, naming
-the field.
+`stages`, `streams`, `env`, `keep_open` or `beside` in it refuses the
+launch, naming the field.
 
 ## A launch's declaration
 
@@ -603,7 +614,7 @@ known fields fail, naming every field that does.
 | `branch` | a non-empty string | the prefix of its places' branches | the kind's name |
 | `starts_unready` | `true`, `false` | its first stage starts in a place whose readiness failed | `false` |
 | `lands` | `true`, `false` | its work is submitted to the merge queue after the last stage | `false` |
-| `agents` | a table | settings for every stage's agents, and `agents.stages.<stage>` for one stage's: `program`, `model`, `effort`, `instructions`, `beside`, `mode`, `programs` | none |
+| `agents` | a table | settings for every stage's agents, and `agents.stages.<stage>` for one stage's: `program`, `model`, `effort`, `instructions`, `beside`, `mode`, `programs`; an `env` or a `keep_open` refuses the launch | none |
 | `stages` | an array of tables | its stages, at least one | refused |
 
 ### A stage
@@ -614,7 +625,7 @@ known fields fail, naming every field that does.
 | `prompt` | a path | its prompt, relative to the declaring file's folder; for a repository, read from git at the same revision | refused |
 | `deliverables` | a list of one spelling | what ends it: `commits`, `change`, `tasks`, `archived`, `report:<path>` or `committed:<path>` | refused, unless a conversation |
 | `conversation` | `true`, `false` | a stage with no deliverable, ended by `flume finish` | `false` |
-| `agents` | a list of one table | its agent's settings: `program`, `model`, `effort`, `instructions`, `beside`, `mode`, `programs`; an `env` refuses the launch | refused by flume, which runs one agent per stage |
+| `agents` | a list of one table | its agent's settings: `program`, `model`, `effort`, `instructions`, `beside`, `mode`, `programs`; an `env` or a `keep_open` refuses the launch | refused by flume, which runs one agent per stage |
 | `makes` | a list of names | what it makes besides its deliverable, each recorded as a line of `made.jsonl` | none |
 | `wait` | `true`, `false` | the stage is held before it starts until a retry names it | `false` |
 | `quiet` | a whole number then `s`, `m` or `h`, as `"45m"` | how long its agent may be quiet with nothing delivered before it is stuck | 30 minutes |

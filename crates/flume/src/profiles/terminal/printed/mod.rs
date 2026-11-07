@@ -143,6 +143,12 @@ impl Terminal for Printed {
         }
     }
 
+    /// The printed command types into no running agent, so it keeps none
+    /// open for an answer (198, C.5).
+    fn sends(&self) -> bool {
+        false
+    }
+
     fn state(&self, _agent: &Identity) -> AgentState {
         AgentState::Unknown
     }

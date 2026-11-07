@@ -1,7 +1,8 @@
 //! The terminal seam's scenarios (B.5, 94 to 98, 122, 136 to 139, 7),
 //! a recipient's session reached by its name (43, 132), a part's agents
 //! given by their names (132, C.5), a part shown to a person in each
-//! view the terminal offers (187), and whether a part runs (201).
+//! view the terminal offers (187), whether a part runs (201), and
+//! whether the terminal hands a running agent words (95).
 
 use crate::engine::world::World;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -263,7 +264,36 @@ pub fn scenarios<H: TerminalHarness>() -> Vec<Scenario<H>> {
             cites: &["201"],
             run: runs_reads_each_part::<H>,
         },
+        Scenario {
+            name: "terminal: sends says whether it hands a running agent words, and one that does not refuses every send with nothing typed",
+            cites: &["95", "53", "198"],
+            run: sends_says_whether_it_hands_words::<H>,
+        },
     ]
+}
+
+/// The seam-contracts spec's scenarios of whether a terminal hands a
+/// running agent words: it says so as the harness has it, the same each
+/// time asked, and one that does not refuses a send to an agent it
+/// opened, the agent taking nothing (53, 95, C.5).
+fn sends_says_whether_it_hands_words<H: TerminalHarness>(harness: &H) -> Outcome {
+    let sends = harness.seam().sends();
+    ensure_eq!(sends, harness.sends(), "whether it sends");
+    ensure_eq!(harness.seam().sends(), sends, "asked again");
+    if sends {
+        return Ok(());
+    }
+    let who = opened(harness, 1)?;
+    ensure!(
+        matches!(harness.seam().send(&who, "notes.md"), Sent::Refused { .. }),
+        "a terminal that hands no words sent"
+    );
+    ensure!(
+        harness.submitted(&who).is_empty(),
+        "the agent took {:?}",
+        harness.submitted(&who)
+    );
+    Ok(())
 }
 
 /// The seam-contracts spec's runs over the fake: each part answered as
@@ -829,6 +859,10 @@ impl Terminal for Counted {
 
     fn send(&self, agent: &Identity, text: &str) -> Sent {
         self.call().send(agent, text)
+    }
+
+    fn sends(&self) -> bool {
+        self.call().sends()
     }
 
     fn state(&self, agent: &Identity) -> AgentState {
