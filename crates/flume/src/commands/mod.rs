@@ -200,7 +200,9 @@ enum Command {
     /// Wake a role's address, `<partition>/<role>`: its run, the kind the
     /// host's `[roles]` table names for it, launched where none stands,
     /// and otherwise nothing made, the answer saying the run is live or
-    /// waits (132).
+    /// waits. An address the table gives a standing agent launches
+    /// nothing, the answer saying where that agent lives, what was found
+    /// of it and the ends pending for it (132).
     Wake {
         /// The role's address, `<partition>/<role>`.
         address: String,
