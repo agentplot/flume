@@ -230,7 +230,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   conformance:test` passes, with the role-waking spec's scenarios of a
   run over at its delivery, the next end, and a run's stall, S99's done
   among them, and every existing scenario passes.
-- [ ] 4.3 Run the checks of the projects this group touched. True when
+- [x] 4.3 Run the checks of the projects this group touched. True when
   `sluice exec main -- moon run seams:format seams:lint seams:test
   core:format core:lint core:test conformance:format conformance:lint
   conformance:test` passes.
