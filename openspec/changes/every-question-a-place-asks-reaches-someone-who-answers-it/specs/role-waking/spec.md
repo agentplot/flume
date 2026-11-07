@@ -6,6 +6,10 @@
 - TO: `### Requirement: A role's run is a place named per address`
 - FROM: `### Requirement: A role's run names its stream`
 - TO: `### Requirement: A role's run runs in its address's stream`
+- FROM: `### Requirement: A role's kind may be an identity`
+- TO: `### Requirement: A role's kind is its source's own`
+- FROM: `### Requirement: The configuration decides who holds an address`
+- TO: `### Requirement: A source's entry decides who holds an address`
 
 ## MODIFIED Requirements
 
@@ -83,6 +87,72 @@ stream of its own (132, 143, 180, 193).
 
 - **WHEN** `acme`'s file gives `east/planner` `stream = "west"`
 - **THEN** `east/planner` wakes nothing, and status names the entry and that its address names its stream
+
+### Requirement: A role's kind is its source's own
+
+A role's `kind` SHALL be one of its source's own kinds, named by its
+name, bare or under its source's name, and its run SHALL be launched as
+`<source>/<kind>`, resolved and locked as a launch's kind is, at the
+version the locks record, carrying no declaration of its own. An entry
+naming another source's kind, or a kind with a version, SHALL declare
+nothing for its address (132, 154, 155, 193, C.7; core.34).
+
+#### Scenario: A role woken to a kind of a host's source
+
+- **WHEN** acme declares `madswan/planner` with `kind = "turn"`, acme holds `turn@1` and `turn@2`, the host's lock records both, and an end pending for the address wakes it
+- **THEN** the woken place runs acme/turn@2, and status names `acme/turn@2` with the source's file (132, 154)
+
+#### Scenario: A role's kind unlocked
+
+- **WHEN** acme declares `madswan/planner` with `kind = "turn"`, no lock records acme's `turn`, and `flume wake` names its address
+- **THEN** the wake is refused naming acme/turn as a launch of it is refused, and no place is made (4, 132, 155)
+
+#### Scenario: A version in a role's kind
+
+- **WHEN** acme's file gives `east/planner` `kind = "turn@1"`
+- **THEN** `east/planner` wakes nothing, and status names the entry and that a role's kind is named by its name, its version the locks' (154)
+
+### Requirement: A standing address wakes no run
+
+A settle that finds an end pending for an address a source gives a
+standing agent SHALL launch nothing for it, record nothing of it as
+unwoken, and open, start and watch nothing for it, whatever the
+terminal finds (132, 193; core.13, core.28).
+
+#### Scenario: Ends pending while the agent is away
+
+- **WHEN** three ends are pending for `madswan/planner`, whose standing agent the fake terminal holds nowhere, and the place is settled twice
+- **THEN** no place is made, the fake terminal records no open, and the place's unwoken names nothing for the address (132, S38)
+
+### Requirement: A wake of a standing address launches nothing
+
+`flume wake <address>` of an address a source gives a standing agent
+SHALL launch nothing and SHALL answer that a standing agent holds it,
+with what status says of the address: its agent, its session, what the
+terminal found and its pending ends (132, 193).
+
+#### Scenario: A carrier wakes a standing address
+
+- **WHEN** a carrier runs `flume wake madswan/planner`, whose standing agent the fake terminal holds waiting
+- **THEN** the answer is held, naming `madswan-planner`, its session and the agent found waiting, and no place is made (132)
+
+### Requirement: A source's entry decides who holds an address
+
+Where a source's entry gives an address a standing agent, an end for it
+SHALL go to that agent and not to a live run of an earlier entry; where
+it gives a kind, an end SHALL wake or reach the run and not a standing
+agent; each read as the source's roles file stands at the delivery (32,
+132, 193).
+
+#### Scenario: A standing agent over a run still live
+
+- **WHEN** `madswan/planner`'s run, woken under an entry with a kind, is live, the entry then gives `agent = "madswan-planner"`, and an end for the address is read
+- **THEN** the notice goes to the standing agent, and the run's session receives none (132)
+
+#### Scenario: A standing agent's entry becomes a run's
+
+- **WHEN** `madswan/planner`'s entry gives `agent`, its agent takes one end, the entry then gives a repository and a kind, and another end for the address is read
+- **THEN** a run of the kind is woken for the second end, and the standing agent receives no second notice (132)
 
 ## ADDED Requirements
 
@@ -243,3 +313,15 @@ address (130, 132, 193).
 
 - **WHEN** the run of `east/operator`, the answerer of its own stream, is reported lost and stalls
 - **THEN** its stall is delivered to no address, and status names it under the host's addresses
+
+## REMOVED Requirements
+
+### Requirement: The host's configuration may name a standing agent for an address
+
+**Reason**: A source declares a standing agent's entry in its roles
+file, as it declares a run's, and the host's configuration gives no
+`[roles]` table (132, 193, C.7; record 0039's amendment).
+
+**Migration**: "A source may declare a standing agent for an address",
+"A fault in a source's roles stays its own" and "A source declares each
+role's run" above.

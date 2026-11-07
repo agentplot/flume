@@ -808,7 +808,12 @@ naming it (191):
   source's, an `env`, a pool, an account or a `stream`, whose address
   names a stream the host does not declare and is not carried, that
   gives `agent` beside `kind` or a run's other keys, or that gives
-  `carried` beside a run's keys, `agent` or `answerer`;
+  `carried` beside a run's keys, `agent` or `answerer`; and, the code
+  stage's own reading, one that writes its kind with a version, since
+  C.7 has the entry name the kind and the locks give the version, and
+  one that gives `points`, which this flume takes for no place, as it
+  refuses a stream's `points` (165), rather than one taken and its
+  points dropped unread;
 - an address two entries declare, of one source or two, and two
   addresses whose runs would be one place, of one repository, kind and
   name, are declared by neither, and status names both;

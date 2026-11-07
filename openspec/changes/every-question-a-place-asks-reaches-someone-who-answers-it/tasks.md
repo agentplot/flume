@@ -114,7 +114,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 ## 2. A source's roles and the answerer
 
-- [ ] 2.1 Have `flume-seams`' `is_address` and `role_of` read an address
+- [x] 2.1 Have `flume-seams`' `is_address` and `role_of` read an address
   as `<stream>/<role>`, with `stream_of` beside them, their docs naming
   the stream, and `held.rs`'s role field likewise (design 1; 132, 143).
   Give `RoleRun` its source, `name`, `intent`, `agents` (the settings a
@@ -129,7 +129,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   script each (design 1, 2, 4, 6; 132, 193, C.7). True when `sluice exec
   main -- moon run seams:test fakes:test` passes, `round_trip.rs`'s
   address test named for a stream and a role.
-- [ ] 2.2 Have the host's configuration reader in `crates/flume` read a
+- [x] 2.2 Have the host's configuration reader in `crates/flume` read a
   source's `roles`, an absolute path or one under `~`, and the file it
   names, as it stands when asked, writing nothing, each entry a run's, a
   standing agent's (`agent`, an optional `session`, `answers` and
@@ -158,7 +158,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   stream and its faults, and
   the history-and-host spec's scenarios of the answerer and of the
   host's answering roles.
-- [ ] 2.3 Have a role's kind resolved as its source's own, `<source>/<kind>`,
+- [x] 2.3 Have a role's kind resolved as its source's own, `<source>/<kind>`,
   with its version the locks', and refused at its wake as a launch's
   kind is where no lock records it (design 2; 154, 155, 193; core.34).
   True when `sluice exec main -- moon run core:test conformance:test`
