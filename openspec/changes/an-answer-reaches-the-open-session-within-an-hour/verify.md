@@ -1,9 +1,10 @@
 # Verify: an-answer-reaches-the-open-session-within-an-hour
 
-Verified on 2026-11-07 at 86297b4, the branch
-`change/an-answer-reaches-the-open-session-within-an-hour` cut from main
-and holding main at 9a838ee merged (task 11.1). flume's main is at
-9a838ee still, so the branch holds all of it.
+Verified on 2026-11-07 at c37b453, the branch
+`change/an-answer-reaches-the-open-session-within-an-hour` cut from main,
+holding main at 9a838ee merged (task 11.1) and the stand-in's herdr test
+fixed under the gate's load (task 12.1). flume's main is at 9a838ee
+still, so the branch holds all of it.
 
 **Verdict: the work holds.** Every requirement and scenario of the
 change's twelve delta specs is met by a test that asserts what the
@@ -11,21 +12,23 @@ scenario says, every task is ticked, and the checks the tasks name pass.
 
 ## Tasks
 
-All 26 tasks of groups 1 to 11 are ticked. Each group ends with a commit
-that ran its checks through sluice (`git log 9a838ee..HEAD`, 41
+All 27 tasks of groups 1 to 12 are ticked. Each group ends with a commit
+that ran its checks through sluice (`git log 9a838ee..HEAD`, 44
 commits, the merges of main at f6a5ba7 and at 9a838ee among them).
 
 ## The checks
 
 - `openspec validate an-answer-reaches-the-open-session-within-an-hour --strict --no-interactive`:
   valid.
-- `sluice exec main` at 86297b4, the checks it affects run against main
+- `sluice exec main` at c37b453, the checks it affects run against main
   at 9a838ee: exit 0, 37 tasks passed across `seams`, `fakes`, `core`,
   `conformance`, `flume`, `plugin-claude`, `plugin-herdr`, `site` and
   `root`. `flume:tools` passed 123 tests, among them the four
   walkthroughs of `tools/open_sessions.rs`, the effort's walkthroughs
   under the stand-in, and the stand-in's `stand_in.rs` tests under herdr
-  beside its effort test. `conformance:coverage` found every clause of
+  beside its effort test,
+  `the_stand_in_under_herdr_takes_its_later_prompt_and_reports_its_state`
+  among them. `conformance:coverage` found every clause of
   Parts A and B, I1 to I8 and S1 to S119 at 9c060ab cited by the suite's
   760 scenarios, except those the list names as unbuilt by other
   changes. sluice kept no record of the pass, because this report was
@@ -33,7 +36,9 @@ commits, the merges of main at f6a5ba7 and at 9a838ee among them).
 - A trial `openspec archive` over a copy of `openspec/` applies 18 added
   and 8 modified requirements across the twelve specs and leaves
   `openspec validate --specs --strict --no-interactive` passing 45 of 45.
-  `openspec/specs/` on the branch is main's at 9a838ee, byte for byte.
+  `openspec/specs/` on the branch is main's at 9a838ee, byte for byte,
+  and the trial leaves them as the change's last archive, b7e5bbd2,
+  left them, byte for byte.
 - No MODIFIED requirement drops a scenario main holds: caller-acts'
   Retry (2 on main, 3 here) and Tell (1, 2), clause-coverage's two (1
   and 2, each kept), place-status' waiting place (1, 2), running-through's
@@ -48,6 +53,21 @@ commits, the merges of main at f6a5ba7 and at 9a838ee among them).
   to 11, kinds-profile 14 to 15, launching 12 to 13, place-status 23 to
   25, seam-contracts 45 to 48, seam-fakes 20 to 22, stage-runs 15 to 19,
   store-profile 11 to 12.
+
+## The stand-in's herdr test under the gate's load
+
+The stand-in's `turn` (`crates/flume/tests/profiles/stand-in/claude.rs`)
+reports `working` to herdr as it takes a prompt, before the
+`UserPromptSubmit` hook, the user's record and the run's acts. herdr can
+therefore read it working before the first run has written `first.txt`.
+Under main's gate load, the test for #146 read the file at that moment
+and failed. The test now waits until herdr reads the stand-in working
+and `first.txt` is written. Both hold together while the first run waits
+on `midway`, so the wait ends once the act is made and never misses it.
+The test still asserts every state the scenario names. Since b7e5bbd2,
+the branch's only change outside `openspec/` is these six lines of
+`tools/stand_in.rs`. The stand-in, design 10 and the specs are
+unchanged.
 
 ## The merge of main at 9a838ee
 
