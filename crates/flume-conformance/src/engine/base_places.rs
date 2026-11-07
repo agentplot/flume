@@ -77,12 +77,12 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: landed_with_no_inbox,
         },
         Scenario {
-            name: "base places: S112, a base place's failed submission starts nothing and waits on its caller with the merge queue's words, delivered once; a fix launched on its branch with them lands there, and the retry lands the base place",
+            name: "base places: S112, a base place whose kind names no fix: its failed submission starts nothing, launches no fix and is never forecast, and it waits on its caller with the merge queue's words, delivered once; a fix its caller launches on its branch with them lands there, and the retry lands the base place",
             cites: &["S112", "112", "203", "204", "43", "36"],
             run: s112_a_failed_base_place_takes_a_fix,
         },
         Scenario {
-            name: "base places: a base place's conflicting submission starts no stage, and waits on its caller with words naming the files and the base's revision it was tested against",
+            name: "base places: a base place whose kind names no fix: its conflicting submission starts no stage and launches no fix, and it waits on its caller with words naming the files and the base's revision it was tested against",
             cites: &["112", "203", "S112"],
             run: a_conflicting_submission,
         },
@@ -230,7 +230,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
 }
 
 /// The repository's kind that lands with no stages, so its places are
-/// base places.
+/// base places, naming no kind for its fixes (203).
 fn train() -> Kind {
     kind("train", true, vec![])
 }
@@ -903,6 +903,11 @@ fn s112_a_failed_base_place_takes_a_fix(_: &()) -> Outcome {
         waiting.words
     );
     ensure_eq!(world.terminal.log.count("open"), 0, "agents opened");
+    ensure!(
+        world.store.places() == vec![spring.clone()],
+        "a place was launched for the failure: {:?}",
+        world.store.places()
+    );
     let fix = World::id("fix", "spring-test");
     launched(&world.engine.launch(&Launch {
         base: "train/spring".into(),
@@ -948,6 +953,7 @@ fn s112_a_failed_base_place_takes_a_fix(_: &()) -> Outcome {
             .all(|call| !call.contains("train--spring")),
         "an agent opened in the base place"
     );
+    ensure_eq!(forecasts(&world), Vec::<String>::new(), "the forecasts");
     Ok(())
 }
 
@@ -972,6 +978,12 @@ fn a_conflicting_submission(_: &()) -> Outcome {
     );
     ensure!(status.stages.is_empty(), "a stage: {:?}", status.stages);
     ensure_eq!(world.terminal.log.count("open"), 0, "agents opened");
+    ensure_eq!(forecasts(&world), Vec::<String>::new(), "the forecasts");
+    ensure!(
+        world.store.places() == vec![spring.clone()],
+        "a place was launched for the conflict: {:?}",
+        world.store.places()
+    );
     Ok(())
 }
 
