@@ -502,3 +502,10 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   orchestrator (verify's items 3 and 5; 63, 111, 114, 132, 165;
   core.19). True when `sluice exec main -- moon run conformance:test`
   passes and the branch holds the commit.
+- [x] 12.4 Give status's `addresses[].role` the address's stream again,
+  as `role.stream`, which main's form gave from an entry's own `stream`:
+  status's `RoleStatus`, the run's entry flattened beside `stream`, with
+  `role.stream` and `role.source` listed in `answers.rs`'s `FIELDS` and
+  the site's state page naming it (verify's item 7; 56, 132, 143;
+  core.14). True when `sluice exec main -- moon run core:test
+  conformance:test flume:test site:prose site:build` passes.

@@ -1442,7 +1442,10 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         let run = match (&address.run, &address.role, &address.carried) {
             (Some(run), _, _) => format!("its run {run}"),
             (None, Some(role), _) => {
-                format!("no run; it wakes {} in {}", role.kind, role.repository)
+                format!(
+                    "no run; it wakes {} in {}",
+                    role.run.kind, role.run.repository
+                )
             }
             (None, None, Some(carried)) => format!(
                 "no run; {} declares it carried, its run on another host",

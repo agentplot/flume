@@ -770,7 +770,7 @@ pub struct PlaceClues {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AddressStatus {
     pub address: String,
-    pub role: Option<RoleRun>,
+    pub role: Option<RoleStatus>,
     pub run: Option<PlaceId>,
     pub pending: Vec<PendingEnd>,
     pub unwoken: Option<String>,
@@ -782,6 +782,17 @@ pub struct AddressStatus {
     pub wakes_nothing: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stalled: Option<PendingEnd>,
+}
+
+/// A role's run as status gives it under its address: what its source's
+/// entry declares for the run, and the stream it runs in, its address's,
+/// which the form gives as `role.stream` though an entry names no stream
+/// of its own (132, 143, 193; core.14).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoleStatus {
+    #[serde(flatten)]
+    pub run: RoleRun,
+    pub stream: String,
 }
 
 /// Where a role's address a standing agent holds lives, read at the ask

@@ -39,7 +39,7 @@
 
 use crate::standing::Standing;
 use crate::start::Starts;
-use crate::{what_ended, AddressStatus, Answer, Engine, PendingEnd, Step, Woke};
+use crate::{what_ended, AddressStatus, Answer, Engine, PendingEnd, RoleStatus, Step, Woke};
 use flume_seams::*;
 use std::collections::BTreeMap;
 
@@ -246,7 +246,12 @@ impl Engine {
                 status.unwoken = None;
             } else {
                 match roles.declared(&status.address) {
-                    Ok(RoleEntry::Run(run)) => status.role = Some(*run),
+                    Ok(RoleEntry::Run(run)) => {
+                        status.role = Some(RoleStatus {
+                            run: *run,
+                            stream: stream_of(&status.address).to_string(),
+                        })
+                    }
                     Ok(RoleEntry::Carried(carried)) => status.carried = Some(carried),
                     Ok(RoleEntry::Standing(_)) => {}
                     Err(why) => status.wakes_nothing = Some(why),
