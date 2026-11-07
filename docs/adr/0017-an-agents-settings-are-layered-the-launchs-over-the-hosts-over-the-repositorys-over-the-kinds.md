@@ -11,6 +11,8 @@ decision-makers:
 
 Status: accepted by the user, 2026-10-28, in their design session, on how a host chooses the Claude account and configuration its agents run under once a caller's session no longer reaches them.
 
+Amended in part by record 0055, proposed on 2026-11-06, once it is accepted: a repository's tables, `[repos."<repository>"]`, name it by its address, `<owner>/<name>` as its clone's `origin` gives it, and by its folder only where it has no forge origin.
+
 Deciders: the user, who set the six layers and the example of one account for every change@1 agent; the shape, and the choice of when the host's layers are read, are the reviewing agent's.
 Sources: `agentplot/blueprints:design/flume/requirements.md` at 4d1f88b, clauses 4, 7, 8, 23, 29, 32, 56, C.2, C.4, C.7 and S44, and `design/weir/requirements.md` clauses 52, 57, 58 and C.4, both as amended with this record; records 0004, 0015, 0016; rules core.4, core.30.
 
