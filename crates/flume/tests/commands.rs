@@ -1700,6 +1700,102 @@ fn a_stream_and_an_intent_at_the_launch() {
 }
 
 #[test]
+fn a_launch_takes_its_stream_by_its_repositorys_address() {
+    // 56, 143; record 0055: a clone whose origin is on a forge, reached
+    // through a bare remote beside it by the host's rewriting, takes the
+    // stream the host names for its address, and status gives the
+    // address beside its folder.
+    let host = Host::new("by-address");
+    host.configure("[streams.work]\nagents = 2\n\n[repos.\"acme/acme\"]\nstream = \"work\"\n");
+    let source = repository("by-address", None);
+    let remote = source.bare_remote();
+    let clone = Repository::clone_of(&remote, Scratch::new("by-address-clone"));
+    let origin = "git@github.com:acme/acme.git";
+    clone.git(&["remote", "set-url", "origin", origin]);
+    clone.git(&[
+        "config",
+        &format!("url.{}.insteadOf", remote.to_string_lossy()),
+        origin,
+    ]);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &clone.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&clone, "fix--one");
+    let status = host.flume(&clone.dir, &["status", &place, "--json"], &[]);
+    assert_eq!(status.code, 0, "{}", status.text);
+    let answer = status.answer();
+    let one = the_place(&answer);
+    assert_eq!(
+        one.stream,
+        StreamHeld {
+            name: "work".into(),
+            from: StreamFrom::HostRepository,
+        }
+    );
+    assert_eq!(one.address.as_deref(), Some("acme/acme"));
+    assert_eq!(one.repository, clone.name());
+    assert!(
+        !status.text.contains(origin),
+        "status gives the origin's URL: {}",
+        status.text
+    );
+}
+
+#[test]
+fn a_launch_given_an_address_finds_no_clone() {
+    // 4, 143; record 0055: `--repository` names a folder, and flume finds
+    // no clone by an address.
+    let host = Host::new("no-clone-by-address");
+    let kinds = kinds_file(&host, false);
+    let empty = host.scratch.path("empty");
+    std::fs::create_dir_all(&empty).expect("the empty folder");
+    let refused = host.stand_in(
+        &empty,
+        &[
+            "launch",
+            "--repository",
+            "acme/acme",
+            "--kind",
+            "fix",
+            "--name",
+            "one",
+            "--kinds",
+            &kinds,
+            "--json",
+        ],
+        &[],
+    );
+    assert_ne!(refused.code, 0, "{}", refused.text);
+    let folder = empty
+        .canonicalize()
+        .expect("the empty folder")
+        .join("acme/acme");
+    let reason = refused
+        .answer()
+        .refusal()
+        .map(str::to_string)
+        .expect("a refusal");
+    assert!(
+        reason.contains(&*folder.to_string_lossy()),
+        "the folder it was given: {reason}"
+    );
+    assert!(!folder.exists(), "the folder made");
+    let count = |dir: PathBuf| std::fs::read_dir(dir).map_or(0, |entries| entries.count());
+    assert_eq!(count(host.data().join("places")), 0, "a place made");
+    assert_eq!(
+        count(StateDir::at(host.state()).places()),
+        0,
+        "a place held"
+    );
+}
+
+#[test]
 fn host_settings_and_an_account_for_a_kind() {
     // 32, 144, C.7: the host's one-account pool gives change's agents a
     // variable, read at the start, named in status from the account with

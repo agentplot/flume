@@ -326,6 +326,30 @@ pub struct UsageWindow {
     pub resets_at: Option<Seconds>,
 }
 
+/// A repository as the host's configuration names it: by its address,
+/// `<owner>/<name>` as its clone's `origin` gives it on its forge, else by
+/// its folder (143, C.7; record 0055). The host's tables for a repository
+/// are the address's where the configuration has a table under it, whole,
+/// and the folder's otherwise.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RepositoryName {
+    /// `<owner>/<name>` as its clone's origin gives it on its forge; none
+    /// where it has no forge origin, or a place held none.
+    pub address: Option<String>,
+    /// The folder that holds it, as a launch names it.
+    pub folder: String,
+}
+
+impl RepositoryName {
+    /// A repository named by its folder alone, with no address.
+    pub fn of_folder(folder: impl Into<String>) -> RepositoryName {
+        RepositoryName {
+            address: None,
+            folder: folder.into(),
+        }
+    }
+}
+
 /// Where a place's stream came from (143).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -772,9 +796,10 @@ pub trait Host: Send + Sync {
 
     /// The settings the host's configuration gives `kind`'s agents in
     /// `repository` and in `stream`, the place's, and every agent's, as
-    /// it stands now: read at every start, never kept in held state (32,
-    /// 143, C.7).
-    fn settings(&self, repository: &str, kind: &str, stream: &str) -> HostSettings;
+    /// it stands now: read at every start, never kept in held state; the
+    /// repository's tables its address's where the configuration has a
+    /// table under it, whole, else its folder's (32, 143, C.7).
+    fn settings(&self, repository: &RepositoryName, kind: &str, stream: &str) -> HostSettings;
 
     /// What the host's sources declare of roles, read from their roles
     /// files as they stand now, and never kept (132, 191, 193, C.7).
@@ -821,14 +846,17 @@ pub trait Host: Send + Sync {
     /// The stream the host's configuration names for `kind` in
     /// `repository`, as it stands now: its word for the repository and
     /// kind, else for the repository, else for the kind, with where it
-    /// came from; none where it names none (143, C.7).
-    fn stream_for(&self, repository: &str, kind: &str) -> Option<StreamHeld>;
+    /// came from; none where it names none. The repository's words are
+    /// its address's table's where the configuration has a table under
+    /// it, whole, else its folder's (143, C.7).
+    fn stream_for(&self, repository: &RepositoryName, kind: &str) -> Option<StreamHeld>;
 
     /// The label the host's configuration gives `kind` in `repository`,
     /// as it stands now: its word for the repository and kind, else for
-    /// the kind, with where it came from; none where it gives none (180,
-    /// C.7).
-    fn label_for(&self, repository: &str, kind: &str) -> Option<LabelHeld>;
+    /// the kind, with where it came from; none where it gives none. The
+    /// repository's word is its address's table's where the configuration
+    /// has a table under it, whole, else its folder's (180, C.7).
+    fn label_for(&self, repository: &RepositoryName, kind: &str) -> Option<LabelHeld>;
 
     /// The host's configuration as it stands now: every value with its
     /// layer, whether the local layer was taken, and each key passed over

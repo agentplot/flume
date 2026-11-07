@@ -37,6 +37,15 @@ pub trait History: Send + Sync {
     /// of it the host holds is never read in its place (9, C.1).
     fn origin_branch(&self, repository: &str, branch: &str) -> OriginBranch;
 
+    /// The repository's `remote.origin.url` as its configuration holds
+    /// it, a folder holding a bare repository beside its worktrees read
+    /// by the bare repository's, never rewritten by
+    /// `url.<base>.insteadOf`; none where it has no `origin` or git
+    /// cannot say (143, C.7). The core reads a repository's address from
+    /// it and keeps nothing else of it, since a URL may carry a user and
+    /// a token (56; core.30).
+    fn origin_url(&self, repository: &str) -> Option<String>;
+
     /// Whether `head` holds a commit `start` does not: `head` reaches it
     /// and `start` does not (25).
     fn holds_since(&self, repository: &str, head: &Revision, start: &Revision) -> bool;

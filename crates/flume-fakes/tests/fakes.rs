@@ -1478,7 +1478,7 @@ fn the_settings_of_the_host_and_of_a_repository_are_set() {
     host.set_every_kind("/r", model("haiku"));
     host.set_stream_settings("work", model("fast"));
     host.set_every_agent(model("any"));
-    let in_r = host.settings("/r", "change", "work");
+    let in_r = host.settings(&RepositoryName::of_folder("/r"), "change", "work");
     assert_eq!(in_r.kind, given("opus"));
     assert_eq!(in_r.repository, given("sonnet"));
     assert_eq!(in_r.every_kind, model("haiku"));
@@ -1488,7 +1488,7 @@ fn the_settings_of_the_host_and_of_a_repository_are_set() {
         host.log.of("settings"),
         vec!["settings /r change work".to_string()]
     );
-    let in_s = host.settings("/s", "change", "default");
+    let in_s = host.settings(&RepositoryName::of_folder("/s"), "change", "default");
     assert_eq!(in_s.repository, KindSettings::default());
     assert_eq!(in_s.every_kind, Settings::default());
     assert_eq!(in_s.stream, Settings::default());
@@ -1498,7 +1498,7 @@ fn the_settings_of_the_host_and_of_a_repository_are_set() {
     host.set_stream_settings("work", Settings::default());
     host.set_every_agent(Settings::default());
     assert_eq!(
-        host.settings("/r", "change", "work"),
+        host.settings(&RepositoryName::of_folder("/r"), "change", "work"),
         HostSettings {
             repository: given("sonnet"),
             ..HostSettings::default()
@@ -2169,7 +2169,8 @@ fn a_stream_named_for_a_place() {
     host.name_stream(None, Some("chore"), Some("personal"));
     host.name_stream(Some("/r"), None, Some("work"));
     host.name_stream(Some("/r"), Some("fix"), Some("nightly"));
-    let named = |repository, kind| host.stream_for(repository, kind);
+    let named =
+        |repository: &str, kind| host.stream_for(&RepositoryName::of_folder(repository), kind);
     assert_eq!(
         named("/r", "fix"),
         Some(StreamHeld {
@@ -2768,13 +2769,18 @@ fn a_scripted_label() {
         Some("operation")
     );
     let host = FakeHost::default();
-    assert_eq!(host.label_for("/r", "deploy"), None);
-    let label = host.label_for("/r", "deploy").or_else(|| {
-        read[0].label.clone().map(|name| LabelHeld {
-            name,
-            from: LabelFrom::Kind,
-        })
-    });
+    assert_eq!(
+        host.label_for(&RepositoryName::of_folder("/r"), "deploy"),
+        None
+    );
+    let label = host
+        .label_for(&RepositoryName::of_folder("/r"), "deploy")
+        .or_else(|| {
+            read[0].label.clone().map(|name| LabelHeld {
+                name,
+                from: LabelFrom::Kind,
+            })
+        });
     assert_eq!(
         label,
         Some(LabelHeld {
@@ -2797,23 +2803,27 @@ fn the_hosts_labels_shares_and_layers_are_scripted() {
     host.name_label(None, "research", Some("inception"));
     host.name_label(Some("/r"), "research", Some("operation"));
     assert_eq!(
-        host.label_for("/r", "research"),
+        host.label_for(&RepositoryName::of_folder("/r"), "research"),
         Some(LabelHeld {
             name: "operation".into(),
             from: LabelFrom::HostRepositoryKind,
         })
     );
     assert_eq!(
-        host.label_for("/s", "research"),
+        host.label_for(&RepositoryName::of_folder("/s"), "research"),
         Some(LabelHeld {
             name: "inception".into(),
             from: LabelFrom::HostKind,
         })
     );
-    assert_eq!(host.label_for("/s", "fix"), None);
+    assert_eq!(
+        host.label_for(&RepositoryName::of_folder("/s"), "fix"),
+        None
+    );
     host.name_label(Some("/r"), "research", None);
     assert_eq!(
-        host.label_for("/r", "research").map(|label| label.from),
+        host.label_for(&RepositoryName::of_folder("/r"), "research")
+            .map(|label| label.from),
         Some(LabelFrom::HostKind)
     );
 

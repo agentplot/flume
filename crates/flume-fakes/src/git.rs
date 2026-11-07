@@ -26,6 +26,9 @@ struct GitState {
     /// Each repository's remote `origin`: the branches it holds, or why a
     /// fetch of it fails; a repository named here by none has no origin.
     origins: BTreeMap<String, Result<BTreeMap<String, Revision>, String>>,
+    /// Each repository's `remote.origin.url` as its configuration would
+    /// hold it; a repository named here by none has none (143, C.7).
+    origin_urls: BTreeMap<String, String>,
 }
 
 struct Node {
@@ -114,6 +117,24 @@ impl FakeGit {
         if let Some(Ok(branches)) = lock(&self.state).origins.get_mut(repository) {
             branches.insert(branch.into(), revision.clone());
         }
+    }
+
+    /// The repository's `remote.origin.url` made `url`, as written.
+    pub fn set_origin_url(&self, repository: &str, url: &str) {
+        lock(&self.state)
+            .origin_urls
+            .insert(repository.into(), url.into());
+    }
+
+    /// The repository's `remote.origin.url` removed, as removing `origin`
+    /// leaves it.
+    pub fn remove_origin_url(&self, repository: &str) {
+        lock(&self.state).origin_urls.remove(repository);
+    }
+
+    /// The repository's `remote.origin.url`, as it was last set (143).
+    pub fn origin_url(&self, repository: &str) -> Option<String> {
+        lock(&self.state).origin_urls.get(repository).cloned()
     }
 
     /// Every fetch of the repository's `origin` fails with `reason`.
@@ -325,6 +346,12 @@ impl History for FakeHistory {
         self.log
             .push(format!("origin_branch {repository} {branch}"));
         self.git.origin_branch(repository, branch)
+    }
+
+    /// The URL [`FakeGit::set_origin_url`] left; unlogged, since every
+    /// launch reads it.
+    fn origin_url(&self, repository: &str) -> Option<String> {
+        self.git.origin_url(repository)
     }
 
     fn holds_since(&self, repository: &str, head: &Revision, start: &Revision) -> bool {
