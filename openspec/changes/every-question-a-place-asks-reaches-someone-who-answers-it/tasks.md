@@ -437,7 +437,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
     addressee, and a hold on the waiting move.
 
   True when `sluice exec main -- moon run site:prose site:build` passes.
-- [ ] 10.2 Run the checks of the project this group touched. True when
+- [x] 10.2 Run the checks of the project this group touched. True when
   `sluice exec main -- moon run site:prose site:build root:format`
   passes.
 
