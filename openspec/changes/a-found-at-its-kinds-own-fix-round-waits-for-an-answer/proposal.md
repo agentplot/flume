@@ -67,6 +67,9 @@ None.
   fix round only where the fix round is a stage before it. Found work
   that no stage before it can do again, from any stage but such a last
   one, is taken as needing an answer.
+- `stage-runs`: a stop-short starts the kind's fix round only where the
+  found is from the kind's last stage and the fix round is a stage
+  before it. Any other found is taken as needing an answer.
 - `agent-profile`: Claude Code's way to stop short tells the agent that
   a found is work a stage before its own must do again.
 - `command-line`: `flume needs --found`'s help says what a found is.
