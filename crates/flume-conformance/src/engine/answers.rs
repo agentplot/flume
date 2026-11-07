@@ -80,6 +80,7 @@ fn settings() -> Settings {
     Settings {
         program: Some("agent".into()),
         model: Some("large".into()),
+        effort: None,
         instructions: Some("brief".into()),
         beside: Some("operator".into()),
         mode: Some(ModeSetting::Programs(BTreeMap::from([

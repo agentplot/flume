@@ -28,7 +28,7 @@ use flume::profiles::agent::claude::{
 use flume::profiles::agent::claude::{carry, live, mode, settings, transcript};
 use flume::profiles::{core_over, BuiltIn, DEFAULT_PROGRAM};
 use flume_conformance::scenario::pass_all;
-use flume_conformance::seams::agent::{self, AgentHarness, Modes, OwnWay};
+use flume_conformance::seams::agent::{self, AgentHarness, Efforts, Modes, OwnWay};
 use flume_core::Answer;
 use flume_seams::*;
 use serde_json::{json, Value};
@@ -546,6 +546,12 @@ impl AgentHarness for Harness {
             takes: true,
             reserved: settings::reserved(),
         }
+    }
+
+    /// None yet: the profile keeps the seam's defaults, naming no way to
+    /// give an effort and no variable read over one (197).
+    fn efforts(&self) -> Efforts {
+        Efforts::default()
     }
 
     /// The JSON object of the file the command names by `--settings`, as
