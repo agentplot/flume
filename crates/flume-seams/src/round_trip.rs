@@ -15,6 +15,7 @@ fn settings() -> Settings {
     Settings {
         program: Some("agent".into()),
         model: Some("large".into()),
+        effort: None,
         instructions: Some("be brief".into()),
         beside: Some("operator".into()),
         mode: None,
@@ -881,6 +882,58 @@ fn a_held_state_with_a_mode() {
         serde_json::to_value(&read).expect("written again"),
         before,
         "no mode written where none is held"
+    );
+}
+
+/// `value` with every `effort` key taken out, at any depth.
+fn without_efforts(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(object) => {
+            object.remove("effort");
+            object.values_mut().for_each(without_efforts);
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(without_efforts),
+        _ => {}
+    }
+}
+
+#[test]
+fn a_held_state_with_an_effort() {
+    // The launch gives verify the effort `max` and the kind gives every
+    // stage `high`, each its program's own word as written; the same
+    // state written before the effort reads with none, and writes none
+    // back (32, 197).
+    let mut state = held();
+    state.place.settings.insert(
+        "verify".into(),
+        Settings {
+            effort: Some("max".into()),
+            ..Settings::default()
+        },
+    );
+    state.place.kind.agents.every_stage.effort = Some("high".into());
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(json["place"]["settings"]["verify"]["effort"], "max");
+    assert_eq!(
+        json["place"]["kind"]["agents"]["every_stage"]["effort"],
+        "high"
+    );
+    assert_eq!(
+        json["place"]["settings"]["code"].get("effort"),
+        None,
+        "no effort written where none is given"
+    );
+
+    let mut before = json;
+    without_efforts(&mut before);
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read with no effort");
+    assert_eq!(read.place.settings["verify"].effort, None);
+    assert_eq!(read.place.kind.agents.every_stage.effort, None);
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "no effort written where none is held"
     );
 }
 
@@ -1810,6 +1863,18 @@ fn a_profile_that_maps_no_mode() {
 }
 
 #[test]
+fn a_profile_that_names_no_way_to_give_an_effort() {
+    // A profile that keeps the seam's defaults refuses every effort,
+    // naming it, and names no variable read over it (170, 197).
+    let words = Bare
+        .effort("high")
+        .expect_err("a profile that names no way to give an effort took high");
+    assert!(words.contains("`high`"), "{words}");
+    assert_eq!(words, no_effort("high"));
+    assert_eq!(Bare.effort_variable(), None);
+}
+
+#[test]
 fn a_profile_that_passes_no_own_settings() {
     // A profile that keeps the seam's defaults reserves no key, refuses
     // its program's keys, saying it passes none, and takes an empty entry
@@ -1887,6 +1952,30 @@ fn settings_under_others_take_the_mode_whole() {
     assert_eq!(under.under(&over).mode, over.mode);
     assert_eq!(under.under(&Settings::default()).mode, Some(programs()));
     assert_eq!(Settings::default().under(&under).mode, Some(programs()));
+}
+
+#[test]
+fn settings_under_others_take_the_effort_whole() {
+    // The effort is taken whole, as the model is: the more specific
+    // settings' where they give one, and the less specific's otherwise
+    // (32, 197).
+    let under = Settings {
+        effort: Some("high".into()),
+        ..Settings::default()
+    };
+    let over = Settings {
+        effort: Some("max".into()),
+        ..Settings::default()
+    };
+    assert_eq!(under.under(&over).effort, Some("max".into()));
+    assert_eq!(
+        under.under(&Settings::default()).effort,
+        Some("high".into())
+    );
+    assert_eq!(
+        Settings::default().under(&under).effort,
+        Some("high".into())
+    );
 }
 
 #[test]

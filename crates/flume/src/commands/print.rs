@@ -742,9 +742,11 @@ fn own_lines(own: &OwnStatus) -> Vec<String> {
 /// The current agent's line: its identity, program, account and state,
 /// the account from the intent's affinity for the agent's program, the
 /// strategy, or the account a lost conversation's start ran under, its
-/// conversation's, and its mode as written with its layer, the entry it took of
-/// a table and the value passed, where a layer gave one (56, 145, 147,
-/// 169).
+/// conversation's, its mode as written with its layer, the entry it took of
+/// a table and the value passed, where a layer gave one, and its effort
+/// as written with its layer, the value passed and the account's variable
+/// that outranks it, by its name alone, where a layer gave one (56, 145,
+/// 147, 169, 197).
 fn agent_line(agent: &AgentStatus) -> String {
     let mut line = format!("  agent {} ({})", agent.identity, agent.program);
     if let Some(account) = &agent.account {
@@ -774,6 +776,20 @@ fn agent_line(agent: &AgentStatus) -> String {
         line.push_str(&format!(" passed as {}", mode.passed));
         if !mode.read_back {
             line.push_str(", not read back");
+        }
+    }
+    if let Some(effort) = &agent.effort {
+        line.push_str(&format!(
+            ", at the effort {} (from {}) passed as {}",
+            effort.word,
+            word(json!(effort.layer)),
+            effort.passed
+        ));
+        if !effort.read_back {
+            line.push_str(", not read back");
+        }
+        if let Some(variable) = &effort.outranked_by {
+            line.push_str(&format!("; the account's {variable} outranks it"));
         }
     }
     line
@@ -1379,9 +1395,9 @@ mod tests {
     use super::*;
     use flume_core::EndStatus;
     use flume_core::{
-        AccountStatus, AddressStatus, AgentSettings, Listed, ModeStatus, MoveStatus, OwnFileStatus,
-        OwnStatus, Past, PendingEnd, PlaceLine, RoomWanted, StreamListed, StreamStatus, TitleFrom,
-        TitleHeld, WindowStatus,
+        AccountStatus, AddressStatus, AgentSettings, EffortStatus, Listed, ModeStatus, MoveStatus,
+        OwnFileStatus, OwnStatus, Past, PendingEnd, PlaceLine, RoomWanted, StreamListed,
+        StreamStatus, TitleFrom, TitleHeld, WindowStatus,
     };
     use flume_seams::{
         AccountFrom, AccountHeld, AccountMove, AgentState, Declared, EndHeld, EndOf, Given, Layer,
@@ -1419,6 +1435,7 @@ mod tests {
             session: None,
             terminal: None,
             own: None,
+            effort: None,
         };
         assert_eq!(
             agent_line(&agent),
@@ -1905,6 +1922,7 @@ mod tests {
             session: None,
             terminal: None,
             own: None,
+            effort: None,
         }
     }
 
@@ -2100,6 +2118,112 @@ mod tests {
         assert_eq!(
             agent_line(&agent),
             "  agent flume:r:fix--one:code:1 (agent): working, in the mode edits (from kind) passed as edit-files, not read back"
+        );
+    }
+
+    /// An agent whose layer `layer` gave the effort `word`, none where it
+    /// is none, on an account whose `env` names `CLAUDE_CODE_EFFORT_LEVEL`
+    /// where `outranked`, as the core gives it: the variable by its name
+    /// alone (56, 197; core.30).
+    fn with_effort(word: Option<&str>, layer: Layer, outranked: bool) -> AgentStatus {
+        let variable = "CLAUDE_CODE_EFFORT_LEVEL";
+        let mut from = BTreeMap::new();
+        let mut env = BTreeMap::new();
+        if outranked {
+            env.insert(variable.to_string(), flume_seams::SET.to_string());
+            from.insert(
+                format!("env.{variable}"),
+                Given {
+                    layer: Layer::Account,
+                    value: flume_seams::SET.into(),
+                    file: None,
+                },
+            );
+        }
+        if let Some(word) = word {
+            from.insert(
+                "effort".to_string(),
+                Given {
+                    layer,
+                    value: word.into(),
+                    file: None,
+                },
+            );
+        }
+        AgentStatus {
+            settings: AgentSettings {
+                settings: flume_seams::Settings {
+                    effort: word.map(str::to_string),
+                    ..flume_seams::Settings::default()
+                },
+                env,
+                from,
+            },
+            mode: None,
+            effort: word.map(|word| EffortStatus {
+                word: word.into(),
+                layer,
+                passed: word.into(),
+                read_back: false,
+                outranked_by: outranked.then(|| variable.to_string()),
+            }),
+            ..in_mode(
+                "edits",
+                Layer::Kind,
+                ModeStatus {
+                    passed: "edit-files".into(),
+                    entry: None,
+                    read_back: false,
+                },
+            )
+        }
+    }
+
+    #[test]
+    fn an_effort_from_the_launch() {
+        // S103: the launch's `xhigh`, on the agent's line with its layer,
+        // passed and not read back, and among its settings (56, 197).
+        let agent = with_effort(Some("xhigh"), Layer::Launch, false);
+        assert_eq!(
+            agent_line(&agent),
+            "  agent flume:r:fix--one:code:1 (agent): working, at the effort xhigh (from launch) passed as xhigh, not read back"
+        );
+        assert_eq!(
+            agent_lines(&agent, "work", "fix")[2..],
+            ["    effort = xhigh (from launch)"]
+        );
+    }
+
+    #[test]
+    fn an_effort_the_accounts_variable_outranks() {
+        // The account's variable named as outranking the effort, by its
+        // name, its value never in the answer (56, 197; core.30).
+        let agent = with_effort(Some("high"), Layer::HostKind, true);
+        assert_eq!(
+            agent_line(&agent),
+            "  agent flume:r:fix--one:code:1 (agent): working, at the effort high (from host-kind) passed as high, not read back; the account's CLAUDE_CODE_EFFORT_LEVEL outranks it"
+        );
+        assert_eq!(
+            agent_lines(&agent, "work", "fix")[2..],
+            [
+                "    effort = high (from host-kind)",
+                "    env.CLAUDE_CODE_EFFORT_LEVEL = <set> (from account)",
+            ]
+        );
+    }
+
+    #[test]
+    fn no_effort() {
+        // No layer gave an effort: the line names none, and the account's
+        // variable is a variable like any other (197).
+        let agent = with_effort(None, Layer::Launch, true);
+        assert_eq!(
+            agent_line(&agent),
+            "  agent flume:r:fix--one:code:1 (agent): working"
+        );
+        assert_eq!(
+            agent_lines(&agent, "work", "fix")[2..],
+            ["    env.CLAUDE_CODE_EFFORT_LEVEL = <set> (from account)"]
         );
     }
 
