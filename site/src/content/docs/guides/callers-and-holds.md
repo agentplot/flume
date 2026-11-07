@@ -34,7 +34,7 @@ happens:
 | `<stage> delivered` | the stage's deliverable exists and its agent is quiet |
 | `<stage> finished` | a conversation ended by `flume finish` |
 | `<stage> needs an answer` | the agent stopped short with a question, in its words |
-| `<stage> found work` | the agent stopped short with work it cannot deliver past, in its words |
+| `<stage> found work` | the agent stopped short with work a stage before its own must do again, in its words |
 | `<stage> never begun` | the agent never said it started, or never took its prompt; one that says so later goes on, its stage begun |
 | `<stage> lost` | the agent stopped with nothing delivered; a conversation's goes on in its session at a retry ([a lost conversation](#a-lost-conversation)) |
 | `<stage> stuck` | the agent stayed quiet past the stage's limit with nothing delivered |
@@ -165,9 +165,15 @@ whether it needs an answer or found work:
   ended: code needs an answer; pending for me
 ```
 
-A question starts no next stage: the place waits. Found work from the
-kind's last stage starts the kind's fix round on its own, as a failed
-submission does ([kinds](/flume/guides/kinds/#how-a-kind-runs-through)).
+A question starts no next stage: the place waits. Found work is work a
+stage before the agent's own must do again. From the kind's last stage
+it starts the kind's fix round on its own, as a failed submission does,
+where the fix round is a stage before it, as a change's `code` is before
+its `verify` ([kinds](/flume/guides/kinds/#how-a-kind-runs-through)).
+From any other stage, and from a last stage that is its kind's fix
+round, as fix's and chore's `code` is, no stage before it can do the
+work again: the place waits on an answer as for a question, and the
+retry's prompt carries the findings as the question.
 
 ## Retrying
 
