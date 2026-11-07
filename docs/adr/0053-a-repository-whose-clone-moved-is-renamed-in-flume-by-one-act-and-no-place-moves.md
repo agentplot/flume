@@ -1,7 +1,7 @@
 ---
 number: 53
 title: A repository whose clone moved is renamed in flume by one act, and no place moves
-status: proposed
+status: rejected
 date: 2026-11-06
 decision-makers:
 - Chuck Swanberg
@@ -10,7 +10,7 @@ decision-makers:
 
 # A repository whose clone moved is renamed in flume by one act, and no place moves
 
-Status: proposed to the user on 2026-11-06, as `briefs.15` has it; accepted only on their yes.
+Status: rejected by the user on 2026-11-07, on its card: "I don't think we want to be handling renames like this. A lot of my renaming is just because I'm in flux at an early stage. Once this is a final product, I think you either add a repo or remove a repo. There's no renaming". Clause 209 is taken out of the statement (agentplot/blueprints b0df70b).
 
 Deciders: the user, on proposal 13's card in Pending You, 2026-11-06, ruling on a request written under a kit's former name: "Wouldn't the root cause be that the original rename didn't rename the parts of the data that were necessary? If anything shouldn't the tools expose some sort of rename functionality? I don't want you to be building [...] custom workaround [...]", which settles that a rename renames the data that names what was renamed, that each tool exposes its own rename, and that no reader maps a former name. agentplot-design for flume's shape below.
 
