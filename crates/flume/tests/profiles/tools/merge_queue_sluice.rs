@@ -18,10 +18,14 @@
 //! asked of the pinned sluice's equip and its answer read. A base place's
 //! branch is opened and closed by the seam's scenarios, an open of a
 //! branch the policy names no table for refused and a close of a branch a
-//! submission is queued on kept, each in sluice's words (205, 206). A
-//! chore submitted with no agent in it lands by the settles of a caller
-//! keeping watch alone, `flume settle --every 1m`, each stepping main
-//! once, with no `sluice run` live (124, 125, 208, S109).
+//! submission is queued on kept, each in sluice's words (205, 206), and
+//! submitted by name from the repository; over a stand-in origin, a base
+//! place's branch is made there, a fix lands on it, it lands on main by
+//! name, its landing read from sluice's status with no inbox run, and it
+//! is closed on the origin and the host (203, S110). A chore submitted
+//! with no agent in it lands by the settles of a caller keeping watch
+//! alone, `flume settle --every 1m`, each stepping main once, with no
+//! `sluice run` live (124, 125, 208, S109).
 
 use super::walk::{stage, user_scratch, Walk, USER_SCRATCH};
 use crate::common::*;
@@ -51,6 +55,9 @@ const POLICY: &str =
 /// The policy with a table for `train/*` beside main's, so sluice opens,
 /// lands on and closes `train/a`.
 const TRAINS: &str = "[tests]\nrunner = \"command\"\ncommand = \"sh check.sh\"\n\n[branches.\"train/*\"]\n\n[branches.main]\n";
+
+/// The policy that lands `train/*` and main on the stand-in origin.
+const TRAINS_ON_ORIGIN: &str = "[tests]\nrunner = \"command\"\ncommand = \"sh check.sh\"\n\n[branches.\"train/*\"]\nremote = \"origin\"\n\n[branches.main]\nremote = \"origin\"\n";
 
 /// A scratch repository gated by sluice, and the place it holds.
 struct Harness {
@@ -201,6 +208,64 @@ impl Harness {
     }
 }
 
+impl Harness {
+    /// The seam with a `sluice` first on its `PATH` that writes each
+    /// command it is asked, a line each, then runs the pinned sluice; and
+    /// where it writes them.
+    fn counting(&self) -> (Sluice, PathBuf) {
+        let pinned = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+            .map(|dir| dir.join("sluice"))
+            .find(|path| path.is_file())
+            .expect("the pinned sluice on PATH");
+        let bin = self.repository.scratch.path("counted");
+        fs::create_dir_all(&bin).expect("the counting sluice's folder");
+        let asked = self.repository.scratch.path("sluice-counted");
+        let program = bin.join("sluice");
+        fs::write(
+            &program,
+            format!(
+                "#!/bin/sh\necho \"$*\" >>'{}'\nexec '{}' \"$@\"\n",
+                asked.display(),
+                pinned.display()
+            ),
+        )
+        .expect("the counting sluice");
+        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).expect("it runs");
+        let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        )))
+        .expect("a PATH");
+        let seam = self
+            .seam
+            .clone()
+            .with_env("PATH", Some(&path.to_string_lossy()));
+        (seam, asked)
+    }
+}
+
+/// Steps `base` through `seam` until `branch`'s newest submission is
+/// decided, and gives it as read-submission reads it.
+fn stepped_until_decided(seam: &Sluice, repository: &str, base: &str, branch: &str) -> Submission {
+    let deadline = Instant::now() + Duration::from_secs(120);
+    loop {
+        assert_eq!(
+            seam.step(repository, base),
+            Stepped::Stepped,
+            "a step of {base}"
+        );
+        match seam.read_submission(repository, branch).read {
+            SubmissionRead::Found { submission } if !submission.state.open() => return submission,
+            SubmissionRead::Found { .. } => {}
+            other => panic!("read-submission of {branch} gave {other:?}"),
+        }
+        assert!(
+            Instant::now() < deadline,
+            "{branch}'s submission to {base} was never decided"
+        );
+        std::thread::sleep(Duration::from_millis(300));
+    }
+}
+
 impl Drop for Harness {
     fn drop(&mut self) {
         if let Some(path) = self.locked.borrow_mut().take() {
@@ -326,7 +391,7 @@ impl MergeQueueHarness for Harness {
 
     /// `bolt/x`, its policy naming it, given a submission from `unit/x`,
     /// then a policy at its tip that declares `[[checkout.cache]]`, which
-    /// sluice 0.67.0 refuses: no round of `bolt/x` has read its revision,
+    /// the pinned sluice refuses: no round of `bolt/x` has read its revision,
     /// so `sluice status bolt/x` reads the policy at its tip and refuses
     /// the branch, as it refused one on deneb on 2026-11-04.
     fn refuse_another(&self, _place: &PlaceRef) -> String {
@@ -393,18 +458,184 @@ fn the_sluice_profile_passes_the_merge_queue_scenarios() {
 }
 
 #[test]
-fn the_sluice_profile_opens_and_closes_a_base_places_branch() {
-    // The seam's base-place scenarios that open and close a branch, over
-    // a policy that names `train/*`; the submit by name waits on the pin
-    // that takes `--head` without `--check` (203, 205, 206).
-    let opens: Vec<_> = merge_queue::base_place_scenarios()
-        .into_iter()
-        .filter(|scenario| !scenario.cites.contains(&"203"))
-        .collect();
-    assert_eq!(opens.len(), 2, "the open and close scenarios");
-    pass_all("merge queue's base place", &opens, || {
-        Harness::with_policy(TRAINS)
-    });
+fn the_sluice_profile_passes_the_base_place_scenarios() {
+    // The seam's base-place scenarios, over a policy that names
+    // `train/*`: a branch opened and closed, and submitted by name from
+    // the repository (203, 205, 206).
+    pass_all(
+        "merge queue's base place",
+        &merge_queue::base_place_scenarios(),
+        || Harness::with_policy(TRAINS),
+    );
+}
+
+#[test]
+fn a_base_places_branch_over_a_scratch_repository() {
+    // A base place's branch through the profile alone, on a scratch
+    // repository whose policy lands `train/*` and main on a stand-in
+    // origin: sluice makes `train/a` there, a fix cut from it lands on it
+    // by the settles' steps, the base place's submission of `train/a` by
+    // name from the repository lands on main by them, its landing read
+    // from sluice's status with no inbox run, and its close removes it on
+    // the origin and the host. The profile runs sluice and a fetch alone,
+    // so nothing of flume's pushes or moves a branch (14, 202 to 206,
+    // S110).
+    let harness = Harness::with_policy(TRAINS_ON_ORIGIN);
+    let repository = harness.repository.name();
+    let remote = harness.repository.bare_remote();
+    harness
+        .repository
+        .git(&["remote", "add", "origin", &remote.to_string_lossy()]);
+    harness.repository.git(&["fetch", "--quiet", "origin"]);
+    let on_origin = |branch: &str| {
+        let line = git(
+            &harness.repository.dir,
+            &[
+                "ls-remote",
+                &remote.to_string_lossy(),
+                &format!("refs/heads/{branch}"),
+            ],
+        );
+        line.split_whitespace().next().map(str::to_string)
+    };
+    let main = on_origin("main").expect("main on the origin");
+
+    let BranchOpened::Made { revision } = harness.seam.open(&repository, "train/a", "main") else {
+        panic!("train/a was not opened");
+    };
+    assert_eq!(revision.0, main, "train/a made at main's revision");
+    assert_eq!(
+        on_origin("train/a").as_deref(),
+        Some(main.as_str()),
+        "train/a on the origin"
+    );
+
+    harness
+        .repository
+        .git(&["fetch", "--quiet", "origin", "train/a"]);
+    let fix = harness.repository.dir.join("places/fix--a");
+    harness.repository.git(&[
+        "worktree",
+        "add",
+        "--quiet",
+        "-b",
+        "fix/a",
+        &fix.to_string_lossy(),
+        "origin/train/a",
+    ]);
+    fs::write(fix.join("a.rs"), "fix/a\n").expect("the fix's work");
+    git(&fix, &["add", "a.rs"]);
+    git(&fix, &["commit", "--quiet", "-m", "fix/a"]);
+    let fix_place = PlaceRef {
+        repository: repository.clone(),
+        location: fix.to_string_lossy().into(),
+        branch: "fix/a".into(),
+        base: "train/a".into(),
+    };
+    let head = Revision::new(git(&fix, &["rev-parse", "HEAD"]));
+    let Submitted::Submitted { .. } = harness.seam.submit(&fix_place, &from_worktree(&head)) else {
+        panic!("the fix's submit to train/a was refused");
+    };
+    let landed = stepped_until_decided(&harness.seam, &repository, "train/a", "fix/a");
+    assert!(
+        matches!(landed.state, SubmissionState::Landed { .. }),
+        "the fix came to {landed:?}"
+    );
+    let train = on_origin("train/a").expect("train/a on the origin");
+    assert_eq!(
+        git(
+            &harness.repository.dir,
+            &[
+                "--git-dir",
+                &remote.to_string_lossy(),
+                "show",
+                &format!("{train}:a.rs")
+            ],
+        ),
+        "fix/a",
+        "the fix on train/a"
+    );
+
+    let (seam, asked) = harness.counting();
+    let base_place = PlaceRef {
+        repository: repository.clone(),
+        location: harness
+            .repository
+            .dir
+            .join("places/train--a")
+            .to_string_lossy()
+            .into(),
+        branch: "train/a".into(),
+        base: "main".into(),
+    };
+    let submission = match seam.submit(
+        &base_place,
+        &SubmitHead::Branch {
+            branch: "train/a".into(),
+            revision: Revision::new(train.clone()),
+        },
+    ) {
+        Submitted::Submitted { submission } => submission,
+        other => panic!("train/a's submit by name answered {other:?}"),
+    };
+    assert_eq!(
+        (submission.branch.as_str(), submission.target.as_str()),
+        ("train/a", "main"),
+        "the submission by name"
+    );
+    let landed = stepped_until_decided(&seam, &repository, "main", "train/a");
+    assert_eq!(landed.id, submission.id, "the landing read by its branch");
+    assert!(
+        matches!(landed.state, SubmissionState::Landed { .. }),
+        "train/a came to {landed:?}"
+    );
+    let main = on_origin("main").expect("main on the origin");
+    assert_eq!(
+        git(
+            &harness.repository.dir,
+            &[
+                "--git-dir",
+                &remote.to_string_lossy(),
+                "show",
+                &format!("{main}:a.rs")
+            ],
+        ),
+        "fix/a",
+        "train/a's work on main"
+    );
+    let asked = fs::read_to_string(&asked).expect("sluice was asked");
+    assert!(
+        asked
+            .lines()
+            .next()
+            .is_some_and(|line| line == "submit main --head train/a --no-wait --json"),
+        "the submit by name: {asked}"
+    );
+    assert!(
+        !asked.lines().any(|line| line.starts_with("inbox")),
+        "an inbox ran for a submission by name: {asked}"
+    );
+    let worktrees = harness.repository.git(&["worktree", "list", "--porcelain"]);
+    assert!(
+        !worktrees.contains("branch refs/heads/train/a"),
+        "a worktree on train/a: {worktrees}"
+    );
+    assert!(
+        !Path::new(&base_place.location).exists(),
+        "something stands at the base place's location"
+    );
+
+    assert_eq!(
+        harness.seam.close(&repository, "train/a", "main"),
+        BranchClosed::Removed,
+        "train/a's close into main"
+    );
+    assert_eq!(on_origin("train/a"), None, "train/a on the origin");
+    assert_eq!(
+        harness.branch_head(&repository, "train/a"),
+        None,
+        "train/a on the host"
+    );
 }
 
 #[test]

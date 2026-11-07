@@ -548,13 +548,11 @@ The sluice profile (C.6):
 
 Each runs with every multiplexer's session stripped and
 `GIT_TERMINAL_PROMPT=0`, as the profile's other commands do (C.6). No
-`sluice inbox` runs for a base place. The pinned sluice, 0.67.0, takes
-`--head` only with `--check`, and records the worktree it runs in as a
-submitter. The submit by name waits on sluice's follow-up S1, and the
-profile's test of it on the pin that carries it. Until each is built the
-profile answers it in its own words as not yet built: open refused, a
-submit by name refused, and close kept, since a close that cannot run
-leaves the branch where it is.
+`sluice inbox` runs for a base place. The pinned sluice, 0.71.0, is the
+first release that carries S1: it takes `--head` without `--check` from
+anywhere in the repository, and records the branch named as the entry's
+work and its head, `from.worktree` and `from.head`, with no session, so
+read-submission finds the entry by the branch either way (sluice 124).
 
 The git worktree place profile (C.1) is asked only for a base place's
 location, which it gives as for any place; it makes, reads and removes

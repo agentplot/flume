@@ -1,5 +1,5 @@
 //! The merge-queue profile over sluice (C.6; design 13), every command
-//! and field it reads checked against the sluice the tree pins, 0.67.0.
+//! and field it reads checked against the sluice the tree pins, 0.71.0.
 //!
 //! submit is `sluice submit <base> --no-wait --json` in the place, with
 //! every multiplexer's session stripped from its environment, so sluice
@@ -64,9 +64,11 @@
 //! exit a refusal in sluice's words; close answers removed on exit 0, gone
 //! on exit 1 naming the branch itself, and kept in sluice's words
 //! otherwise, an `into` sluice cannot find among it, since the branch
-//! stands then (205, 206; sluice 104, 105). A submit naming a branch is
-//! refused, saying so, until the pin takes `--head` without `--check`
-//! (203).
+//! stands then (205, 206; sluice 104, 105). A base place's branch is
+//! submitted by name, `sluice submit <base> --head <branch> --no-wait
+//! --json` run in the repository, answered as any submit; sluice records
+//! the branch as the entry's `from.head`, so read-submission reads its
+//! outcome, and no inbox runs for it (99, 133, 203; sluice 124).
 
 use crate::git::Git;
 use crate::shell;
@@ -591,13 +593,28 @@ fn base_at(repository: &str, base: &str) -> Option<Revision> {
 
 impl MergeQueue for Sluice {
     fn submit(&self, place: &PlaceRef, head: &SubmitHead) -> Submitted {
-        if let SubmitHead::Branch { branch, .. } = head {
-            return Submitted::Refused {
-                reason: format!("submitting {branch} by name through sluice is not yet built"),
-            };
-        }
-        let args = ["submit", place.base.as_str(), "--no-wait", "--json"];
-        let (success, stdout, stderr) = match self.run(Path::new(&place.location), &args) {
+        // A base place's branch is submitted by name from the repository,
+        // which holds no worktree of it, and every other place from its
+        // worktree (203; sluice 124).
+        let git = Git::at(&place.repository);
+        let (dir, args) = match head {
+            SubmitHead::Branch { branch, .. } => (
+                git.path(),
+                vec![
+                    "submit",
+                    place.base.as_str(),
+                    "--head",
+                    branch.as_str(),
+                    "--no-wait",
+                    "--json",
+                ],
+            ),
+            SubmitHead::Worktree { .. } => (
+                Path::new(&place.location),
+                vec!["submit", place.base.as_str(), "--no-wait", "--json"],
+            ),
+        };
+        let (success, stdout, stderr) = match self.run(dir, &args) {
             Ok(output) => output,
             Err(reason) => return Submitted::Refused { reason },
         };
