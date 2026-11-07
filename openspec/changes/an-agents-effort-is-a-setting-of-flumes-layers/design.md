@@ -288,12 +288,19 @@ than it says of any variable.
 `Engine::launch` resolves every stage's effort and asks the agent's
 profile of it before anything is made, as it does a mode (4, 8). A
 word the profile refuses, or an effort for a program whose profile
-names no way to give one, refuses the launch:
+names no way to give one, refuses the launch. The core names the
+stage, the effort as written, its layer and the program, in the words
+it gives a mode's refusal, and the profile's words follow, naming the
+word and the words its program takes (design 5):
 
 ```
-launch refused: the stage code's effort `med`, from host-kind, is no
-effort claude takes: low, medium, high, xhigh or max
+launch refused: the stage `code`'s effort `med`, from the layer
+`host-kind`, cannot run on `claude`: `med` is no effort claude takes:
+low, medium, high, xhigh or max
 ```
+
+A profile that keeps the seam's default says "its agent profile names
+no way to give an effort, `med` among them" after the same words.
 
 A host's table changed after the launch is read at the next start, and
 a word refused then leaves the stage refused in the same words, starting
