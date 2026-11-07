@@ -1175,6 +1175,51 @@ fn a_base_places_open_and_close_are_scripted() {
 }
 
 #[test]
+fn the_fake_merge_queue_scripts_a_forecast() {
+    // The seam-fakes spec's "Scripted, then cleared": clear at the base's
+    // revision where nothing is scripted, a scripted answer standing at
+    // every ask until scripted again, each ask logged, and no submission
+    // added (106, 210).
+    let git = FakeGit::new();
+    let base = git.init("/r", "main");
+    let queue = FakeMergeQueue::new(git.clone());
+    assert!(matches!(
+        queue.open("/r", "train/x", "main"),
+        BranchOpened::Made { .. }
+    ));
+    let head = git.commit("/r", "train/x", &["README.md"]);
+    let clear = Forecast::Clear {
+        head: head.clone(),
+        onto: base.clone(),
+    };
+    assert_eq!(queue.forecast("/r", "train/x", "main"), clear);
+    let conflict = Forecast::Conflict {
+        head: head.clone(),
+        onto: base.clone(),
+        files: vec!["README.md".into()],
+        with: vec!["#7".into()],
+        words: "would conflict: README.md with #7".into(),
+    };
+    queue.answer_forecast("/r", "train/x", conflict.clone());
+    assert_eq!(queue.forecast("/r", "train/x", "main"), conflict);
+    assert_eq!(queue.forecast("/r", "train/x", "main"), conflict);
+    queue.answer_forecast("/r", "train/x", clear.clone());
+    assert_eq!(queue.forecast("/r", "train/x", "main"), clear);
+    let forecasts: Vec<String> = queue
+        .log
+        .calls()
+        .into_iter()
+        .filter(|call| call.starts_with("forecast"))
+        .collect();
+    assert_eq!(forecasts, vec!["forecast train/x onto main"; 4]);
+    assert!(queue.submissions("/r", "train/x").is_empty());
+    assert_eq!(
+        queue.read_submission("/r", "train/x").read,
+        SubmissionRead::None
+    );
+}
+
+#[test]
 fn a_submission_by_name_is_decided_in_the_record() {
     // The seam-fakes spec's "A submission by name decided in the
     // record": a branch the fake opened is one it lands on, a submission
