@@ -38,6 +38,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_scripted_refusal,
         },
         Scenario {
+            name: "tidy: a place read gone is removed through the place seam all the same, kept while that remove is refused",
+            cites: &["62", "66", "81"],
+            run: a_place_read_gone,
+        },
+        Scenario {
             name: "tidy: the last place on a base tidied closes its tab and the base's workspace",
             cites: &["S47", "137", "138", "64"],
             run: s47_the_last_place_on_a_base,
@@ -285,6 +290,44 @@ fn a_scripted_refusal(_: &()) -> Outcome {
         vec![format!("remove {}", id.0)],
         "the removes"
     );
+    Ok(())
+}
+
+fn a_place_read_gone(_: &()) -> Outcome {
+    // A place whose worktree its repository no longer holds may still
+    // leave something at its location: its remove clears it, and a
+    // refused remove keeps the place for the next tidy (62; record 0057).
+    let world = World::new();
+    let id = world.begun("notes", Some(Deliverable::Commits), "one")?;
+    world.place.vanish(&id.0);
+    world.place.fail_teardown(
+        &id.0,
+        "git worktree remove",
+        "what stands at the location could not be removed",
+    );
+    let tidy = match world.engine.done(&id, false) {
+        Answer::Acted {
+            tidy: Some(tidy), ..
+        } => tidy,
+        other => return Err(format!("the done answered {other:?}")),
+    };
+    ensure!(
+        matches!(tidy.kept.first().map(|kept| &kept.why), Some(Kept::Teardown { step, .. }) if step == "git worktree remove"),
+        "the gone place was not kept naming its remove: {tidy:?}"
+    );
+    ensure_eq!(
+        world.place.log.of("remove"),
+        vec![format!("remove {}", id.0)],
+        "the removes"
+    );
+    world.place.mend_teardown(&id.0);
+    let tidy = tidied(world.engine.tidy(Some(&id)))?;
+    ensure_eq!(
+        tidy.removed,
+        vec![id.clone()],
+        "the gone place once its remove passes"
+    );
+    ensure_eq!(world.place.log.count("remove"), 2, "removes");
     Ok(())
 }
 
