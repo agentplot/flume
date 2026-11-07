@@ -7,8 +7,8 @@
 use crate::status::waiting_on;
 use crate::Engine;
 use flume_seams::{
-    EndHeld, EndOf, HeldState, Over, Phase, PlaceId, Seconds, StageEnd, StageState, Verdict,
-    Versioned, Waiting, Waits, Written,
+    EndHeld, EndOf, HeldState, Over, Phase, PlaceId, Seconds, StageState, Verdict, Versioned,
+    Waiting, Waits, Written,
 };
 
 /// What an act decided of a place's held state.
@@ -139,7 +139,8 @@ fn record_ends(next: &mut HeldState, now: Seconds) {
             } else {
                 None
             },
-            end: stage.end.clone().unwrap_or_else(StageEnd::default),
+            answered: 0,
+            end: Box::new(stage.end.clone().unwrap_or_default()),
         });
     }
     let submit = next.submission.submits;
@@ -176,6 +177,7 @@ fn record_ends(next: &mut HeldState, now: Seconds) {
                 of,
                 read_at: now,
                 deliveries: vec![],
+                answer: None,
             });
         }
     }
@@ -226,6 +228,7 @@ pub(crate) fn read_stall(next: &mut HeldState, now: Seconds) {
             of,
             read_at: now,
             deliveries: vec![],
+            answer: None,
         });
     }
 }

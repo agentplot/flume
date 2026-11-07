@@ -391,7 +391,7 @@ fn a_repository_with_no_declaration_declares_no_kind() {
         KindsRead::Read {
             kinds: vec![],
             settings: Default::default(),
-            agents: Settings::default(),
+            agents: Box::default(),
         }
     );
     assert_eq!(
@@ -1119,7 +1119,7 @@ model = "sonnet"
         panic!("the launch's declaration did not read");
     };
     assert_eq!(
-        agents,
+        *agents,
         Settings::default(),
         "a launch's [agents] is not read"
     );

@@ -913,7 +913,7 @@ fn talks_lost_end(world: &World, id: &PlaceId) -> Result<(StageEnd, Vec<String>)
                 state: StageState::Lost,
                 end,
                 ..
-            } if stage == "talk" => Some(end.clone()),
+            } if stage == "talk" => Some(StageEnd::clone(end)),
             _ => None,
         })
         .ok_or("no lost end of talk is recorded")?;

@@ -186,6 +186,16 @@ pub struct WaitingOn {
     pub why: Waits,
     pub since: Option<Seconds>,
     pub words: Option<String>,
+    /// For an answer, the time the stage's agent is kept open for it
+    /// until, while it is; none for any other move, and in a move written
+    /// before (130, 198).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub open_until: Option<Seconds>,
+    /// For an answer, when and why the stage's agent kept open for it was
+    /// let go, once a settle recorded it; none for any other move, and in
+    /// a move written before (130, 198).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub closed: Option<SessionClosed>,
 }
 
 impl WaitingOn {
@@ -268,6 +278,63 @@ pub struct EndHeld {
     /// Each delivery of it, to whom, when and by what.
     #[serde(default)]
     pub deliveries: Vec<Delivery>,
+    /// For a stop-short needing an answer, the answer that answered it,
+    /// once one did; none for any other end, and in an end written before
+    /// (42).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answer: Option<AnswerHeld>,
+}
+
+/// An answer to a stop-short: the caller's words, the act they came by,
+/// when flume took them and, where they were handed to the session of the
+/// agent kept open for them, when they were sent and received there (42,
+/// 53, 54, 198).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnswerHeld {
+    pub words: String,
+    pub act: Act,
+    pub at: Seconds,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<Handed>,
+}
+
+/// An answer handed to the session of an agent kept open: when it was
+/// last sent, and when the agent's own record read it received (38, 54).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Handed {
+    pub sent_at: Seconds,
+    pub received_at: Seconds,
+}
+
+/// An agent kept open for its answer let go: when a settle read it so,
+/// why, when the agent was ended, none until it is, and whether an agent
+/// the terminal brought back bare was left in its conversation's pane,
+/// written only where one was (31, 77, 96, 134, 146, 198).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionClosed {
+    pub at: Seconds,
+    pub by: ClosedBy,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ended_at: Option<Seconds>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub left_in_pane: bool,
+}
+
+/// Why an agent kept open for its answer was let go: its time passed, its
+/// caller stopped it, it was read stopped, its session ended by its own
+/// record or an agent the terminal brought back bare stands in its pane,
+/// or its account was spent (51, 77, 96, 134, 146, 198).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClosedBy {
+    Time,
+    Stopped,
+    AgentEnded,
+    AccountSpent,
+}
+
+fn is_zero(count: &u32) -> bool {
+    *count == 0
 }
 
 impl EndHeld {
@@ -309,10 +376,17 @@ pub enum EndOf {
         /// For a stuck start, the first quiet reading it ran from (44).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         quiet_from: Option<Seconds>,
+        /// How many answers the start had taken in its session when the
+        /// end was read, so a stop-short after an answer is an end of its
+        /// own; zero, written by no field, for every other end and in an
+        /// end written before (42, 43).
+        #[serde(default, skip_serializing_if = "is_zero")]
+        answered: u32,
         /// What was read of it: the head or report, the agent's words and
         /// whether it needs an answer or found work, or what flume read of
-        /// an agent lost, never begun or stuck.
-        end: StageEnd,
+        /// an agent lost, never begun or stuck; boxed, so an end stays
+        /// small beside a submission's.
+        end: Box<StageEnd>,
     },
     Submission {
         /// The submit's number (48).
@@ -329,7 +403,9 @@ pub enum EndOf {
 }
 
 impl EndOf {
-    /// The end's key: what ended, without what was read of it.
+    /// The end's key: what ended, without what was read of it. A stage's
+    /// names the answers its start had taken only where there are some, so
+    /// every key written before reads as it did (43).
     pub fn key(&self) -> String {
         match self {
             EndOf::Stage {
@@ -337,11 +413,19 @@ impl EndOf {
                 start,
                 state,
                 quiet_from,
+                answered,
                 ..
-            } => format!(
-                "stage {stage} {start} {state:?} {}",
-                quiet_from.map(|at| at.to_string()).unwrap_or_default()
-            ),
+            } => {
+                let key = format!(
+                    "stage {stage} {start} {state:?} {}",
+                    quiet_from.map(|at| at.to_string()).unwrap_or_default()
+                );
+                if *answered == 0 {
+                    key
+                } else {
+                    format!("{key} {answered}")
+                }
+            }
             EndOf::Submission { submit, verdict } => {
                 let outcome = match verdict {
                     Verdict::Landed { .. } => "landed",
@@ -759,6 +843,16 @@ pub struct StageEnd {
     /// agent there, sent nothing (43, 77; core.10).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub left_in_pane: bool,
+    /// For a stop-short needing an answer whose agent was kept open for
+    /// it, the time it is kept open until: its stop-short's time and its
+    /// start's `keep_open`; none where it was not kept open, and in an end
+    /// written before (198).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub open_until: Option<Seconds>,
+    /// For an agent kept open, when and why a settle read it let go, once
+    /// one did (198).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub closed: Option<SessionClosed>,
 }
 
 /// One line a stage's run wrote of what it made (129): a JSON object
@@ -885,6 +979,11 @@ pub struct StartHeld {
     /// written before (56, 195, 196).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub own: Option<OwnHeld>,
+    /// How many answers its agent took in its session, each handed to it
+    /// while it was kept open; zero, written by no field, in a start
+    /// written before (42, 198).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub answered: u32,
 }
 
 /// A start's own settings beyond its keys: each file a layer named for

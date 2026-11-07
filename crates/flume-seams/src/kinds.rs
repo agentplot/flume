@@ -112,6 +112,12 @@ pub struct Settings {
     /// where the layer gives none, and in settings written before (195).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub programs: BTreeMap<String, ProgramSettings>,
+    /// How long the agent is kept open for an answer once it stops short,
+    /// flume's own time and passed to no program, as its layer wrote it,
+    /// `<n>`, `<n>s`, `<n>m` or `<n>h`; none where the layer gives none,
+    /// and in settings written before (32, 198).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_open: Option<String>,
 }
 
 /// One program's own settings as one table of a layer gives them, each
@@ -328,6 +334,7 @@ impl Settings {
             } else {
                 over.programs.clone()
             },
+            keep_open: over.keep_open.clone().or_else(|| self.keep_open.clone()),
         }
     }
 }
@@ -594,9 +601,10 @@ pub enum KindsRead {
         settings: BTreeMap<String, KindSettings>,
         /// The settings the repository gives every kind run in it, its
         /// own among them, by its `[agents]`; none where it gives none,
-        /// and in a read written before (32, 195, C.2).
+        /// and in a read written before (32, 195, C.2); boxed, so a read
+        /// stays small beside a refusal.
         #[serde(default)]
-        agents: Settings,
+        agents: Box<Settings>,
     },
     CouldNotRead {
         reason: String,

@@ -709,6 +709,7 @@ impl Engine {
                     files: own.files.clone(),
                     passed: None,
                 }),
+                answered: 0,
             });
             if !held
                 .terminals

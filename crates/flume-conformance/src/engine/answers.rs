@@ -88,6 +88,7 @@ fn settings() -> Settings {
         ]))),
         session: Some("review".into()),
         programs: BTreeMap::new(),
+        keep_open: None,
     }
 }
 
@@ -162,6 +163,8 @@ fn place_status() -> PlaceStatus {
             starts: 2,
             end: Some(StageEnd {
                 left_in_pane: true,
+                open_until: None,
+                closed: None,
                 head: Some(Revision::new("c3")),
                 report: Some("/s/conclusion.md".into()),
                 words: Some("which design?".into()),
@@ -293,6 +296,8 @@ fn place_status() -> PlaceStatus {
             why: Waits::Answer,
             since: Some(120),
             words: Some("which design?".into()),
+            open_until: None,
+            closed: None,
         }),
         stalled: true,
         waits_on_session: Some(SessionWait {
@@ -390,12 +395,13 @@ fn place_status() -> PlaceStatus {
                         start: 2,
                         state: StageState::EndedShort,
                         quiet_from: None,
-                        end: StageEnd {
+                        answered: 0,
+                        end: Box::new(StageEnd {
                             words: Some("which design?".into()),
                             needs: Some(StopKind::NeedsAnswer),
                             made: made(),
                             ..StageEnd::default()
-                        },
+                        }),
                     },
                     read_at: 110,
                     deliveries: vec![Delivery {
@@ -403,6 +409,7 @@ fn place_status() -> PlaceStatus {
                         at: 111,
                         by: DeliveredBy::Notice,
                     }],
+                    answer: None,
                 },
                 pending_for: vec![],
             },
@@ -414,6 +421,7 @@ fn place_status() -> PlaceStatus {
                     },
                     read_at: 420,
                     deliveries: vec![],
+                    answer: None,
                 },
                 pending_for: vec!["operator".into()],
             },
@@ -429,6 +437,7 @@ fn place_status() -> PlaceStatus {
                     },
                     read_at: 130,
                     deliveries: vec![],
+                    answer: None,
                 },
                 pending_for: vec!["operator".into()],
             },

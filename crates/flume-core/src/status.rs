@@ -526,6 +526,8 @@ pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
             why,
             since,
             words,
+            open_until: None,
+            closed: None,
         })
     };
     let submission = &held.submission;

@@ -2766,13 +2766,15 @@ mod tests {
                     start: 1,
                     state: StageState::Lost,
                     quiet_from: None,
-                    end: StageEnd {
+                    answered: 0,
+                    end: Box::new(StageEnd {
                         left_in_pane: true,
                         ..StageEnd::default()
-                    },
+                    }),
                 },
                 read_at: 54_000,
                 deliveries: vec![],
+                answer: None,
             },
             pending_for: vec!["ops".into()],
         };
@@ -3338,6 +3340,8 @@ mod tests {
             why: Waits::OnHold,
             since: Some(54_000),
             words: Some("Wait until the release is cut.".into()),
+            open_until: None,
+            closed: None,
         };
         assert_eq!(
             waiting_line(&held, false),
@@ -3366,6 +3370,8 @@ mod tests {
                 "New MCP server found in .mcp.json: docs\n\u{1b}[1m\u{276f} 1. Use this and all future MCP servers\u{1b}[0m"
                     .into(),
             ),
+            open_until: None,
+            closed: None,
         };
         assert_eq!(
             waiting_line(&dialog, false),

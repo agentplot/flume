@@ -773,6 +773,8 @@ fn waiting_on_an_answer(_: &()) -> Outcome {
             why: Waits::Answer,
             since: Some(asked),
             words: Some(question.into()),
+            open_until: None,
+            closed: None,
         }),
         "the move the place waits on"
     );
