@@ -7,8 +7,8 @@
 use crate::status::waiting_on;
 use crate::Engine;
 use flume_seams::{
-    Act, EndHeld, EndOf, HeldState, Over, Phase, PlaceId, Seconds, StageState, StopShortWaited,
-    Verdict, Versioned, Waiting, WaitingOn, Waits, Written,
+    Act, EndHeld, EndOf, HeldState, HoldOn, Over, Phase, PlaceId, Seconds, StageState,
+    StopShortWaited, Verdict, Versioned, Waiting, WaitingOn, Waits, Written,
 };
 
 /// What an act decided of a place's held state.
@@ -184,9 +184,16 @@ fn record_ends(next: &mut HeldState, now: Seconds) {
 /// Reads, from the held state alone, the move the place waits on its
 /// caller for: a move read for the first time is kept with since when
 /// it stood so, the same move keeps its since and whether it stalled,
-/// and none clears it (56, 130; design 5).
+/// and none clears it; a hold on the move ends once the place waits on
+/// another move or none, the move made (56, 130; design 5, 7).
 pub(crate) fn refresh_waiting(next: &mut HeldState, now: Seconds) {
-    next.waiting = waiting_on(next).map(|mut on| match &next.waiting {
+    let was = next.waiting.take();
+    let moved = |now: &Option<Waiting>| match (&was, now) {
+        (Some(was), Some(now)) => !was.on.same_move(&now.on),
+        (Some(_), None) => true,
+        (None, _) => false,
+    };
+    next.waiting = waiting_on(next).map(|mut on| match &was {
         Some(was) if was.on.same_move(&on) => {
             on.since = was.on.since;
             Waiting {
@@ -199,17 +206,24 @@ pub(crate) fn refresh_waiting(next: &mut HeldState, now: Seconds) {
             Waiting { on, stalled: false }
         }
     });
+    if moved(&next.waiting) {
+        next.holds.retain(|hold| hold.on != HoldOn::Waiting);
+    }
 }
 
 /// Reads the place stalled where it has waited on its caller under no
 /// hold's words for its bound, recording the stall as an end once, with
 /// the stop-short the place waits on, to be delivered to each recipient,
 /// to the role that stop-short named and to the answerer `answerer` reads
-/// of the place as the stall is recorded (43, 130, 193; core.24). A stall
-/// an earlier flume recorded, which read neither, is read for them at the
-/// first settle that reads it while the place still waits so, and
-/// delivered as a new stall would be. A hold with words never stalls, and
-/// a stage waiting for room is no move of its caller's (70).
+/// of the place as the stall is recorded (43, 130, 193; core.24). A hold
+/// on the waiting move holds it from stalling until its bound passes:
+/// the settle that reads it passed lapses it, recorded with when, and
+/// stalls the place again at once, its stall naming the lapsed hold's
+/// words. A stall an earlier flume recorded, which read neither the
+/// answerer nor the stop-short, is read for them at the first settle that
+/// reads it while the place still waits so, and delivered as a new stall
+/// would be. A hold with words never stalls, and a stage waiting for room
+/// is no move of its caller's (70).
 pub(crate) fn read_stall(
     next: &mut HeldState,
     now: Seconds,
@@ -219,21 +233,35 @@ pub(crate) fn read_stall(
     let Some(waiting) = &next.waiting else {
         return;
     };
-    let held = waiting.on.why == Waits::OnHold && waiting.on.words.is_some();
-    let since = waiting.on.since.unwrap_or(now);
-    if held {
+    if waiting.on.why == Waits::OnHold && waiting.on.words.is_some() {
         return;
     }
-    if waiting.stalled {
+    let mut since = waiting.on.since.unwrap_or(now);
+    let mut lapsed = None;
+    if let Some(hold) = next.waiting_hold() {
+        match hold.bound {
+            Some(bound) if now.saturating_sub(hold.since) >= bound => {
+                lapsed = Some(hold.words.clone().unwrap_or_default());
+                since = now;
+            }
+            _ => return,
+        }
+    } else if waiting.stalled {
         read_earlier_stall(next, since, answerer);
         return;
-    }
-    if now.saturating_sub(since) < next.stall_after {
+    } else if now.saturating_sub(since) < next.stall_after {
         return;
     }
     let words = waiting.on.move_words();
     let stop_short = stop_short_waited(next, &waiting.on);
     let answerer = answerer(next);
+    if lapsed.is_some() {
+        for hold in &mut next.holds {
+            if hold.on == HoldOn::Waiting && hold.lapsed.is_none() {
+                hold.lapsed = Some(now);
+            }
+        }
+    }
     if let Some(waiting) = &mut next.waiting {
         waiting.stalled = true;
     }
@@ -243,6 +271,7 @@ pub(crate) fn read_stall(
         answerer,
         stop_short: stop_short.map(Box::new),
         answerer_read: true,
+        lapsed,
     };
     if !next.ends.iter().any(|end| end.same(&of)) {
         next.ends.push(EndHeld {

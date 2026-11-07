@@ -42,8 +42,11 @@ pub struct HeldState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
     /// Each hold on a stage or the submission, the launch's and those put
-    /// after it, with its words and since when; a retry naming its stage
-    /// or the submission ends it, and nothing else does (47, 49, 130).
+    /// after it, with its words and since when, a retry naming its stage
+    /// or the submission ending it and nothing else; and the hold on the
+    /// move the place waits on, with its words, since when and its bound,
+    /// ended by the move made, a retry or a drop, and lapsed at its bound
+    /// (47, 49, 52, 130).
     #[serde(default)]
     pub holds: Vec<Hold>,
     /// The move the place waits on its caller for, since when, and
@@ -140,10 +143,19 @@ impl HeldState {
     pub fn submission_hold(&self) -> Option<&Hold> {
         self.holds.iter().find(|hold| hold.on == HoldOn::Submission)
     }
+
+    /// The hold on the move the place waits on, if it is held and has not
+    /// lapsed (130).
+    pub fn waiting_hold(&self) -> Option<&Hold> {
+        self.holds
+            .iter()
+            .find(|hold| hold.on == HoldOn::Waiting && hold.lapsed.is_none())
+    }
 }
 
-/// A hold on a stage or the submission, with its caller's words and
-/// since when (47, 130).
+/// A hold on a stage, the submission or the move the place waits on, with
+/// its caller's words and since when, and, on the waiting move, its bound
+/// and when it lapsed (47, 130).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hold {
     #[serde(flatten)]
@@ -153,14 +165,24 @@ pub struct Hold {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub words: Option<String>,
     pub since: Seconds,
+    /// For a hold on the waiting move, how long it holds from its since,
+    /// none where it holds until the move is made (130).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bound: Option<Seconds>,
+    /// When the settle that read its bound passed lapsed it, after which it
+    /// holds nothing and the place stalls again (130).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lapsed: Option<Seconds>,
 }
 
-/// What a hold holds: a stage, or the submission (47).
+/// What a hold holds: a stage, the submission (47), or the move the place
+/// waits on its caller for (130).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "on", rename_all = "snake_case")]
 pub enum HoldOn {
     Stage { stage: String },
     Submission,
+    Waiting,
 }
 
 /// The move a place waits on its caller for, as the settle last read it,
@@ -360,7 +382,8 @@ pub enum EndOf {
         verdict: Verdict,
     },
     Stall {
-        /// Since when the place waited on its caller (130).
+        /// Since when the place waited on its caller under no hold's
+        /// words: since the move, or since the hold on it lapsed (130).
         since: Seconds,
         /// The move it waits on.
         waiting: String,
@@ -384,6 +407,11 @@ pub enum EndOf {
         /// (130, 193).
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         answerer_read: bool,
+        /// The words of the hold on the waiting move whose bound passed,
+        /// stalling the place again; none for a stall under no hold
+        /// (130, 193).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        lapsed: Option<String>,
     },
 }
 

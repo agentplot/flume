@@ -981,6 +981,8 @@ fn launch_holds(launch: &Launch, now: Seconds) -> Vec<Hold> {
             },
             words: launch.hold_words.get(stage).cloned(),
             since: now,
+            bound: None,
+            lapsed: None,
         })
         .collect();
     if launch.hold_submission {
@@ -988,6 +990,8 @@ fn launch_holds(launch: &Launch, now: Seconds) -> Vec<Hold> {
             on: HoldOn::Submission,
             words: None,
             since: now,
+            bound: None,
+            lapsed: None,
         });
     }
     holds

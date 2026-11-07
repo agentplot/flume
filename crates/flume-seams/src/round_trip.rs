@@ -544,11 +544,22 @@ fn holds_put() -> Vec<Hold> {
             },
             words: Some("until the design is ruled".into()),
             since: 10,
+            bound: None,
+            lapsed: None,
         },
         Hold {
             on: HoldOn::Submission,
             words: None,
             since: 10,
+            bound: None,
+            lapsed: None,
+        },
+        Hold {
+            on: HoldOn::Waiting,
+            words: Some("passed to east/design".into()),
+            since: 40,
+            bound: Some(3600),
+            lapsed: Some(3640),
         },
     ]
 }
@@ -624,6 +635,7 @@ fn ends() -> Vec<EndHeld> {
                     addressee: Some("west/ops".into()),
                 })),
                 answerer_read: true,
+                lapsed: Some("east-planner has it".into()),
             },
             read_at: 490,
             deliveries: vec![],
@@ -721,11 +733,16 @@ fn holds_the_waiting_move_and_the_stall_bound() {
         serde_json::json!([
             {"on": "stage", "stage": "review", "words": "until the design is ruled", "since": 10},
             {"on": "submission", "since": 10},
+            {"on": "waiting", "words": "passed to east/design", "since": 40, "bound": 3600, "lapsed": 3640},
         ])
     );
     assert_eq!(held.hold_on("review"), Some(&held.holds[0]));
     assert_eq!(held.hold_on("code"), None);
     assert_eq!(held.submission_hold(), Some(&held.holds[1]));
+    assert_eq!(held.waiting_hold(), None, "a lapsed hold holds nothing");
+    let mut holding = held.clone();
+    holding.holds[2].lapsed = None;
+    assert_eq!(holding.waiting_hold(), Some(&holding.holds[2]));
     let mut value = serde_json::to_value(&held).unwrap();
     for field in ["holds", "waiting", "stall_after"] {
         value.as_object_mut().unwrap().remove(field);
@@ -2605,6 +2622,7 @@ fn a_stalls_answerer_beside_the_places_recipients() {
             answerer: None,
             stop_short: None,
             answerer_read: false,
+            lapsed: None,
         }
     );
     assert_eq!(

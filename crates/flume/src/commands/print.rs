@@ -354,6 +354,7 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         let what = match &hold.on {
             HoldOn::Stage { stage } => stage.as_str(),
             HoldOn::Submission => "the submission",
+            HoldOn::Waiting => "the move it waits on",
         };
         let mut line = format!("  {what} on hold since {}", hold.since);
         if let Some(words) = &hold.words {

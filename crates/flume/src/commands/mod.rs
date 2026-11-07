@@ -539,7 +539,7 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
                 },
                 None => HoldOn::Submission,
             };
-            build()?.hold(&place, on, words)
+            build()?.hold(&place, on, words, None)
         }
         Command::Tidy { place } => {
             let place = maybe(place)?;

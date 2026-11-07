@@ -5,7 +5,9 @@
 //! (31); a retry ends none whose stage it started or began under, so it
 //! never ends a working session (35, 50).
 
+use crate::held::refresh_waiting;
 use crate::start::{Start, Starts};
+use crate::status::waiting_on;
 use crate::{Act, Answer, Engine, Step, Tidied, POLL, RECEIVED_WITHIN, TELL_BOUND};
 use flume_seams::*;
 
@@ -191,7 +193,8 @@ impl Engine {
             None => HoldOn::Submission,
         };
         self.update(place, |held| {
-            held.holds.retain(|hold| hold.on != ends);
+            held.holds
+                .retain(|hold| hold.on != ends && hold.on != HoldOn::Waiting);
             Step::Write(())
         });
         let Some(index) = index else {
@@ -287,12 +290,28 @@ impl Engine {
     /// submission made and undecided, a hold already put, or a place
     /// whose work is over. Only a retry naming it ends it (8, 47, 49,
     /// 130; core.24).
-    pub fn hold(&self, place: &PlaceId, on: HoldOn, words: &str) -> Answer {
+    ///
+    /// Or holds the move the place waits on its caller for, with the
+    /// caller's words and the `bound` it holds for, none holding until the
+    /// move is made: a later hold on the move replaces the words, the
+    /// bound and since when, the place is not stalled while it holds, and
+    /// the move made, a retry or a drop ends it; refused on a place that
+    /// waits on no move of its caller's. A bound is the waiting move's
+    /// alone (47, 49, 52, 130; core.24).
+    pub fn hold(&self, place: &PlaceId, on: HoldOn, words: &str, bound: Option<Seconds>) -> Answer {
         self.settle_attended();
         let now = self.host.now();
         let refused = self.update(place, |held| {
             if held.phase != Phase::Live {
                 return Step::Keep(Some(format!("the work of the place {place} is over")));
+            }
+            if on == HoldOn::Waiting {
+                return hold_waiting(held, place, words, bound, now);
+            }
+            if bound.is_some() {
+                return Step::Keep(Some(
+                    "a bound is given only to a hold on the move the place waits on".into(),
+                ));
             }
             let index = match &on {
                 HoldOn::Stage { stage } => {
@@ -310,12 +329,13 @@ impl Engine {
                         "the place {place}'s kind does not land, so it has no submission"
                     )))
                 }
-                HoldOn::Submission => None,
+                HoldOn::Submission | HoldOn::Waiting => None,
             };
             if let Some(hold) = held.holds.iter().find(|hold| hold.on == on) {
                 let what = match &on {
                     HoldOn::Stage { stage } => format!("the stage {stage}"),
                     HoldOn::Submission => "the submission".into(),
+                    HoldOn::Waiting => "the move it waits on".into(),
                 };
                 return Step::Keep(Some(format!(
                     "{what} of the place {place} is on hold already, since {}",
@@ -359,6 +379,8 @@ impl Engine {
                 on: on.clone(),
                 words: Some(words.to_string()),
                 since: now,
+                bound: None,
+                lapsed: None,
             });
             Step::Write(None)
         });
@@ -618,4 +640,35 @@ fn only(tidy: Tidied, place: &PlaceId) -> Tidied {
             .filter(|tidied| &tidied.place == place)
             .collect(),
     }
+}
+
+/// Holds the move the place waits on its caller for with `words`, for
+/// `bound` where given, in place of any hold on it before, lapsed or not,
+/// the place no longer stalled; refused, naming the place, where it waits
+/// on no move of its caller's (130).
+fn hold_waiting(
+    held: &mut HeldState,
+    place: &PlaceId,
+    words: &str,
+    bound: Option<Seconds>,
+    now: Seconds,
+) -> Step<Option<String>> {
+    if waiting_on(held).is_none() {
+        return Step::Keep(Some(format!(
+            "the place {place} waits on no move of its caller's"
+        )));
+    }
+    refresh_waiting(held, now);
+    held.holds.retain(|hold| hold.on != HoldOn::Waiting);
+    held.holds.push(Hold {
+        on: HoldOn::Waiting,
+        words: Some(words.to_string()),
+        since: now,
+        bound,
+        lapsed: None,
+    });
+    if let Some(waiting) = &mut held.waiting {
+        waiting.stalled = false;
+    }
+    Step::Write(None)
 }
