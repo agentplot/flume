@@ -11,7 +11,7 @@ change this list in the commit that adopts it.
 #### Scenario: The clauses listed
 
 - **WHEN** the suite's list is read
-- **THEN** it names the revision of agentplot/blueprints main that holds record 0039's amendment and states 193, S93, S94, S98 and S99, or the later one the build read; Part A holds what main's list holds when this change builds, and 193; Part B holds what main's list holds then; the scenarios run S1 to S108 as that revision holds them, or to the last a later one holds; and it names as unbuilt what main's list names then, each with its change, and nothing of this change's
+- **THEN** it names the revision of agentplot/blueprints main that holds record 0039's amendment, 193 and S93, S94, S98 and S99 among it, 9c060ab or the later one of main the build read; Parts A and B hold every clause that revision states, 193 in Part A; the scenarios run as that revision holds them, S93, S94, S98 and S99 among them; and it names as unbuilt what it named before this change but 193, S93, S94, S98 and S99, and each clause and scenario of that revision another change has not yet built, by that change, and nothing of 193, S93, S94, S98 and S99, 202 to 206 and 208, S109 to S112 and S118, 198, S104 and S105, 197 and S103, or 207 and S113 to S117, whose changes have landed
 
 ### Requirement: A clause cited by nothing fails the suite
 
@@ -28,4 +28,4 @@ and SHALL fail naming any of those a scenario cites.
 #### Scenario: The suite as this change leaves it
 
 - **WHEN** the coverage check runs over the suite as this change lands it
-- **THEN** it passes: every clause of Parts A and B, I1 to I8 and every scenario of section 11 but those named as unbuilt is cited, 193, S93, S94, S98 and S99 by this change's engine scenarios
+- **THEN** it passes: every clause of Parts A and B, I1 to I8 and every scenario the list holds but those named as unbuilt is cited, 193, S93, S94, S98 and S99 by this change's engine scenarios

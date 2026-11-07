@@ -443,7 +443,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 ## 11. Coverage and the gate
 
-- [ ] 11.1 Have the suite's clause list read the statement at the
+- [x] 11.1 Have the suite's clause list read the statement at the
   revision of agentplot/blueprints main that holds record 0039's
   amendment, Part A with 193 and the scenarios to S118. Have 193, S93,
   S94, S98 and S99 cited by this change's scenarios, and nothing of this
