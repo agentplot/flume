@@ -1,19 +1,37 @@
 #!/bin/sh
-# shellcheck disable=SC1091,SC2154,SC2016 # common.sh, sourced, sets state and status; jq programs.
-# The popup: every place in flight, drawn from the status the watch last
-# wrote, each its number and its line, the status line's words, with its
-# location beneath (56, 60; S14), and the keys that act on one: open
-# focuses its tab, tell, stop and retry each run one flume command, the
-# words or the force asked for first (53, 56, 60, 107; core.14). No key
-# sends to, opens or closes an agent's pane. Each key acts at once, as
-# sluice's popup's do: the arrows, j and k or a number choose a place,
-# o, t, s or r act on it, q or Escape closes; only words are read as a
-# line.
+# shellcheck disable=SC1091,SC2154,SC2016 # common.sh, sourced, sets state; jq programs.
+# The popup: every place in flight, drawn from `flume status --json`,
+# read once when a person opens it and again after each key that runs a
+# flume command, never on a timer (56, 60, 122): each place its number
+# and its line, the status line's words, with its location beneath (S14),
+# and the keys that act on one: open focuses its tab, tell, stop and
+# retry each run one flume command, the words or the force asked for
+# first (53, 56, 60, 107; core.14). No key sends to, opens or closes an
+# agent's pane. Each key acts at once, as sluice's popup's do: the
+# arrows, j and k or a number choose a place, o, t, s or r act on it, q
+# or Escape closes; only words are read as a line. A second with no key
+# redraws from the answer last read.
 set -u
 . "$(dirname "$0")/../lib/common.sh"
 
 sel=1
 note=
+# The answer this popup last read, its own.
+status=$state/popup.$$.json
+unread=
+
+# `flume status --json`, read into the popup's answer; why not, where it
+# could not be read.
+read_status() {
+  if flume status --json 2>"$status.err" | put "$status.new" && jq -e .status "$status.new" >/dev/null 2>&1; then
+    mv -f "$status.new" "$status"
+    unread=
+  else
+    rm -f "$status.new"
+    unread="flume status gave no status: $(tail -1 "$status.err" 2>/dev/null)"
+  fi
+  rm -f "$status.err"
+}
 
 count() {
   jq -r '.status.places | length' "$status" 2>/dev/null || echo 0
@@ -22,7 +40,7 @@ count() {
 draw() {
   [ -t 0 ] && printf '\033[H\033[2J'
   if [ ! -f "$status" ]; then
-    echo "flume: no status yet; the watch writes it at its next settle."
+    echo "flume: ${unread:-no status}"
   else
     n=$(count)
     [ "$sel" -le "$n" ] || sel=$n
@@ -34,10 +52,12 @@ draw() {
   fi
   echo
   echo "↑↓, j/k or a number to choose · o open · t tell · s stop · r retry · q close"
+  [ -n "$unread" ] && [ -f "$status" ] && printf '%s\n' "$unread"
   [ -n "$note" ] && printf '%s\n' "$note"
+  return 0
 }
 
-# Field $2 of the place numbered $1, as status gives it.
+# Field $2 of the place numbered $1, as the status read gives it.
 field() {
   jq -r --argjson n "$1" ".status.places[\$n - 1]$2 // empty" "$status" 2>/dev/null
 }
@@ -92,11 +112,13 @@ act() {
     ask "words for its agent:"
     [ -n "$answer" ] || return
     flume tell "$place" "$answer" 2>&1
+    echo "$acted" >"$acts"
     ;;
   s)
     force=$(forced)
     # shellcheck disable=SC2086 # --force or nothing.
     flume stop "$place" $force 2>&1
+    echo "$acted" >"$acts"
     ;;
   r)
     stage=$(field "$n" .current)
@@ -109,6 +131,7 @@ act() {
     else
       flume retry "$place" --stage "$stage" $force 2>&1
     fi
+    echo "$acted" >"$acts"
     ;;
   esac
 }
@@ -123,16 +146,23 @@ key() {
   printf '%s' "${k%.}"
 }
 
+# A key's flume command marks it ran here, since act runs in a
+# subshell whose words are the note.
+acts=$state/popup.$$.acted
+acted=1
 if [ -t 0 ]; then
   saved=$(stty -g)
-  trap 'stty "$saved" 2>/dev/null; printf "\033[?1049l\033[?25h"' EXIT
+  trap 'stty "$saved" 2>/dev/null; printf "\033[?1049l\033[?25h"; rm -f "$status" "$acts"' EXIT
   trap 'exit 0' INT TERM HUP
   # The alternate screen, so closing leaves the pane as it was.
   printf '\033[?1049h'
   raw
+else
+  trap 'rm -f "$status" "$acts"' EXIT
 fi
 
 esc=$(printf '\033')
+read_status
 draw
 while :; do
   key=$(key)
@@ -179,7 +209,12 @@ while :; do
     fi
     ;;
   o | t | s | r)
+    rm -f "$acts"
     note=$(act "$sel" "$key")
+    if [ -f "$acts" ]; then
+      rm -f "$acts"
+      read_status
+    fi
     ;;
   esac
   draw

@@ -1,7 +1,7 @@
 $schema: 'https://moonrepo.dev/schemas/project.json'
 
-# flume's herdr plugin (design 10): POSIX sh scripts with jq, its watch
-# on herdr's server, its sidebar rows and popup. Each check is one task
+# flume's herdr plugin (C.5): POSIX sh scripts with jq, its startup on
+# herdr's server and its popup. Each check is one task
 # (core.21): the manifest, the lint and the tests in the fast layer; the
 # plugin linked into the pinned herdr in the tools layer.
 language: 'bash'
@@ -18,7 +18,7 @@ tasks:
   # shellcheck over every script, the stand-ins among them, by the pinned
   # shellcheck.
   lint:
-    command: 'shellcheck -x bin/watch.sh bin/places.sh bin/open.sh lib/common.sh lib/lease.sh lib/procs.sh tests/run.sh tests/test.sh tests/manifest.sh tests/install.sh tests/fake/herdr tests/fake/flume'
+    command: 'shellcheck -x bin/startup.sh bin/places.sh bin/open.sh lib/common.sh lib/procs.sh tests/run.sh tests/test.sh tests/manifest.sh tests/install.sh tests/fake/herdr tests/fake/flume'
     inputs: ['bin/**/*', 'lib/**/*', 'tests/**/*', '/devenv.nix', '/devenv.lock', '/.prototools']
     tags: [check-fast]
   # The scripts against stand-in herdr and flume on PATH, under the

@@ -5,7 +5,9 @@
 //! (31); a retry ends none whose stage it started or began under, so it
 //! never ends a working session (35, 50).
 
+use crate::base::base_place;
 use crate::held::refresh_waiting;
+use crate::launch::and_list;
 use crate::open_sessions::waits_on_answer;
 use crate::start::{Start, Starts};
 use crate::status::waiting_on;
@@ -192,6 +194,24 @@ impl Engine {
         if held.phase != Phase::Live {
             return Answer::refused(format!("the work of the place {place} is over"));
         }
+        // A base place has no stage, and its submission waits on the
+        // places on its branch, which land there first (49, 203).
+        if base_place(&held.place.kind) {
+            if target != Retry::Submission {
+                return Answer::refused(format!(
+                    "the base place {place} has no stage; a retry names its submission"
+                ));
+            }
+            let on_branch = self.on_branch(&held.place);
+            if !on_branch.is_empty() {
+                return Answer::refused(format!(
+                    "the base place {place} is submitted once no place on its branch {} is live, and {} {} (203)",
+                    held.place.branch,
+                    and_list(on_branch.iter().map(ToString::to_string).collect()),
+                    if on_branch.len() == 1 { "is" } else { "are" }
+                ));
+            }
+        }
         let index = match &target {
             Retry::Current => Some(held.current.unwrap_or(0)),
             Retry::Stage(name) => match held.stages.iter().position(|stage| &stage.name == name) {
@@ -211,7 +231,8 @@ impl Engine {
         if let Some(key) = &answering.key {
             let stage =
                 Some(index.map_or("the submission", |index| held.stages[index].name.as_str()));
-            if let Err(reason) = keyed(&held, place, key, stage, words.is_some()) {
+            let on_branch = self.on_branch_count(&held);
+            if let Err(reason) = keyed(&held, on_branch, place, key, stage, words.is_some()) {
                 return Answer::refused(reason);
             }
         }
@@ -387,7 +408,8 @@ impl Engine {
                 return Step::Keep(Some(format!("the work of the place {place} is over")));
             }
             if on == HoldOn::Waiting {
-                return hold_waiting(held, place, words, bound, now);
+                let on_branch = self.on_branch_count(held);
+                return hold_waiting(held, on_branch, place, words, bound, now);
             }
             if bound.is_some() {
                 return Step::Keep(Some(
@@ -489,8 +511,25 @@ impl Engine {
     }
 
     /// Gives up the place's work: its agent ended, nothing more started,
-    /// and the place tidied (52, 63).
+    /// and the place tidied (52, 63); a base place's refused while a
+    /// place on its branch is live, since those land there and are
+    /// dropped first (204).
     pub fn drop_place(&self, place: &PlaceId, force: bool) -> Answer {
+        if let Some(read) = self.store.read(place) {
+            let held = read.state;
+            if base_place(&held.place.kind) && held.phase == Phase::Live {
+                let on_branch = self.on_branch(&held.place);
+                if !on_branch.is_empty() {
+                    return Answer::refused(format!(
+                        "the base place {place}'s branch {} is the base of {}, which {} live; drop {} first (52, 204)",
+                        held.place.branch,
+                        and_list(on_branch.iter().map(ToString::to_string).collect()),
+                        if on_branch.len() == 1 { "is" } else { "are" },
+                        if on_branch.len() == 1 { "it" } else { "them" }
+                    ));
+                }
+            }
+        }
         let live = self
             .store
             .read(place)
@@ -634,7 +673,8 @@ impl Engine {
             return Answer::refused(format!("no place {place} stands on this host"));
         };
         if let Some(key) = &answering.key {
-            if let Err(reason) = keyed(&read.state, place, key, None, true) {
+            let on_branch = self.on_branch_count(&read.state);
+            if let Err(reason) = keyed(&read.state, on_branch, place, key, None, true) {
                 return Answer::refused(reason);
             }
         }
@@ -778,6 +818,7 @@ pub(crate) fn waited_key(held: &HeldState) -> Option<EndKey> {
 /// now (42, 49, 53).
 fn keyed(
     held: &HeldState,
+    on_branch: Option<usize>,
     place: &PlaceId,
     key: &EndKey,
     stage: Option<&str>,
@@ -789,7 +830,7 @@ fn keyed(
         .find(|end| end.of.end_key() == *key)
         .and_then(|end| end.answer.as_ref());
     if taken.is_some() || waited_key(held).as_ref() != Some(key) {
-        let now = match waiting_on(held) {
+        let now = match waiting_on(held, on_branch) {
             Some(waiting) => format!("it waits on {} now", waiting.move_words()),
             None => "it waits on no move of its caller's now".to_string(),
         };
@@ -874,17 +915,18 @@ fn only(tidy: Tidied, place: &PlaceId) -> Tidied {
 /// on no move of its caller's (130).
 fn hold_waiting(
     held: &mut HeldState,
+    on_branch: Option<usize>,
     place: &PlaceId,
     words: &str,
     bound: Option<Seconds>,
     now: Seconds,
 ) -> Step<Option<String>> {
-    if waiting_on(held).is_none() {
+    if waiting_on(held, on_branch).is_none() {
         return Step::Keep(Some(format!(
             "the place {place} waits on no move of its caller's"
         )));
     }
-    refresh_waiting(held, now);
+    refresh_waiting(held, now, on_branch);
     held.holds.retain(|hold| hold.on != HoldOn::Waiting);
     held.holds.push(Hold {
         on: HoldOn::Waiting,

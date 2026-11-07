@@ -22,7 +22,15 @@
 //! status, and decides nothing of the place unless it is the place's
 //! base, where its submission is: the record and the inbox of every other
 //! branch are read and acted on still (15, 68, 99, 133).
+//!
+//! A base place's submission is made only by its caller's retry, its
+//! branch submitted by name at the revision where the merge queue says
+//! it lives, from the repository with no worktree; its outcomes are read
+//! from the merge queue's record of its branch alone, never an inbox, and
+//! a failure or a conflict starts nothing: the place waits on its caller
+//! with the merge queue's words (47, 111, 112, 117, 133, 203; core.6).
 
+use crate::base::base_place;
 use crate::start::Starts;
 use crate::{Engine, Step};
 use flume_seams::*;
@@ -40,7 +48,8 @@ impl Engine {
         };
         let id = &place.id;
         let ours = &held.submission;
-        if ours.submits > 0 && self.collect(id, queue.as_ref(), &place.place_ref()) {
+        let base = base_place(&place.kind);
+        if ours.submits > 0 && !base && self.collect(id, queue.as_ref(), &place.place_ref()) {
             return true;
         }
         match own_read(
@@ -63,6 +72,20 @@ impl Engine {
                 {
                     self.verdict(id, Verdict::Withdrawn);
                     true
+                }
+                // A base place's failure or conflict is read from the
+                // record, since no inbox gives an outcome of a submission
+                // by name (133, 203).
+                SubmissionState::Failed { .. } | SubmissionState::Conflict { .. }
+                    if base && is_ours(&held.submission, &submission) && ours.verdict.is_none() =>
+                {
+                    match recorded(queue.as_ref(), place, &submission.state) {
+                        Some(outcome) => {
+                            self.verdict(id, verdict_of(outcome));
+                            true
+                        }
+                        None => false,
+                    }
                 }
                 SubmissionState::Failed { .. } | SubmissionState::Conflict { .. }
                     if submission.request.is_some()
@@ -177,8 +200,11 @@ impl Engine {
     }
 
     /// Submits the place's branch at its head to its base, holding no
-    /// wait on the verdict (111, 117). A retry naming the submission
-    /// submits whether or not one is due (49).
+    /// wait on the verdict (111, 117): a base place's by its branch's
+    /// name, at the revision where the merge queue says the branch
+    /// lives, from the repository, and any other's from its worktree's
+    /// head (203). A retry naming the submission submits whether or not
+    /// one is due (49).
     pub(crate) fn submit(&self, id: &PlaceId, retried: bool) -> bool {
         let claimed = self.update(id, |held| {
             if held.phase != Phase::Live || !(retried || held.submission.due) {
@@ -200,10 +226,6 @@ impl Engine {
         let Some(queue) = self.bound(&place).ok().and_then(|bound| bound.merge_queue) else {
             return false;
         };
-        let head = self
-            .history
-            .head(&place.repository, &place.branch)
-            .unwrap_or_else(|| place.base_revision.clone());
         // The branch's newest entry now is never this submission, whose
         // entry is the one the submit makes, or the one an intake takes
         // its request in as later (99, 124).
@@ -213,6 +235,34 @@ impl Engine {
         ) {
             SubmissionRead::Found { submission } => Some(submission.id),
             SubmissionRead::None | SubmissionRead::CouldNotRead { .. } => None,
+        };
+        let head = if base_place(&place.kind) {
+            match self.base_place_head(&place, queue.as_ref()) {
+                Ok(revision) => SubmitHead::Branch {
+                    branch: place.branch.clone(),
+                    revision,
+                },
+                Err(reason) => {
+                    self.submitted(id, None, None, before);
+                    self.verdict(
+                        id,
+                        Verdict::Refused {
+                            reason: format!(
+                                "the head of {} could not be read: {reason}",
+                                place.branch
+                            ),
+                        },
+                    );
+                    return true;
+                }
+            }
+        } else {
+            SubmitHead::Worktree {
+                head: self
+                    .history
+                    .head(&place.repository, &place.branch)
+                    .unwrap_or_else(|| place.base_revision.clone()),
+            }
         };
         match queue.submit(&place.place_ref(), &head) {
             Submitted::Submitted { submission } => {
@@ -259,7 +309,9 @@ impl Engine {
 
     /// Acts on an outcome of the place's submission, or its refusal at
     /// submit: a failure or a conflict starts the kind's fix round with
-    /// the merge queue's words (112, 113, 131). A failure or a conflict
+    /// the merge queue's words, or, for a base place, which has no stage
+    /// to start, leaves it waiting on its caller with them, whose fix
+    /// lands through a place on its branch (36, 112, 113, 131, 203). A failure or a conflict
     /// is acted on once for the submission flume made, decided in the
     /// write itself: two settles that read it at once, or one that
     /// reads it again from the record or the inbox, find the verdict
@@ -303,6 +355,10 @@ impl Engine {
                 }
             };
             if held.phase != Phase::Live {
+                return Step::Write(None);
+            }
+            if base_place(&held.place.kind) {
+                held.submission.waiting = Some(format!("{cause}: {words}"));
                 return Step::Write(None);
             }
             Step::Write(fix_round(held, limit, cause, words))

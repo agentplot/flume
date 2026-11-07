@@ -26,7 +26,13 @@
 //! its kind, else `default`, and one the host does not declare, or whose
 //! multiplexer names a terminal profile flume does not carry, refuses
 //! the launch (4, 8, 143, 190); its intent is the launch's name, else its
-//! repository and base (147).
+//! repository and base (147). A base place, whose kind lands and has
+//! no stages, is launched as any place until its held state is written,
+//! and then has its branch opened by the merge queue and nothing else
+//! made: no worktree, no readiness and no start (202, 205); and a launch
+//! on the branch of a place that stands is refused unless that place is
+//! a base place whose submission is not open and whose work is not over
+//! (10, 204).
 
 use crate::own::Table;
 use crate::reading::reads_change;
@@ -524,10 +530,11 @@ impl Engine {
             .ok_or_else(|| format!("{repository} has no base {base}"))
     }
 
-    /// Refuses a kind that asks for more than flume runs (4, 23).
+    /// Refuses a kind that asks for more than flume runs (4, 23): a kind
+    /// with no stages runs only where it lands, as a base place's (202).
     fn runs(kind: &Kind, identity: &KindIdentity) -> Result<(), String> {
         let named = format!("the kind {identity}");
-        if kind.stages.is_empty() {
+        if kind.stages.is_empty() && !kind.lands {
             return Err(format!("{named} has no stage"));
         }
         for stage in &kind.stages {
@@ -581,6 +588,7 @@ impl Engine {
         } = self
             .bind(repository, &binding)
             .map_err(|reason| format!("{repository}'s binding: {reason}"))?;
+        self.on_a_places_branch(repository, &launch.base)?;
         let (base_revision, base_from) =
             self.base_now(repository, &launch.base, merge_queue.as_deref())?;
         let Resolved {
@@ -770,6 +778,9 @@ impl Engine {
         }
         if self.create(&held).is_none() {
             return Err(format!("the place {id} already stands"));
+        }
+        if let (true, Some(queue)) = (crate::base::base_place(&kind), &merge_queue) {
+            return self.open_base_place(&held, queue.as_ref());
         }
         let refused = match place_seam.make(repository, &base_revision, &branch, &location) {
             MakeOutcome::Made => None,

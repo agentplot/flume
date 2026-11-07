@@ -300,7 +300,10 @@ fn s105_the_agents_account_spent_within_the_hour_and_a_retry_answers() {
     // spent into the host's documents, as another agent reaching its limit
     // leaves it. The settle records the agent let go by its account and
     // ends it. A retry with the answer starts code on the pool's second
-    // account with the question and the answer, and the place lands.
+    // account with the question and the answer, and the place lands. Code's
+    // second start waits on a signal before it commits, so the test reads
+    // its agent's account while the agent is live: run straight through,
+    // it delivers and the place lands between two of the test's reads.
     let host = Walk::under_herdr("open-s105-spent");
     let second = host.account_folder("account-2");
     host.configure_whole(&format!(
@@ -310,7 +313,10 @@ fn s105_the_agents_account_spent_within_the_hour_and_a_retry_answers() {
         host.stand_in_account("stand-in-2", &second),
     ));
     host.script("code", 1, json!([[needs(WHICH)], []]));
-    host.script("code", 2, commits("notes.md\n"));
+    let go = host.signal("go");
+    let mut acts = vec![json!({ "wait_for": go })];
+    acts.extend(commits("notes.md\n").as_array().cloned().expect("the acts"));
+    host.script("code", 2, Value::Array(acts));
     let place = host.launch("fix", "one", &["--brief", "write the notes"]);
     let status = host.until(&place, "code waiting on its answer", |status| {
         waits_on(status, WHICH) && status["waiting_on"]["open_until"].is_u64()
@@ -347,6 +353,7 @@ fn s105_the_agents_account_spent_within_the_hour_and_a_retry_answers() {
         stage(status, "code")["starts"] == 2 && !status["agent"].is_null()
     });
     assert_eq!(status["agent"]["account"]["name"], "stand-in-2", "{status}");
+    std::fs::write(&go, "").expect("the signal");
     until_landed(&host, &place);
     assert_eq!(host.on_remote("notes.md").as_deref(), Some("notes.md\n"));
     let prompts = host.prompts("code", 2);

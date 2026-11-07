@@ -33,6 +33,10 @@ impl TerminalHarness for Harness {
         &self.seam
     }
 
+    fn shared(&self) -> Arc<dyn Terminal> {
+        Arc::new(self.seam)
+    }
+
     fn place(&self) -> PlaceRef {
         PlaceRef {
             repository: self.scratch.path("repository").to_string_lossy().into(),

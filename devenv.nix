@@ -316,11 +316,11 @@ let
   # loader and libgcc_s, on macOS libiconv, are store paths of the machine
   # that built them, set here to this tree's. Bump the version and the three
   # checksums from the release's assets.
-  sluiceVersion = "0.67.0";
+  sluiceVersion = "0.71.0";
   sluiceHashes = {
-    aarch64-darwin = "ea02ae38cd9d3b3023a39cb13ec28818fd0a665c1ca840aff257ba9ad2053942";
-    aarch64-linux = "00f40536c3ac91aba9e41196a8bbeb10306a63e08e469da84427ce791fe71718";
-    x86_64-linux = "13be60e2fdf9a4d3245e0a50dbb2534902311707bba58f90f770eedf5277504e";
+    aarch64-darwin = "7991d1f8fc607edca5582eca5307f9ba029e01723c55b32de0c120fde65b8aa6";
+    aarch64-linux = "a1da7963e99171d2f2b9a64a79367d3344a8022828650e8f505aa349552c4d6a";
+    x86_64-linux = "2b3efa38fa5f78d0e0b3d65de3342b0ced04d39c211bd98c10ddb5ae0e9a6d2e";
   };
   sluiceSystem = pkgs.stdenv.hostPlatform.system;
   sluice = pkgs.stdenv.mkDerivation {

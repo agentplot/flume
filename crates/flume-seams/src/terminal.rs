@@ -119,8 +119,9 @@ pub enum Closed {
     Refused { reason: String },
 }
 
-/// watch: the terminal settling its places on a bound it states, or no
-/// watch (122).
+/// A watch as status gives it: a caller settling every place on a bound
+/// it states, or none (61, 208). No terminal keeps one or settles: a
+/// terminal's answer in status gives its watch none (122).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Watch {
@@ -158,8 +159,10 @@ impl std::fmt::Display for BaseCount {
 }
 
 /// The clues show gives a terminal for a place: its current stage, that
-/// stage's state as a word, the agent the stage runs if one is live, and
-/// the count of the places on its base (139).
+/// stage's state as a word, the agent the stage runs if one is live, the
+/// count of the places on its base, and the short form of the place's
+/// line, `code 1/2 · run 1 · tasks 2/5 · working`, which a terminal shows
+/// beside the agent; none in clues written before (139).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Clues {
     pub stage: String,
@@ -167,6 +170,8 @@ pub struct Clues {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<crate::Identity>,
     pub base: BaseCount,
+    #[serde(default)]
+    pub line: String,
 }
 
 /// show: the clues shown, the terminal showing none, or a failure, which
@@ -185,8 +190,8 @@ pub enum Shown {
 /// none where it holds none; and each thing that holds the places of its
 /// repository on its base, one for each of the terminal's sessions that
 /// has one, none where it holds none and in an answer written before.
-/// Status gives them so a plugin of the terminal's refreshes the clues
-/// show gives, copying status (107, 139, C.5).
+/// Status gives them; the settle alone shows the clues, and a plugin of
+/// the terminal's copies none (107, 139, C.5).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ShownAt {
     #[serde(default)]
@@ -263,7 +268,10 @@ pub const NO_NAMED_AGENTS: &str = "the terminal holds no agent a name finds";
 
 /// The terminal seam (B.5), kept once for the host. The guarantee: open
 /// never runs a second agent under an identity already live, and close
-/// never reports an end that did not happen (98).
+/// never reports an end that did not happen (98). It offers no operation
+/// that settles, keeps watch over the host or answers a bound: whether
+/// flume runs attended is read from the host's watch alone (119, 122,
+/// 208).
 pub trait Terminal: Send + Sync {
     /// An agent running `command` in the place under `identity`, where
     /// `at` says, and carrying the session name `session`, a role run's
@@ -355,9 +363,6 @@ pub trait Terminal: Send + Sync {
     /// nothing of the terminal's program; none of each where it shows
     /// none (139).
     fn shown_at(&self, place: &crate::PlaceRef, agent: Option<&crate::Identity>) -> ShownAt;
-
-    /// The watch the terminal keeps, if any (122).
-    fn watch(&self) -> Watch;
 
     /// What the terminal's own configuration lacks for flume's plugin
     /// there, each in words a person acts on, which status gives when

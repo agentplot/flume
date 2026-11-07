@@ -1,9 +1,10 @@
 //! The display clues show gives a terminal (139): a place's current
-//! stage and that stage's state, and the count of the places of its
-//! repository on its base. The settle shows them, and status gives them
-//! with where the terminal shows them, so a plugin of the terminal's
-//! refreshes them by copying status and computing nothing (core.14). A
-//! clue is display only: nothing flume decides reads one back.
+//! stage and that stage's state, the count of the places of its
+//! repository on its base, and the short form of the place's line. The
+//! settle alone shows them, at each settle that changes one, and status
+//! gives them with where the terminal shows them; no plugin of a
+//! terminal's computes or copies one (core.14). A clue is display only:
+//! nothing flume decides reads one back.
 
 use crate::start::Starts;
 use crate::terminals::{add, Terminals};
@@ -15,7 +16,7 @@ impl Engine {
     /// The clues of a live place with a current stage, its agent's state
     /// read where `state` gives none, a repeating stage named with
     /// `group`'s place among the change's groups, `code 3/7`; none for any
-    /// other place.
+    /// other place. The base's count and the line are show's to give.
     pub(crate) fn clues(
         &self,
         held: &HeldState,
@@ -40,6 +41,7 @@ impl Engine {
             state,
             agent: agent.map(|start| start.identity.clone()),
             base: BaseCount::default(),
+            line: String::new(),
         })
     }
 

@@ -9,7 +9,9 @@
 //! source's listing, its packages and their hashes wherever they lie, the
 //! repository's lock at a revision, a lock written and read back, and the
 //! packages refused at another identity, naming a part outside them, an
-//! environment or a program by a location (155 to 160, 192; S63).
+//! environment or a program by a location (155 to 160, 192; S63); and a
+//! kind that lands with no stages beside one that does not and a table of
+//! settings (18, 202; weir 51, 57).
 
 use crate::common::engine::{base_at, engine, PLACE_PROFILE};
 use crate::common::*;
@@ -466,6 +468,57 @@ agents = [{ instructions = "keep it short" }]
         Some("keep it short"),
         "the stage's own beside the kind's"
     );
+}
+
+#[test]
+fn a_kind_that_lands_with_no_stages_beside_one_that_does_not_and_settings() {
+    // The kinds-profile spec's "Three tables over a scratch repository":
+    // weir's crate reads `stages = []` on a kind that lands as a kind with
+    // no stages, refuses it on one that does not, naming its stages, and
+    // reads a table that leaves `stages` out and holds `agents` alone as
+    // settings for a kind declared elsewhere, flume's own fix; a refusal
+    // refuses the declaration whole (18, 23, 57, 202; weir 51, 57; core.4).
+    let repository = Repository::new("no-stages");
+    let declared = "[kinds.train]\nbranch = \"train\"\nlands = true\nstages = []\n\n\
+                    [kinds.fix.agents]\nmodel = \"opus\"\n";
+    repository.write(DECLARATION, declared);
+    let revision = Revision::new(repository.commit("a kind that lands with no stages"));
+    let KindsRead::Read {
+        kinds, settings, ..
+    } = Weir.read_kinds(&repository.name(), &revision)
+    else {
+        panic!("a kind that lands with no stages did not read");
+    };
+    assert_eq!(
+        kinds
+            .iter()
+            .map(|kind| (kind.name.as_str(), kind.lands, kind.stages.len()))
+            .collect::<Vec<_>>(),
+        vec![("train", true, 0)],
+        "train, a kind that lands with no stages"
+    );
+    assert_eq!(kinds[0].branch_prefix, "train");
+    assert_eq!(
+        settings.keys().collect::<Vec<_>>(),
+        vec!["fix"],
+        "fix's table, settings for a kind declared elsewhere"
+    );
+    assert_eq!(settings["fix"].every_stage.model.as_deref(), Some("opus"));
+    repository.write(
+        DECLARATION,
+        &format!("{declared}\n[kinds.idle]\nlands = false\nstages = []\n"),
+    );
+    let revision = Revision::new(repository.commit("a kind that does not land with none"));
+    match Weir.read_kinds(&repository.name(), &revision) {
+        KindsRead::CouldNotRead { reason } => {
+            assert!(reason.contains("kinds.idle.stages"), "{reason}");
+            assert!(
+                !reason.contains("kinds.train") && !reason.contains("kinds.fix"),
+                "a table that reads named in {reason}"
+            );
+        }
+        other => panic!("a kind that does not land with no stages read as {other:?}"),
+    }
 }
 
 /// A one-stage kind `bump` of the repository's at `version`, not landing.

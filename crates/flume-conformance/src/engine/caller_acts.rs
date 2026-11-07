@@ -630,7 +630,7 @@ fn a_drop_repeated(_: &()) -> Outcome {
 
 fn two_starts_at_once(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     let id = World::id("change", "plan");
     launched(&world.engine.launch(&launch("change", "plan", Some("x"))))?;
     world.settle(&id);
@@ -1153,7 +1153,7 @@ fn s93_a_question_for_ops_answered_once(_: &()) -> Outcome {
     );
     // The run collects before its notice lands, as a run whose start
     // collects does (43; core.25).
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.keep_watch();
     let Answer::Inbox { ends, .. } = world.engine.inbox("east/ops") else {
         return Err("the inbox did not answer".into());
     };

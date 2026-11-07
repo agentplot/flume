@@ -580,7 +580,8 @@ fn two_settles_at_once(_: &()) -> Outcome {
 
 fn three_ends_one_run(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    // A watch whose bound holds it past the five minutes the stall takes.
+    world.engine.settle_every(300);
     world.host.set_bound(Some(3));
     configure(
         &world,
@@ -700,7 +701,7 @@ fn a_wake_while_the_run_waits_for_room(_: &()) -> Outcome {
 
 fn the_run_starts(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     configure(
         &world,
         "Read what is pending for you.",
@@ -1198,7 +1199,7 @@ fn the_runs_intent_and_settings(_: &()) -> Outcome {
 /// 132, 143, 193).
 fn s99_one_declaration_two_streams(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.keep_watch();
     let named = |name: &str| RoleRun {
         name: Some(name.into()),
         ..planner_run(None, None)
@@ -1265,7 +1266,7 @@ fn s99_one_declaration_two_streams(_: &()) -> Outcome {
 /// its pane with no run launched (3, 132, 193).
 fn a_run_an_earlier_flume_named(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.keep_watch();
     configure(
         &world,
         "Read what is pending for you.",
@@ -1581,7 +1582,7 @@ fn run_delivered(world: &World) -> Outcome {
 /// The role-waking spec's "A turn delivers" (S99; 114, 132).
 fn a_turn_delivers(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.keep_watch();
     run_delivered(&world)?;
     ensure!(
         world.held(&planner_id()).is_none(),
@@ -1602,7 +1603,7 @@ fn a_turn_delivers(_: &()) -> Outcome {
 /// The role-waking spec's "The next end" (S99; 114, 132).
 fn the_next_end(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.keep_watch();
     run_delivered(&world)?;
     ensure_eq!(runs(&world), Vec::<PlaceId>::new(), "runs once tidied");
     world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);

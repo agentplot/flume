@@ -1162,6 +1162,7 @@ impl Engine {
                     .collect(),
             })
             .collect();
+        let (watch, watch_settled, watch_lapsed) = self.watch_status();
         HostStatus {
             running: queue.running,
             bound: queue.bound,
@@ -1171,7 +1172,9 @@ impl Engine {
             pools,
             terminal_kept: self.terminal.kept(),
             addresses: self.addresses(&roles),
-            watch: self.terminal.watch(),
+            watch,
+            watch_settled,
+            watch_lapsed,
             terminals: self.terminals_status(),
             bases: self.bases(agents),
             terminal_setup: self.terminal.setup(),

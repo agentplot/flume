@@ -1,9 +1,8 @@
 # flume for herdr
 
-flume's plugin for [herdr](https://herdr.dev): the watch that moves
-every place on with no command of yours, and the places in flight in
-herdr's sidebar and a popup, with keys that act through flume's
-commands.
+flume's plugin for [herdr](https://herdr.dev): the places in flight in
+a popup, with keys that act through flume's commands, and the rows flume
+shows in herdr's sidebar. It keeps no process and runs no settle.
 
 ```sh
 herdr plugin install agentplot/flume/plugins/herdr --ref v<version>
@@ -18,36 +17,32 @@ herdr.
 
 ## What it does
 
-- **The watch.** herdr starts it when its server starts; one runs per
-  server. Every two seconds it reads every pane's agent state in one
-  listing. When the agent of one of flume's places changes state, an
-  agent comes up or goes in one of the server's panes, as a stage's new
-  agent does, or the bound passes, it runs `flume settle`, then writes
-  `flume status --json` for the sidebar and the popup. The bound is the one flume's
-  status gives, thirty seconds. A place moves on without you: a stage's
-  next start, its submission, the landing and the tidy, and an agent
-  that crashed, hung or was killed is read within the bound. While the
-  watch runs, flume's commands leave the settling to it; once it stops,
-  each command settles every place first, as flume does with no watch.
-  It runs nothing of flume's but `flume settle` and `flume status`. At
-  its start and after each settle it reads herdr's configuration file
-  and writes down what it lacks for the plugin, the popup's key or the
-  sidebar's rows, which `flume status` gives under the watch's line. It
-  logs the same once at its start, and tells no one.
-- **Display clues.** After each settle it gives each agent's pane the
-  title `<stage> · <state>` and the name `<kind>--<name>`, and each
-  base's workspace a count of its places: running, asking, waiting on
-  their caller and stalled. They show what flume's status says, and
-  nothing flume decides reads them back.
-- **A row on each agent's sidebar entry**, the `$flume` token: its
-  place's line, the words flume's status line gives, less the place's
-  name and kind: the stage with its group, how many times it started,
-  the change's tasks ticked and the place's state, as in
-  `code 1/2 · run 1 · tasks 2/5 · working`.
+- **Nothing between herdr's start and your asking.** The plugin keeps
+  no process: it runs no `flume settle` and reads no status on a timer.
+  Places move when their agents go quiet, at each settle of a caller
+  keeping watch over the host, and at each command of flume's that acts.
+- **At herdr's start**, once for each server, it reads herdr's
+  configuration file and writes down what it lacks for the plugin, the
+  popup's key or the sidebar's rows, which `flume status` gives under
+  the line naming the host's watch while that server runs. It logs the
+  same, tells no one, and exits. Where an earlier release of the plugin
+  left its watch running on that server, it ends it.
+- **Display clues**, which flume itself shows at each settle that
+  changes one, through its herdr profile, and which the plugin neither
+  computes nor copies: each agent's pane its title `<stage> · <state>`
+  and the name `<kind>--<name>`, and each base's workspace a count of
+  its places. Nothing flume decides reads them back.
+- **A row on each agent's sidebar entry**, the `$flume` token: the
+  short form of its place's line, the words flume's status line gives
+  less the place's name and kind: the stage with its group, how many
+  times it started, the change's tasks ticked and the place's state, as
+  in `code 1/2 · run 1 · tasks 2/5 · working`. It is one of flume's
+  clues, shown at the settles that change it.
 - **The count on each workspace's row**, the `$flume` token of the
   workspace: `1 running · 0 asking · 1 waiting on caller · 0 stalled`.
-- **The popup** (`agentplot.flume.places`): every place in flight, each
-  its number and its line, as in
+- **The popup** (`agentplot.flume.places`): every place in flight, read
+  from `flume status --json` when you open it and again after each key
+  that acts, and never on a timer: each its number and its line, as in
   `▶ 1  fix--one · fix@1 · code · run 1 · working`, with its location
   beneath, the chosen one marked `▶`. Each key acts at once, with no
   Enter: the arrow keys or `j` and `k` move the choice, and `1` to `9`
@@ -59,6 +54,19 @@ herdr.
   `flume tell`, `flume stop` or `flume retry`, or focuses the place's
   tab. No key types into an agent's pane.
 
+## Keeping watch over the host
+
+The plugin keeps no watch and decides nothing of how flume runs.
+Whatever keeps time on your host, a timer or a supervisor of your own,
+keeps watch over it by running `flume settle --every <time>` on that
+bound, which settles every place, an agent in it or none. While its
+newest settle began less than twice its bound ago, flume's commands
+leave the settling to it. While nothing does, flume runs attended: each
+command of flume's that acts settles every place first, and what no
+agent's quiet reports, an agent killed with no word or a submission the
+merge queue decided, moves at the next such command. `flume status`
+says which.
+
 ## Setting it up
 
 The plugin changes none of herdr's configuration. Add the popup's key
@@ -66,7 +74,7 @@ and the sidebar's rows to herdr's `config.toml` yourself, or to
 whatever generates it: the file `HERDR_CONFIG_PATH` names, else
 `$XDG_CONFIG_HOME/herdr/config.toml`, else
 `~/.config/herdr/config.toml`. Until it holds both, `flume status`
-says what it lacks under the line naming the watch.
+says what it lacks under the line naming the host's watch.
 
 ### The popup's key
 
@@ -107,7 +115,7 @@ own, add only the `$flume` entries.
 
 Under herdr's state directory for the plugin,
 `$XDG_STATE_HOME/herdr/plugins/agentplot.flume`, one directory per
-herdr server: the watch's lease, the status it last wrote and its log,
-`watch.log`, and what herdr's configuration lacks, `setup.json`. flume
-reads the lease to know the watch runs, and `setup.json` beside a lease
-that is fresh to say what herdr's configuration lacks.
+herdr server: `setup.json`, the server's socket and what herdr's
+configuration lacks, and the startup's log, `startup.log`. flume says
+what a server's `setup.json` lacks while the socket it names is
+present.

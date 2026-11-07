@@ -683,7 +683,7 @@ impl AgentHarness for FakeAgentHarness {
 
 pub struct FakeTerminalHarness {
     pub host: Arc<FakeHost>,
-    pub terminal: FakeTerminal,
+    pub terminal: Arc<FakeTerminal>,
     sends: bool,
 }
 
@@ -691,7 +691,7 @@ impl FakeTerminalHarness {
     /// A terminal that sends, or, as the printed command, one that cannot.
     pub fn new(sends: bool) -> Self {
         let host = Arc::new(FakeHost::default());
-        let terminal = FakeTerminal::new(host.clone());
+        let terminal = Arc::new(FakeTerminal::new(host.clone()));
         if sends {
             terminal.set_session(Some("pane-1"));
         } else {
@@ -710,6 +710,10 @@ impl TerminalHarness for FakeTerminalHarness {
 
     fn seam(&self) -> &FakeTerminal {
         &self.terminal
+    }
+
+    fn shared(&self) -> Arc<dyn Terminal> {
+        self.terminal.clone()
     }
 
     fn place(&self) -> PlaceRef {
@@ -1033,6 +1037,10 @@ impl MergeQueueHarness for FakeMergeQueueHarness {
             &format!("{other}'s policy cannot be read"),
         );
         other.into()
+    }
+
+    fn branch_head(&self, repository: &str, branch: &str) -> Option<Revision> {
+        self.git.branch_head(repository, branch)
     }
 }
 

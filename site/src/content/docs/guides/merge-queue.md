@@ -83,6 +83,18 @@ the answer in the same settle, as it reads one from the inbox. A
 conflict there starts the fix round as any other does, never a wait as
 if sluice refused the submission.
 
+A submitted place has no agent left in it, so no agent's quiet runs
+those settles. A caller keeping watch over the host runs them: `flume
+settle --every <time>`, run on that bound from a timer of the host's or
+whatever else keeps time there, settles every place, an agent in it or
+none. So every submitted place has its outcome read, and its base's
+queue run one round, within the bound
+([keeping watch over the host](/flume/guides/places-and-herdr/#keeping-watch-over-the-host)).
+While no caller keeps watch, flume runs attended: every command of
+flume's that acts settles every place first, so a submitted place
+moves at your next such command. Status says which of the two holds,
+under the host's part.
+
 ## A base that takes pull requests
 
 Where the base takes its work as pull requests, sluice pushes the
@@ -140,6 +152,131 @@ Each fix round counts toward the kind's bound, three goings-back unless
 the last stage sets `max_send_backs`, together with found work from
 the last stage. Past the bound the place waits on you with the last
 words, and a retry starts it again.
+
+## Branches that land on branches
+
+Work can land on a branch that itself lands: several changes gathered
+on one branch, tested there one by one as each lands, and landed on
+`main` together once the last is in. In flume that branch is a place's,
+a base place: a place whose kind lands and has no stages. It runs no
+agent and has no worktree. It is its branch, which sluice makes and
+removes at flume's asking, and the state flume holds of it. The same
+holds at every depth: a base place's branch can itself be the base of
+another base place.
+
+### A kind with no stages
+
+flume carries no such kind. A repository declares one, as here, or a
+source on the host or a launch's file does ([a kind with no stages](/flume/guides/kinds/#a-kind-with-no-stages)):
+
+```toml
+# .config/flume.toml
+[profiles]
+merge_queue = "sluice"
+
+[kinds.train]
+branch = "train"
+lands = true
+stages = []
+```
+
+flume tells a base place by its kind's shape alone, a kind that lands
+with `stages = []`, never by the kind's name, its branch's prefix or
+how deep it sits. Its branch is one sluice lands work on, so the
+repository's sluice policy names a table for it beside the base's:
+
+```toml
+# .config/sluice.toml
+[branches."train/*"]
+
+[branches.main]
+```
+
+### Launching one, and the places on its branch
+
+```sh
+flume launch --kind train --name spring --base main
+```
+
+flume writes the place's state, then has sluice make the branch,
+`sluice branch create train/spring --from main --json`, run in the
+repository. Nothing else is made: no worktree, no readiness, no agent,
+and the place takes none of the host's room. Where sluice refuses the
+branch, the launch is refused with sluice's words and leaves nothing.
+The place is named as any other, `train--spring`, by the location its
+repository's places take, and nothing stands at that location.
+
+Places launched with `--base train/spring` are cut from that branch,
+where sluice says it lives, and land on it through sluice, as places
+on `main` land on `main`. A fix, a chore or a change runs through as
+it would anywhere. A launch on a branch flume holds is refused, naming
+the place that holds it, in three cases:
+
+- the branch is a place's that is no base place, since its worktree
+  checks the branch out and a landing would move it under the place's
+  agent;
+- the base place's submission is open, since work landing on its branch
+  then would land after the revision sluice is testing;
+- the base place's work is over.
+
+A branch no place of flume's holds, your own or one a tool made, takes
+launches as any base does.
+
+### Its submission
+
+A base place has no last stage, so nothing submits it on its own. While
+a place on its branch is live, the base place waits on them, never
+stalled, and status says so. Once every one has landed or been dropped,
+it waits on you, and stalls as any wait on its caller does unless a
+hold's words keep it: `flume hold train--spring --submission "<words>"`.
+You submit it when the branch holds what it should:
+
+```sh
+flume retry train--spring --submission
+```
+
+The retry is refused, naming them, while a place on its branch is live.
+Otherwise flume runs, in the repository,
+
+```sh
+sluice submit main --head train/spring --no-wait --json
+```
+
+since the place has no worktree to submit from. That needs sluice
+0.71.0 or later, the first release that takes a branch named as its
+head from no worktree. sluice tests the branch merged with what is
+queued ahead of it on `main`, as it tests any submission.
+
+### Where its outcome is read
+
+No inbox gives a base place's outcome, since sluice delivers an inbox
+to a worktree. flume reads it from sluice's record of the branch, the
+entry `sluice status main --all --json` gives for `train/spring`, at
+the settles after the submission, and acts on it once. The outcome
+reaches the place's recipients as any end does. A caller keeping watch
+moves it as it moves every submitted place.
+
+### A failed submission
+
+A failed or conflicting submission starts nothing, since the kind
+names no stage to send it back to. The base place waits on you with
+sluice's words: the failed check, or the contested files and the
+revision of `main` sluice tested against. To fix it, launch a fix with
+`--base train/spring` and those words as its brief. A conflict's fix
+merges that revision of `main` into its branch first, as any conflict's
+fix does. Once the fix lands on `train/spring`, retry the base place's
+submission. flume launches no fix of its own.
+
+### Dropping it, and its tidy
+
+`flume drop train--spring` is refused, naming them, while a place on
+its branch is live: drop those first. A landed or dropped base place
+is tidied with no worktree to remove and no teardown to run. flume has
+sluice remove the branch, `sluice branch delete train/spring --into
+main --json`, and never deletes it itself. Where sluice keeps the
+branch, holding a submission or work `main` lacks, the answer to the
+act that removed the place names it once with sluice's words. While
+it stands, a launch that would make the branch again is refused.
 
 ## What sluice never does to a place
 

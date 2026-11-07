@@ -4,6 +4,7 @@
 //! decided again, so two acts on one place leave it as one or the other
 //! would have (75).
 
+use crate::base::base_place;
 use crate::status::waiting_on;
 use crate::Engine;
 use flume_seams::{
@@ -68,7 +69,8 @@ impl Engine {
 
     /// Stamps since when each stage stands in its state and the place
     /// waits for its caller, wherever an act changed them, so status says
-    /// since when a place waits (56, 130).
+    /// since when a place waits (56, 130); a base place's wait read from
+    /// the live places on its branch as they stand (203).
     fn stamp(&self, was: &HeldState, next: &mut HeldState) {
         let now = self.host.now();
         for (index, stage) in next.stages.iter_mut().enumerate() {
@@ -82,7 +84,8 @@ impl Engine {
         } else if submission.waiting != was.submission.waiting {
             submission.waiting_since = Some(now);
         }
-        refresh_waiting(next, now);
+        let on_branch = self.on_branch_count(next);
+        refresh_waiting(next, now, on_branch);
         record_ends(next, now);
     }
 
@@ -184,19 +187,48 @@ fn record_ends(next: &mut HeldState, now: Seconds) {
     }
 }
 
-/// Reads, from the held state alone, the move the place waits on its
-/// caller for: a move read for the first time is kept with since when
-/// it stood so, the same move keeps its since and whether it stalled,
-/// and none clears it; a hold on the move ends once the place waits on
-/// another move or none, the move made (56, 130; design 5, 7).
-pub(crate) fn refresh_waiting(next: &mut HeldState, now: Seconds) {
-    let was = next.waiting.take();
-    let moved = |now: &Option<Waiting>| match (&was, now) {
+/// Reads, from the held state alone, and for a base place `on_branch`,
+/// the count of the live places on its branch, the move the place waits
+/// on its caller for: a move read for the first time is kept with since
+/// when it stood so, the same move keeps its since and whether it
+/// stalled, and none clears it; a hold on the move ends once the place
+/// waits on another move or none, the move made (56, 130, 203; design 5,
+/// 7).
+pub(crate) fn refresh_waiting(next: &mut HeldState, now: Seconds, on_branch: Option<usize>) {
+    let was = next.waiting.clone();
+    next.waiting = waiting_read(next, on_branch, Some(now));
+    let moved = match (&was, &next.waiting) {
         (Some(was), Some(now)) => !was.on.same_move(&now.on),
         (Some(_), None) => true,
         (None, _) => false,
     };
-    next.waiting = waiting_on(next).map(|mut on| match &was {
+    if moved {
+        next.holds.retain(|hold| hold.on != HoldOn::Waiting);
+    }
+}
+
+/// The move the place waits on its caller for as status, its line and
+/// the list give it when asked: as the last settle or act wrote it, but
+/// a base place's read again from `on_branch`, the live places on its
+/// branch as they stand, keeping since when and whether it stalled where
+/// the move is the one written (56, 58, 130, 203; core.15).
+pub(crate) fn waiting_now(held: &HeldState, on_branch: Option<usize>) -> Option<Waiting> {
+    if base_place(&held.place.kind) {
+        waiting_read(held, on_branch, None)
+    } else {
+        held.waiting.clone()
+    }
+}
+
+/// The move `held` waits on its caller for, read again, the same move
+/// keeping its since and whether it stalled, and a move read for the
+/// first time since `now` where one is given.
+fn waiting_read(
+    held: &HeldState,
+    on_branch: Option<usize>,
+    now: Option<Seconds>,
+) -> Option<Waiting> {
+    waiting_on(held, on_branch).map(|mut on| match &held.waiting {
         Some(was) if was.on.same_move(&on) => {
             on.since = was.on.since;
             Waiting {
@@ -205,13 +237,10 @@ pub(crate) fn refresh_waiting(next: &mut HeldState, now: Seconds) {
             }
         }
         _ => {
-            on.since = Some(on.since.unwrap_or(now));
+            on.since = on.since.or(now);
             Waiting { on, stalled: false }
         }
-    });
-    if moved(&next.waiting) {
-        next.holds.retain(|hold| hold.on != HoldOn::Waiting);
-    }
+    })
 }
 
 /// Reads the place stalled where it has waited on its caller under no
@@ -225,14 +254,16 @@ pub(crate) fn refresh_waiting(next: &mut HeldState, now: Seconds) {
 /// words. A stall an earlier flume recorded, which read neither the
 /// answerer nor the stop-short, is read for them at the first settle that
 /// reads it while the place still waits so, and delivered as a new stall
-/// would be. A hold with words never stalls, and a stage waiting for room
-/// is no move of its caller's (70).
+/// would be. A hold with words never stalls, a stage waiting for room is
+/// no move of its caller's (70), and nor is a base place's wait on the
+/// places on its branch (203).
 pub(crate) fn read_stall(
     next: &mut HeldState,
     now: Seconds,
+    on_branch: Option<usize>,
     answerer: &dyn Fn(&HeldState) -> Option<String>,
 ) {
-    refresh_waiting(next, now);
+    refresh_waiting(next, now, on_branch);
     let Some(waiting) = &next.waiting else {
         return;
     };

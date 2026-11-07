@@ -285,6 +285,9 @@ pub enum Waits {
     Submission,
     /// The last stage delivered, and the kind does not land (114).
     Delivered,
+    /// A base place with no place on its branch live, whose submission
+    /// its caller has not asked for (203).
+    Unsubmitted,
 }
 
 /// An end of a place, recorded once by its key when a settle or an act

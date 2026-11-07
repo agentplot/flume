@@ -286,6 +286,23 @@ impl World {
         revision
     }
 
+    /// Holds a caller's watch over the host from now for longer than any
+    /// scenario's clock runs, settling nothing, so a command that acts on
+    /// places settles none first and a scenario settles them itself (119,
+    /// 208).
+    pub fn keep_watch(&self) {
+        let watched = Watched {
+            began: self.host.now(),
+            bound: 7 * 24 * 60 * 60,
+        };
+        let at = self
+            .store
+            .read_host(&HostKey::Watch)
+            .map(|read| read.version);
+        self.store
+            .write_host(&HostKey::Watch, at, Some(&HostDocument::Watch(watched)));
+    }
+
     /// Settles the place as an agent going quiet or the watch does.
     pub fn settle(&self, place: &PlaceId) {
         self.engine().settle(Some(place));

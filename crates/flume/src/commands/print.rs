@@ -13,9 +13,9 @@ use flume_seams::{
     AccountFrom, Act, AnswerHeld, BaseFrom, CarryCause, ClosedBy, ConfigLayer, ConfigValue,
     Conversation, EndOf, Given, Hold, HoldOn, HostConfiguration, IntentKey, Kept, KindFrom,
     LabelHeld, LiveProcess, LocalLayer, Made, NamedBy, NamedSession, Phase, ProfileHeld, Readiness,
-    RecipientsFrom, SessionFrom, SessionHeld, StopKind, StreamAnswerer, StreamHeld, SubmissionRead,
-    UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch, LAUNCH_SOURCE, OWN_SOURCE,
-    REPO_SOURCE,
+    RecipientsFrom, Seconds, SessionFrom, SessionHeld, StopKind, StreamAnswerer, StreamHeld,
+    SubmissionRead, UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch, LAUNCH_SOURCE,
+    OWN_SOURCE, REPO_SOURCE,
 };
 use serde_json::{json, Value};
 
@@ -354,6 +354,11 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
             lines.push(format!("    waiting: {waiting}"));
         }
     }
+    if place.worktree == Some(false) {
+        lines.push(base_place_line(
+            place.on_branch.as_deref().unwrap_or_default(),
+        ));
+    }
     if let Some(waiting) = &place.waiting_on {
         lines.push(waiting_line(waiting, place.stalled));
         lines.extend(kept_open_line(waiting));
@@ -524,6 +529,22 @@ fn answerer_line(answerer: &StreamAnswerer) -> String {
                 .join(" and ")
         ),
     }
+}
+
+/// A base place's line: it has no worktree, and the places live on its
+/// branch, which it waits on while any is (56, 202, 203).
+fn base_place_line(on_branch: &[flume_seams::PlaceId]) -> String {
+    if on_branch.is_empty() {
+        return "  no worktree; no place on its branch is live".into();
+    }
+    format!(
+        "  no worktree; waits on the places on its branch: {}",
+        on_branch
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
 }
 
 /// What a place waits on its caller for, since when, and its words; a
@@ -1404,14 +1425,6 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         for kept in &terminal.kept {
             lines.push(format!("  the terminal {name} keeps {kept}"));
         }
-        lines.push(match terminal.watch {
-            Watch::Bound { seconds } => {
-                format!("  the terminal {name} keeps watch every {seconds} seconds")
-            }
-            Watch::None => format!(
-                "  the terminal {name} keeps no watch, so every place settles at each command of flume's that acts"
-            ),
-        });
     }
     for address in &host.addresses {
         if let Some(standing) = &address.standing {
@@ -1458,16 +1471,42 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
             ));
         }
     }
-    lines.push(match host.watch {
-        Watch::Bound { seconds } => format!(
-            "  the terminal keeps watch: every place settles every {seconds} seconds and when an agent's state changes"
-        ),
-        Watch::None => "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".into(),
-    });
+    lines.push(watch_line(host));
     for setup in &host.terminal_setup {
         lines.push(format!("    {setup}"));
     }
     lines
+}
+
+/// Whether a caller keeps watch over the host, with its bound and when
+/// its newest settle began, or since when none has (56, 119, 208).
+fn watch_line(host: &HostStatus) -> String {
+    match (host.watch, host.watch_lapsed) {
+        (Watch::Bound { seconds }, _) => format!(
+            "  a caller keeps watch: every place settles every {}, last at {}",
+            duration(seconds),
+            host.watch_settled
+                .map_or_else(|| "an unknown time".to_string(), |at| at.to_string())
+        ),
+        (Watch::None, Some(lapsed)) => format!(
+            "  no caller keeps watch since {lapsed}: every place settles at each command of flume's that acts"
+        ),
+        (Watch::None, None) => {
+            "  no caller keeps watch: every place settles at each command of flume's that acts"
+                .into()
+        }
+    }
+}
+
+/// A duration in its largest whole unit, as `flume wait --timeout` and
+/// `flume settle --every` take one: `2m`, `1h`, `90s`.
+fn duration(seconds: Seconds) -> String {
+    match seconds {
+        0 => "0s".into(),
+        _ if seconds.is_multiple_of(3600) => format!("{}h", seconds / 3600),
+        _ if seconds.is_multiple_of(60) => format!("{}m", seconds / 60),
+        _ => format!("{seconds}s"),
+    }
 }
 
 /// A start whose agent began without its settings, each variable by its
@@ -1628,12 +1667,18 @@ fn tidy_lines(tidy: &Tidied) -> Vec<String> {
         });
     }
     for branch in &tidy.branches_kept {
-        lines.push(format!(
-            "kept the branch {} of {}, {} commits not landed",
-            branch.branch,
-            branch.place,
-            branch.commits.len()
-        ));
+        lines.push(match &branch.reason {
+            Some(reason) => format!(
+                "kept the branch {} of {}, the merge queue keeping it: {reason}",
+                branch.branch, branch.place
+            ),
+            None => format!(
+                "kept the branch {} of {}, {} commits not landed",
+                branch.branch,
+                branch.place,
+                branch.commits.len()
+            ),
+        });
     }
     for place in &tidy.not_over {
         lines.push(format!("{place}'s work is not over"));
@@ -2732,7 +2777,7 @@ mod tests {
                     .to_string(),
                 "      spent an hour: no reset read in \"You've hit your weekly limit \u{b7} resets Nov 8, 12am (UTC)\""
                     .to_string(),
-                "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
+                "  no caller keeps watch: every place settles at each command of flume's that acts".to_string(),
             ]
         );
     }
@@ -3058,7 +3103,7 @@ mod tests {
                 "  source bad (/c/flume/sources/bad.toml): cannot be read: gives no `kinds_dir`, the directory holding the source's packages".to_string(),
                 "  source beta (/c/flume/sources/beta.toml) at /k/beta: holds no kind".to_string(),
                 "  source gamma (/c/flume/sources/gamma.toml) at /k/gamma: cannot be read: /k/gamma, the directory of the source gamma, does not exist".to_string(),
-                "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
+                "  no caller keeps watch: every place settles at each command of flume's that acts".to_string(),
             ]
         );
     }
@@ -3197,7 +3242,7 @@ mod tests {
         };
         assert_eq!(
             person(&status),
-            "no place stands on this host\nhost: 0 agents running, no bound\n  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet"
+            "no place stands on this host\nhost: 0 agents running, no bound\n  no caller keeps watch: every place settles at each command of flume's that acts"
         );
     }
 
@@ -3373,14 +3418,40 @@ mod tests {
 
     #[test]
     fn a_host_under_a_watch() {
+        // The place-status spec's watched host: a caller's bound and when
+        // its newest settle began (56, 208).
         let host = HostStatus {
-            watch: Watch::Bound { seconds: 30 },
+            watch: Watch::Bound { seconds: 120 },
+            watch_settled: Some(47_400),
             ..HostStatus::default()
         };
         assert_eq!(
             host_lines(&host)[1],
-            "  the terminal keeps watch: every place settles every 30 seconds and when an agent's state changes"
+            "  a caller keeps watch: every place settles every 2m, last at 47400"
         );
+    }
+
+    #[test]
+    fn a_host_whose_watch_lapsed() {
+        // The place-status spec's unwatched host: since when no caller
+        // keeps watch, the watch's lapse (119, 208).
+        let host = HostStatus {
+            watch_settled: Some(47_400),
+            watch_lapsed: Some(47_640),
+            ..HostStatus::default()
+        };
+        assert_eq!(
+            host_lines(&host)[1],
+            "  no caller keeps watch since 47640: every place settles at each command of flume's that acts"
+        );
+    }
+
+    #[test]
+    fn a_duration_in_its_largest_whole_unit() {
+        assert_eq!(duration(120), "2m");
+        assert_eq!(duration(90), "90s");
+        assert_eq!(duration(3600), "1h");
+        assert_eq!(duration(30), "30s");
     }
 
     #[test]
@@ -3389,6 +3460,7 @@ mod tests {
         let key = "the terminal's /t/config.toml binds no key to flume's places".to_string();
         let host = HostStatus {
             watch: Watch::Bound { seconds: 30 },
+            watch_settled: Some(100),
             terminal_setup: vec![key.clone()],
             ..HostStatus::default()
         };
@@ -3396,7 +3468,7 @@ mod tests {
         assert_eq!(
             lines[lines.len() - 2..],
             [
-                "  the terminal keeps watch: every place settles every 30 seconds and when an agent's state changes".to_string(),
+                "  a caller keeps watch: every place settles every 30s, last at 100".to_string(),
                 format!("    {key}"),
             ]
         );
@@ -3483,6 +3555,9 @@ mod tests {
             role: None,
             clues: None,
             line: a_line("fix--one", "code · run 1 · working"),
+            waits_on: None,
+            worktree: None,
+            on_branch: None,
         }
     }
 
@@ -3910,6 +3985,68 @@ mod tests {
                 "  the move it waits on on hold since 160, for 3600 seconds: east-planner has it",
             ]
             .join("\n")
+        );
+    }
+
+    #[test]
+    fn a_base_place_says_it_has_no_worktree_and_what_is_on_its_branch() {
+        // 56, 202, 203: a base place's status in the person's form; any
+        // other place's says nothing of a worktree.
+        let base = PlaceStatus {
+            worktree: Some(false),
+            on_branch: Some(vec![
+                PlaceId::new("/d/places/1/change--one"),
+                PlaceId::new("/d/places/1/change--two"),
+            ]),
+            ..a_place()
+        };
+        assert!(place_lines(&base).contains(
+            &"  no worktree; waits on the places on its branch: /d/places/1/change--one, /d/places/1/change--two"
+                .to_string()
+        ));
+        let alone = PlaceStatus {
+            on_branch: Some(vec![]),
+            ..base
+        };
+        assert!(place_lines(&alone)
+            .contains(&"  no worktree; no place on its branch is live".to_string()));
+        assert!(!place_lines(&a_place())
+            .iter()
+            .any(|line| line.contains("worktree")));
+    }
+
+    #[test]
+    fn a_base_places_branch_the_merge_queue_kept() {
+        // 67, 206: a branch the merge queue keeps at a base place's tidy
+        // is named once with its words; a place's with its commits.
+        let place = PlaceId::new("/d/places/1/train--spring");
+        let tidy = Tidied {
+            removed: vec![place.clone()],
+            kept: vec![],
+            branches_kept: vec![
+                flume_core::BranchKept {
+                    place: place.clone(),
+                    branch: "train/spring".into(),
+                    commits: vec![],
+                    reason: Some("work main lacks".into()),
+                },
+                flume_core::BranchKept {
+                    place: PlaceId::new("/d/places/1/fix--one"),
+                    branch: "fix/one".into(),
+                    commits: vec![flume_seams::Revision::new("c4")],
+                    reason: None,
+                },
+            ],
+            not_over: vec![],
+            terminal: vec![],
+        };
+        assert_eq!(
+            tidy_lines(&tidy),
+            [
+                "removed /d/places/1/train--spring",
+                "kept the branch train/spring of /d/places/1/train--spring, the merge queue keeping it: work main lacks",
+                "kept the branch fix/one of /d/places/1/fix--one, 1 commits not landed",
+            ]
         );
     }
 
@@ -4365,7 +4502,7 @@ mod tests {
                 "  stream default, priority 0: 0 agents running, no bound of its own".to_string(),
                 "    its agents open in the terminal's own session".to_string(),
                 "    multiplexer printed (the host's), view terminal (the default), terminal app printed (the default), title \"default\" (the stream's name)".to_string(),
-                "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
+                "  no caller keeps watch: every place settles at each command of flume's that acts".to_string(),
             ]
         );
     }

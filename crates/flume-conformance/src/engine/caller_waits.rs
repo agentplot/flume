@@ -669,7 +669,7 @@ fn stalled_after_five_minutes(_: &()) -> Outcome {
     let world = World::new();
     world.terminal.add_session("ops", AgentState::Working);
     world.terminal.add_session("lead", AgentState::Waiting);
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     let (id, asked) = construct_asks(&world, "plan", &["ops", "lead"], None)?;
     for _ in 0..9 {
         world.host.advance(30);
@@ -888,7 +888,7 @@ fn the_stall_reaches_the_answerer(_: &()) -> Outcome {
     east_and_west(&world);
     answerer_behind(&world, "east");
     world.terminal.add_session("ops", AgentState::Waiting);
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.keep_watch();
     world.host.set_recipient(None);
     world.terminal.set_session(Some("ops"));
     let (id, _) = asks_in_east(&world, &[], None)?;
@@ -1261,7 +1261,7 @@ fn s98_the_users_question_held_and_lapsed(_: &()) -> Outcome {
             ..super::role_waking::planner_run(None, None)
         }),
     );
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.keep_watch();
     let (id, _) = asks_in_east(&world, &["east/planner"], Some("west/design"))?;
     world.engine().settle(None);
     ensure!(

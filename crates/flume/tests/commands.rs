@@ -7,8 +7,9 @@
 //! The launches run through this test binary re-run as flume: the same
 //! commands over the profiles built in, beside a stand-in agent program
 //! bound by its name, which reads its start and its end from marks the
-//! test writes in the place's folder, and a stand-in merge queue for the
-//! one scenario that needs a kind that lands. Every answer read back is
+//! test writes in the place's folder, and stand-in merge queues for the
+//! scenarios that need a kind that lands, one of them holding each
+//! submission and recording each step for a caller's watch. Every answer read back is
 //! read through flume's own binary where the scenario allows.
 
 mod common;
@@ -49,6 +50,14 @@ fn launch_env<'a>(words: &[&str], env: &[(&'a str, &'a str)]) -> Vec<(&'a str, &
 
 /// The stand-in merge queue's name.
 const STAND_IN_QUEUE: &str = "stand-in-queue";
+
+/// The holding stand-in merge queue's name.
+const HOLDING_QUEUE: &str = "stand-in-holding-queue";
+
+/// The variable naming the file the holding stand-in merge queue keeps
+/// its record in, one line for each submit and each step, across the
+/// commands' processes.
+const QUEUE_LOG: &str = "FLUME_TEST_QUEUE_LOG";
 
 /// The variable that makes this test binary run as flume, the command's
 /// words in it as a JSON list.
@@ -170,7 +179,7 @@ impl Agent for StandInAgent {
 struct StandInQueue;
 
 impl MergeQueue for StandInQueue {
-    fn submit(&self, _place: &PlaceRef, _head: &Revision) -> Submitted {
+    fn submit(&self, _place: &PlaceRef, _head: &SubmitHead) -> Submitted {
         Submitted::Refused {
             reason: "the stand-in queue takes nothing".into(),
         }
@@ -197,6 +206,92 @@ impl MergeQueue for StandInQueue {
             },
             Err(reason) => BaseRevision::Refused { reason },
         }
+    }
+    fn open(&self, _repository: &str, _branch: &str, _base: &str) -> BranchOpened {
+        BranchOpened::Refused {
+            reason: "the stand-in queue opens nothing".into(),
+        }
+    }
+    fn close(&self, _repository: &str, _branch: &str, _into: &str) -> BranchClosed {
+        BranchClosed::Gone
+    }
+}
+
+/// The holding stand-in merge queue: each submission held open through
+/// every round, each submit and each step a line of the file
+/// `$FLUME_TEST_QUEUE_LOG`, `submit <branch>` and `step <base>`; a step
+/// runs its round, deciding nothing.
+struct HoldingQueue;
+
+impl HoldingQueue {
+    fn log() -> PathBuf {
+        PathBuf::from(std::env::var(QUEUE_LOG).expect("the holding queue's record"))
+    }
+
+    fn record(line: &str) {
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(Self::log())
+            .expect("the holding queue's record");
+        writeln!(file, "{line}").expect("the holding queue's record written");
+    }
+
+    fn submission(branch: &str) -> Submission {
+        Submission {
+            id: format!("held-{branch}"),
+            branch: branch.into(),
+            target: "main".into(),
+            state: SubmissionState::Waiting,
+            request: None,
+        }
+    }
+}
+
+impl MergeQueue for HoldingQueue {
+    fn submit(&self, place: &PlaceRef, _head: &SubmitHead) -> Submitted {
+        Self::record(&format!("submit {}", place.branch));
+        Submitted::Submitted {
+            submission: Self::submission(&place.branch),
+        }
+    }
+    fn inbox(&self, _place: &PlaceRef) -> Inbox {
+        Inbox::Outcomes {
+            outcomes: vec![],
+            passed_over: vec![],
+        }
+    }
+    fn read_submissions(&self, _repository: &str, branches: &[&str]) -> Vec<ReadAcross> {
+        let record = std::fs::read_to_string(Self::log()).unwrap_or_default();
+        branches
+            .iter()
+            .map(|branch| {
+                if record
+                    .lines()
+                    .any(|line| line == format!("submit {branch}"))
+                {
+                    SubmissionRead::Found {
+                        submission: Self::submission(branch),
+                    }
+                    .into()
+                } else {
+                    SubmissionRead::None.into()
+                }
+            })
+            .collect()
+    }
+    fn step(&self, _repository: &str, base: &str) -> Stepped {
+        Self::record(&format!("step {base}"));
+        Stepped::Stepped
+    }
+    fn base_revision(&self, repository: &str, base: &str) -> BaseRevision {
+        StandInQueue.base_revision(repository, base)
+    }
+    fn open(&self, repository: &str, branch: &str, base: &str) -> BranchOpened {
+        StandInQueue.open(repository, branch, base)
+    }
+    fn close(&self, repository: &str, branch: &str, into: &str) -> BranchClosed {
+        StandInQueue.close(repository, branch, into)
     }
 }
 
@@ -260,6 +355,7 @@ impl Resolver for StandIn {
     fn merge_queue(&self, profile: &str) -> Option<Arc<dyn MergeQueue>> {
         match profile {
             STAND_IN_QUEUE => Some(Arc::new(StandInQueue)),
+            HOLDING_QUEUE => Some(Arc::new(HoldingQueue)),
             _ => self.0.merge_queue(profile),
         }
     }
@@ -796,6 +892,144 @@ fn a_refusal() {
     let person = host.flume(&repository.dir, &["done", "fix--one"], &[]);
     assert_eq!(person.code, 1);
     assert!(person.text.starts_with("refused: "), "{}", person.text);
+}
+
+#[test]
+fn a_watch_over_a_scratch_repository() {
+    // The command-line spec's "A watch over a scratch repository": a
+    // caller's settle with a bound steps the submitted place's base once,
+    // and status gives the host's watch with its bound and when that
+    // settle began (56, 208).
+    let host = Host::new("settle-every");
+    let repository = repository("settle-every", Some(HOLDING_QUEUE));
+    let kinds = kinds_file(&host, true);
+    let log = host.scratch.path("queue.log");
+    let log = log.to_string_lossy();
+    let env = [(QUEUE_LOG, log.as_ref())];
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &env,
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "fix--one");
+    commit_in(&place, "code.txt");
+    host.end_agent(&place, "code", 1);
+    let settled = host.stand_in(&repository.dir, &["settle", &place, "--json"], &env);
+    assert_eq!(settled.code, 0, "{}", settled.text);
+    let record = || std::fs::read_to_string(host.scratch.path("queue.log")).unwrap_or_default();
+    assert!(
+        record().lines().any(|line| line == "submit fix/one"),
+        "the place was not submitted: {}",
+        record()
+    );
+    let steps = || {
+        record()
+            .lines()
+            .filter(|line| line.starts_with("step "))
+            .count()
+    };
+    let before = steps();
+    let began = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("the clock")
+        .as_secs();
+    let watched = host.stand_in(
+        &repository.dir,
+        &["settle", "--every", "2m", "--json"],
+        &env,
+    );
+    assert_eq!(watched.code, 0, "{}", watched.text);
+    assert_eq!(steps(), before + 1, "the watch's steps: {}", record());
+    assert!(record().ends_with("step main\n"), "{}", record());
+    let status = host.stand_in(&repository.dir, &["status", "--json"], &env);
+    assert_eq!(status.code, 0, "{}", status.text);
+    let watch = &status.json()["status"]["host"];
+    assert_eq!(
+        watch["watch"],
+        json!({"bound": {"seconds": 120}}),
+        "{watch}"
+    );
+    let settled_at = watch["watch_settled"].as_u64().expect("watch_settled");
+    assert!(
+        (began..began + 60).contains(&settled_at),
+        "the watch settled at {settled_at}, the settle began at {began}"
+    );
+    assert!(watch.get("watch_lapsed").is_none(), "{watch}");
+    let person = host.stand_in(&repository.dir, &["status"], &env);
+    assert!(
+        person
+            .text
+            .contains("a caller keeps watch: every place settles every 2m, last at "),
+        "{}",
+        person.text
+    );
+}
+
+#[test]
+fn a_watch_with_a_place_named() {
+    // The command-line spec's "A watch with a place named": refused
+    // naming `--every` and the place, nothing settled and no watch
+    // recorded; a bound that is no positive duration refused the same
+    // (208).
+    let host = Host::new("settle-every-named");
+    let repository = repository("settle-every-named", None);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "fix--one");
+    let store = StateDir::at(host.state());
+    let version = store
+        .read(&PlaceId::new(&place))
+        .expect("the place's document")
+        .version;
+    let ran = host.stand_in(
+        &repository.dir,
+        &["settle", "fix--one", "--every", "2m", "--json"],
+        &[],
+    );
+    assert_eq!(ran.code, 1, "{}", ran.text);
+    let reason = ran
+        .answer()
+        .refusal()
+        .map(str::to_string)
+        .expect("a refusal");
+    assert!(
+        reason.contains("--every") && reason.contains("fix--one"),
+        "{reason}"
+    );
+    for bound in ["0", "0m", "soon"] {
+        let ran = host.stand_in(
+            &repository.dir,
+            &["settle", "--every", bound, "--json"],
+            &[],
+        );
+        assert_eq!(ran.code, 1, "--every {bound}: {}", ran.text);
+        let reason = ran
+            .answer()
+            .refusal()
+            .map(str::to_string)
+            .expect("a refusal");
+        assert!(reason.contains(bound), "--every {bound}: {reason}");
+    }
+    assert_eq!(
+        store.read(&PlaceId::new(&place)).map(|read| read.version),
+        Some(version),
+        "the place's document after the refusals"
+    );
+    assert!(
+        store.read_host(&HostKey::Watch).is_none(),
+        "a watch recorded by a refused settle"
+    );
+    assert!(!host.state().join("watch.json").exists());
 }
 
 #[test]
