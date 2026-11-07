@@ -182,3 +182,10 @@ activation link "$file"
 expect "$named" "link of a folder exits $status: $err" [ "$status" -eq 0 ]
 expect "$named" "$target is no link to $file, where a folder was" linked
 expect "$named" "$aside does not hold the folder" holds "$aside/inside" kept
+
+named="An unknown system"
+fresh
+fails unknownSystem
+expect "$named" "services.flume.package on riscv64-linux evaluates" [ "$status" -ne 0 ]
+expect "$named" "its failure names not the systems the flake gives: $err" \
+  says "$err" "gives no package for riscv64-linux: it gives aarch64-darwin, aarch64-linux, x86_64-linux"
