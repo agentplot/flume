@@ -2,9 +2,11 @@
 //! section 11 where it has one, and each citing its clauses as data.
 
 pub mod account_pools;
+pub mod agent_effort;
 pub mod agent_modes;
 pub mod agent_settings;
 pub mod answers;
+pub mod base_places;
 pub mod caller_acts;
 pub mod caller_waits;
 pub mod carried_conversations;
@@ -18,6 +20,7 @@ pub mod launching;
 pub mod list;
 pub mod made_things;
 pub mod open;
+pub mod open_sessions;
 pub mod own_settings;
 pub mod place_line;
 pub mod place_status;
@@ -57,6 +60,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(host_queue::scenarios());
     every.extend(agent_settings::scenarios());
     every.extend(agent_modes::scenarios());
+    every.extend(agent_effort::scenarios());
     every.extend(end_delivery::scenarios());
     every.extend(caller_waits::scenarios());
     every.extend(made_things::scenarios());
@@ -74,5 +78,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(open::scenarios());
     every.extend(list::scenarios());
     every.extend(own_settings::scenarios());
+    every.extend(base_places::scenarios());
+    every.extend(open_sessions::scenarios());
     every
 }

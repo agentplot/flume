@@ -32,6 +32,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["2", "61"],
             run: a_refusal_is_an_answer,
         },
+        Scenario {
+            name: "answers: status gives the host's watch, a caller's bound and when its newest settle began, and once it lapsed since when none is kept",
+            cites: &["56", "61", "119", "208", "S118"],
+            run: a_watched_host_and_an_unwatched_one,
+        },
+        Scenario {
+            name: "answers: under a caller's watch, each terminal's answer in status gives its watch none, the host's own and a stream's, and the host's watch gives the caller's bound",
+            cites: &["61", "122", "208"],
+            run: the_terminals_answers_in_status,
+        },
+        Scenario {
+            name: "answers: every answer reads back as it was written",
+            cites: &["61", "60"],
+            run: every_answer_reads_back,
+        },
+        Scenario {
+            name: "answers: a role's address written before the host gave where a standing agent lives, that it is carried, why it wakes nothing or its run's stall that reached no one reads with none of them",
+            cites: &["61", "132", "130"],
+            run: an_address_before_standing,
+        },
     ]
 }
 
@@ -76,10 +96,26 @@ pub fn missing(answer: &str, json: &Value) -> Vec<String> {
         .collect()
 }
 
+/// An answer handed to a session, taken by a retry (42, 54).
+fn answered() -> AnswerHeld {
+    AnswerHeld {
+        words: "the queue".into(),
+        act: Act::Retry,
+        at: 300,
+        session: Some(Handed {
+            sent_at: 301,
+            received_at: 305,
+        }),
+        by: Some("east/ops".into()),
+        key: Some("stage/code/1/ended-short".parse().expect("an end's key")),
+    }
+}
+
 fn settings() -> Settings {
     Settings {
         program: Some("agent".into()),
         model: Some("large".into()),
+        effort: Some("xhigh".into()),
         instructions: Some("brief".into()),
         beside: Some("operator".into()),
         mode: Some(ModeSetting::Programs(BTreeMap::from([
@@ -88,6 +124,7 @@ fn settings() -> Settings {
         ]))),
         session: Some("review".into()),
         programs: BTreeMap::new(),
+        keep_open: None,
     }
 }
 
@@ -162,10 +199,18 @@ fn place_status() -> PlaceStatus {
             starts: 2,
             end: Some(StageEnd {
                 left_in_pane: true,
+                open_until: Some(3720),
+                closed: Some(SessionClosed {
+                    at: 3720,
+                    by: ClosedBy::Time,
+                    ended_at: None,
+                    left_in_pane: true,
+                }),
                 head: Some(Revision::new("c3")),
                 report: Some("/s/conclusion.md".into()),
                 words: Some("which design?".into()),
                 needs: Some(StopKind::NeedsAnswer),
+                addressee: Some("east/design".into()),
                 last_words: Some("I need the design".into()),
                 commits: vec![Revision::new("c3")],
                 screen: None,
@@ -187,6 +232,10 @@ fn place_status() -> PlaceStatus {
                 number: Some("2".into()),
                 title: Some("Two".into()),
             }),
+            answers: vec![SessionAnswer {
+                question: Some("which design?".into()),
+                answer: answered(),
+            }],
         }],
         current: Some("code".into()),
         agent: Some(AgentStatus {
@@ -253,6 +302,13 @@ fn place_status() -> PlaceStatus {
                     }],
                 }],
             }),
+            effort: Some(EffortStatus {
+                word: "xhigh".into(),
+                layer: Layer::Launch,
+                passed: "xhigh".into(),
+                read_back: false,
+                outranked_by: Some("KEY".into()),
+            }),
         }),
         head: Some(Revision::new("c3")),
         delivered: Some(false),
@@ -285,7 +341,10 @@ fn place_status() -> PlaceStatus {
         refused_acts: vec!["a push".into()],
         cannot_read: vec!["the agent's state".into()],
         failures: vec!["did not end".into()],
-        recipients: vec!["operator".into()],
+        recipients: vec!["east/operator".into()],
+        recipients_from: Some(RecipientsFrom::Answerer {
+            source: "acme".into(),
+        }),
         hold_words: BTreeMap::from([("code".into(), "until the design lands".into())]),
         waiting_on: Some(WaitingOn {
             act: Act::Retry,
@@ -293,6 +352,13 @@ fn place_status() -> PlaceStatus {
             why: Waits::Answer,
             since: Some(120),
             words: Some("which design?".into()),
+            open_until: Some(3720),
+            closed: Some(SessionClosed {
+                at: 3720,
+                by: ClosedBy::Time,
+                ended_at: Some(3720),
+                left_in_pane: true,
+            }),
         }),
         stalled: true,
         waits_on_session: Some(SessionWait {
@@ -314,11 +380,22 @@ fn place_status() -> PlaceStatus {
                 },
                 words: Some("until the design lands".into()),
                 since: 100,
+                bound: None,
+                lapsed: None,
             },
             Hold {
                 on: HoldOn::Submission,
                 words: None,
                 since: 100,
+                bound: None,
+                lapsed: None,
+            },
+            Hold {
+                on: HoldOn::Waiting,
+                words: Some("east-planner has it".into()),
+                since: 110,
+                bound: Some(3600),
+                lapsed: Some(3710),
             },
         ],
         priority: 2,
@@ -390,12 +467,14 @@ fn place_status() -> PlaceStatus {
                         start: 2,
                         state: StageState::EndedShort,
                         quiet_from: None,
-                        end: StageEnd {
+                        answered: 0,
+                        end: Box::new(StageEnd {
                             words: Some("which design?".into()),
                             needs: Some(StopKind::NeedsAnswer),
+                            addressee: Some("east/design".into()),
                             made: made(),
                             ..StageEnd::default()
-                        },
+                        }),
                     },
                     read_at: 110,
                     deliveries: vec![Delivery {
@@ -403,19 +482,36 @@ fn place_status() -> PlaceStatus {
                         at: 111,
                         by: DeliveredBy::Notice,
                     }],
+                    answer: Some(answered()),
+                    claim: None,
                 },
+                key: "stage/code/2/ended-short".parse().unwrap(),
                 pending_for: vec![],
+                open_until: Some(3720),
             },
             EndStatus {
                 end: EndHeld {
                     of: EndOf::Stall {
                         since: 120,
                         waiting: "a retry of code".into(),
+                        answerer: Some("east/operator".into()),
+                        stop_short: Some(Box::new(StopShortWaited {
+                            words: Some("Which design?".into()),
+                            needs: Some(StopKind::NeedsAnswer),
+                            key: "stage/code/1/ended-short".parse().unwrap(),
+                            addressee: Some("west/ops".into()),
+                        })),
+                        answerer_read: true,
+                        lapsed: None,
                     },
                     read_at: 420,
                     deliveries: vec![],
+                    answer: None,
+                    claim: None,
                 },
+                key: "stall/120".parse().unwrap(),
                 pending_for: vec!["operator".into()],
+                open_until: None,
             },
             EndStatus {
                 end: EndHeld {
@@ -429,8 +525,12 @@ fn place_status() -> PlaceStatus {
                     },
                     read_at: 130,
                     deliveries: vec![],
+                    answer: None,
+                    claim: None,
                 },
+                key: "submission/2/landed".parse().unwrap(),
                 pending_for: vec!["operator".into()],
+                open_until: None,
             },
         ],
         role: Some("madswan/planner".into()),
@@ -447,6 +547,9 @@ fn place_status() -> PlaceStatus {
             },
         }),
         line: line(),
+        waits_on: Some(WaitsOn::Places),
+        worktree: Some(false),
+        on_branch: Some(vec![PlaceId::new("/r/places/change--two")]),
     }
 }
 
@@ -521,6 +624,10 @@ fn host_status() -> HostStatus {
             reserves: Reserves::Held,
             refused: Some("the stream work's reserves, operation 3 and construction 3, 6 in all, pass its bound of 5".into()),
             view_refused: None,
+            answerer: Some(StreamAnswerer::Stands(DeclaredBy {
+                address: "work/operator".into(),
+                source: "acme".into(),
+            })),
             multiplexer: ProfileHeld {
                 profile: "fake".into(),
                 from: NamedBy::Host,
@@ -582,27 +689,92 @@ fn host_status() -> HostStatus {
         terminal_kept: vec!["the workspace r main, held by the pane w1:p3".into()],
         addresses: vec![AddressStatus {
             address: "madswan/planner".into(),
-            role: Some(RoleRun {
-                repository: "/r".into(),
-                kind: "planner".into(),
-                priority: 5,
-                base: Some("next".into()),
-                brief: Some("read the records".into()),
-                stream: Some("work".into()),
+            role: Some(RoleStatus {
+                run: RoleRun {
+                    source: "acme".into(),
+                    repository: "/r".into(),
+                    kind: "planner".into(),
+                    priority: 5,
+                    base: Some("next".into()),
+                    brief: Some("read the records".into()),
+                    name: None,
+                    intent: None,
+                    agents: RoleAgents::default(),
+                    answers: None,
+                    answerer: false,
+                },
+                stream: "madswan".into(),
             }),
             run: Some(PlaceId::new("/r/places/planner--planner")),
             pending: vec![PendingEnd {
                 place: PlaceId::new("/r/places/fix--one"),
-                key: "stage verify 1".into(),
+                key: "stage/verify/1/delivered".parse().unwrap(),
                 what: "verify needs an answer".into(),
             }],
             unwoken: Some("the run of madswan/planner was not launched: the kind planner resolves to no declaration".into()),
+            standing: None,
+            carried: None,
+            wakes_nothing: None,
+            stalled: None,
+        }, AddressStatus {
+            address: "madswan/ops".into(),
+            role: None,
+            run: None,
+            pending: vec![PendingEnd {
+                place: PlaceId::new("/r/places/fix--one"),
+                key: "stage/code/1/ended-short".parse().unwrap(),
+                what: "code delivered".into(),
+            }],
+            unwoken: None,
+            standing: Some(standing_status()),
+            carried: None,
+            wakes_nothing: None,
+            stalled: None,
+        }, AddressStatus {
+            address: "north/planner".into(),
+            role: None,
+            run: None,
+            pending: vec![],
+            unwoken: None,
+            standing: None,
+            carried: Some(CarriedRole {
+                source: "acme".into(),
+                answers: Some("The work's scope.".into()),
+            }),
+            wakes_nothing: None,
+            stalled: None,
+        }, AddressStatus {
+            address: "east/planner".into(),
+            role: None,
+            run: None,
+            pending: vec![],
+            unwoken: None,
+            standing: None,
+            carried: None,
+            wakes_nothing: Some("no source of the host declares east/planner".into()),
+            stalled: None,
+        }, AddressStatus {
+            address: "east/operator".into(),
+            role: None,
+            run: Some(PlaceId::new("/r/places/turn--east-operator")),
+            pending: vec![],
+            unwoken: None,
+            standing: None,
+            carried: None,
+            wakes_nothing: None,
+            stalled: Some(PendingEnd {
+                place: PlaceId::new("/r/places/turn--east-operator"),
+                key: "stall/420".parse().unwrap(),
+                what: "stalled: a retry of plan".into(),
+            }),
         }],
         watch: Watch::Bound { seconds: 30 },
+        watch_settled: Some(47_400),
+        watch_lapsed: Some(47_460),
         terminals: vec![TerminalStatus {
             profile: Some("fake".into()),
             kept: vec!["the workspace r main, held by the pane w1:p3".into()],
-            watch: Watch::Bound { seconds: 30 },
+            watch: Watch::None,
         }],
         bases: vec![BaseClues {
             repository: "/r".into(),
@@ -622,6 +794,14 @@ fn host_status() -> HostStatus {
             kinds_dir: Some("/kinds/acme".into()),
             kinds: vec!["acme/review@1".into()],
             cannot_read: Some("/kinds/acme/lint@1 could not be read".into()),
+            roles_file: Some("/state/acme/roles.toml".into()),
+            roles: vec!["east/operator".into()],
+            roles_refused: vec![RoleRefused {
+                address: "east/ops".into(),
+                source: "acme".into(),
+                reason: "its kind is not acme's".into(),
+            }],
+            roles_cannot_read: Some("/state/acme/roles.toml: no such file".into()),
         }],
         terminal_setup: vec![crate::fake_harness::SETUP.into()],
         configuration: HostConfiguration {
@@ -662,11 +842,20 @@ fn tidied() -> Tidied {
                 },
             },
         ],
-        branches_kept: vec![BranchKept {
-            place: place.clone(),
-            branch: "fix/one".into(),
-            commits: vec![Revision::new("c4")],
-        }],
+        branches_kept: vec![
+            BranchKept {
+                place: place.clone(),
+                branch: "fix/one".into(),
+                commits: vec![Revision::new("c4")],
+                reason: None,
+            },
+            BranchKept {
+                place: place.clone(),
+                branch: "train/spring".into(),
+                commits: vec![],
+                reason: Some("train/spring holds c5 that main lacks".into()),
+            },
+        ],
         not_over: vec![place.clone()],
         terminal: vec![TerminalTidied {
             place,
@@ -752,6 +941,35 @@ pub fn full() -> Vec<(&'static str, Answer)> {
                         end,
                     })
                     .collect(),
+                waiting: vec![WaitingPlace {
+                    place: PlaceId::new("/r/places/change--plan"),
+                    kind: "change".into(),
+                    name: "plan".into(),
+                    stream: "east".into(),
+                    brief: Some("one of two designs".into()),
+                    waiting_on: WaitingOn {
+                        act: Act::Retry,
+                        stage: Some("construct".into()),
+                        why: Waits::Answer,
+                        since: Some(100),
+                        words: Some("Which design does the brief mean?".into()),
+                        open_until: Some(3700),
+                        closed: None,
+                    },
+                    stop_short: Some(StopShortWaited {
+                        words: Some("Which design does the brief mean?".into()),
+                        needs: Some(StopKind::NeedsAnswer),
+                        key: "stage/construct/1/ended-short".parse().expect("a key"),
+                        addressee: Some("east/ops".into()),
+                    }),
+                    hold: Some(Hold {
+                        on: HoldOn::Waiting,
+                        words: Some("east-planner has it".into()),
+                        since: 160,
+                        bound: Some(3600),
+                        lapsed: None,
+                    }),
+                }],
             },
         ),
         (
@@ -760,6 +978,18 @@ pub fn full() -> Vec<(&'static str, Answer)> {
                 address: "madswan/planner".into(),
                 woke: Woke::Waiting,
                 place: place_status(),
+            },
+        ),
+        (
+            "held",
+            Answer::Held {
+                address: "madswan/ops".into(),
+                standing: standing_status(),
+                pending: vec![PendingEnd {
+                    place: PlaceId::new("/r/places/fix--one"),
+                    key: "stage/code/1/ended-short".parse().unwrap(),
+                    what: "code delivered".into(),
+                }],
             },
         ),
         (
@@ -781,6 +1011,24 @@ pub fn full() -> Vec<(&'static str, Answer)> {
         ),
         ("list", list()),
     ]
+}
+
+/// Where a standing agent lives, found waiting in the entry's own
+/// session of its stream's terminal (132, 190).
+pub fn standing_status() -> StandingStatus {
+    StandingStatus {
+        agent: "madswan-ops".into(),
+        stream: "madswan".into(),
+        session: SessionHeld {
+            name: Some("madswan".into()),
+            from: SessionFrom::Role,
+        },
+        terminal: Some("fake".into()),
+        found: StandingFound::One {
+            at: "fake:1@madswan".into(),
+            state: AgentState::Waiting,
+        },
+    }
 }
 
 /// A list of a place waiting on the host and a place kept by its
@@ -907,6 +1155,69 @@ fn a_status_before_terminal_setup(_: &()) -> Outcome {
     Ok(())
 }
 
+fn every_answer_reads_back(_: &()) -> Outcome {
+    for (name, answer) in full() {
+        let back: Answer =
+            serde_json::from_str(&answer.to_json()).map_err(|error| error.to_string())?;
+        ensure_eq!(back, answer, format!("the answer {name} read back"));
+    }
+    let found = [
+        StandingFound::None,
+        StandingFound::Several { count: 2 },
+        StandingFound::Unread {
+            reason: "the host declares no stream gone".into(),
+        },
+    ];
+    for found in found {
+        let answer = Answer::Held {
+            address: "madswan/ops".into(),
+            standing: StandingStatus {
+                found,
+                terminal: None,
+                ..standing_status()
+            },
+            pending: vec![],
+        };
+        let back: Answer =
+            serde_json::from_str(&answer.to_json()).map_err(|error| error.to_string())?;
+        ensure_eq!(back, answer, "the held answer read back");
+    }
+    Ok(())
+}
+
+fn an_address_before_standing(_: &()) -> Outcome {
+    let (_, answer) = full().remove(0);
+    let mut json: Value =
+        serde_json::from_str(&answer.to_json()).map_err(|error| error.to_string())?;
+    for address in json["status"]["host"]["addresses"]
+        .as_array_mut()
+        .ok_or("no addresses")?
+    {
+        let address = address.as_object_mut().ok_or("an address is no object")?;
+        address.remove("standing").ok_or("no standing")?;
+        address.remove("carried");
+        address.remove("wakes_nothing");
+        address.remove("stalled");
+    }
+    let back: Answer = serde_json::from_value(json).map_err(|error| error.to_string())?;
+    let Answer::Status { host, .. } = back else {
+        return Err(format!("read back as {back:?}"));
+    };
+    ensure_eq!(host.addresses.len(), 5, "the addresses read");
+    for address in &host.addresses {
+        let name = &address.address;
+        ensure_eq!(address.standing, None, format!("{name}'s standing"));
+        ensure_eq!(address.carried, None, format!("{name}'s carrying"));
+        ensure_eq!(
+            address.wakes_nothing,
+            None,
+            format!("why {name} wakes nothing")
+        );
+        ensure_eq!(address.stalled, None, format!("{name}'s run's stall"));
+    }
+    Ok(())
+}
+
 fn a_refusal_is_an_answer(_: &()) -> Outcome {
     let world = super::world::World::new();
     let refused = world
@@ -932,6 +1243,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host",
             "status.host.addresses",
             "status.host.addresses[].address",
+            "status.host.addresses[].carried",
+            "status.host.addresses[].carried.answers",
+            "status.host.addresses[].carried.source",
             "status.host.addresses[].pending",
             "status.host.addresses[].pending[].key",
             "status.host.addresses[].pending[].place",
@@ -942,8 +1256,26 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.addresses[].role.kind",
             "status.host.addresses[].role.priority",
             "status.host.addresses[].role.repository",
+            "status.host.addresses[].role.source",
+            "status.host.addresses[].role.stream",
             "status.host.addresses[].run",
+            "status.host.addresses[].standing",
+            "status.host.addresses[].standing.agent",
+            "status.host.addresses[].standing.found",
+            "status.host.addresses[].standing.found.one",
+            "status.host.addresses[].standing.found.one.at",
+            "status.host.addresses[].standing.found.one.state",
+            "status.host.addresses[].standing.session",
+            "status.host.addresses[].standing.session.from",
+            "status.host.addresses[].standing.session.name",
+            "status.host.addresses[].standing.stream",
+            "status.host.addresses[].stalled",
+            "status.host.addresses[].stalled.key",
+            "status.host.addresses[].stalled.place",
+            "status.host.addresses[].stalled.what",
+            "status.host.addresses[].standing.terminal",
             "status.host.addresses[].unwoken",
+            "status.host.addresses[].wakes_nothing",
             "status.host.bases",
             "status.host.bases[].base",
             "status.host.bases[].count",
@@ -983,8 +1315,19 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.sources[].kinds",
             "status.host.sources[].kinds_dir",
             "status.host.sources[].name",
+            "status.host.sources[].roles",
+            "status.host.sources[].roles_cannot_read",
+            "status.host.sources[].roles_file",
+            "status.host.sources[].roles_refused",
+            "status.host.sources[].roles_refused[].address",
+            "status.host.sources[].roles_refused[].reason",
+            "status.host.sources[].roles_refused[].source",
             "status.host.sources[].source_file",
             "status.host.streams",
+            "status.host.streams[].answerer",
+            "status.host.streams[].answerer.stands",
+            "status.host.streams[].answerer.stands.address",
+            "status.host.streams[].answerer.stands.source",
             "status.host.streams[].bound",
             "status.host.streams[].labels",
             "status.host.streams[].labels[].keep_free",
@@ -1051,12 +1394,12 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.watch",
             "status.host.watch.bound",
             "status.host.watch.bound.seconds",
+            "status.host.watch_lapsed",
+            "status.host.watch_settled",
             "status.host.terminals",
             "status.host.terminals[].kept",
             "status.host.terminals[].profile",
             "status.host.terminals[].watch",
-            "status.host.terminals[].watch.bound",
-            "status.host.terminals[].watch.bound.seconds",
             "status.places",
             "status.places[].agent",
             "status.places[].agent.account",
@@ -1068,6 +1411,12 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].agent.conversation.carried",
             "status.places[].agent.conversation.from",
             "status.places[].agent.conversation.why",
+            "status.places[].agent.effort",
+            "status.places[].agent.effort.layer",
+            "status.places[].agent.effort.outranked_by",
+            "status.places[].agent.effort.passed",
+            "status.places[].agent.effort.read_back",
+            "status.places[].agent.effort.word",
             "status.places[].agent.identity",
             "status.places[].agent.mode",
             "status.places[].agent.mode.entry",
@@ -1084,6 +1433,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].agent.terminal.profile",
             "status.places[].agent.settings",
             "status.places[].agent.settings.beside",
+            "status.places[].agent.settings.effort",
             "status.places[].agent.settings.env",
             "status.places[].agent.settings.env.KEY",
             "status.places[].agent.settings.instructions",
@@ -1128,10 +1478,12 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].ends[].end.made",
             "status.places[].ends[].end.made[].name",
             "status.places[].ends[].end.needs",
+            "status.places[].ends[].end.addressee",
             "status.places[].ends[].end.report",
             "status.places[].ends[].end.words",
             "status.places[].ends[].of",
             "status.places[].ends[].pending_for",
+            "status.places[].ends[].key",
             "status.places[].ends[].read_at",
             "status.places[].ends[].since",
             "status.places[].ends[].stage",
@@ -1142,10 +1494,19 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].ends[].verdict.landed",
             "status.places[].ends[].verdict.landed.commit",
             "status.places[].ends[].waiting",
+            "status.places[].ends[].answerer",
+            "status.places[].ends[].answerer_read",
+            "status.places[].ends[].stop_short",
+            "status.places[].ends[].stop_short.addressee",
+            "status.places[].ends[].stop_short.key",
+            "status.places[].ends[].stop_short.needs",
+            "status.places[].ends[].stop_short.words",
             "status.places[].failures",
             "status.places[].head",
             "status.places[].hold_words",
             "status.places[].holds",
+            "status.places[].holds[].bound",
+            "status.places[].holds[].lapsed",
             "status.places[].holds[].on",
             "status.places[].holds[].since",
             "status.places[].holds[].stage",
@@ -1225,6 +1586,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].readiness.steps[].step",
             "status.places[].readiness.steps[].words",
             "status.places[].recipients",
+            "status.places[].recipients_from",
+            "status.places[].recipients_from.from",
+            "status.places[].recipients_from.source",
             "status.places[].refused_acts",
             "status.places[].repository",
             "status.places[].role",
@@ -1238,6 +1602,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].stages[].end.group.number",
             "status.places[].stages[].end.group.title",
             "status.places[].stages[].end.needs",
+            "status.places[].stages[].end.addressee",
             "status.places[].stages[].end.report",
             "status.places[].stages[].end.words",
             "status.places[].stages[].group",
@@ -1283,6 +1648,37 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].agent.conversation.cause",
             "status.places[].agent.left_in_pane",
             "status.places[].stages[].end.left_in_pane",
+            "status.places[].stages[].end.open_until",
+            "status.places[].stages[].end.closed",
+            "status.places[].stages[].end.closed.at",
+            "status.places[].stages[].end.closed.by",
+            "status.places[].stages[].end.closed.left_in_pane",
+            "status.places[].stages[].answers",
+            "status.places[].stages[].answers[].act",
+            "status.places[].stages[].answers[].at",
+            "status.places[].stages[].answers[].question",
+            "status.places[].stages[].answers[].session",
+            "status.places[].stages[].answers[].session.received_at",
+            "status.places[].stages[].answers[].session.sent_at",
+            "status.places[].stages[].answers[].words",
+            "status.places[].stages[].answers[].by",
+            "status.places[].stages[].answers[].key",
+            "status.places[].ends[].open_until",
+            "status.places[].ends[].answer",
+            "status.places[].ends[].answer.act",
+            "status.places[].ends[].answer.at",
+            "status.places[].ends[].answer.session",
+            "status.places[].ends[].answer.session.received_at",
+            "status.places[].ends[].answer.session.sent_at",
+            "status.places[].ends[].answer.words",
+            "status.places[].ends[].answer.by",
+            "status.places[].ends[].answer.key",
+            "status.places[].waiting_on.open_until",
+            "status.places[].waiting_on.closed",
+            "status.places[].waiting_on.closed.at",
+            "status.places[].waiting_on.closed.by",
+            "status.places[].waiting_on.closed.ended_at",
+            "status.places[].waiting_on.closed.left_in_pane",
             "status.places[].waits_on_session",
             "status.places[].waits_on_session.processes",
             "status.places[].waits_on_session.processes[].pid",
@@ -1290,6 +1686,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].waits_on_session.since",
             "status.places[].waits_on_session.stage",
             "status.places[].waits_on_session.unread",
+            "status.places[].on_branch",
+            "status.places[].waits_on",
+            "status.places[].worktree",
         ],
     ),
     (
@@ -1307,6 +1706,12 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.agent.conversation.carried",
             "launched.place.agent.conversation.from",
             "launched.place.agent.conversation.why",
+            "launched.place.agent.effort",
+            "launched.place.agent.effort.layer",
+            "launched.place.agent.effort.outranked_by",
+            "launched.place.agent.effort.passed",
+            "launched.place.agent.effort.read_back",
+            "launched.place.agent.effort.word",
             "launched.place.agent.identity",
             "launched.place.agent.mode",
             "launched.place.agent.mode.entry",
@@ -1323,6 +1728,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.agent.terminal.profile",
             "launched.place.agent.settings",
             "launched.place.agent.settings.beside",
+            "launched.place.agent.settings.effort",
             "launched.place.agent.settings.env",
             "launched.place.agent.settings.env.KEY",
             "launched.place.agent.settings.instructions",
@@ -1367,10 +1773,12 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.ends[].end.made",
             "launched.place.ends[].end.made[].name",
             "launched.place.ends[].end.needs",
+            "launched.place.ends[].end.addressee",
             "launched.place.ends[].end.report",
             "launched.place.ends[].end.words",
             "launched.place.ends[].of",
             "launched.place.ends[].pending_for",
+            "launched.place.ends[].key",
             "launched.place.ends[].read_at",
             "launched.place.ends[].since",
             "launched.place.ends[].stage",
@@ -1381,10 +1789,19 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.ends[].verdict.landed",
             "launched.place.ends[].verdict.landed.commit",
             "launched.place.ends[].waiting",
+            "launched.place.ends[].answerer",
+            "launched.place.ends[].answerer_read",
+            "launched.place.ends[].stop_short",
+            "launched.place.ends[].stop_short.addressee",
+            "launched.place.ends[].stop_short.key",
+            "launched.place.ends[].stop_short.needs",
+            "launched.place.ends[].stop_short.words",
             "launched.place.failures",
             "launched.place.head",
             "launched.place.hold_words",
             "launched.place.holds",
+            "launched.place.holds[].bound",
+            "launched.place.holds[].lapsed",
             "launched.place.holds[].on",
             "launched.place.holds[].since",
             "launched.place.holds[].stage",
@@ -1450,6 +1867,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.readiness.steps[].step",
             "launched.place.readiness.steps[].words",
             "launched.place.recipients",
+            "launched.place.recipients_from",
+            "launched.place.recipients_from.from",
+            "launched.place.recipients_from.source",
             "launched.place.refused_acts",
             "launched.place.repository",
             "launched.place.role",
@@ -1463,6 +1883,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.stages[].end.group.number",
             "launched.place.stages[].end.group.title",
             "launched.place.stages[].end.needs",
+            "launched.place.stages[].end.addressee",
             "launched.place.stages[].end.report",
             "launched.place.stages[].end.words",
             "launched.place.stages[].group",
@@ -1513,6 +1934,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.waits_on_session.since",
             "launched.place.waits_on_session.stage",
             "launched.place.waits_on_session.unread",
+            "launched.place.on_branch",
+            "launched.place.waits_on",
+            "launched.place.worktree",
         ],
     ),
     (
@@ -1532,6 +1956,12 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.agent.account.name",
             "acted.status.agent.account.pool",
             "acted.status.agent.asking",
+            "acted.status.agent.effort",
+            "acted.status.agent.effort.layer",
+            "acted.status.agent.effort.outranked_by",
+            "acted.status.agent.effort.passed",
+            "acted.status.agent.effort.read_back",
+            "acted.status.agent.effort.word",
             "acted.status.agent.identity",
             "acted.status.agent.mode",
             "acted.status.agent.mode.entry",
@@ -1548,6 +1978,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.agent.terminal.profile",
             "acted.status.agent.settings",
             "acted.status.agent.settings.beside",
+            "acted.status.agent.settings.effort",
             "acted.status.agent.settings.env",
             "acted.status.agent.settings.env.KEY",
             "acted.status.agent.settings.instructions",
@@ -1592,10 +2023,12 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.ends[].end.made",
             "acted.status.ends[].end.made[].name",
             "acted.status.ends[].end.needs",
+            "acted.status.ends[].end.addressee",
             "acted.status.ends[].end.report",
             "acted.status.ends[].end.words",
             "acted.status.ends[].of",
             "acted.status.ends[].pending_for",
+            "acted.status.ends[].key",
             "acted.status.ends[].read_at",
             "acted.status.ends[].since",
             "acted.status.ends[].stage",
@@ -1606,10 +2039,19 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.ends[].verdict.landed",
             "acted.status.ends[].verdict.landed.commit",
             "acted.status.ends[].waiting",
+            "acted.status.ends[].answerer",
+            "acted.status.ends[].answerer_read",
+            "acted.status.ends[].stop_short",
+            "acted.status.ends[].stop_short.addressee",
+            "acted.status.ends[].stop_short.key",
+            "acted.status.ends[].stop_short.needs",
+            "acted.status.ends[].stop_short.words",
             "acted.status.failures",
             "acted.status.head",
             "acted.status.hold_words",
             "acted.status.holds",
+            "acted.status.holds[].bound",
+            "acted.status.holds[].lapsed",
             "acted.status.holds[].on",
             "acted.status.holds[].since",
             "acted.status.holds[].stage",
@@ -1668,6 +2110,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.readiness.steps[].step",
             "acted.status.readiness.steps[].words",
             "acted.status.recipients",
+            "acted.status.recipients_from",
+            "acted.status.recipients_from.from",
+            "acted.status.recipients_from.source",
             "acted.status.refused_acts",
             "acted.status.repository",
             "acted.status.role",
@@ -1681,6 +2126,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.stages[].end.group.number",
             "acted.status.stages[].end.group.title",
             "acted.status.stages[].end.needs",
+            "acted.status.stages[].end.addressee",
             "acted.status.stages[].end.report",
             "acted.status.stages[].end.words",
             "acted.status.stages[].group",
@@ -1726,6 +2172,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.tidy.branches_kept[].branch",
             "acted.tidy.branches_kept[].commits",
             "acted.tidy.branches_kept[].place",
+            "acted.tidy.branches_kept[].reason",
             "acted.tidy.kept",
             "acted.tidy.kept[].place",
             "acted.tidy.kept[].why",
@@ -1749,6 +2196,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.waits_on_session.since",
             "acted.status.waits_on_session.stage",
             "acted.status.waits_on_session.unread",
+            "acted.status.on_branch",
+            "acted.status.waits_on",
+            "acted.status.worktree",
             "acted.tidy.kept[].why.session_runs",
             "acted.tidy.kept[].why.session_runs.processes",
             "acted.tidy.kept[].why.session_runs.processes[].pid",
@@ -1766,6 +2216,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "settled.tidy.branches_kept[].branch",
             "settled.tidy.branches_kept[].commits",
             "settled.tidy.branches_kept[].place",
+            "settled.tidy.branches_kept[].reason",
             "settled.tidy.kept",
             "settled.tidy.kept[].place",
             "settled.tidy.kept[].why",
@@ -1795,6 +2246,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "tidied.tidy.branches_kept[].branch",
             "tidied.tidy.branches_kept[].commits",
             "tidied.tidy.branches_kept[].place",
+            "tidied.tidy.branches_kept[].reason",
             "tidied.tidy.kept",
             "tidied.tidy.kept[].place",
             "tidied.tidy.kept[].why",
@@ -1857,6 +2309,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "inbox.ends[].end.end.made[].name",
             "inbox.ends[].end.end.last_words",
             "inbox.ends[].end.end.needs",
+            "inbox.ends[].end.end.addressee",
             "inbox.ends[].end.end.report",
             "inbox.ends[].end.end.screen",
             "inbox.ends[].end.end.words",
@@ -1874,6 +2327,14 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "inbox.ends[].end.verdict.landed.commit",
             "inbox.ends[].end.verdict.landed.place_removed",
             "inbox.ends[].end.waiting",
+            "inbox.ends[].end.answerer",
+            "inbox.ends[].end.key",
+            "inbox.ends[].end.answerer_read",
+            "inbox.ends[].end.stop_short",
+            "inbox.ends[].end.stop_short.addressee",
+            "inbox.ends[].end.stop_short.key",
+            "inbox.ends[].end.stop_short.needs",
+            "inbox.ends[].end.stop_short.words",
             "inbox.ends[].kind",
             "inbox.ends[].name",
             "inbox.ends[].place",
@@ -1892,6 +2353,12 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.agent.account.name",
             "woken.place.agent.account.pool",
             "woken.place.agent.asking",
+            "woken.place.agent.effort",
+            "woken.place.agent.effort.layer",
+            "woken.place.agent.effort.outranked_by",
+            "woken.place.agent.effort.passed",
+            "woken.place.agent.effort.read_back",
+            "woken.place.agent.effort.word",
             "woken.place.agent.identity",
             "woken.place.agent.mode",
             "woken.place.agent.mode.entry",
@@ -1908,6 +2375,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.agent.terminal.profile",
             "woken.place.agent.settings",
             "woken.place.agent.settings.beside",
+            "woken.place.agent.settings.effort",
             "woken.place.agent.settings.env",
             "woken.place.agent.settings.env.KEY",
             "woken.place.agent.settings.instructions",
@@ -1952,10 +2420,12 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.ends[].end.made",
             "woken.place.ends[].end.made[].name",
             "woken.place.ends[].end.needs",
+            "woken.place.ends[].end.addressee",
             "woken.place.ends[].end.report",
             "woken.place.ends[].end.words",
             "woken.place.ends[].of",
             "woken.place.ends[].pending_for",
+            "woken.place.ends[].key",
             "woken.place.ends[].read_at",
             "woken.place.ends[].since",
             "woken.place.ends[].stage",
@@ -1966,10 +2436,19 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.ends[].verdict.landed",
             "woken.place.ends[].verdict.landed.commit",
             "woken.place.ends[].waiting",
+            "woken.place.ends[].answerer",
+            "woken.place.ends[].answerer_read",
+            "woken.place.ends[].stop_short",
+            "woken.place.ends[].stop_short.addressee",
+            "woken.place.ends[].stop_short.key",
+            "woken.place.ends[].stop_short.needs",
+            "woken.place.ends[].stop_short.words",
             "woken.place.failures",
             "woken.place.head",
             "woken.place.hold_words",
             "woken.place.holds",
+            "woken.place.holds[].bound",
+            "woken.place.holds[].lapsed",
             "woken.place.holds[].on",
             "woken.place.holds[].since",
             "woken.place.holds[].stage",
@@ -2028,6 +2507,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.readiness.steps[].step",
             "woken.place.readiness.steps[].words",
             "woken.place.recipients",
+            "woken.place.recipients_from",
+            "woken.place.recipients_from.from",
+            "woken.place.recipients_from.source",
             "woken.place.refused_acts",
             "woken.place.repository",
             "woken.place.role",
@@ -2041,6 +2523,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.stages[].end.group.number",
             "woken.place.stages[].end.group.title",
             "woken.place.stages[].end.needs",
+            "woken.place.stages[].end.addressee",
             "woken.place.stages[].end.report",
             "woken.place.stages[].end.words",
             "woken.place.stages[].group",
@@ -2092,6 +2575,31 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.waits_on_session.since",
             "woken.place.waits_on_session.stage",
             "woken.place.waits_on_session.unread",
+            "woken.place.on_branch",
+            "woken.place.waits_on",
+            "woken.place.worktree",
+        ],
+    ),
+    (
+        "held",
+        &[
+            "held",
+            "held.address",
+            "held.pending",
+            "held.pending[].key",
+            "held.pending[].place",
+            "held.pending[].what",
+            "held.standing",
+            "held.standing.agent",
+            "held.standing.found",
+            "held.standing.found.one",
+            "held.standing.found.one.at",
+            "held.standing.found.one.state",
+            "held.standing.session",
+            "held.standing.session.from",
+            "held.standing.session.name",
+            "held.standing.stream",
+            "held.standing.terminal",
         ],
     ),
     (
@@ -2155,3 +2663,93 @@ pub const FIELDS: &[(&str, &[&str])] = &[
         ],
     ),
 ];
+
+/// The host's part of status as the engine gives it now.
+fn host_now(world: &super::world::World) -> Result<HostStatus, String> {
+    match world.engine().status(None) {
+        Answer::Status { host, .. } => Ok(host),
+        other => Err(format!("status answered {other:?}")),
+    }
+}
+
+/// The place-status spec's "A watched host and an unwatched one": a
+/// caller's settle with a bound of two minutes, status asked a minute
+/// later, then five minutes on with no such settle (56, 119, 208).
+fn a_watched_host_and_an_unwatched_one(_: &()) -> Outcome {
+    let world = super::world::World::new();
+    let before = host_now(&world)?;
+    ensure_eq!(
+        (before.watch, before.watch_settled, before.watch_lapsed),
+        (Watch::None, None, None),
+        "the watch on a host where none was kept"
+    );
+    let began = world.host.now();
+    world.engine.settle_every(120);
+    world.host.advance(60);
+    let watched = host_now(&world)?;
+    ensure_eq!(
+        (watched.watch, watched.watch_settled, watched.watch_lapsed),
+        (Watch::Bound { seconds: 120 }, Some(began), None),
+        "the watch a minute after the caller's settle"
+    );
+    let json = serde_json::to_value(&watched).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        (
+            json["watch"]["bound"]["seconds"].as_u64(),
+            json["watch_settled"].as_u64(),
+            json.get("watch_lapsed").is_none()
+        ),
+        (Some(120), Some(began), true),
+        "the watch in the JSON form"
+    );
+    world.host.advance(5 * 60);
+    let lapsed = host_now(&world)?;
+    ensure_eq!(
+        (lapsed.watch, lapsed.watch_settled, lapsed.watch_lapsed),
+        (Watch::None, Some(began), Some(began + 4 * 60)),
+        "the watch five minutes on, lapsed four minutes after its settle began"
+    );
+    Ok(())
+}
+
+/// The place-status spec's "The terminals' answers in status": a caller
+/// keeps watch, the host binds the fake terminal and `trial` names
+/// `other`; each terminal's answer gives its watch none, and the host's
+/// watch gives the caller's bound (61, 122, 208).
+fn the_terminals_answers_in_status(_: &()) -> Outcome {
+    let world = super::world::World::new();
+    world.other_terminal("other");
+    world.host.set_host_display(Some("fake"), None, None);
+    world.host.set_display("trial", Some("other"), None, None);
+    world.engine.settle_every(120);
+    let host = host_now(&world)?;
+    ensure_eq!(
+        host.terminals
+            .iter()
+            .map(|terminal| (terminal.profile.clone(), terminal.watch))
+            .collect::<Vec<_>>(),
+        vec![
+            (Some("fake".to_string()), Watch::None),
+            (Some("other".to_string()), Watch::None),
+        ],
+        "each terminal's answer"
+    );
+    ensure_eq!(
+        host.watch,
+        Watch::Bound { seconds: 120 },
+        "the host's watch beside the terminals"
+    );
+    let json = serde_json::to_value(&host).map_err(|error| error.to_string())?;
+    for at in 0..2 {
+        let keys: Vec<&str> = json["terminals"][at]
+            .as_object()
+            .map(|answer| answer.keys().map(String::as_str).collect())
+            .unwrap_or_default();
+        ensure_eq!(
+            (json["terminals"][at]["watch"].as_str(), keys),
+            (Some("none"), vec!["kept", "profile", "watch"]),
+            format!("the terminal {at}'s answer in the JSON form")
+        );
+    }
+    Ok(())
+}

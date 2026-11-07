@@ -8,7 +8,9 @@
 //! UserPromptSubmit, at the start's first prompt, the mode its session
 //! runs in, which 2.1.296 gives no SessionStart input, blocking the prompt
 //! where it is another (161, 162). Outside such an agent every hook does
-//! nothing. A hook never fails and never holds up a start or a turn: what
+//! nothing but SessionStart, which runs `flume inbox` as the session the
+//! terminal names and gives the agent what waits on it (43; design 9). A
+//! hook never fails and never holds up a start or a turn: what
 //! it cannot do it leaves undone, and it always exits 0; it answers only
 //! through the JSON Claude Code reads, a refused command's reason, a
 //! blocked prompt's or a stop's.
@@ -311,8 +313,9 @@ fn guard_reason(act: &str) -> String {
 }
 
 /// What the hook for `event` does with `input`, in the start `start`
-/// names: the JSON Claude Code reads, or nothing. It does nothing outside
-/// an agent flume started, and never fails.
+/// names: the JSON Claude Code reads, or nothing. Outside an agent flume
+/// started it does nothing, but SessionStart, which gives the session
+/// what waits on it ([`caller_session_start`]); it never fails.
 pub fn hook(
     event: &str,
     input: &str,
@@ -324,7 +327,10 @@ pub fn hook(
         return status_line::line(start.place.as_deref(), start.agent.as_deref(), build);
     }
     if start.agent.is_none() || start.secret.is_none() {
-        return String::new();
+        return match event {
+            "session-start" => caller_session_start(input, build),
+            _ => String::new(),
+        };
     }
     let input: Value = serde_json::from_str(input).unwrap_or(Value::Null);
     // A subagent's input carries its id; the acks skip it, and the guard
@@ -438,6 +444,38 @@ pub fn hook(
         }
         _ => String::new(),
     }
+}
+
+/// SessionStart in a session flume did not start: `flume inbox` run as
+/// the session the terminal names, never as the environment's recipient or
+/// a role's address, so a person's session never takes a role's ends, and
+/// what it gives handed to the agent as the session's added context, each
+/// end and each waiting place with its key and the ways on; nothing where
+/// it gives nothing, no terminal names the session, as under the printed
+/// command, or flume cannot be reached (43, C.4; design 9). It holds up no
+/// start past the hook's own timeout, and fails nothing.
+fn caller_session_start(input: &str, build: &dyn Fn() -> Result<Engine, String>) -> String {
+    let input: Value = serde_json::from_str(input).unwrap_or(Value::Null);
+    if input["agent_id"].is_string() {
+        return String::new();
+    }
+    let Ok(core) = build() else {
+        return String::new();
+    };
+    let Some(words) = core
+        .session_inbox()
+        .as_ref()
+        .and_then(flume_core::session_words)
+    else {
+        return String::new();
+    };
+    json!({
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": words,
+        }
+    })
+    .to_string()
 }
 
 /// The host's clock, in seconds.

@@ -236,9 +236,9 @@ declaration naming the field (157, 195, C.2; core.34).
 The kinds profile SHALL read a repository's `[agents]`, flume's own
 table of `.config/flume.toml` beside `[profiles]` and no part of any
 kind, from the sections weir's crate returns unnamed, at the revision
-the kinds are read at, giving `program`, `model`, `mode`,
-`instructions` and `programs` as the repository's kind tables do (21,
-23, 32, 195, C.2; core.4).
+the kinds are read at, giving `program`, `model`, `effort`,
+`mode`, `instructions` and `programs` as the repository's kind tables
+do (21, 23, 32, 195, 197, C.2; core.4).
 
 #### Scenario: A repository's agents for every kind
 
@@ -255,6 +255,62 @@ and a package's SHALL not be read for the table (4, 32, C.2).
 
 - **WHEN** a repository's `[agents]` gives `stages = { code = { model = "opus" } }`, or `env = { X = "1" }`
 - **THEN** the declaration cannot be read, naming `agents.stages` or `agents.env`, and nothing is launched (4, C.2)
+
+### Requirement: A declaration's agents tables give an effort
+
+The kinds profile SHALL read `effort` from every agents table a
+declaration holds, a kind's, a stage's, the repository's for a kind it
+does not declare and the repository's `[agents]` for every kind, from
+the table weir's crate returns as written: a
+string, kept as written; any other, a table of programs among it until
+the model's is built with it, SHALL fail the declaration naming the
+field (23, 158, 172, 197, C.2; core.4).
+
+#### Scenario: An effort for every stage and one for a stage
+
+- **WHEN** a scratch repository's `.config/flume.toml` gives `[kinds.bump.agents] effort = "high"` and a stage's `agents = [{ effort = "xhigh" }]`
+- **THEN** the kind's settings read `high` for every stage and `xhigh` for that stage (23, 197, C.2)
+
+#### Scenario: An effort for every kind of a repository
+
+- **WHEN** a scratch repository's `.config/flume.toml` gives `[agents] effort = "medium"` beside a `[kinds.fix.agents]` table giving `effort = "high"`
+- **THEN** the kinds read give the repository's settings for every kind with `medium`, and its settings for fix with `high` (32, 197, C.2)
+
+#### Scenario: An effort that is no word
+
+- **WHEN** a declaration's agents table gives `effort = 3` or `effort = { claude = "high" }`
+- **THEN** the declaration cannot be read, naming the table's `effort` (4, 197, C.2)
+
+### Requirement: A declaration gives no keep_open
+
+A declaration's agents table, a kind's, a stage's, or a repository's
+for every kind or for a kind it does not declare, that gives
+`keep_open` SHALL fail to read, naming the field and that the host or
+the launch gives it, so the launch is refused whole (4, 158, 198, C.2).
+
+#### Scenario: A repository's keep_open
+
+- **WHEN** a repository's `.config/flume.toml` gives `[kinds.fix.agents] keep_open = "2h"`
+- **THEN** a launch of a fix is refused naming `kinds.fix.agents.keep_open`, and nothing is made (4, 198)
+
+#### Scenario: A kind's keep_open
+
+- **WHEN** a package's kind declares a stage whose `agents` entry gives `keep_open = "5m"`
+- **THEN** a launch of that kind is refused naming the stage's `keep_open`, and nothing is made (4, 158)
+
+### Requirement: A kind that lands with no stages read through weir's crate
+
+The kinds profile SHALL read a kind declaring `stages = []` and
+`lands = true` through `weir-kinds`, at the revision that reads it, as
+a kind with no stages; a kind declaring no stages that does not land
+SHALL be refused in weir's words, naming the field; and a table that
+leaves `stages` out SHALL read as settings for a kind declared
+elsewhere, as before (4, 18, 23, 202; weir 51, 57; core.4).
+
+#### Scenario: Three tables over a scratch repository
+
+- **WHEN** a scratch repository's `.config/flume.toml` declares `train` with `lands = true` and `stages = []`, `idle` with `lands = false` and `stages = []`, and a `[kinds.fix.agents]` table with no stages
+- **THEN** `train` reads as a kind that lands with no stages, `idle` is refused naming its stages, and `fix`'s table is read as settings for flume's own fix (18, 57)
 
 ### Requirement: change@3's construct gives each task its own check
 

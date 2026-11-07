@@ -784,7 +784,7 @@ pub fn affinity(world: &World, intent: &IntentKey) -> Option<Affinity> {
         digest: intent.digest().to_string(),
     })? {
         HostDocument::Intent(affinity) => Some(affinity),
-        HostDocument::Account(_) => None,
+        HostDocument::Account(_) | HostDocument::Watch(_) => None,
     }
 }
 
@@ -1368,7 +1368,7 @@ fn spent_until(world: &World, pool: &str, account: &str) -> Option<AccountSpent>
         account: account.into(),
     })? {
         HostDocument::Account(spent) => Some(spent),
-        HostDocument::Intent(_) => None,
+        HostDocument::Intent(_) | HostDocument::Watch(_) => None,
     }
 }
 
@@ -2684,6 +2684,12 @@ fn a_stage_moved_off_a_threshold(_: &()) -> Outcome {
         ],
     );
     let at = world.host.now();
+    // The asking agent stopped, so the retry starts a fresh agent rather
+    // than answering its session (51, 198).
+    ensure!(
+        world.engine().stop(&id, false).refusal().is_none(),
+        "the stop of the asking agent was refused"
+    );
     let retried = world.engine().retry(
         &id,
         Retry::Stage("code".into()),

@@ -388,6 +388,7 @@ fn a_source_written_beside_and_renamed() {
                 file: acme.to_string_lossy().into_owned(),
                 read: HostSourceRead::Read {
                     kinds_dir: format!("{}/kinds/acme", home()),
+                    roles: None,
                 },
             }
         )])
@@ -415,7 +416,8 @@ fn entries_that_are_no_source() {
     assert_eq!(
         read["crew"].read,
         HostSourceRead::Read {
-            kinds_dir: "/srv/kinds/crew".into()
+            kinds_dir: "/srv/kinds/crew".into(),
+            roles: None,
         }
     );
     assert_eq!(read.len(), 2, "{read:?}");
@@ -509,7 +511,8 @@ fn each_fault_is_its_sources_own() {
         assert_eq!(
             read[name].read,
             HostSourceRead::Read {
-                kinds_dir: kinds_dir.into()
+                kinds_dir: kinds_dir.into(),
+                roles: None,
             },
             "{name}"
         );
@@ -559,6 +562,546 @@ fn the_local_layer_declares_no_source() {
         refused.configuration.local
     );
     assert_eq!(declared(&refused), ["acme"]);
+}
+
+/// A scratch host declaring the streams `east` and `west` and each of
+/// `sources`, `(name, roles file's text)`, its roles file written beside
+/// its packages' directory; the host read as a command reads it, and the
+/// roles files' paths by source (143, 191, 193, C.7).
+fn roles_host(
+    scratch: &Scratch,
+    sources: &[(&str, &str)],
+) -> (RealHost, BTreeMap<String, std::path::PathBuf>) {
+    let (file, dir) = configuration(scratch);
+    std::fs::write(&file, "[streams.east]\n[streams.west]\n").unwrap();
+    let mut files = BTreeMap::new();
+    for (name, text) in sources {
+        let roles = scratch.path(&format!("state/{name}/roles.toml"));
+        std::fs::create_dir_all(roles.parent().unwrap()).unwrap();
+        std::fs::write(&roles, text).unwrap();
+        std::fs::write(
+            dir.join(format!("{name}.toml")),
+            format!(
+                "kinds_dir = \"/srv/kinds/{name}\"\nroles = \"{}\"\n",
+                roles.display()
+            ),
+        )
+        .unwrap();
+        files.insert(name.to_string(), roles);
+    }
+    let config = HostConfig::read(&file).expect("the configuration read");
+    (host(scratch, config), files)
+}
+
+/// The run `kind` of `source` in `/r` at priority 0, with nothing else.
+fn bare_run(source: &str, kind: &str) -> RoleRun {
+    RoleRun {
+        source: source.into(),
+        repository: "/r".into(),
+        kind: kind.into(),
+        priority: 0,
+        base: None,
+        brief: None,
+        name: None,
+        intent: None,
+        agents: RoleAgents::default(),
+        answers: None,
+        answerer: false,
+    }
+}
+
+/// role-waking, "A role configured", "A base and a brief" and "The run's
+/// intent and settings", as the host reads them: a source's `roles`
+/// names its file, under `~` read as the home, and each key of a run's
+/// entry is its run's, its kind its source's own written bare or under
+/// the source's name, its repository's `~` the home (7, 32, 132, 147,
+/// 193, C.7).
+#[test]
+fn a_sources_roles_name_each_run() {
+    let scratch = Scratch::new("roles-run");
+    let (host, _) = roles_host(
+        &scratch,
+        &[(
+            "acme",
+            "[roles.\"east/planner\"]\nrepository = \"~/r\"\nkind = \"turn\"\npriority = 5\n\
+             base = \"next\"\nbrief = \"Plan the next unit.\"\nname = \"east\"\n\
+             intent = \"east-planner\"\nanswers = \"The work's scope.\"\nanswerer = true\n\
+             [roles.\"east/planner\".agents]\nmodel = \"opus\"\n\
+             [roles.\"east/planner\".agents.stages.turn]\ninstructions = \"Be brief.\"\n\
+             [roles.\"west/planner\"]\nrepository = \"/r\"\nkind = \"acme/turn\"\n",
+        )],
+    );
+    assert_eq!(
+        host.role("east/planner"),
+        Some(RoleRun {
+            repository: format!("{}/r", home()),
+            priority: 5,
+            base: Some("next".into()),
+            brief: Some("Plan the next unit.".into()),
+            name: Some("east".into()),
+            intent: Some("east-planner".into()),
+            agents: RoleAgents {
+                every_stage: Settings {
+                    model: Some("opus".into()),
+                    ..Settings::default()
+                },
+                stages: BTreeMap::from([(
+                    "turn".to_string(),
+                    Settings {
+                        instructions: Some("Be brief.".into()),
+                        ..Settings::default()
+                    },
+                )]),
+            },
+            answers: Some("The work's scope.".into()),
+            answerer: true,
+            ..bare_run("acme", "turn")
+        })
+    );
+    assert_eq!(
+        host.role("west/planner"),
+        Some(bare_run("acme", "turn")),
+        "a kind under its source's own name, its priority zero and its base the default branch's"
+    );
+    assert!(host.roles().refused.is_empty(), "{:?}", host.roles());
+}
+
+/// role-waking, "Read as it stands": the source's program writes its
+/// roles file beside it and renames it over the first, and the next ask
+/// reads `east/ops` beside `east/planner`, nothing of flume's run between;
+/// no read writes the file (191, 193; core.16).
+#[test]
+fn a_roles_file_read_as_it_stands() {
+    let scratch = Scratch::new("roles-renamed");
+    let planner = "[roles.\"east/planner\"]\nrepository = \"/r\"\nkind = \"turn\"\n";
+    let (host, files) = roles_host(&scratch, &[("acme", planner)]);
+    let roles = &files["acme"];
+    assert_eq!(
+        host.roles().declared.keys().collect::<Vec<_>>(),
+        ["east/planner"]
+    );
+    let beside = roles.with_file_name(".roles.toml.tmp");
+    std::fs::write(
+        &beside,
+        format!("{planner}[roles.\"east/ops\"]\nrepository = \"/r\"\nkind = \"turn\"\n"),
+    )
+    .unwrap();
+    std::fs::rename(&beside, roles).unwrap();
+    let before = as_it_stands(roles);
+    assert_eq!(
+        host.roles().declared.keys().collect::<Vec<_>>(),
+        ["east/ops", "east/planner"]
+    );
+    assert_eq!(host.role("east/ops"), Some(bare_run("acme", "turn")));
+    assert_eq!(as_it_stands(roles), before, "a read wrote the roles file");
+}
+
+/// role-waking, "A standing design agent" and "A standing door" as the
+/// host reads them, and "A carried address": a standing agent's entry
+/// gives no run and a run's no standing agent; a carried address of a
+/// stream the host does not declare is carried (132, 193, C.5, C.7;
+/// record 0039's amendment).
+#[test]
+fn a_standing_agent_and_a_carried_address() {
+    let scratch = Scratch::new("roles-standing");
+    let (host, _) = roles_host(
+        &scratch,
+        &[(
+            "acme",
+            "[roles.\"east/design\"]\nagent = \"east-design\"\n\
+             answers = \"A decision the design has not made.\"\n\
+             [roles.\"east/operator\"]\nagent = \"east-operator\"\nsession = \"doors\"\nanswerer = true\n\
+             [roles.\"east/ops\"]\nrepository = \"/r\"\nkind = \"turn\"\n\
+             [roles.\"north/planner\"]\ncarried = true\nanswers = \"The work's scope.\"\n",
+        )],
+    );
+    let standing = host.standing();
+    assert_eq!(
+        standing.keys().collect::<Vec<_>>(),
+        ["east/design", "east/operator"]
+    );
+    assert_eq!(
+        standing["east/operator"],
+        StandingAgent {
+            source: "acme".into(),
+            agent: "east-operator".into(),
+            session: Some("doors".into()),
+            answers: None,
+            answerer: true,
+        }
+    );
+    assert_eq!(host.role("east/design"), None, "a standing address's run");
+    assert!(host.role("east/ops").is_some());
+    assert_eq!(
+        host.declared("north/planner"),
+        Ok(RoleEntry::Carried(CarriedRole {
+            source: "acme".into(),
+            answers: Some("The work's scope.".into()),
+        }))
+    );
+    assert_eq!(
+        host.answerer("east"),
+        Some(StreamAnswerer::Stands(DeclaredBy {
+            address: "east/operator".into(),
+            source: "acme".into(),
+        }))
+    );
+}
+
+/// role-waking, "An entry that names a stream", "A stream the host does
+/// not declare", "Another source's kind", "A standing agent beside a
+/// kind", "Points in a role's entry" and the other faults of an entry:
+/// each declares nothing for its address, named with why, and every other
+/// entry of the file is declared (4, 132, 143, 165, 191, 193, C.7;
+/// core.30).
+#[test]
+fn an_entry_at_fault_declares_nothing_for_its_address() {
+    let scratch = Scratch::new("roles-faults");
+    let run = "repository = \"/r\"\nkind = \"turn\"\n";
+    let entries = [
+        (
+            "east/a",
+            format!("{run}stream = \"west\"\n"),
+            "its address names its stream",
+        ),
+        (
+            "south/planner",
+            run.to_string(),
+            "the stream south, which the host does not declare",
+        ),
+        (
+            "east/b",
+            "repository = \"/r\"\nkind = \"beta/turn\"\n".into(),
+            "not acme's own",
+        ),
+        (
+            "east/c",
+            "repository = \"/r\"\nkind = \"turn@1\"\n".into(),
+            "its version the locks'",
+        ),
+        (
+            "east/d",
+            "agent = \"east-d\"\nkind = \"turn\"\n".into(),
+            "both a standing agent and a kind",
+        ),
+        (
+            "east/e",
+            "agent = \"east-e\"\npriority = 5\n".into(),
+            "priority beside agent",
+        ),
+        (
+            "east/f",
+            format!("{run}env = {{ A = \"b\" }}\n"),
+            "an agent's environment is its account's alone",
+        ),
+        ("east/g", format!("{run}pool = \"work\"\n"), "gives pool"),
+        ("east/h", format!("{run}account = \"w\"\n"), "gives account"),
+        ("east/i", format!("{run}carried = true\n"), "carried beside"),
+        (
+            "east/j",
+            "carried = true\nagent = \"east-j\"\n".into(),
+            "carried beside agent",
+        ),
+        (
+            "east/k",
+            "carried = true\nanswerer = true\n".into(),
+            "carried beside answerer",
+        ),
+        (
+            "east/l",
+            format!("{run}points = 3\n"),
+            "points is no word of a role's run",
+        ),
+        (
+            "east/m",
+            format!("{run}[roles.\"east/m\".agents]\nenv = {{ A = \"b\" }}\n"),
+            "env is no setting of a role's run",
+        ),
+        ("planner", run.to_string(), "<stream>/<role>"),
+    ];
+    let mut text = String::from("[roles.\"east/ok\"]\nrepository = \"/r\"\nkind = \"turn\"\n");
+    for (address, entry, _) in &entries {
+        text.push_str(&format!("[roles.\"{address}\"]\n{entry}"));
+    }
+    let (host, _) = roles_host(&scratch, &[("acme", &text)]);
+    let roles = host.roles();
+    assert_eq!(
+        roles.declared.keys().collect::<Vec<_>>(),
+        ["east/ok"],
+        "{roles:?}"
+    );
+    for (address, _, named) in entries {
+        let Err(why) = host.declared(address) else {
+            panic!("{address} declared");
+        };
+        assert!(why.contains(named), "{address}: {why}");
+        assert!(
+            roles
+                .refused
+                .iter()
+                .any(|refused| refused.address == address && refused.source == "acme"),
+            "{address} not named refused"
+        );
+    }
+    assert!(roles.unread.is_empty());
+}
+
+/// role-waking, "A roles file that is not TOML": acme's roles file
+/// declares no role and is named with why, and beta's `west/ops` is
+/// declared; a file that cannot be read, and one giving another key than
+/// `roles`, likewise (191, 193).
+#[test]
+fn a_roles_file_that_cannot_be_read_declares_no_role() {
+    let scratch = Scratch::new("roles-unread");
+    let (host, files) = roles_host(
+        &scratch,
+        &[
+            ("acme", "[roles.\"east/ops\"\nrepository = \"/r\"\n"),
+            (
+                "beta",
+                "[roles.\"west/ops\"]\nrepository = \"/r\"\nkind = \"turn\"\n",
+            ),
+            ("gamma", "kinds = 3\n"),
+        ],
+    );
+    std::fs::remove_file(&files["gamma"]).unwrap();
+    std::fs::write(
+        scratch.path("config/flume/sources/delta.toml"),
+        format!(
+            "kinds_dir = \"/srv/kinds/delta\"\nroles = \"{}\"\n",
+            scratch.path("state/delta/roles.toml").display()
+        ),
+    )
+    .unwrap();
+    std::fs::create_dir_all(scratch.path("state/delta")).unwrap();
+    std::fs::write(scratch.path("state/delta/roles.toml"), "kinds = 3\n").unwrap();
+    let host = {
+        drop(host);
+        let file = scratch.path("config/flume/config.toml");
+        self::host(&scratch, HostConfig::read(&file).unwrap())
+    };
+    let roles = host.roles();
+    assert_eq!(roles.declared.keys().collect::<Vec<_>>(), ["west/ops"]);
+    assert_eq!(roles.unread["acme"].file, files["acme"].to_string_lossy());
+    assert!(
+        roles.unread["acme"].reason.contains("is not TOML"),
+        "{roles:?}"
+    );
+    assert!(
+        roles.unread["gamma"].reason.contains("could not be read"),
+        "{roles:?}"
+    );
+    assert!(
+        roles.unread["delta"]
+            .reason
+            .contains("`kinds` is no key of a roles file"),
+        "{roles:?}"
+    );
+    assert!(host
+        .declared("east/ops")
+        .is_err_and(|why| why.contains("no source")));
+}
+
+/// role-waking, "One address, two sources" and "Two addresses, one
+/// place": neither is declared, each named with both (3, 4, 132, 193).
+#[test]
+fn what_two_entries_claim_is_neithers() {
+    let scratch = Scratch::new("roles-claimed");
+    let (host, _) = roles_host(
+        &scratch,
+        &[
+            (
+                "acme",
+                "[roles.\"east/planner\"]\nrepository = \"/r\"\nkind = \"turn\"\n\
+                 [roles.\"east/ops\"]\nrepository = \"/r\"\nkind = \"turn\"\nname = \"planner\"\n\
+                 [roles.\"west/ops\"]\nrepository = \"/r\"\nkind = \"turn\"\nname = \"planner\"\n\
+                 [roles.\"west/design\"]\nrepository = \"/s\"\nkind = \"turn\"\nname = \"planner\"\n",
+            ),
+            ("beta", "[roles.\"east/planner\"]\nagent = \"east-planner\"\n"),
+        ],
+    );
+    let Err(why) = host.declared("east/planner") else {
+        panic!("east/planner declared");
+    };
+    assert!(why.contains("acme") && why.contains("beta"), "{why}");
+    for address in ["east/ops", "west/ops"] {
+        let Err(why) = host.declared(address) else {
+            panic!("{address} declared");
+        };
+        assert!(
+            why.contains("east/ops") && why.contains("west/ops") && why.contains("turn--planner"),
+            "{why}"
+        );
+    }
+    assert!(
+        host.role("west/design").is_some(),
+        "a run of the same name in another repository"
+    );
+    assert_eq!(host.roles().refused.len(), 4, "{:?}", host.roles());
+}
+
+/// history-and-host, "Each stream's door", "No answerer" and "Two behind
+/// one stream" (143, 191, 193, C.7).
+#[test]
+fn the_answerer_behind_each_stream() {
+    let scratch = Scratch::new("roles-answerer");
+    let (host, files) = roles_host(
+        &scratch,
+        &[(
+            "acme",
+            "[roles.\"east/operator\"]\nrepository = \"/r\"\nkind = \"turn\"\nanswerer = true\n\
+             [roles.\"west/operator\"]\nrepository = \"/r\"\nkind = \"turn\"\nanswerer = true\n",
+        )],
+    );
+    let door = |address: &str| {
+        Some(StreamAnswerer::Stands(DeclaredBy {
+            address: address.into(),
+            source: "acme".into(),
+        }))
+    };
+    assert_eq!(host.answerer("east"), door("east/operator"));
+    assert_eq!(host.answerer("west"), door("west/operator"));
+    assert_eq!(host.answerer(DEFAULT_STREAM), None);
+
+    std::fs::write(
+        &files["acme"],
+        "[roles.\"east/ops\"]\nrepository = \"/r\"\nkind = \"turn\"\n",
+    )
+    .unwrap();
+    for stream in ["east", "west", DEFAULT_STREAM] {
+        assert_eq!(host.answerer(stream), None, "{stream}");
+    }
+
+    let (host, _) = roles_host(
+        &scratch,
+        &[
+            (
+                "acme",
+                "[roles.\"east/operator\"]\nrepository = \"/r\"\nkind = \"turn\"\nanswerer = true\n",
+            ),
+            ("beta", "[roles.\"east/ops\"]\nagent = \"east-ops\"\nanswerer = true\n"),
+        ],
+    );
+    assert_eq!(
+        host.answerer("east"),
+        Some(StreamAnswerer::Contested {
+            roles: vec![
+                DeclaredBy {
+                    address: "east/operator".into(),
+                    source: "acme".into(),
+                },
+                DeclaredBy {
+                    address: "east/ops".into(),
+                    source: "beta".into(),
+                },
+            ],
+        })
+    );
+}
+
+/// history-and-host, "The host's roles" (28, 41, 132, 193).
+#[test]
+fn the_roles_a_host_answers_with() {
+    let scratch = Scratch::new("roles-answering");
+    let (host, _) = roles_host(
+        &scratch,
+        &[(
+            "acme",
+            "[roles.\"east/planner\"]\nrepository = \"/r\"\nkind = \"turn\"\nanswers = \"The work's scope.\"\n\
+             [roles.\"east/ops\"]\nrepository = \"/r\"\nkind = \"turn\"\nanswers = \"A live system.\"\n\
+             [roles.\"west/ops\"]\nrepository = \"/r\"\nkind = \"turn\"\nanswers = \"A live system.\"\n\
+             [roles.\"east/design\"]\nagent = \"east-design\"\nanswers = \"A screen's look.\"\n\
+             [roles.\"north/design\"]\ncarried = true\nanswers = \"A decision.\"\n\
+             [roles.\"east/reviewer\"]\nrepository = \"/r\"\nkind = \"turn\"\n",
+        )],
+    );
+    let answering: Vec<(String, String, String)> = host
+        .answering()
+        .into_iter()
+        .map(|role| (role.address, role.stream, role.answers))
+        .collect();
+    let role = |address: &str, stream: &str, answers: &str| {
+        (address.to_string(), stream.to_string(), answers.to_string())
+    };
+    assert_eq!(
+        answering,
+        [
+            role("east/design", "east", "A screen's look."),
+            role("east/ops", "east", "A live system."),
+            role("east/planner", "east", "The work's scope."),
+            role("north/design", "north", "A decision."),
+            role("west/ops", "west", "A live system."),
+        ]
+    );
+}
+
+/// A source's `roles` neither absolute nor under `~` is its file's fault,
+/// as its `kinds_dir` would be (191, 193, C.7).
+#[test]
+fn a_sources_roles_path_at_fault() {
+    let scratch = Scratch::new("roles-path");
+    let (file, dir) = configuration(&scratch);
+    std::fs::write(
+        dir.join("acme.toml"),
+        "kinds_dir = \"/srv/kinds/acme\"\nroles = \"state/roles.toml\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("beta.toml"),
+        "kinds_dir = \"/srv/kinds/beta\"\nroles = 3\n",
+    )
+    .unwrap();
+    let read = sources(&scratch, &file);
+    for (name, named) in [
+        (
+            "acme",
+            "`roles` is `state/roles.toml`, which is neither absolute nor under `~`",
+        ),
+        ("beta", "`roles` is not a path"),
+    ] {
+        let HostSourceRead::CouldNotRead { reason } = &read[name].read else {
+            panic!("{name} read");
+        };
+        assert!(reason.contains(named), "{name}: {reason}");
+    }
+}
+
+/// role-waking, "The roles in the host's configuration": a `config.toml`
+/// giving `[roles]` is unreadable, naming it and that a source declares a
+/// role, as a command of its own reads it (193, C.7).
+#[test]
+fn a_roles_table_in_the_hosts_configuration_is_unreadable() {
+    let scratch = Scratch::new("roles-table");
+    let (file, _) = configuration(&scratch);
+    std::fs::write(
+        &file,
+        "[streams.east]\n[roles.\"east/planner\"]\nrepository = \"/r\"\nkind = \"turn\"\n",
+    )
+    .unwrap();
+    let Err(reason) = HostConfig::read(&file) else {
+        panic!("a configuration with [roles] read");
+    };
+    assert!(
+        reason.contains("[roles]") && reason.contains("a source declares each role"),
+        "{reason}"
+    );
+    let answer = scratch.path("answer.json");
+    let status = Command::new(std::env::current_exe().unwrap())
+        .args([READER, "--exact", "--nocapture", "--test-threads=1"])
+        .env("XDG_CONFIG_HOME", scratch.path("config"))
+        .env("XDG_STATE_HOME", scratch.path("state"))
+        .env(CHILD_ANSWER, &answer)
+        .stdout(std::process::Stdio::null())
+        .status()
+        .expect("a child process");
+    assert!(status.success());
+    let answer: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&answer).unwrap()).unwrap();
+    let refused = answer["refused"].as_str().unwrap_or_default();
+    assert!(
+        refused.contains("[roles]") && refused.contains("a source declares each role"),
+        "{answer}"
+    );
 }
 
 const CHILD_ANSWER: &str = "FLUME_TEST_LAYERS_ANSWER";

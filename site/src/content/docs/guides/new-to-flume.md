@@ -72,10 +72,10 @@ stops that at a stage or at the submission, with your words saying what
 it waits for, until you retry it. Each **end** of a stage, a
 submission's outcome and a stall goes once to each **recipient** of the
 place, and stays pending until it is delivered.
-[Callers, holds and ends](/flume/guides/callers-and-holds/) covers
-holds, `flume wait`, `flume inbox` and stalls, and
+[Callers, holds and ends](/flume/guides/callers-and-holds/) covers who
+answers a place, holds, `flume wait`, `flume inbox` and stalls, and
 [roles and wake](/flume/guides/roles-and-wake/) covers a recipient that
-is a role rather than a session.
+is a role of a stream rather than a session.
 
 ## The host's queue
 

@@ -1,5 +1,5 @@
 //! The merge-queue profile over sluice (C.6; design 13), every command
-//! and field it reads checked against the sluice the tree pins, 0.67.0.
+//! and field it reads checked against the sluice the tree pins, 0.71.0.
 //!
 //! submit is `sluice submit <base> --no-wait --json` in the place, with
 //! every multiplexer's session stripped from its environment, so sluice
@@ -56,13 +56,26 @@
 //! (11, 12, 20, 79, C.1, C.6). The profile reads no `[tests]` key and no
 //! `.prototools` for a place: the readiness, `sluice release` as the
 //! teardown and the remote the policy lands the base on are declared for
-//! the resolver to hand the place profile (core.3).
+//! the resolver to hand the place profile (core.3). A base place's
+//! branch is opened by `sluice branch create <branch> --from <base>
+//! --json` and closed by `sluice branch delete <branch> --into <base>
+//! --json`, each run in the repository as read-submission and step are:
+//! open answers the revision sluice made the branch at, and any other
+//! exit a refusal in sluice's words; close answers removed on exit 0, gone
+//! on exit 1 naming the branch itself, and kept in sluice's words
+//! otherwise, an `into` sluice cannot find among it, since the branch
+//! stands then (205, 206; sluice 104, 105). A base place's branch is
+//! submitted by name, `sluice submit <base> --head <branch> --no-wait
+//! --json` run in the repository, answered as any submit; sluice records
+//! the branch as the entry's `from.head`, so read-submission reads its
+//! outcome, and no inbox runs for it (99, 133, 203; sluice 124).
 
 use crate::git::Git;
 use crate::shell;
 use flume_seams::{
-    BaseRevision, Inbox, MergeQueue, PassedOver, PlaceRef, ReadAcross, ReadyStep, Revision,
-    Stepped, Submission, SubmissionOutcome, SubmissionRead, SubmissionState, Submitted,
+    BaseRevision, BranchClosed, BranchOpened, Inbox, MergeQueue, PassedOver, PlaceRef, ReadAcross,
+    ReadyStep, Revision, Stepped, Submission, SubmissionOutcome, SubmissionRead, SubmissionState,
+    SubmitHead, Submitted,
 };
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -116,6 +129,14 @@ impl Sluice {
     /// sluice run in `dir` with `args`: whether it succeeded, its output
     /// and its errors, or why it could not run.
     fn run(&self, dir: &Path, args: &[&str]) -> Result<(bool, String, String), String> {
+        let (code, stdout, stderr) = self.exited(dir, args)?;
+        Ok((code == Some(0), stdout, stderr))
+    }
+
+    /// sluice run in `dir` with `args`: its exit code, none where a
+    /// signal ended it, its output and its errors, or why it could not
+    /// run.
+    fn exited(&self, dir: &Path, args: &[&str]) -> Result<(Option<i32>, String, String), String> {
         let mut command = Command::new(&self.program);
         command
             .args(args)
@@ -142,7 +163,7 @@ impl Sluice {
             .output()
             .map_err(|error| format!("sluice could not be run: {error}"))?;
         Ok((
-            output.status.success(),
+            output.status.code(),
             String::from_utf8_lossy(&output.stdout).into_owned(),
             String::from_utf8_lossy(&output.stderr).into_owned(),
         ))
@@ -571,9 +592,29 @@ fn base_at(repository: &str, base: &str) -> Option<Revision> {
 }
 
 impl MergeQueue for Sluice {
-    fn submit(&self, place: &PlaceRef, _head: &Revision) -> Submitted {
-        let args = ["submit", place.base.as_str(), "--no-wait", "--json"];
-        let (success, stdout, stderr) = match self.run(Path::new(&place.location), &args) {
+    fn submit(&self, place: &PlaceRef, head: &SubmitHead) -> Submitted {
+        // A base place's branch is submitted by name from the repository,
+        // which holds no worktree of it, and every other place from its
+        // worktree (203; sluice 124).
+        let git = Git::at(&place.repository);
+        let (dir, args) = match head {
+            SubmitHead::Branch { branch, .. } => (
+                git.path(),
+                vec![
+                    "submit",
+                    place.base.as_str(),
+                    "--head",
+                    branch.as_str(),
+                    "--no-wait",
+                    "--json",
+                ],
+            ),
+            SubmitHead::Worktree { .. } => (
+                Path::new(&place.location),
+                vec!["submit", place.base.as_str(), "--no-wait", "--json"],
+            ),
+        };
+        let (success, stdout, stderr) = match self.run(dir, &args) {
             Ok(output) => output,
             Err(reason) => return Submitted::Refused { reason },
         };
@@ -766,6 +807,65 @@ impl MergeQueue for Sluice {
             Err(reason) => BaseRevision::Refused { reason },
         }
     }
+
+    /// `sluice branch create <branch> --from <base> --json` in the
+    /// repository: the revision sluice made the branch at, on the remote
+    /// the policy names or locally; any other answer, a policy that names
+    /// no table for the branch, a branch present or a base sluice cannot
+    /// find among it, a refusal in sluice's words (205; sluice 104).
+    fn open(&self, repository: &str, branch: &str, base: &str) -> BranchOpened {
+        let args = ["branch", "create", branch, "--from", base, "--json"];
+        let (code, stdout, stderr) = match self.exited(Git::at(repository).path(), &args) {
+            Ok(output) => output,
+            Err(reason) => return BranchOpened::Refused { reason },
+        };
+        let made = serde_json::from_str::<Value>(stdout.trim())
+            .ok()
+            .filter(|answer| code == Some(0) && answer.get("error").is_none())
+            .and_then(|answer| text(&answer, "created"));
+        match made {
+            Some(revision) => BranchOpened::Made {
+                revision: Revision::new(revision),
+            },
+            None => BranchOpened::Refused {
+                reason: branch_words("create", &stdout, &stderr),
+            },
+        }
+    }
+
+    /// `sluice branch delete <branch> --into <into> --json` in the
+    /// repository: removed on exit 0; gone on exit 1 where sluice says it
+    /// finds no such branch; kept in sluice's words otherwise, a
+    /// submission still queued on it, work of it `into` lacks, a step
+    /// holding it or an `into` sluice cannot find among it, and a sluice
+    /// that could not run, since the branch stands then (206; sluice 105).
+    fn close(&self, repository: &str, branch: &str, into: &str) -> BranchClosed {
+        let args = ["branch", "delete", branch, "--into", into, "--json"];
+        let (code, stdout, stderr) = match self.exited(Git::at(repository).path(), &args) {
+            Ok(output) => output,
+            Err(reason) => return BranchClosed::Kept { reason },
+        };
+        match code {
+            Some(0) => BranchClosed::Removed,
+            Some(1) if gone(branch, &stdout, &stderr) => BranchClosed::Gone,
+            _ => BranchClosed::Kept {
+                reason: branch_words("delete", &stdout, &stderr),
+            },
+        }
+    }
+}
+
+/// sluice's words for a refusal of `sluice branch <command>`.
+fn branch_words(command: &str, stdout: &str, stderr: &str) -> String {
+    format!("sluice branch {command}: {}", refusal(stdout, stderr))
+}
+
+/// Whether `sluice branch delete` said it finds no `branch`: it exits 1
+/// both for the branch gone and for an `into` it cannot find, and says
+/// `no branch <name>` naming which, so only its words naming the branch
+/// itself read gone (sluice 105).
+fn gone(branch: &str, stdout: &str, stderr: &str) -> bool {
+    refusal(stdout, stderr) == format!("no branch {branch}")
 }
 
 #[cfg(test)]
@@ -807,6 +907,20 @@ mod tests {
         assert_eq!(steps[3].words, shell::tail(&long));
         assert!(steps[3].words.len() < long.len(), "the words were not cut");
         assert!(steps[3].words.ends_with("the toolchain is unknown"));
+    }
+
+    #[test]
+    fn a_close_reads_gone_only_where_sluice_names_the_branch_itself() {
+        let not_found = |name: &str| {
+            serde_json::json!({"error": {"kind": "not_found", "message": format!("no branch {name}"), "next": []}})
+                .to_string()
+        };
+        assert!(gone("train/a", &not_found("train/a"), ""));
+        assert!(
+            !gone("train/a", &not_found("main"), ""),
+            "an into not found"
+        );
+        assert!(!gone("train/a", "", "sluice: could not read the policy"));
     }
 
     #[test]

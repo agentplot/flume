@@ -1,14 +1,25 @@
 //! What an agent's program asks of flume (41, 42, 110, 115, 131): a
 //! stop-short, taken only under the current start's identity and secret
 //! while its agent is live, saying whether it needs an answer or found
-//! work, and the stop check, which keeps at work an agent that
-//! would go quiet with its deliverable missing and nothing said.
+//! work, and naming, where it names one, the role its words are for among
+//! those its start's prompt listed; and the stop check, which keeps at
+//! work an agent that would go quiet with its deliverable missing and
+//! nothing said. An agent that stops short needing an answer, found work
+//! from a stage before the kind's last among it, is kept open for that
+//! answer where its start's terminal hands a running agent words (131,
+//! 198).
 
-use crate::prompt::group_text;
+use crate::prompt::{addressed, group_text, listed_names};
 use crate::reading::find_group;
 use crate::start::Starts;
-use crate::{Act, Answer, Engine, Step};
+use crate::{Act, Answer, Engine, Step, KEEP_OPEN, POLL};
 use flume_seams::*;
+
+/// How long a stop-short its agent makes in its session after taking an
+/// answer waits for the act that handed it the answer to record it: that
+/// act reads the answer received every [`POLL`] seconds and records it at
+/// once (42, 53; design 4).
+pub const ANSWER_RECORDED_WITHIN: Seconds = 2 * POLL;
 
 impl Engine {
     /// The place and stage index whose live current start `identity`
@@ -27,25 +38,80 @@ impl Engine {
     /// short with the words whole, the kind and a repetition's task group
     /// (142), and no next stage starts,
     /// except that found work from the kind's last stage starts its fix
-    /// round once the agent is quiet (41, 42, 131).
+    /// round once the agent is quiet (41, 42, 131). One that needs an
+    /// answer, found work from any other stage among it, keeps its agent
+    /// open for the answer until now and the start's `keep_open`, where
+    /// the terminal its start opened in hands a running agent words, and
+    /// records that time on the end; none is kept open otherwise (53, 95,
+    /// 198, C.5). A stop-short from an agent kept open, its stage still
+    /// ended short, first waits for the act that handed it an answer to
+    /// record it, as [`Engine::once_answered`] reads it, and is refused
+    /// where none does (42, 53).
     pub fn needs(&self, identity: &str, secret: &str, words: &str, kind: StopKind) -> Answer {
+        self.needs_to(identity, secret, words, kind, None)
+    }
+
+    /// An agent's stop-short as [`Engine::needs`] takes it, naming by `to`
+    /// the role its words are for, where it names one: a role alone the
+    /// place's own stream's, an address any stream's, and either taken only
+    /// among those its start's prompt listed. Its end records the address
+    /// whole and goes to it alone, in place of the place's recipients. A
+    /// name the prompt did not list is refused, naming those it did, and
+    /// the stage goes on (41, 43, 132).
+    pub fn needs_to(
+        &self,
+        identity: &str,
+        secret: &str,
+        words: &str,
+        kind: StopKind,
+        to: Option<&str>,
+    ) -> Answer {
         self.settle_attended();
         let Some((held, index)) = self.current_start(identity) else {
             return Answer::refused(format!(
                 "no live agent of a place's current stage is {identity}"
             ));
         };
-        let start = held.stages[index].start.clone().expect("a live start");
-        if start.secret.0 != secret {
+        if held.stages[index]
+            .start
+            .as_ref()
+            .is_none_or(|start| start.secret.0 != secret)
+        {
             return Answer::refused(format!("the secret is not {identity}'s start's"));
         }
+        let Some((held, index)) = self.once_answered(identity, held, index) else {
+            return Answer::refused(format!(
+                "no live agent of a place's current stage is {identity}"
+            ));
+        };
+        let start = held.stages[index].start.clone().expect("a live start");
         let agent = self.agent(&start.program);
         let folder = self.store.folder(&held.place.id);
         if self.state_of(agent.as_deref(), &folder, &start) == AgentState::Stopped {
             return Answer::refused(format!("the agent {identity} is not live"));
         }
+        let stream = &held.place.stream.name;
+        let addressee = to.map(|to| addressed(to, stream));
+        if let Some(addressee) = &addressee {
+            if !start.may_name.contains(addressee) {
+                let to = to.unwrap_or_default();
+                return Answer::refused(if start.may_name.is_empty() {
+                    format!(
+                        "the stop-short names `{to}`, and its prompt listed no role it may name: stop short naming none"
+                    )
+                } else {
+                    format!(
+                        "the stop-short names `{to}`, which its prompt did not list: it may name {}, or none",
+                        listed_names(&start.may_name, stream)
+                    )
+                });
+            }
+        }
         let id = held.place.id.clone();
         let made = self.made_since(&id, &start);
+        let answers = kind == StopKind::NeedsAnswer || index + 1 < held.stages.len();
+        let open_until = (answers && self.sends(&start))
+            .then(|| self.host.now().saturating_add(keep_open(&start)));
         let taken = self
             .update(&id, |held| {
                 let Some(index) = held.index_of(&start.identity) else {
@@ -59,8 +125,10 @@ impl Engine {
                 stage.end = Some(StageEnd {
                     words: Some(words.to_string()),
                     needs: Some(kind),
+                    addressee: addressee.clone(),
                     made: made.clone(),
                     group: start.group.clone().map(Box::new),
+                    open_until,
                     ..StageEnd::default()
                 });
                 Step::Write(true)
@@ -70,6 +138,41 @@ impl Engine {
             return Answer::refused(format!("the stage of {identity} is not running"));
         }
         self.acted(Act::Needs, &id)
+    }
+
+    /// The place and stage index of the live current start `identity`
+    /// names, `held` and `index` as first read, once an answer its agent
+    /// took in its session is recorded: while its stage still reads ended
+    /// short and its agent kept open, the agent stops short again only on
+    /// words handed to it, which the act that handed them records within
+    /// [`POLL`] seconds of reading them received, so the place is read
+    /// again each second, for up to [`ANSWER_RECORDED_WITHIN`], until its
+    /// stage runs again or its agent is no longer kept open; none where the
+    /// start is no longer the place's live current one (42, 53; design 4).
+    fn once_answered(
+        &self,
+        identity: &str,
+        held: HeldState,
+        index: usize,
+    ) -> Option<(HeldState, usize)> {
+        let began = self.host.now();
+        let (mut held, mut index) = (held, index);
+        while held.stages[index].state == StageState::EndedShort
+            && self.kept_open(&held).is_some()
+            && self.host.now().saturating_sub(began) < ANSWER_RECORDED_WITHIN
+        {
+            self.host.sleep(1);
+            (held, index) = self.current_start(identity)?;
+        }
+        Some((held, index))
+    }
+
+    /// Whether the terminal the start opened its agent in hands a running
+    /// agent words, as a tell's send does; not where no profile answers
+    /// for that terminal now (95, 190, 198).
+    fn sends(&self, start: &StartHeld) -> bool {
+        self.terminal_of(start)
+            .is_ok_and(|terminal| terminal.sends())
     }
 
     /// The place's own folder, where the agent of the live current start
@@ -199,6 +302,19 @@ impl Engine {
             declared.name,
         ))
     }
+}
+
+/// How long the start's agent is kept open once it stops short needing an
+/// answer: its settings' `keep_open` as resolved at its start, and
+/// flume's own hour for a start written before it resolved one, or one
+/// whose value no longer reads (32, 198).
+fn keep_open(start: &StartHeld) -> Seconds {
+    start
+        .settings
+        .keep_open
+        .as_deref()
+        .and_then(|given| read_span(given).ok())
+        .unwrap_or(KEEP_OPEN)
 }
 
 /// What a repetition delivers, in the stop check's words: its group, by

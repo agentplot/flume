@@ -5,7 +5,7 @@
 use flume_fakes::*;
 use flume_seams::*;
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 fn identity(stage: &str, start: u32) -> Identity {
     Identity {
@@ -35,6 +35,21 @@ fn the_clock_moves_only_when_advanced_or_slept_on() {
     host.sleep(60);
     assert_eq!(host.now(), at + 90);
     assert_eq!(host.log.calls(), vec!["sleep 60"]);
+}
+
+#[test]
+fn what_another_process_does_runs_once_at_the_next_sleep() {
+    // seam-fakes: another process acting while a command sleeps.
+    let host = Arc::new(FakeHost::default());
+    let at = host.now();
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let (by, on) = (seen.clone(), host.clone());
+    host.at_next_sleep(move || by.lock().unwrap().push(on.now()));
+    host.advance(30);
+    assert!(seen.lock().unwrap().is_empty(), "ran before a sleep");
+    host.sleep(5);
+    host.sleep(5);
+    assert_eq!(*seen.lock().unwrap(), vec![at + 35]);
 }
 
 #[test]
@@ -765,6 +780,76 @@ fn a_carried_start_scripted_to_end_before_its_word() {
 }
 
 #[test]
+fn the_agents_efforts_are_scripted() {
+    // Unscripted, the fake takes no effort, refusing every word in the
+    // seam's default words, and names no variable read over it; scripted
+    // to take `low` and `high`, it takes each and refuses any other naming
+    // it and both, names the variable scripted, its log names each effort
+    // asked, as at a launch and a start, and its command passes the
+    // effort its settings give as `--effort <word>`, and none where they
+    // give none (88, 106, 197).
+    let host = Arc::new(FakeHost::default());
+    let agent = FakeAgent::new(Arc::new(FakeTerminal::new(host)));
+    assert_eq!(agent.effort("high"), Err(no_effort("high")));
+    assert_eq!(agent.effort_variable(), None);
+
+    agent.take_efforts(&["low", "high"]);
+    agent.read_effort_over("FAKE_EFFORT");
+    assert_eq!(agent.effort("high"), Ok(()));
+    assert_eq!(agent.effort("high"), Ok(()));
+    assert_eq!(agent.effort("low"), Ok(()));
+    let words = agent.effort("med").expect_err("a word it does not take");
+    assert!(
+        words.contains("`med`") && words.contains("low") && words.contains("high"),
+        "{words}"
+    );
+    assert_eq!(agent.effort_variable(), Some("FAKE_EFFORT"));
+    assert_eq!(
+        agent.log.of("effort"),
+        vec![
+            "effort high",
+            "effort high",
+            "effort high",
+            "effort low",
+            "effort med"
+        ]
+    );
+
+    let who = identity("code", 1);
+    let command = |effort: Option<&str>| {
+        agent.command(
+            "/state/fix--one",
+            &Settings {
+                effort: effort.map(str::to_string),
+                ..Settings::default()
+            },
+            None,
+            &BTreeMap::new(),
+            None,
+            &BTreeMap::new(),
+            &place_ref(),
+            &who,
+            &Secret("s".into()),
+            "go",
+        )
+    };
+    let high = command(Some("high"));
+    assert!(
+        high.args
+            .windows(2)
+            .any(|pair| pair == ["--effort", "high"]),
+        "{:?}",
+        high.args
+    );
+    let none = command(None);
+    assert!(
+        !none.args.iter().any(|arg| arg == "--effort"),
+        "{:?}",
+        none.args
+    );
+}
+
+#[test]
 fn the_agents_own_settings_are_scripted() {
     // Unscripted, the fake reserves no key and refuses own settings in the
     // seam's default words, taking an empty entry, and its command lists
@@ -888,6 +973,11 @@ fn the_terminals_states_follow_the_fake_clock() {
     assert_eq!(terminal.session().as_deref(), Some("pane-3"));
 }
 
+/// What a place submits from its worktree at `head`.
+fn worktree(head: Revision) -> SubmitHead {
+    SubmitHead::Worktree { head }
+}
+
 fn submitted(answer: Submitted) -> Submission {
     match answer {
         Submitted::Submitted { submission } => submission,
@@ -909,7 +999,7 @@ fn submit_holds_no_wait_and_a_step_decides() {
     let queue = FakeMergeQueue::new(git.clone());
     let at = place_ref();
     git.set_branch("/r", "fix/one", &base);
-    let head = git.commit("/r", "fix/one", &["a"]);
+    let head = worktree(git.commit("/r", "fix/one", &["a"]));
     let submission = submitted(queue.submit(&at, &head));
     assert!(submission.state.open());
     assert_eq!(outcomes(queue.inbox(&at)), vec![]);
@@ -938,7 +1028,7 @@ fn the_merge_queues_outcomes_are_planned() {
     let queue = FakeMergeQueue::new(git.clone());
     let at = place_ref();
     git.set_branch("/r", "fix/one", &base);
-    let head = git.commit("/r", "fix/one", &["a"]);
+    let head = worktree(git.commit("/r", "fix/one", &["a"]));
     queue.plan_submits(vec![
         Plan::Fail("test x".into()),
         Plan::Conflict(vec!["a".into()], "conflicts with main".into()),
@@ -1019,7 +1109,7 @@ fn a_conflict_at_submit_is_answered_and_never_in_the_inbox() {
     let queue = FakeMergeQueue::new(git.clone());
     let at = place_ref();
     git.set_branch("/r", "fix/one", &base);
-    let head = git.commit("/r", "fix/one", &["a"]);
+    let head = worktree(git.commit("/r", "fix/one", &["a"]));
     queue.plan_submits(vec![Plan::ConflictAtSubmit(
         vec!["a".into()],
         "conflict on main: a with #1".into(),
@@ -1048,13 +1138,99 @@ fn a_conflict_at_submit_is_answered_and_never_in_the_inbox() {
 }
 
 #[test]
+fn a_base_places_open_and_close_are_scripted() {
+    // The seam-fakes spec's "Scripted open and close": open and close
+    // answer as a test scripts them, and the log names each ask (205,
+    // 206).
+    let git = FakeGit::new();
+    git.init("/r", "main");
+    let queue = FakeMergeQueue::new(git.clone());
+    let refused = BranchOpened::Refused {
+        reason: "train/x is not a branch the policy lands on".into(),
+    };
+    let kept = BranchClosed::Kept {
+        reason: "train/y has submission #3 open".into(),
+    };
+    queue.answer_open("/r", "train/x", refused.clone());
+    queue.answer_close("/r", "train/y", kept.clone());
+    assert_eq!(queue.open("/r", "train/x", "main"), refused);
+    assert!(
+        !git.branch_exists("/r", "train/x"),
+        "a refused open made it"
+    );
+    assert!(matches!(
+        queue.open("/r", "train/y", "main"),
+        BranchOpened::Made { .. }
+    ));
+    assert_eq!(queue.close("/r", "train/y", "main"), kept);
+    assert!(git.branch_exists("/r", "train/y"), "a kept branch removed");
+    assert_eq!(
+        queue.log.calls(),
+        vec![
+            "open train/x from main",
+            "open train/y from main",
+            "close train/y into main",
+        ]
+    );
+}
+
+#[test]
+fn a_submission_by_name_is_decided_in_the_record() {
+    // The seam-fakes spec's "A submission by name decided in the
+    // record": a branch the fake opened is one it lands on, a submission
+    // of it by name is logged so and decided in its record alone, and
+    // the inbox gives nothing for any place (133, 203).
+    let git = FakeGit::new();
+    let base = git.init("/r", "main");
+    let queue = FakeMergeQueue::new(git.clone());
+    assert_eq!(
+        queue.open("/r", "train/z", "main"),
+        BranchOpened::Made {
+            revision: base.clone()
+        }
+    );
+    let work = git.commit("/r", "train/z", &["a"]);
+    let base_place = PlaceRef {
+        repository: "/r".into(),
+        location: "/r/places/train--z".into(),
+        branch: "train/z".into(),
+        base: "main".into(),
+    };
+    queue.plan_submits(vec![Plan::Land]);
+    let submission = submitted(queue.submit(
+        &base_place,
+        &SubmitHead::Branch {
+            branch: "train/z".into(),
+            revision: work.clone(),
+        },
+    ));
+    assert_eq!(submission.branch, "train/z");
+    assert!(submission.state.open(), "submit waited on the verdict");
+    assert_eq!(queue.step("/r", "main"), Stepped::Stepped);
+    assert!(matches!(
+        queue.read_submission("/r", "train/z").read,
+        SubmissionRead::Found { submission }
+            if matches!(submission.state, SubmissionState::Landed { .. })
+    ));
+    assert!(
+        git.lacking("/r", "train/z", "main").is_empty(),
+        "not landed"
+    );
+    assert_eq!(outcomes(queue.inbox(&base_place)), vec![]);
+    assert_eq!(outcomes(queue.inbox(&place_ref())), vec![]);
+    assert_eq!(queue.log.of("submit"), vec!["submit train/z named"]);
+    assert_eq!(queue.close("/r", "train/z", "main"), BranchClosed::Removed);
+    assert_eq!(queue.close("/r", "train/z", "main"), BranchClosed::Gone);
+}
+
+#[test]
 fn a_request_is_an_entry_only_once_taken_in_and_its_outcome_goes_to_the_request() {
     let git = FakeGit::new();
     let base = git.init("/r", "main");
     let queue = FakeMergeQueue::new(git.clone());
     let at = place_ref();
     git.set_branch("/r", "fix/one", &base);
-    let head = git.commit("/r", "fix/one", &["a"]);
+    let head = worktree(git.commit("/r", "fix/one", &["a"]));
     let request = |then, to_place| Plan::Request {
         then: Box::new(then),
         to_place,
@@ -1189,6 +1365,53 @@ fn the_kinds_and_change_are_set() {
         change.read_change("/r", &later, "one"),
         ChangeRead::CouldNotRead { .. }
     ));
+}
+
+#[test]
+fn the_store_keeps_the_hosts_watch_and_the_clock_lets_it_lapse() {
+    // The seam-fakes spec's "A watch the clock lets lapse": the fake
+    // store holds the host's watch as any host document, by
+    // compare-and-set, so a watch written at the fake clock's time lapses
+    // once the clock passes twice its bound and is kept again by the next
+    // one written; the fake terminal answers nothing of a watch (106,
+    // 119, 122, 208).
+    let host = Arc::new(FakeHost::default());
+    let store = FakeStore::default();
+    assert!(store.read_host(&HostKey::Watch).is_none());
+    let first = Watched {
+        began: host.now(),
+        bound: 30,
+    };
+    let Written::Written { version } =
+        store.write_host(&HostKey::Watch, None, Some(&HostDocument::Watch(first)))
+    else {
+        panic!("the first watch was not written");
+    };
+    assert!(first.kept(host.now()));
+    host.advance(61);
+    assert!(!first.kept(host.now()), "a watch kept past twice its bound");
+    assert_eq!(
+        store.write_host(&HostKey::Watch, None, Some(&HostDocument::Watch(first))),
+        Written::Moved,
+        "a second first write"
+    );
+    let next = Watched {
+        began: host.now(),
+        bound: 30,
+    };
+    assert!(matches!(
+        store.write_host(
+            &HostKey::Watch,
+            Some(version),
+            Some(&HostDocument::Watch(next))
+        ),
+        Written::Written { .. }
+    ));
+    assert_eq!(
+        store.host_document(&HostKey::Watch),
+        Some(HostDocument::Watch(next))
+    );
+    assert!(next.kept(host.now()));
 }
 
 #[test]
@@ -1354,6 +1577,243 @@ fn the_terminal_holds_recipients_sessions_by_name() {
         ToSession::Refused { .. }
     ));
     assert_eq!(terminal.notices("ops"), vec!["two", "four"]);
+}
+
+/// The seam-fakes spec's "An entry set and taken away": a standing agent
+/// a source declares for `madswan/planner` is among the host's standing
+/// entries until a test takes it away, and each read logged (132, 193).
+#[test]
+fn an_entry_set_and_taken_away() {
+    let host = FakeHost::default();
+    assert!(host.standing().is_empty());
+    let planner = StandingAgent {
+        source: "acme".into(),
+        agent: "madswan-planner".into(),
+        session: Some("madswan".into()),
+        answers: None,
+        answerer: false,
+    };
+    host.set_standing("madswan/planner", Some(planner.clone()));
+    assert_eq!(
+        host.standing(),
+        BTreeMap::from([("madswan/planner".to_string(), planner)])
+    );
+    assert_eq!(host.role("madswan/planner"), None, "no run for it");
+    host.set_standing("madswan/planner", None);
+    assert!(host.standing().is_empty());
+    assert_eq!(
+        host.log.calls(),
+        vec!["standing", "standing", "role madswan/planner", "standing"]
+    );
+}
+
+/// The fake host scripts what its sources declare of roles: a run, a
+/// standing agent and a carried address, each in place of the entry
+/// before it and taken away by its own kind alone; an entry that declares
+/// nothing, with why; a roles file not read; and each stream's answerer
+/// and the answering roles, read from them as the test sets them (132,
+/// 191, 193, C.7).
+#[test]
+fn the_roles_its_sources_declare() {
+    let host = FakeHost::default();
+    let run = |source: &str, answers: Option<&str>, answerer: bool| RoleRun {
+        source: source.into(),
+        repository: "/r".into(),
+        kind: "turn".into(),
+        priority: 5,
+        base: None,
+        brief: None,
+        name: None,
+        intent: None,
+        agents: RoleAgents::default(),
+        answers: answers.map(str::to_string),
+        answerer,
+    };
+    host.set_role(
+        "east/planner",
+        Some(run("acme", Some("The work's scope."), false)),
+    );
+    host.set_role("east/operator", Some(run("acme", None, true)));
+    host.set_carried(
+        "north/design",
+        Some(CarriedRole {
+            source: "acme".into(),
+            answers: Some("A decision the design has not made.".into()),
+        }),
+    );
+    host.refuse_role("east/ops", "acme", "its kind beta/turn is not acme's own");
+    host.set_roles_unread("beta", Some(("/state/beta/roles.toml", "is not TOML")));
+    assert_eq!(
+        host.role("east/planner"),
+        Some(run("acme", Some("The work's scope."), false))
+    );
+    assert!(matches!(
+        host.declared("north/design"),
+        Ok(RoleEntry::Carried(_))
+    ));
+    assert_eq!(
+        host.declared("east/ops"),
+        Err("its kind beta/turn is not acme's own".into())
+    );
+    assert_eq!(
+        host.answerer("east"),
+        Some(StreamAnswerer::Stands(DeclaredBy {
+            address: "east/operator".into(),
+            source: "acme".into(),
+        }))
+    );
+    assert_eq!(host.answerer("west"), None);
+    assert_eq!(
+        host.answering()
+            .into_iter()
+            .map(|role| (role.address, role.stream))
+            .collect::<Vec<_>>(),
+        [
+            ("east/planner".to_string(), "east".to_string()),
+            ("north/design".to_string(), "north".to_string()),
+        ]
+    );
+    let roles = host.roles();
+    assert_eq!(roles.unread["beta"].file, "/state/beta/roles.toml");
+    assert_eq!(roles.refused.len(), 1);
+    host.set_standing("east/planner", None);
+    assert!(
+        host.role("east/planner").is_some(),
+        "a run kept from a standing agent's taking away"
+    );
+    host.set_standing(
+        "east/planner",
+        Some(StandingAgent {
+            source: "acme".into(),
+            agent: "east-planner".into(),
+            session: None,
+            answers: None,
+            answerer: false,
+        }),
+    );
+    assert_eq!(host.role("east/planner"), None, "the run replaced");
+    host.set_carried("north/design", None);
+    host.set_roles_unread("beta", None);
+    assert!(host.declared("north/design").is_err());
+    assert!(host.roles().unread.is_empty());
+    assert_eq!(host.log.of("answerer"), ["answerer east", "answerer west"]);
+}
+
+/// The seam-fakes spec's "An agent added, removed and refused":
+/// `w-planner` added waiting in `w` is listed there by its name under its
+/// key, which a send and a state reach and whose notices are kept; gone
+/// once removed; and `w` refused answers not read in the test's words,
+/// each asking logged and nothing opened (132, C.5).
+#[test]
+fn an_agent_added_removed_and_refused() {
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    assert_eq!(
+        terminal.agents_in(Some("w")),
+        AgentsIn::Read { agents: vec![] },
+        "a part holding none"
+    );
+    let at = terminal.add_agent(Some("w"), "w-planner", AgentState::Waiting);
+    assert_eq!(
+        terminal.agents_in(Some("w")),
+        AgentsIn::Read {
+            agents: vec![NamedAgent {
+                name: "w-planner".into(),
+                at: at.clone(),
+                state: AgentState::Waiting,
+            }]
+        }
+    );
+    assert_eq!(
+        terminal.agents_in(Some("office")),
+        AgentsIn::Read { agents: vec![] },
+        "another part's agents are its own"
+    );
+    assert_eq!(terminal.agents_in(None), AgentsIn::Read { agents: vec![] });
+    assert_eq!(terminal.session_state(&at), Some(AgentState::Waiting));
+    assert_eq!(terminal.send_to(&at, "an end of fix--one"), ToSession::Sent);
+    assert_eq!(terminal.notices(&at), vec!["an end of fix--one"]);
+    terminal.set_session_state(&at, AgentState::Asking);
+    let AgentsIn::Read { agents } = terminal.agents_in(Some("w")) else {
+        panic!("w is read");
+    };
+    assert_eq!(agents[0].state, AgentState::Asking, "its state as set");
+
+    terminal.remove_agent(&at);
+    assert_eq!(
+        terminal.agents_in(Some("w")),
+        AgentsIn::Read { agents: vec![] }
+    );
+    assert_eq!(terminal.session_state(&at), None);
+    assert_eq!(terminal.send_to(&at, "another"), ToSession::NotFound);
+
+    terminal.refuse_agents_in(Some("w"), "the session w did not answer");
+    assert_eq!(
+        terminal.agents_in(Some("w")),
+        AgentsIn::Unread {
+            reason: "the session w did not answer".into()
+        }
+    );
+    let own = terminal.add_agent(None, "planner", AgentState::Working);
+    assert!(own.ends_with("@own"), "{own}");
+    assert_eq!(
+        terminal.agents_in(None),
+        AgentsIn::Read {
+            agents: vec![NamedAgent {
+                name: "planner".into(),
+                at: own,
+                state: AgentState::Working,
+            }]
+        },
+        "the terminal's own part, read while w is refused"
+    );
+    assert_eq!(
+        terminal.log.of("agents_in"),
+        vec![
+            "agents_in w",
+            "agents_in w",
+            "agents_in office",
+            "agents_in own",
+            "agents_in w",
+            "agents_in w",
+            "agents_in w",
+            "agents_in own",
+        ]
+    );
+    assert_eq!(terminal.log.count("open"), 0, "nothing started");
+}
+
+/// The seam-fakes spec's "Two of one name": `w-planner` added twice in
+/// `w` is listed twice, each under its own key, which the core reads
+/// as no one agent (132; core.28).
+#[test]
+fn two_of_one_name() {
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    let first = terminal.add_agent(Some("w"), "w-planner", AgentState::Waiting);
+    let second = terminal.add_agent(Some("w"), "w-planner", AgentState::Working);
+    assert_ne!(first, second);
+    assert_eq!(
+        terminal.agents_in(Some("w")),
+        AgentsIn::Read {
+            agents: vec![
+                NamedAgent {
+                    name: "w-planner".into(),
+                    at: first.clone(),
+                    state: AgentState::Waiting,
+                },
+                NamedAgent {
+                    name: "w-planner".into(),
+                    at: second.clone(),
+                    state: AgentState::Working,
+                },
+            ]
+        }
+    );
+    assert_eq!(terminal.send_to(&second, "one"), ToSession::Sent);
+    assert_eq!(terminal.notices(&second), vec!["one"]);
+    assert!(
+        terminal.notices(&first).is_empty(),
+        "each reached by its key"
+    );
 }
 
 fn attach_command(part: &str) -> Attached {
@@ -2011,6 +2471,7 @@ fn the_hosts_sources_are_scripted() {
             file: source_file("acme"),
             read: HostSourceRead::Read {
                 kinds_dir: "/kinds/acme".into(),
+                roles: None,
             },
         })
     );
@@ -2027,7 +2488,7 @@ fn the_hosts_sources_are_scripted() {
     assert!(
         matches!(
             &host.sources()["acme"].read,
-            HostSourceRead::Read { kinds_dir } if kinds_dir == "/kinds/acme-2"
+            HostSourceRead::Read { kinds_dir, .. } if kinds_dir == "/kinds/acme-2"
         ),
         "a file renamed over another"
     );
@@ -2398,4 +2859,110 @@ fn the_hosts_labels_shares_and_layers_are_scripted() {
     host.set_configuration(configuration.clone());
     assert_eq!(host.configuration(), configuration);
     assert_eq!(host.log.count("configuration"), 3);
+}
+
+#[test]
+fn shows_clues_in_the_log() {
+    // The seam-fakes spec's "Show's clues in the log": the fake terminal
+    // logs the place, its stage and state, its line's short form and its
+    // base's count, and keeps the clues as given (139).
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    let clues = Clues {
+        stage: "code 1/2".into(),
+        state: "working".into(),
+        agent: Some(identity("code", 1)),
+        base: BaseCount {
+            running: 1,
+            ..BaseCount::default()
+        },
+        line: "code 1/2 · run 1 · tasks 2/5 · working".into(),
+    };
+    assert_eq!(terminal.show(&place_ref(), &clues), Shown::Shown);
+    assert_eq!(
+        terminal.log.of("show"),
+        vec![
+            "show /r/places/fix--one code 1/2 · working; code 1/2 · run 1 · tasks 2/5 · working; \
+             1 running · 0 asking · 0 waiting on caller · 0 stalled"
+                .to_string()
+        ]
+    );
+    assert_eq!(
+        terminal.shown(),
+        vec![("/r/places/fix--one".to_string(), clues)]
+    );
+}
+
+#[test]
+fn a_fake_terminal_that_hands_no_words() {
+    // The seam-fakes spec's first scenario: scripted to hand no words to a
+    // running agent, it says it cannot, and a send to it is refused with
+    // nothing typed (53, 198).
+    let host = Arc::new(FakeHost::default());
+    let terminal = FakeTerminal::new(host);
+    assert!(terminal.sends(), "a fake terminal sends unless scripted");
+    let who = identity("code", 1);
+    terminal.open(
+        &place_ref(),
+        "/state/fix--one",
+        &AgentCommand::default(),
+        &who,
+        &OpenIn::Own,
+        None,
+    );
+    terminal.cannot_send();
+    assert!(!terminal.sends());
+    assert!(matches!(
+        terminal.send(&who, "notes.md"),
+        Sent::Refused { .. }
+    ));
+    assert!(terminal.sent_to(&who).is_empty(), "words were sent");
+    assert_eq!(
+        terminal.typed(&who),
+        Some((String::new(), 0)),
+        "words typed"
+    );
+    assert!(
+        !terminal.log.calls().iter().any(|call| call == "sends"),
+        "asking whether it sends asks nothing"
+    );
+}
+
+#[test]
+fn a_fake_agents_session_ended_after_its_stop_short() {
+    // The seam-fakes spec's second scenario: scripted to end its session
+    // after a stop-short, the agent reads stopped and its session ended
+    // from then on; one not so scripted reads as it did (96, 134).
+    let host = Arc::new(FakeHost::default());
+    let terminal = Arc::new(FakeTerminal::new(host.clone()));
+    let agent = FakeAgent::new(terminal.clone());
+    let folder = "/state/fix--one";
+    let (asking, other) = (identity("code", 1), identity("review", 1));
+    for who in [&asking, &other] {
+        terminal.open(
+            &place_ref(),
+            folder,
+            &AgentCommand::default(),
+            who,
+            &OpenIn::Own,
+            None,
+        );
+        terminal.set_state(who, AgentState::Waiting);
+    }
+    agent.ends_after_stop_short(&asking);
+    assert_eq!(terminal.state(&asking), AgentState::Waiting, "before");
+    assert_eq!(agent.ended(folder, &asking), Reading::No, "before");
+    agent.stopped_short(&asking);
+    agent.stopped_short(&other);
+    host.advance(3600);
+    assert_eq!(terminal.state(&asking), AgentState::Stopped);
+    assert_eq!(agent.ended(folder, &asking), Reading::Yes);
+    assert_eq!(terminal.state(&other), AgentState::Waiting);
+    assert_eq!(agent.ended(folder, &other), Reading::No);
+    let ended: Vec<String> = agent
+        .log
+        .calls()
+        .into_iter()
+        .filter(|call| call.starts_with("session ended"))
+        .collect();
+    assert_eq!(ended, vec![format!("session ended {asking}")]);
 }

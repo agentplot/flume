@@ -69,7 +69,10 @@ merge that revision into the place's branch, resolve the files and
 commit, never to rebase.
 
 A stop-short that needs an answer, `flume needs "<words>"`, starts no
-next stage: the place waits until a retry carries the answer.
+next stage, and nor does found work from any other stage. The place
+waits until a retry carries the answer, or a tell while its agent is
+kept open for it
+([the agent kept open](/flume/guides/callers-and-holds/#the-agent-kept-open)).
 
 ## Where kinds come from
 
@@ -173,7 +176,29 @@ complete and flume tidies it.
 | `starts_unready` | the first stage starts in a place that could not be made ready | `false` |
 | `lands` | flume submits the place once the last stage delivers | `false` |
 | `agents` | settings for every stage's agent, and for the stages named under `agents.stages.<stage>` | none |
-| `stages` | the stages, at least one, in order | refused |
+| `stages` | the stages, in order: at least one, or `stages = []` for a kind that lands with no stages ([a kind with no stages](#a-kind-with-no-stages)) | refused |
+
+### A kind with no stages
+
+A kind that lands may declare `stages = []`. Its place is a base place:
+a branch other places land on, which lands in its turn. It runs no
+agent, has no worktree, and is submitted only when you retry its
+submission once every place on its branch is over:
+
+```toml
+[kinds.train]
+branch = "train"
+lands = true
+stages = []
+```
+
+A kind that does not land and declares `stages = []` refuses the
+launch, naming its stages. A table that leaves `stages` out is no
+kind: it gives settings to a kind declared elsewhere
+([settings](#settings)). flume carries no kind with no stages; a
+repository, a source on the host or a launch declares one. [Branches that land on
+branches](/flume/guides/merge-queue/#branches-that-land-on-branches)
+follows a base place from its launch to its tidy.
 
 ### A stage's fields
 
@@ -235,12 +260,29 @@ none of the lines once the place is tidied.
 ### Settings
 
 A kind's `agents` table, and a stage's one agent table, give the
-agent's `program`, `model` and `instructions`, `beside` for where its
-pane opens, `mode` and `programs`. The mode says how far the agent may
-act without asking a person: one of `plan`, `ask`, `edits` and `full`,
-or a table of programs such as `{ claude = "auto" }`
+agent's `program`, `model`, `effort` and `instructions`, `beside` for
+where its pane opens, `mode` and `programs`. The mode says how far the
+agent may act without asking a person: one of `plan`, `ask`, `edits`
+and `full`, or a table of programs such as `{ claude = "auto" }`
 ([the mode](/flume/guides/agent-settings/#the-mode)).
 A `mode` that is neither refuses the launch, naming the field.
+
+The effort says how hard the agent's model works on each turn, as its
+program's own word, such as Claude Code's `xhigh`
+([the effort](/flume/guides/agent-settings/#the-effort)). A kind that
+runs a deep stage harder than the rest gives that stage its own:
+
+```toml
+[[kinds.spike.stages]]
+name = "explore"
+prompt = "prompts/spike.md"
+deliverables = ["committed:notes/spike.md"]
+agents = [{ effort = "xhigh" }]
+```
+
+An `effort` that is not a string refuses the launch, naming the field,
+and a word the agent's program does not take refuses it naming the
+word, the stage and the program.
 
 `programs` gives each program's own settings, in that program's own
 words: a settings file the table names, `file`, and keys it gives
@@ -333,9 +375,11 @@ directory beside its configuration:
 kinds_dir = "~/.local/share/flume/kinds/acme"
 ```
 
-The file's name, less `.toml`, is the source's name. Its one key,
-`kinds_dir`, names the directory that holds the source's packages: an
-absolute path, or one whose leading `~` is your home. flume reads the
+The file's name, less `.toml`, is the source's name. Its key
+`kinds_dir` names the directory that holds the source's packages: an
+absolute path, or one whose leading `~` is your home. Its key `roles`,
+where it gives one, names the file declaring the roles the source
+answers ([roles come from a source](/flume/guides/roles-and-wake/#roles-come-from-a-source)). flume reads the
 sources directory as it stands at each launch, each wake of a role, each
 `flume kinds lock` and each status. It writes nothing in it, or in a
 source's `kinds_dir`.

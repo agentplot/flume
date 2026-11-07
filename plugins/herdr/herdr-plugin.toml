@@ -2,16 +2,17 @@ id = "agentplot.flume"
 name = "flume"
 version = "0.0.0"
 min_herdr_version = "0.9.5"
-description = "flume's watch, which settles every place on its bound and at each change of an agent's state, so flume runs unattended; and the places in flight in the sidebar and a popup, with keys that act through flume's commands."
+description = "flume's places in flight in a popup that reads flume's status when it opens and after each key that acts, whose keys act through flume's commands; the sidebar's rows are the clues flume's settles show. It keeps no process and runs no settle: its startup writes what herdr's configuration lacks for it, and exits."
 platforms = ["linux", "macos"]
 
-# One watch per server: it holds a lease, so starting it again does
-# nothing while it runs.
+# Once per server, and gone: what herdr's configuration lacks for the
+# popup's key and the sidebar's rows, written for flume's status (122,
+# C.5).
 [[startup]]
-command = ["sh", "bin/watch.sh", "--ensure"]
+command = ["sh", "bin/startup.sh"]
 
 # herdr 0.9.5's action declares no key: the description names the
-# host's entry that binds one (122; design 8).
+# host's entry that binds one (122, C.5).
 [[actions]]
 id = "places"
 title = "flume: the places in flight"

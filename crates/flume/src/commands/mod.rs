@@ -10,8 +10,10 @@ pub mod place;
 mod print;
 
 use clap::{Args, Parser, Subcommand};
-use flume_core::{Answer, Engine, KindsLock, LockOf, Retry, WaitFor};
-use flume_seams::{AgentState, HoldOn, Launch, PlaceId, Reading, Seconds, StopKind};
+use flume_core::{Answer, Answering, Engine, KindsLock, LockOf, Retry, WaitFor};
+use flume_seams::{
+    read_span, AgentState, EndKey, HoldOn, Launch, PlaceId, Reading, Seconds, StopKind,
+};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -81,6 +83,13 @@ enum Command {
         /// How long to wait for the agent, as `<n>`, `<n>s`, `<n>m` or `<n>h`.
         #[arg(long)]
         within: Option<String>,
+        /// The key of the stop-short the words answer, as the inbox and
+        /// status give it, its agent kept open for its answer: taken only
+        /// while the place waits on that stop-short and only once, and
+        /// otherwise refused naming the answer it took or the move the
+        /// place waits on now (42, 53, 198).
+        #[arg(long, value_name = "KEY")]
+        answers: Option<String>,
     },
     /// End the place's agent and nothing else (51).
     Stop(Forced),
@@ -106,40 +115,78 @@ enum Command {
         /// or began under it, which `flume stop` ends first (35, 50).
         #[arg(long)]
         force: bool,
+        /// The key of the stop-short the words answer, as the inbox and
+        /// status give it: taken only while the place waits on that
+        /// stop-short and only once, with words and naming its stage, and
+        /// otherwise refused, before any agent is ended, naming the answer
+        /// it took or the move the place waits on now (42, 49).
+        #[arg(long, value_name = "KEY")]
+        answers: Option<String>,
     },
     /// Put the place's next stage, or its submission, on hold with words
-    /// saying what for; only a retry naming it ends the hold (47, 130).
+    /// saying what for, which only a retry naming it ends; or, with
+    /// `--waiting`, hold the move the place waits on its caller for, with
+    /// words saying who makes it and how, which a later hold on the move
+    /// replaces and which ends once the place waits on another move or
+    /// none (47, 49, 130).
     Hold {
         place: String,
         /// The stage held: one not started since the current stage began.
         #[arg(
             long,
-            conflicts_with = "submission",
-            required_unless_present = "submission"
+            conflicts_with_all = ["submission", "waiting"],
+            required_unless_present_any = ["submission", "waiting"]
         )]
         stage: Option<String>,
         /// Hold the place's submission, not yet made.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "waiting")]
         submission: bool,
-        /// What the hold waits for, the caller's to make good.
+        /// Hold the move the place waits on its caller for: while the
+        /// hold holds, the place is not stalled, so its stall reaches no
+        /// one (130, 193).
+        #[arg(long)]
+        waiting: bool,
+        /// How long a hold on the waiting move holds, as `<n>`, `<n>s`,
+        /// `<n>m` or `<n>h`: once it passes, the hold lapses and the place
+        /// stalls at once; with none, it holds until the move is made. A
+        /// hold on a stage or the submission takes none (130).
+        #[arg(long = "for", value_name = "TIME")]
+        bound: Option<String>,
+        /// What the hold waits for, or who makes the move and how, the
+        /// caller's to make good.
         words: String,
     },
     /// Remove what is over (63 to 68).
     Tidy { place: Option<String> },
-    /// Move a place, or every place, on (46, 119 to 121).
+    /// Move a place, or every place, on (46, 119 to 121); with `--every`,
+    /// every place as a caller's watch over the host (208).
     Settle {
         place: Option<String>,
         /// Read the place's agent until it is quiet, for up to 60 seconds,
         /// first.
         #[arg(long)]
         on_quiet: bool,
+        /// Settle every place as a watch over the host whose settles come
+        /// within this bound, as `<n>`, `<n>s`, `<n>m` or `<n>h`: flume
+        /// runs unattended while the newest such settle began less than
+        /// twice it ago.
+        #[arg(long)]
+        every: Option<String>,
     },
     /// From an agent flume started: its stage cannot deliver without an
-    /// answer, or found work (41, C.4).
+    /// answer, or found work, its end going to the place's recipients, or
+    /// to the role `--to` names alone (41, 43, 132, C.4).
     Needs {
         /// The stage found work it cannot deliver past.
         #[arg(long)]
         found: bool,
+        /// The role the words are for, one the stage's prompt lists: a
+        /// role alone, `<role>`, is the place's own stream's, and an
+        /// address, `<stream>/<role>`, any stream's. The end goes to that
+        /// role alone, in place of the place's recipients; a name the
+        /// prompt did not list is refused, naming those it did (41, 132).
+        #[arg(long, value_name = "ROLE OR ADDRESS")]
+        to: Option<String>,
         words: String,
     },
     /// Set the place's priority (70).
@@ -197,12 +244,18 @@ enum Command {
         #[arg(long)]
         recipient: Option<String>,
     },
-    /// Wake a role's address, `<partition>/<role>`: its run, the kind the
-    /// host's `[roles]` table names for it, launched where none stands,
-    /// and otherwise nothing made, the answer saying the run is live or
-    /// waits (132).
+    /// Wake a role's address, `<stream>/<role>`: a role a source of the
+    /// host declares in its roles file, for a stream the host declares.
+    /// Its run, as the source's entry gives it, is launched in the
+    /// address's stream where none stands, and otherwise nothing is made,
+    /// the answer saying the run is live or waits. An address its source
+    /// gives a standing agent launches nothing, the answer saying where
+    /// that agent lives, what was found of it and the ends pending for
+    /// it. An address carried to another host, declared by no source or
+    /// by two, or whose stream the host does not declare is refused,
+    /// saying why (132, 143, 193).
     Wake {
-        /// The role's address, `<partition>/<role>`.
+        /// The role's address, `<stream>/<role>`.
         address: String,
     },
     /// Show a session of a stream's terminal in the stream's view, by the
@@ -317,9 +370,14 @@ struct LaunchArgs {
     hold: Vec<String>,
     #[arg(long)]
     hold_submission: bool,
-    /// A recipient of the place's ends; `$FLUME_RECIPIENT`, or the
-    /// terminal's session, where none is named (7).
-    #[arg(long)]
+    /// A recipient of the place's ends: a terminal's session by its name,
+    /// or a role's address, `<stream>/<role>`, of any stream, whose run is
+    /// woken for them. Where none is named, `$FLUME_RECIPIENT`, else the
+    /// terminal's session, else the answerer behind the place's stream,
+    /// the role a source of the host declares to stand behind it; a launch
+    /// none of them gives is refused. Every stall reaches the answerer
+    /// behind the place's stream too (7, 130, 132, 193).
+    #[arg(long, value_name = "SESSION OR ADDRESS")]
     recipient: Vec<String>,
     #[arg(long)]
     mark: Option<String>,
@@ -331,10 +389,14 @@ struct LaunchArgs {
     #[arg(long, value_name = "TIME")]
     stall_after: Option<String>,
     /// One setting of every stage's agent, or of one stage's (32): the
-    /// field one of program, model, instructions, beside, session and
-    /// mode, `session` the terminal's session its agents open in, the mode
-    /// one of plan, ask, edits and full, or `mode.<program>` for one
-    /// program's entry of a mode (107, 162, 169).
+    /// field one of program, model, effort, instructions, beside, session,
+    /// mode and keep_open, `effort` its program's own word for how hard its
+    /// model works, `session` the terminal's session its agents open in,
+    /// the mode one of plan, ask, edits and full, or `mode.<program>` for
+    /// one program's entry of a mode, and `keep_open` how long the agent
+    /// is kept open for an answer once it stops short, as `<n>`, `<n>s`,
+    /// `<n>m` or `<n>h`, one time for every program, an hour where no
+    /// layer gives one (107, 162, 169, 197, 198).
     #[arg(long, value_name = "[STAGE.]FIELD=VALUE")]
     agent: Vec<String>,
     /// The stream the place runs in, one the host's configuration
@@ -463,7 +525,7 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
     let named = |place: &str| place::place(place, given);
     let maybe = |place: &Option<String>| place.as_deref().map(named).transpose();
     Ok(match &cli.command {
-        Command::Needs { found, words } => {
+        Command::Needs { found, to, words } => {
             let identity = from_agent(AGENT)?;
             let secret = from_agent(SECRET)?;
             let kind = if *found {
@@ -471,7 +533,7 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             } else {
                 StopKind::NeedsAnswer
             };
-            build()?.needs(&identity, &secret, words, kind)
+            build()?.needs_to(&identity, &secret, words, kind, to.as_deref())
         }
         Command::Launch(args) => {
             let launch = launch_of(args, given)?;
@@ -495,10 +557,14 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             place,
             words,
             within,
+            answers,
         } => {
             let place = named(place)?;
-            let within = within.as_deref().map(seconds).transpose()?;
-            build()?.tell(&place, words, within)
+            let within = within.as_deref().map(read_span).transpose()?;
+            let key = key_of(answers)?;
+            let core = build()?;
+            let answering = answering(&core, key);
+            core.tell_answering(&place, words, within, &answering)
         }
         Command::Stop(forced) => build_for(forced, &named, build, Engine::stop)?,
         Command::Finish(forced) => build_for(forced, &named, build, Engine::finish)?,
@@ -510,6 +576,7 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             submission,
             words,
             force,
+            answers,
         } => {
             let place = named(place)?;
             let target = match (stage, submission) {
@@ -517,28 +584,57 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
                 (None, true) => Retry::Submission,
                 (None, false) => Retry::Current,
             };
-            build()?.retry(&place, target, words.clone(), *force)
+            let key = key_of(answers)?;
+            let core = build()?;
+            let answering = answering(&core, key);
+            core.retry_answering(&place, target, words.clone(), *force, &answering)
         }
         Command::Hold {
             place,
             stage,
             submission: _,
+            waiting,
+            bound,
             words,
         } => {
             let place = named(place)?;
-            let on = match stage {
-                Some(stage) => HoldOn::Stage {
+            let on = match (stage, waiting) {
+                (Some(stage), _) => HoldOn::Stage {
                     stage: stage.clone(),
                 },
-                None => HoldOn::Submission,
+                (None, true) => HoldOn::Waiting,
+                (None, false) => HoldOn::Submission,
             };
-            build()?.hold(&place, on, words)
+            let bound = bound.as_deref().map(read_span).transpose()?;
+            build()?.hold(&place, on, words, bound)
         }
         Command::Tidy { place } => {
             let place = maybe(place)?;
             build()?.tidy(place.as_ref())
         }
-        Command::Settle { place, on_quiet } => {
+        Command::Settle {
+            place: Some(given_place),
+            every: Some(_),
+            ..
+        } => {
+            return Err(format!(
+                "--every settles every place as a caller's watch over the host, and takes no place: {given_place} was named"
+            ));
+        }
+        Command::Settle {
+            every: Some(every), ..
+        } => {
+            let bound = read_span(every)?;
+            if bound == 0 {
+                return Err(format!(
+                    "--every {every} is no bound: a watch's bound is a positive duration"
+                ));
+            }
+            build()?.settle_every(bound)
+        }
+        Command::Settle {
+            place, on_quiet, ..
+        } => {
             let place = maybe(place)?;
             let core = build()?;
             if *on_quiet {
@@ -564,7 +660,7 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
                 Some(stage) => WaitFor::Stage(stage.clone()),
                 None => WaitFor::Submission,
             };
-            let timeout = timeout.as_deref().map(seconds).transpose()?;
+            let timeout = timeout.as_deref().map(read_span).transpose()?;
             let core = build()?;
             let recipient = recipient_of(&core, recipient)?;
             core.wait(&place, &of, &recipient, timeout)
@@ -622,6 +718,23 @@ fn recipient_of(core: &Engine, named: &Option<String>) -> Result<String, String>
     core.recipient(here.as_ref()).ok_or_else(|| {
         format!("no recipient is named: name one with --recipient or ${}, or run in a terminal's session or a role's run", crate::host::RECIPIENT)
     })
+}
+
+/// What a retry's or a tell's answer names beside its words: the key of
+/// the stop-short it answers, where `--answers` gives one, and who gives
+/// it, the recipient the command acts as where it names none, recorded on
+/// the stop-short it answers; none where no recipient is read (42).
+fn answering(core: &Engine, key: Option<EndKey>) -> Answering {
+    Answering {
+        key,
+        by: recipient_of(core, &None).ok(),
+    }
+}
+
+/// The key `--answers` gives, read from its token alone, refused naming
+/// the forms a key takes before the core is asked anything (42, 49).
+fn key_of(answers: &Option<String>) -> Result<Option<EndKey>, String> {
+    answers.as_deref().map(str::parse::<EndKey>).transpose()
 }
 
 /// A forced act on the place `forced` names.
@@ -701,30 +814,10 @@ fn launch_of(args: &LaunchArgs, given: Option<&Path>) -> Result<Launch, String> 
         hold_words,
         priority: args.priority.unwrap_or(0),
         recipients: args.recipient.clone(),
-        stall_after: args.stall_after.as_deref().map(seconds).transpose()?,
+        stall_after: args.stall_after.as_deref().map(read_span).transpose()?,
         stream: args.stream.clone(),
         intent: args.intent.clone(),
     })
-}
-
-/// A time given as `<n>`, `<n>s`, `<n>m` or `<n>h`, in seconds.
-fn seconds(given: &str) -> Result<Seconds, String> {
-    let (number, unit) = match given.char_indices().last() {
-        Some((at, unit)) if unit.is_ascii_alphabetic() => (&given[..at], unit),
-        _ => (given, 's'),
-    };
-    let scale = match unit {
-        's' => 1,
-        'm' => 60,
-        'h' => 60 * 60,
-        _ => 0,
-    };
-    number
-        .parse::<Seconds>()
-        .ok()
-        .filter(|_| scale > 0)
-        .map(|number| number * scale)
-        .ok_or_else(|| format!("{given} is no time: it is <n>, <n>s, <n>m or <n>h"))
 }
 
 /// Reads the place's current agent, as status gives it, until it is
@@ -756,20 +849,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_time_in_seconds() {
-        assert_eq!(seconds("90"), Ok(90));
-        assert_eq!(seconds("90s"), Ok(90));
-        assert_eq!(seconds("10m"), Ok(600));
-        assert_eq!(seconds("1h"), Ok(3600));
-        assert!(seconds("soon").is_err());
-        assert!(seconds("5d").is_err());
-    }
-
-    #[test]
     fn words_that_are_no_command_are_for_the_error_stream() {
         let outcome = run(["flume", "launch"], &|| Err("not built".into()));
         assert!(outcome.usage);
         assert_eq!(outcome.code, 2);
+    }
+
+    #[test]
+    fn a_watch_beside_a_place_or_with_no_bound_builds_nothing() {
+        // 208: refused before the core is built, so nothing is settled
+        // and no watch is recorded.
+        for words in [
+            ["flume", "settle", "fix--one", "--every", "2m"].as_slice(),
+            ["flume", "settle", "--every", "0"].as_slice(),
+            ["flume", "settle", "--every", "soon"].as_slice(),
+        ] {
+            let outcome = run(words.iter().copied(), &|| panic!("the core is built"));
+            assert_eq!(outcome.code, 1, "{words:?}: {}", outcome.text);
+            assert!(!outcome.usage, "{words:?}");
+            assert!(outcome.text.starts_with("refused: "), "{}", outcome.text);
+        }
     }
 
     #[test]

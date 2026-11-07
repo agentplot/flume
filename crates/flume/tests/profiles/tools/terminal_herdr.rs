@@ -29,9 +29,12 @@
 //! refuses as an argument started from the agent profile by a file, a
 //! role run's pane reached by its
 //! address after a move, and a recipient on another server reached
-//! through its own socket; and what flume's herdr plugin's own watch
-//! writes herdr's configuration lacks, given by status while its lease
-//! is fresh. Under a scratch home of herdr's named sessions: two
+//! through its own socket; what flume's herdr plugin's startup writes
+//! herdr's configuration lacks, given by status while its server runs;
+//! the pane's row following its place's line at a settle; and flume
+//! unattended by the host's watch alone, whatever the plugin's state, no
+//! herdr command run to decide it. Under a scratch
+//! home of herdr's named sessions: two
 //! streams' sessions (S82), a session name herdr refuses, a place tidied
 //! in two sessions, records written before they were kept by server, and
 //! attach: a stream's session started for a window's command, a client
@@ -39,7 +42,9 @@
 //! socket, a name herdr refuses, and herdr's app refused (187); and runs:
 //! a session not listed left so, a running session and the own session,
 //! a herdr that does not answer within the bound, and an own server held
-//! by its socket (201).
+//! by its socket (201); and agents_in: a standing agent found by its name
+//! and reached, a session that does not run, an agent with no name, the
+//! agent gone, and a herdr that refuses or does not answer (132, C.5).
 
 use crate::common::*;
 use flume::host::config::HostConfig;
@@ -52,6 +57,7 @@ use flume_conformance::engine::world::{kind, stage, World};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::terminal::{self, TerminalHarness};
 use flume_core::{Answer, Engine, Retry};
+use flume_fakes::FakeChange;
 use flume_seams::*;
 use serde_json::Value;
 use std::cell::RefCell;
@@ -342,6 +348,12 @@ impl TestServer {
 
     /// herdr's result for a call of the test's own, or its words.
     fn try_herdr(&self, args: &[&str]) -> Result<Value, String> {
+        self.try_herdr_on(&self.socket, args)
+    }
+
+    /// herdr's result for a call of the test's own on the server at
+    /// `socket`, or its words.
+    fn try_herdr_on(&self, socket: &Path, args: &[&str]) -> Result<Value, String> {
         let mut command = Command::new("herdr");
         command.args(args);
         for (name, _) in std::env::vars_os() {
@@ -350,7 +362,7 @@ impl TestServer {
             }
         }
         let output = command
-            .env("HERDR_SOCKET_PATH", &self.socket)
+            .env("HERDR_SOCKET_PATH", socket)
             .env("HOME", self.scratch.path("home"))
             .stdin(Stdio::null())
             .output()
@@ -364,7 +376,11 @@ impl TestServer {
     }
 
     fn herdr(&self, args: &[&str]) -> Value {
-        self.try_herdr(args)
+        self.herdr_on(&self.socket, args)
+    }
+
+    fn herdr_on(&self, socket: &Path, args: &[&str]) -> Value {
+        self.try_herdr_on(socket, args)
             .unwrap_or_else(|words| panic!("herdr {}: {words}", args.join(" ")))
     }
 
@@ -453,6 +469,28 @@ impl TestServer {
         fs::read_to_string(self.scratch.path("log").join(pane).join(name))
             .map(|text| text.lines().map(str::to_string).collect())
             .unwrap_or_default()
+    }
+
+    /// What the stand-in that started in `pane` keeps under `name`, line
+    /// by line: on this server's own, or on a session's, whose stand-ins
+    /// keep their logs under its socket's digest, since two servers give
+    /// panes the same ids.
+    fn kept_at(&self, pane: &Pane, name: &str) -> Vec<String> {
+        if pane.socket == self.socket {
+            return self.kept(&pane.id, name);
+        }
+        let log = self.session_log(&pane.socket).join(&pane.id).join(name);
+        fs::read_to_string(log)
+            .map(|text| text.lines().map(str::to_string).collect())
+            .unwrap_or_default()
+    }
+
+    /// Where the stand-ins on the session's server at `socket` keep their
+    /// logs.
+    fn session_log(&self, socket: &Path) -> PathBuf {
+        self.scratch
+            .path("log")
+            .join(digest(&socket.to_string_lossy()))
     }
 
     /// Waits up to ten seconds for `condition`.
@@ -574,8 +612,9 @@ struct Harness {
     caller: Pane,
     /// The pane each moved agent started in, by identity.
     moved: RefCell<BTreeMap<String, String>>,
-    /// The home of the sessions attach starts, the test's own.
-    _home: SessionHome,
+    /// The home of the sessions attach starts and the standing agents
+    /// stand in, the test's own.
+    home: SessionHome,
 }
 
 impl Harness {
@@ -597,7 +636,7 @@ impl Harness {
             seam,
             caller,
             moved: RefCell::default(),
-            _home: home,
+            home,
         }
     }
 }
@@ -607,6 +646,10 @@ impl TerminalHarness for Harness {
 
     fn seam(&self) -> &Herdr {
         &self.seam
+    }
+
+    fn shared(&self) -> Arc<dyn Terminal> {
+        Arc::new(self.seam.clone())
     }
 
     fn place(&self) -> PlaceRef {
@@ -735,7 +778,7 @@ impl TerminalHarness for Harness {
         let pane = Pane::named(session).expect("a session the profile named");
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
-            let got = self.server.kept(&pane.id, "got");
+            let got = self.server.kept_at(&pane, "got");
             if !got.is_empty() || Instant::now() >= deadline {
                 return got;
             }
@@ -791,25 +834,27 @@ impl TerminalHarness for Harness {
 
     /// The plugin's watch on this server, its lease renewed now, having
     /// written that herdr's configuration binds no key to the popup.
+    /// What the plugin's startup on the test's server writes it lacks,
+    /// in setup.json with the server's socket, which is present (122,
+    /// C.5).
     fn setup(&self) -> Vec<String> {
         let words = "herdr's configuration, /h/config.toml, binds no key to flume's places";
-        let watched = self.server.scratch.path("plugin/servers/1");
-        fs::create_dir_all(&watched).expect("the plugin's server state");
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("the clock")
-            .as_secs();
+        let server = self.server.scratch.path("plugin/servers/1");
+        fs::create_dir_all(&server).expect("the plugin's server state");
         fs::write(
-            watched.join("watch.lease"),
-            format!("{} {now}\n", std::process::id()),
-        )
-        .expect("the lease");
-        fs::write(
-            watched.join("setup.json"),
-            serde_json::json!([words]).to_string(),
+            server.join("setup.json"),
+            serde_json::json!({ "socket": self.server.socket, "lacking": [words] }).to_string(),
         )
         .expect("setup.json");
         vec![words.to_string()]
+    }
+
+    /// A stand-in started in the session `session` of the harness's own
+    /// home by `herdr agent start <name>`, as a host's standing agent
+    /// stands in its session (132, C.5).
+    fn named_agent(&self, session: &str, name: &str) -> bool {
+        standing(&self.server, &self.home, session, Some(name));
+        true
     }
 }
 
@@ -1573,6 +1618,7 @@ fn s49_titles_follow_the_stage_and_a_clue_that_fails_fails_nothing() {
             running: 1,
             ..BaseCount::default()
         },
+        line: format!("code · run 1 · {state}"),
     };
     for state in ["starting", "waiting", "working", "asking"] {
         assert_eq!(profile.show(&place, &clues(state)), Shown::Shown, "{state}");
@@ -1583,6 +1629,11 @@ fn s49_titles_follow_the_stage_and_a_clue_that_fails_fails_nothing() {
             "the pane's title"
         );
         assert_eq!(got["pane"]["display_agent"].as_str(), Some("fix--one"));
+        assert_eq!(
+            got["pane"]["tokens"]["flume"].as_str(),
+            Some(format!("code · run 1 · {state}").as_str()),
+            "the pane's row, {got}"
+        );
     }
     let (workspace, _) = profile.workspace(&place).expect("the workspace");
     let got = server.herdr(&["workspace", "get", &workspace]);
@@ -2152,6 +2203,10 @@ impl Agent for StandIn {
         "to stop short, run flume needs".into()
     }
 
+    fn stop_short_to(&self) -> String {
+        "name it by flume needs --to".into()
+    }
+
     fn send_back(&self) -> Offered {
         Offered::NotOffered
     }
@@ -2252,7 +2307,9 @@ fn engine(server: &TestServer, world: &World) -> Engine {
         herdr,
         Arc::new(StateDir::at(&state)),
         world.history.clone(),
-        Arc::new(RealHost::new(&state, config, None)),
+        // The command's environment names a recipient, so a launch from
+        // no pane is taken (7, 193).
+        Arc::new(RealHost::new(&state, config, Some("caller".into()))),
         world.defaults.clone(),
     )
 }
@@ -2292,6 +2349,131 @@ fn begun(server: &TestServer, world: &World, repository: &str) -> PlaceId {
         engine(server, world).settle(Some(&id));
     }
     id
+}
+
+#[test]
+fn the_row_follows_the_line() {
+    // The terminal-profiles spec's "The row follows the line" (139, C.5):
+    // a change's repeating code stage keeps working while the change at
+    // its head goes from 2 tasks ticked of 5 to 3; the settle then
+    // reports the pane's title and its row as the token `flume`, the
+    // short form of the place's line, against the pinned herdr's server,
+    // and the next settle, with nothing changed, reports nothing.
+    const FIVE: &[(&str, &str, usize)] = &[("1", "One", 4), ("2", "Two", 1)];
+    let server = TestServer::start("herdr-row");
+    let world = World::new();
+    let mut code = stage(
+        "code",
+        Some(Deliverable::TasksTicked),
+        "{{brief}} {{needs}}",
+    );
+    code.repeats = true;
+    let repository = bound(&server, &world, vec![code]);
+    // Launched with code held, its change written on its branch, then
+    // code started at the head that holds it, at its first group.
+    let answer = engine(&server, &world).launch(&Launch {
+        repository: repository.clone(),
+        kind: "two".into(),
+        name: "one".into(),
+        base: "main".into(),
+        brief: Some("build it".into()),
+        hold: vec!["code".into()],
+        ..Launch::default()
+    });
+    assert!(answer.refusal().is_none(), "the launch: {answer:?}");
+    let id = place_of(&world, &repository);
+    let at = world
+        .git
+        .commit(&repository, "two/one", &["plans/one/tasks.md"]);
+    world
+        .change
+        .set(&repository, &at, "one", FakeChange::groups(FIVE, 2));
+    let retried = engine(&server, &world).retry(&id, Retry::Stage("code".into()), None, false);
+    assert!(retried.refusal().is_none(), "the retry: {retried:?}");
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while stage_state(&server, &world, &id, "code") != StageState::Begun {
+        assert!(
+            Instant::now() < deadline,
+            "the code stage did not begin: {:?}",
+            stage_state(&server, &world, &id, "code")
+        );
+        engine(&server, &world).settle(Some(&id));
+    }
+    let who = Identity {
+        repository: flume_core::repository_id(&format!("{repository}/.git")),
+        place: "two--one".into(),
+        stage: "code".into(),
+        start: 1,
+    };
+    let pane = server.profile().pane(&who).expect("the pane recorded");
+    server.report(&pane, "working");
+    let calls = server.scratch.path("calls");
+    let logging = server.scratch.path("logging-herdr");
+    fs::write(
+        &logging,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nexec herdr \"$@\"\n",
+            calls.display()
+        ),
+    )
+    .expect("the logging herdr");
+    fs::set_permissions(&logging, fs::Permissions::from_mode(0o755))
+        .expect("the logging herdr made executable");
+    let state = server.scratch.path("state/flume");
+    let settle = || {
+        let herdr: Arc<dyn Terminal> = Arc::new(server.profile().with_program(&logging));
+        world.resolver.with_terminal(NAME, herdr.clone());
+        Engine::new(
+            world.resolver.clone(),
+            herdr,
+            Arc::new(StateDir::at(&state)),
+            world.history.clone(),
+            Arc::new(RealHost::new(
+                &state,
+                HostConfig {
+                    terminal: Some(NAME.into()),
+                    ..HostConfig::default()
+                },
+                None,
+            )),
+            world.defaults.clone(),
+        )
+        .settle(Some(&id));
+        let reports: Vec<String> = fs::read_to_string(&calls)
+            .unwrap_or_default()
+            .lines()
+            .filter(|call| call.contains("report-metadata"))
+            .map(String::from)
+            .collect();
+        let _ = fs::remove_file(&calls);
+        reports
+    };
+    settle();
+    let head = world
+        .git
+        .commit(&repository, "two/one", &["plans/one/tasks.md"]);
+    world
+        .change
+        .set(&repository, &head, "one", FakeChange::groups(FIVE, 3));
+    let row = "code 1/2 · run 1 · tasks 3/5 · working";
+    let reports = settle();
+    assert!(
+        reports.contains(&format!(
+            "pane report-metadata {} --source flume --title code 1/2 · working --display-agent two--one --token flume={row}",
+            pane.id
+        )),
+        "the settle's reports: {reports:?}"
+    );
+    assert_eq!(
+        server.herdr(&["pane", "get", &pane.id])["pane"]["tokens"]["flume"].as_str(),
+        Some(row),
+        "the pane's row"
+    );
+    assert_eq!(
+        settle(),
+        Vec::<String>::new(),
+        "the reports of a settle that changed nothing"
+    );
 }
 
 #[test]
@@ -2647,19 +2829,6 @@ fn an_agent_that_began_after_its_start_read_never_begun_is_begun_and_a_retry_lea
     );
 }
 
-/// flume's herdr plugin's own watch, run on a server of the test's own,
-/// ended with the test.
-struct PluginWatch(Child);
-
-impl Drop for PluginWatch {
-    fn drop(&mut self) {
-        // SAFETY: a signal to the watch this test started, whose trap
-        // ends its renewer and removes its lease.
-        unsafe { libc::kill(self.0.id() as libc::pid_t, libc::SIGTERM) };
-        let _ = self.0.wait();
-    }
-}
-
 /// `flume status --json` under the scratch host, the herdr terminal
 /// bound, its terminal setup.
 fn terminal_setup(server: &TestServer, flume: &Path) -> Value {
@@ -2687,13 +2856,14 @@ fn terminal_setup(server: &TestServer, flume: &Path) -> Value {
 }
 
 #[test]
-fn a_watchs_setup_is_given_by_status_while_its_lease_is_fresh() {
-    // 122, C.5, design 8: the plugin's watch, on the pinned herdr's
-    // server, reads a herdr configuration that binds no key to the popup
-    // and names no row of flume's, and writes what it lacks beside its
-    // lease; `flume status --json` gives those words as the host's
-    // terminal setup, and none once the watch has stopped.
-    let server = TestServer::start("setup");
+fn a_startups_setup_is_given_by_status_while_its_server_runs() {
+    // 122, C.5: the plugin's startup, run as herdr runs it at the pinned
+    // herdr's server's start, reads a herdr configuration that binds no
+    // key to the popup and names no row of flume's, writes what it lacks
+    // into setup.json with the server's socket, and exits; `flume status
+    // --json` gives those words as the host's terminal setup while the
+    // server runs, and none once it has stopped.
+    let mut server = TestServer::start("setup");
     let flume = Path::new(env!("CARGO_BIN_EXE_flume"));
     let plugin = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../plugins/herdr")
@@ -2717,7 +2887,6 @@ fn a_watchs_setup_is_given_by_status_while_its_lease_is_fresh() {
         flume.parent().expect("flume's folder").display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    let log = server.scratch.path("log/watch.log");
     let mut command = Command::new("sh");
     for (name, _) in std::env::vars_os() {
         let name = name.to_string_lossy().into_owned();
@@ -2725,39 +2894,39 @@ fn a_watchs_setup_is_given_by_status_while_its_lease_is_fresh() {
             command.env_remove(name);
         }
     }
-    let watch = PluginWatch(
-        command
-            .arg(plugin.join("bin/watch.sh"))
-            .current_dir(server.scratch.path("home"))
-            .env("PATH", path)
-            .env("HOME", server.scratch.path("home"))
-            .env("XDG_STATE_HOME", server.scratch.path("state"))
-            .env("XDG_CONFIG_HOME", server.scratch.path("config"))
-            .env("XDG_DATA_HOME", server.scratch.path("data"))
-            .env("HERDR_PLUGIN_ROOT", &plugin)
-            .env("HERDR_PLUGIN_STATE_DIR", &plugin_state)
-            .env("HERDR_SOCKET_PATH", &server.socket)
-            .env("HERDR_BIN_PATH", herdr_program())
-            .env("HERDR_CONFIG_PATH", &herdr_config)
-            .env("FLUME_HERDR_TICK", "1")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(fs::File::create(&log).expect("the watch's log"))
-            .spawn()
-            .expect("the watch starts"),
+    let ran = command
+        .arg(plugin.join("bin/startup.sh"))
+        .current_dir(server.scratch.path("home"))
+        .env("PATH", path)
+        .env("HOME", server.scratch.path("home"))
+        .env("XDG_STATE_HOME", server.scratch.path("state"))
+        .env("XDG_CONFIG_HOME", server.scratch.path("config"))
+        .env("XDG_DATA_HOME", server.scratch.path("data"))
+        .env("HERDR_PLUGIN_ROOT", &plugin)
+        .env("HERDR_PLUGIN_STATE_DIR", &plugin_state)
+        .env("HERDR_SOCKET_PATH", &server.socket)
+        .env("HERDR_BIN_PATH", herdr_program())
+        .env("HERDR_CONFIG_PATH", &herdr_config)
+        .stdin(Stdio::null())
+        .output()
+        .expect("the startup runs");
+    assert!(
+        ran.status.success(),
+        "the startup: {}",
+        String::from_utf8_lossy(&ran.stderr)
     );
-    let written = || -> Option<Value> {
-        let servers = fs::read_dir(plugin_state.join("servers")).ok()?;
-        servers
-            .filter_map(Result::ok)
-            .find(|server| server.path().join("watch.lease").exists())
-            .and_then(|server| fs::read_to_string(server.path().join("setup.json")).ok())
-            .and_then(|text| serde_json::from_str(&text).ok())
-    };
-    server.within("the watch wrote no setup.json beside its lease", || {
-        written().is_some()
-    });
-    let lacking = written().expect("setup.json");
+    let written: Value = fs::read_dir(plugin_state.join("servers"))
+        .expect("the plugin's servers")
+        .filter_map(Result::ok)
+        .find_map(|server| fs::read_to_string(server.path().join("setup.json")).ok())
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .expect("setup.json");
+    assert_eq!(
+        written["socket"].as_str(),
+        Some(server.socket.to_string_lossy().as_ref()),
+        "the server's socket in setup.json"
+    );
+    let lacking = written["lacking"].clone();
     let file = herdr_config.display().to_string();
     let words: Vec<&str> = lacking
         .as_array()
@@ -2765,12 +2934,7 @@ fn a_watchs_setup_is_given_by_status_while_its_lease_is_fresh() {
         .iter()
         .filter_map(Value::as_str)
         .collect();
-    assert_eq!(
-        words.len(),
-        2,
-        "{lacking}; the watch logged: {}",
-        fs::read_to_string(&log).unwrap_or_default()
-    );
+    assert_eq!(words.len(), 2, "{lacking}");
     assert!(
         words[0].contains(&file) && words[0].contains("binds no key to flume's places"),
         "{}",
@@ -2782,8 +2946,98 @@ fn a_watchs_setup_is_given_by_status_while_its_lease_is_fresh() {
         words[1]
     );
     assert_eq!(terminal_setup(&server, flume), lacking);
-    drop(watch);
+    server.stop();
     assert_eq!(terminal_setup(&server, flume), Value::Array(vec![]));
+}
+
+/// A lease an earlier release's watch kept on server `1` under `plugin`,
+/// renewed `ago` seconds before now by this process, as that watch wrote
+/// it; this release reads none.
+fn lease_renewed(plugin: &Path, ago: u64) {
+    let server = plugin.join("servers/1");
+    fs::create_dir_all(&server).expect("the plugin's server state");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("the clock")
+        .as_secs();
+    fs::write(
+        server.join("watch.lease"),
+        format!("{} {}\n", std::process::id(), now - ago),
+    )
+    .expect("the lease");
+}
+
+/// The host's watch and when it lapsed, as status gives them.
+fn watch_and_lapse(engine: &Engine) -> (Watch, Option<Seconds>) {
+    match engine.status(None) {
+        Answer::Status { host, .. } => (host.watch, host.watch_lapsed),
+        other => panic!("status answered {other:?}"),
+    }
+}
+
+#[test]
+fn unattended_by_the_hosts_watch_alone() {
+    // The terminal-profiles spec's "Unattended by the host's watch
+    // alone" (119, 122, 208, C.5): the herdr profile bound against the
+    // pinned herdr's server, the plugin's state holding an earlier
+    // release's fresh lease beside it, every herdr command it runs
+    // logged; a caller keeping watch with a bound of a minute keeps flume
+    // unattended, three minutes with no such settle let it run attended,
+    // and no herdr command was run to decide either.
+    let server = TestServer::start("watch");
+    let world = World::new();
+    let plugin = server.scratch.path("plugin");
+    lease_renewed(&plugin, 0);
+    let calls = server.scratch.path("calls");
+    let logging = server.scratch.path("logging-herdr");
+    fs::write(
+        &logging,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nexec herdr \"$@\"\n",
+            calls.display()
+        ),
+    )
+    .expect("the logging herdr");
+    fs::set_permissions(&logging, fs::Permissions::from_mode(0o755))
+        .expect("the logging herdr made executable");
+    let herdr = server
+        .profile()
+        .with_plugin(Some(plugin))
+        .with_program(&logging);
+    let terminal: Arc<dyn Terminal> = Arc::new(herdr);
+    world.resolver.with_terminal(NAME, terminal.clone());
+    let engine = Engine::new(
+        world.resolver.clone(),
+        terminal,
+        Arc::new(StateDir::at(server.scratch.path("state/flume"))),
+        world.history.clone(),
+        world.host.clone(),
+        world.defaults.clone(),
+    );
+    assert_eq!(
+        watch_and_lapse(&engine),
+        (Watch::None, None),
+        "no caller keeping watch beside a fresh lease: flume runs attended"
+    );
+    let settled = engine.settle_every(60);
+    assert!(settled.refusal().is_none(), "{settled:?}");
+    let began = world.host.now();
+    assert_eq!(
+        watch_and_lapse(&engine),
+        (Watch::Bound { seconds: 60 }, None),
+        "a caller keeping watch: flume runs unattended"
+    );
+    world.host.advance(180);
+    assert_eq!(
+        watch_and_lapse(&engine),
+        (Watch::None, Some(began + 120)),
+        "three minutes with no settle of the watch's: flume runs attended"
+    );
+    assert_eq!(
+        fs::read_to_string(&calls).unwrap_or_default(),
+        "",
+        "herdr's calls"
+    );
 }
 
 /// The longer of the two sockets the pinned herdr binds in a named
@@ -2922,6 +3176,50 @@ impl SessionHome {
                 ))
             })
             .collect()
+    }
+
+    /// The socket of the session `name`'s server under this home, started
+    /// headless where none runs, as a host's own session runs: with
+    /// nothing on its `PATH` but herdr's own folder and the system's, the
+    /// scratch's home and its shell that reads no startup file of the
+    /// host's.
+    fn start(&self, server: &TestServer, name: &str) -> PathBuf {
+        if let Some(socket) = self.running().remove(name) {
+            return socket;
+        }
+        let program = herdr_program();
+        let path = format!(
+            "{}:/usr/bin:/bin",
+            program.parent().expect("herdr's folder").display()
+        );
+        let child = Command::new(&program)
+            .args(["--session", name, "server"])
+            .env_clear()
+            .env("PATH", path)
+            .env("HOME", server.scratch.path("home"))
+            .env("SHELL", server.scratch.path("bin/shell"))
+            .env("TERM", "xterm-256color")
+            .env("LANG", "en_US.UTF-8")
+            .env(SESSION_HOME, &self.link)
+            .current_dir(server.scratch.path("home"))
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("herdr's session server starts");
+        // Stopped through its socket when the home is dropped.
+        drop(child);
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            if let Some(socket) = self.running().remove(name) {
+                return socket;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "herdr's session {name} did not run"
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
     }
 
     /// The labels herdr lists of `what`, `workspace` or `tab`, on the
@@ -3593,4 +3891,288 @@ fn runs_of_an_own_server_held_by_its_socket_reads_the_session_listed_there() {
         ),
         other => panic!("runs of a socket no session lists gave {other:?}"),
     }
+}
+
+/// A stand-in in a workspace of its own on the server of the session
+/// `session` under `home`, that server started first where none runs, as
+/// a standing agent stands in a host's session: under the herdr name
+/// `name` by herdr's agent start, or, where none is given, run by its
+/// kind typed into the pane's shell, as a person starts an agent herdr
+/// lists with no name; its pane once herdr lists its agent there and it
+/// came up. Its log is kept under its server's socket (132, C.5).
+fn standing(server: &TestServer, home: &SessionHome, session: &str, name: Option<&str>) -> Pane {
+    let socket = home.start(server, session);
+    let made = server.herdr_on(
+        &socket,
+        &[
+            "workspace",
+            "create",
+            "--cwd",
+            &server.scratch.path("home").to_string_lossy(),
+            "--env",
+            &format!(
+                "PATH={}:/usr/bin:/bin",
+                server.scratch.path("bin").display()
+            ),
+            "--env",
+            &format!("SHELL={}", server.scratch.path("bin/shell").display()),
+            "--env",
+            &format!("STAND_IN_LOG={}", server.session_log(&socket).display()),
+            "--label",
+            name.unwrap_or("unnamed"),
+            "--no-focus",
+        ],
+    );
+    let pane = Pane {
+        id: made["root_pane"]["pane_id"]
+            .as_str()
+            .unwrap_or_else(|| panic!("herdr gave no pane in {made}"))
+            .to_string(),
+        socket: socket.clone(),
+    };
+    // The pane's shell at its prompt first, as the profile's own start
+    // waits for it.
+    let timeout = HARNESS_START.as_millis().to_string();
+    server.herdr_on(
+        &socket,
+        &[
+            "pane",
+            "wait-output",
+            &pane.id,
+            "--source",
+            "visible",
+            "--regex",
+            r"\S",
+            "--timeout",
+            &timeout,
+        ],
+    );
+    match name {
+        Some(name) => {
+            let deadline = Instant::now() + HARNESS_START;
+            loop {
+                match server.try_herdr_on(
+                    &socket,
+                    &[
+                        "agent",
+                        "start",
+                        name,
+                        "--kind",
+                        "claude",
+                        "--pane",
+                        &pane.id,
+                        "--timeout",
+                        &timeout,
+                    ],
+                ) {
+                    Ok(_) => break,
+                    // The pane's shell not yet at its prompt, as the
+                    // profile's own start reads it.
+                    Err(words)
+                        if words.contains("agent_start_input_failed")
+                            && Instant::now() < deadline =>
+                    {
+                        std::thread::sleep(Duration::from_millis(250))
+                    }
+                    Err(words) => panic!("herdr agent start {name}: {words}"),
+                }
+            }
+        }
+        None => {
+            server.herdr_on(&socket, &["pane", "send-text", &pane.id, "claude"]);
+            server.herdr_on(&socket, &["pane", "send-keys", &pane.id, "enter"]);
+        }
+    }
+    server.within("herdr lists no agent in the standing pane", || {
+        server.herdr_on(&socket, &["agent", "list"])["agents"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|agent| agent["pane_id"].as_str() == Some(pane.id.as_str()))
+    });
+    server.within("the standing stand-in did not come up", || {
+        server
+            .session_log(&socket)
+            .join(&pane.id)
+            .join("started")
+            .exists()
+    });
+    pane
+}
+
+#[test]
+fn a_standing_agent_is_found_by_its_name_and_reached() {
+    // The terminal-profiles spec's "A standing agent found and reached"
+    // (95, 132, C.5): a stand-in started in `w` by `herdr agent start
+    // w-planner`, given by that name, waiting, at its pane on `w`'s
+    // server, and a notice sent there taken.
+    let server = TestServer::start("herdr-standing");
+    let home = SessionHome::new(&["w"]);
+    let profile = server.profile().with_session_home(home.path());
+    let pane = standing(&server, &home, "w", Some("w-planner"));
+    assert_eq!(
+        profile.agents_in(Some("w")),
+        AgentsIn::Read {
+            agents: vec![NamedAgent {
+                name: "w-planner".into(),
+                at: pane.session(),
+                state: AgentState::Waiting,
+            }]
+        }
+    );
+    assert_eq!(
+        profile.send_to(&pane.session(), "flume: fix--one code delivered"),
+        ToSession::Sent,
+        "the notice to the standing agent"
+    );
+    server.within("the standing agent did not take the notice", || {
+        server.kept_at(&pane, "got") == vec!["flume: fix--one code delivered".to_string()]
+    });
+}
+
+#[test]
+fn a_session_that_does_not_run_holds_no_agent_and_is_not_started() {
+    // The terminal-profiles spec's "A session that does not run" (132;
+    // core.13): `x`, which the listing does not name running, beside `w`,
+    // which runs a standing agent.
+    let server = TestServer::start("herdr-standing-none");
+    let home = SessionHome::new(&["w", "x"]);
+    let profile = server.profile().with_session_home(home.path());
+    standing(&server, &home, "w", Some("w-planner"));
+    assert_eq!(
+        profile.agents_in(Some("x")),
+        AgentsIn::Read { agents: vec![] }
+    );
+    assert!(
+        !home.running().contains_key("x"),
+        "x runs once its agents were asked: {:?}",
+        home.running()
+    );
+    assert!(!listed(&home, "x"), "x listed once its agents were asked");
+}
+
+#[test]
+fn an_agent_herdr_lists_with_no_name_is_not_given() {
+    // The terminal-profiles spec's "An agent with no name" (C.5): beside
+    // `w-planner`, a stand-in run by its kind typed into a pane of `w`,
+    // which herdr lists with no name.
+    let server = TestServer::start("herdr-standing-unnamed");
+    let home = SessionHome::new(&["w"]);
+    let profile = server.profile().with_session_home(home.path());
+    let named = standing(&server, &home, "w", Some("w-planner"));
+    let unnamed = standing(&server, &home, "w", None);
+    let listed = server.herdr_on(&unnamed.socket, &["agent", "list"]);
+    let nameless = listed["agents"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|agent| agent["pane_id"].as_str() == Some(unnamed.id.as_str()))
+        .unwrap_or_else(|| panic!("herdr lists no agent in the unnamed pane: {listed}"));
+    assert!(
+        nameless.get("name").is_none_or(Value::is_null),
+        "herdr lists a name for the agent started with none: {nameless}"
+    );
+    assert_eq!(
+        profile.agents_in(Some("w")),
+        AgentsIn::Read {
+            agents: vec![NamedAgent {
+                name: "w-planner".into(),
+                at: named.session(),
+                state: AgentState::Waiting,
+            }]
+        }
+    );
+}
+
+#[test]
+fn a_standing_agent_gone_is_not_given() {
+    // The terminal-profiles spec's "The agent gone" (132): the stand-in's
+    // pane closed, the session running still with another workspace.
+    let server = TestServer::start("herdr-standing-gone");
+    let home = SessionHome::new(&["w"]);
+    let profile = server.profile().with_session_home(home.path());
+    let pane = standing(&server, &home, "w", Some("w-planner"));
+    server.herdr_on(
+        &pane.socket,
+        &["workspace", "create", "--label", "kept", "--no-focus"],
+    );
+    let named = |agents: &AgentsIn| match agents {
+        AgentsIn::Read { agents } => Some(
+            agents
+                .iter()
+                .filter(|agent| agent.name == "w-planner")
+                .count(),
+        ),
+        AgentsIn::Unread { .. } => None,
+    };
+    assert_eq!(named(&profile.agents_in(Some("w"))), Some(1), "before");
+    server.herdr_on(&pane.socket, &["pane", "close", &pane.id]);
+    server.within("w-planner is given once its pane closed", || {
+        named(&profile.agents_in(Some("w"))) == Some(0)
+    });
+    assert!(home.running().contains_key("w"), "w stopped");
+}
+
+#[test]
+fn agents_in_of_a_herdr_that_refuses_or_does_not_answer_is_unread_in_its_words() {
+    // 132; core.29: a herdr of the test's own that lists `w` and `slow`
+    // running, refuses `agent list` on `w`'s socket and answers it on
+    // `slow`'s only after ten seconds; and one whose listing answers only
+    // after ten seconds; each call bounded at one.
+    let scratch = Scratch::new("herdr-agents-unread");
+    let scripted = scratch.path("herdr");
+    fs::write(
+        &scripted,
+        r#"#!/bin/sh
+case "$1 $2" in
+  "session list")
+    [ -n "$SLOW_LISTING" ] && sleep 10
+    echo '{"sessions":[{"name":"w","running":true,"socket_path":"/nowhere/w.sock"},{"name":"slow","running":true,"socket_path":"/nowhere/slow.sock"}]}' ;;
+  "agent list")
+    case "$HERDR_SOCKET_PATH" in */slow.sock) sleep 10 ;; esac
+    echo '{"error":{"code":"internal_error","message":"the server broke"}}'
+    exit 1 ;;
+esac
+"#,
+    )
+    .expect("the stand-in herdr");
+    fs::set_permissions(&scripted, fs::Permissions::from_mode(0o755))
+        .expect("the stand-in herdr made executable");
+    let profile = Herdr::new(Server::Session(SESSION.into()), scratch.path("records"))
+        .with_program(&scripted)
+        .with_bound(Duration::from_secs(1))
+        .with_session_home(scratch.path("home"));
+    assert_eq!(
+        profile.agents_in(Some("w")),
+        AgentsIn::Unread {
+            reason: "herdr refused (internal_error): the server broke".into()
+        }
+    );
+    let began = Instant::now();
+    let slow = profile.agents_in(Some("slow"));
+    assert!(
+        matches!(&slow, AgentsIn::Unread { reason } if reason.contains("did not answer within 1 seconds")),
+        "the agents of a server that does not answer gave {slow:?}"
+    );
+    assert!(
+        began.elapsed() < Duration::from_secs(3),
+        "agents_in waited {:?} on herdr",
+        began.elapsed()
+    );
+    let silent = scratch.path("silent-herdr");
+    fs::write(
+        &silent,
+        format!(
+            "#!/bin/sh\nSLOW_LISTING=1 exec {} \"$@\"\n",
+            scripted.display()
+        ),
+    )
+    .expect("the silent herdr");
+    fs::set_permissions(&silent, fs::Permissions::from_mode(0o755))
+        .expect("the silent herdr made executable");
+    let listing = profile.clone().with_program(&silent).agents_in(Some("w"));
+    assert!(
+        matches!(&listing, AgentsIn::Unread { reason } if reason.contains("did not answer within 1 seconds")),
+        "the agents of a part whose listing does not answer gave {listing:?}"
+    );
 }

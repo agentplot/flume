@@ -54,10 +54,14 @@ pub enum Answer {
     },
     /// Every end pending for the recipient that the inbox collected and
     /// delivered, of every place on the host, tidied places kept for
-    /// their ends among them (43, design 9).
+    /// their ends among them, and every place that waits on its caller
+    /// and on this recipient, which marks nothing (43, 130, 193; design
+    /// 9).
     Inbox {
         recipient: String,
         ends: Vec<Collected>,
+        #[serde(default)]
+        waiting: Vec<WaitingPlace>,
     },
     /// A wake of a role's address: its run launched, or the run that
     /// stands for it, live or waiting, and nothing made (132).
@@ -65,6 +69,14 @@ pub enum Answer {
         address: String,
         woke: Woke,
         place: PlaceStatus,
+    },
+    /// A wake of a role's address the host's configuration gives a
+    /// standing agent: nothing made, where the address lives, read at
+    /// the ask, and each end pending for it (132; core.28).
+    Held {
+        address: String,
+        standing: StandingStatus,
+        pending: Vec<PendingEnd>,
     },
     /// `flume kinds lock`'s act: the lock it wrote, each kind it recorded
     /// at its content's hash, and each it removed (155).
@@ -113,8 +125,8 @@ pub struct Listed {
 }
 
 /// Whom a waiting place waits on: its caller for a move 130 names, the
-/// host for room (70), or the merge queue for its submission's outcome
-/// (111).
+/// host for room (70), the merge queue for its submission's outcome
+/// (111), or, for a base place, the places on its branch (203).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WaitsOn {
@@ -124,6 +136,10 @@ pub enum WaitsOn {
     /// carry, or flume could not read whether one does (49, 207).
     Session,
     MergeQueue,
+    /// A base place whose branch a place is live on, which lands there
+    /// before the base place is submitted; never stalled for it (130,
+    /// 203).
+    Places,
 }
 
 impl WaitsOn {
@@ -134,6 +150,7 @@ impl WaitsOn {
             WaitsOn::Host => "waits on the host",
             WaitsOn::Session => "waits on its session",
             WaitsOn::MergeQueue => "waits on the merge queue",
+            WaitsOn::Places => "waits on the places on its branch",
         }
     }
 }
@@ -338,6 +355,11 @@ pub struct PlaceStatus {
     /// The recipients of the place's ends, as its launch fixed them (7,
     /// 8, 43).
     pub recipients: Vec<String>,
+    /// Where the launch took them from, the answerer behind the place's
+    /// stream with the source that declares it; none for a role's run
+    /// and a place launched before flume kept it (7, 56, 193).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recipients_from: Option<RecipientsFrom>,
     /// The words of each hold the launch put, by stage name (7, 130).
     pub hold_words: BTreeMap<String, String>,
     /// The move the place waits on its caller for, and since when; none
@@ -399,6 +421,19 @@ pub struct PlaceStatus {
     /// line asked alone (56, 60; S14).
     #[serde(default)]
     pub line: PlaceLine,
+    /// Whom a live place waits on, as the list gives it, the places on
+    /// its branch among them for a base place; none where it waits on
+    /// nobody (56, 130, 200, 203; core.14).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waits_on: Option<WaitsOn>,
+    /// Whether the place has a worktree, given for a base place alone,
+    /// which has none (9, 56, 202).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worktree: Option<bool>,
+    /// The places being made or live whose base is a base place's
+    /// branch, given for a base place alone (56, 130, 203).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_branch: Option<Vec<PlaceId>>,
 }
 
 /// A stage waiting for room while a process runs the conversation its
@@ -496,12 +531,42 @@ pub enum Cache {
 }
 
 /// An end of a place as status gives it: what ended and what was read of
-/// it, each delivery, and the recipients it stands pending for (43).
+/// it, its key as callers name it, the answer that answered a stop-short
+/// once one did, with who gave it and when, each delivery, and the
+/// recipients it stands pending for (42, 43).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EndStatus {
     #[serde(flatten)]
     pub end: EndHeld,
+    /// The end's key as callers name it, by which an answer names the
+    /// stop-short it answers (42, 43).
+    pub key: EndKey,
     pub pending_for: Vec<String>,
+    /// For a stop-short's end, the time its agent was kept open for the
+    /// answer until when the end was read; none where it was not kept
+    /// open, and for every other end (43, 198).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub open_until: Option<Seconds>,
+}
+
+impl EndStatus {
+    /// The end `end` as status gives it to a place whose recipients are
+    /// `recipients` (43, 198).
+    pub fn of(end: &EndHeld, recipients: &[String]) -> EndStatus {
+        EndStatus {
+            end: end.clone(),
+            key: end.of.end_key(),
+            pending_for: end.pending(recipients),
+            open_until: match &end.of {
+                EndOf::Stage {
+                    state: StageState::EndedShort,
+                    end,
+                    ..
+                } => end.open_until,
+                _ => None,
+            },
+        }
+    }
 }
 
 /// An end the inbox collected: the place it is of, by its location and
@@ -513,6 +578,34 @@ pub struct Collected {
     pub kind: String,
     pub name: String,
     pub end: EndStatus,
+}
+
+/// A place the inbox gives as waiting on its recipient: one that waits on
+/// its caller and that the recipient is a recipient of, was named by the
+/// stop-short it waits on, or was given a stall of as the answerer behind
+/// its stream; given whether anything of it was delivered or not, and
+/// marked nothing for (43, 130, 193; design 9).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WaitingPlace {
+    pub place: PlaceId,
+    pub kind: String,
+    pub name: String,
+    pub stream: String,
+    /// The first line of its brief, none where it has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub brief: Option<String>,
+    /// The move it waits on, since when and its words, and for an answer
+    /// whether its agent is kept open for it and until when (130, 198).
+    pub waiting_on: WaitingOn,
+    /// The stop-short the move answers, with its words, whether it needs
+    /// an answer or found work, its key and the address it named; none
+    /// where the move answers none (41, 42).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stop_short: Option<StopShortWaited>,
+    /// The hold on the move, with its words, since when and its bound,
+    /// while it holds; none where none does (130).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hold: Option<Hold>,
 }
 
 /// The host's agents running, its bound, the room left and the stages
@@ -536,17 +629,29 @@ pub struct HostStatus {
     /// named with what holds it (56, 137, 138).
     #[serde(default)]
     pub terminal_kept: Vec<String>,
-    /// Each role's address an end stands pending for, with the run the
-    /// host's configuration names for it, the run standing, and why it
-    /// was not woken (132; core.28).
+    /// Each role's address an end stands pending for, and each the
+    /// host's configuration gives a standing agent, with the run the
+    /// configuration names for it, the run standing, why it was not
+    /// woken, and where a standing agent lives (132, 190; core.28).
     #[serde(default)]
     pub addresses: Vec<AddressStatus>,
-    /// The watch the terminal keeps, with its bound, or none (122).
+    /// The watch a caller keeps over the host, with the bound it stated,
+    /// or none while none is kept (56, 119, 208).
     #[serde(default = "no_watch")]
     pub watch: Watch,
+    /// When the newest settle a caller asked as its watch began, by the
+    /// host's clock; none where the host holds no watch (56, 208).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub watch_settled: Option<Seconds>,
+    /// When the watch lapsed, twice its bound after its newest settle
+    /// began, given while flume runs attended after one; none while a
+    /// watch is kept or none was ever held (56, 119, 208).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub watch_lapsed: Option<Seconds>,
     /// Each terminal the host binds, its own first, then each stream's
     /// by the stream's name, each once: its profile, what it made and
-    /// keeps for what it did not make, and its watch (56, 119, 190).
+    /// keeps for what it did not make, and its watch, none (56, 122,
+    /// 190).
     #[serde(default)]
     pub terminals: Vec<TerminalStatus>,
     /// Each repository's base a live place stands on, with the count of
@@ -570,10 +675,13 @@ pub struct HostStatus {
     pub sources: Vec<SourceStatus>,
 }
 
-/// A source the host declares as status gives it (56, 191): its name, its
-/// file, the directory its packages lie in, the identity of every package
-/// that directory holds, and why the file or the directory cannot be read
-/// where either cannot.
+/// A source the host declares as status gives it (56, 191, 193): its
+/// name, its file, the directory its packages lie in, the identity of
+/// every package that directory holds, and why the file or the directory
+/// cannot be read where either cannot; and its roles: the file its
+/// declaration names for them, none where it names none, each address
+/// it declares, each entry of it that declares nothing for its address,
+/// with why, and why the roles file cannot be read where it cannot.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceStatus {
     pub name: String,
@@ -584,6 +692,14 @@ pub struct SourceStatus {
     pub kinds: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cannot_read: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub roles_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub roles: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub roles_refused: Vec<RoleRefused>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub roles_cannot_read: Option<String>,
 }
 
 fn no_watch() -> Watch {
@@ -602,6 +718,8 @@ impl Default for HostStatus {
             terminal_kept: vec![],
             addresses: vec![],
             watch: Watch::None,
+            watch_settled: None,
+            watch_lapsed: None,
             terminals: vec![],
             bases: vec![],
             terminal_setup: vec![],
@@ -637,25 +755,82 @@ pub struct PlaceClues {
     pub shown_at: ShownAt,
 }
 
-/// A role's address with ends pending for it (132): the run the host's
-/// configuration names for it, none where it names none and nothing
-/// wakes it; its run where one stands; each end pending for it; and why
-/// the last settle did not wake it.
+/// A role's address with ends pending for it, one a source gives a
+/// standing agent, pending or not, or one whose run's stall reached no
+/// one (130, 132, 193): the run a source declares
+/// for it, none where it declares none; its run where one stands; each
+/// end pending for it; why the last settle did not wake it, none for a
+/// standing address; for a standing address, where it lives; for a
+/// carried one, its entry; and, where no source declares anything for
+/// it, why, so it wakes nothing; and, where its run stalled and its
+/// stall reached no one, its run being its own stream's answerer or no
+/// role standing behind its stream, that stall, so status names what no
+/// one was told: each read at the ask, and none in a status written
+/// before (56, 130, 190, 191, 193; core.14, core.15).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AddressStatus {
     pub address: String,
-    pub role: Option<RoleRun>,
+    pub role: Option<RoleStatus>,
     pub run: Option<PlaceId>,
     pub pending: Vec<PendingEnd>,
     pub unwoken: Option<String>,
+    #[serde(default)]
+    pub standing: Option<StandingStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub carried: Option<CarriedRole>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wakes_nothing: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stalled: Option<PendingEnd>,
 }
 
-/// An end pending for a role's address: the place it is of, its key, and
-/// what ended in a notice's words (43, 132).
+/// A role's run as status gives it under its address: what its source's
+/// entry declares for the run, and the stream it runs in, its address's,
+/// which the form gives as `role.stream` though an entry names no stream
+/// of its own (132, 143, 193; core.14).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoleStatus {
+    #[serde(flatten)]
+    pub run: RoleRun,
+    pub stream: String,
+}
+
+/// Where a role's address a standing agent holds lives, read at the ask
+/// and kept by nothing (56, 132, 190, C.7; core.15): the agent's name as
+/// the terminal knows it, the stream it is sought in, the session there
+/// with where that came from, the profile the stream's terminal names,
+/// none where the host declares no such stream, and what the terminal
+/// found.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StandingStatus {
+    pub agent: String,
+    pub stream: String,
+    pub session: SessionHeld,
+    pub terminal: Option<String>,
+    pub found: StandingFound,
+}
+
+/// What the terminal found of a standing agent in its session (132,
+/// C.5): the one agent of its name, at the session name a notice reaches
+/// it by, with its state; none of that name; more than one, which takes
+/// no notice; or why it could not read, the
+/// host declaring no such stream or its terminal naming no profile flume
+/// carries among the reasons.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StandingFound {
+    One { at: String, state: AgentState },
+    None,
+    Several { count: usize },
+    Unread { reason: String },
+}
+
+/// An end pending for a role's address: the place it is of, its key as
+/// callers name it, and what ended in a notice's words (42, 43, 132).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PendingEnd {
     pub place: PlaceId,
-    pub key: String,
+    pub key: EndKey,
     pub what: String,
 }
 
@@ -750,8 +925,8 @@ impl RoomWanted {
 /// naming a terminal profile flume does not carry, or, for a terminal
 /// view, its terminal app naming a window profile flume does not carry,
 /// that last also given alone, since it refuses the stream's open and
-/// none of its stages; none where none holds (4, 56, 70, 107, 181, 182,
-/// 186, 188, 190, 199, C.7; core.14).
+/// none of its stages, none where none holds; and who stands behind it
+/// (4, 56, 70, 107, 181, 182, 186, 188, 190, 193, 199, C.7; core.14).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamStatus {
     pub name: String,
@@ -779,6 +954,11 @@ pub struct StreamStatus {
     /// it holds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view_refused: Option<String>,
+    /// Who stands behind the stream as the host's sources declare it:
+    /// the one role, with its source, or the roles that each declare to;
+    /// none where no role does (143, 193).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answerer: Option<StreamAnswerer>,
 }
 
 /// The title a window on a stream's part of its terminal carries, and
@@ -804,7 +984,9 @@ pub enum TitleFrom {
 /// A terminal the host binds (119, 190): the profile a stream takes it
 /// by, none for the host's own where no profile flume carries is it,
 /// what it made and keeps for what it did not make, each named with what
-/// holds it, and the watch it keeps.
+/// holds it, and its watch, none since no terminal keeps one or
+/// settles; nothing of a terminal decides the host's watch (61, 122,
+/// 208).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TerminalStatus {
     pub profile: Option<String>,
@@ -966,6 +1148,22 @@ pub struct StageStatus {
     /// head when status is asked (56, 58, 142).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<GroupStatus>,
+    /// Each answer the stage's current start took in its session, in the
+    /// order it took them, each with the question it answered (42, 56,
+    /// 198).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub answers: Vec<SessionAnswer>,
+}
+
+/// An answer a stage's start took in its session: the stop-short's words
+/// it answered, whole, and the answer's words, the act it came by, when
+/// flume took it and when it was sent and received there (42, 54, 56,
+/// 198).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionAnswer {
+    pub question: Option<String>,
+    #[serde(flatten)]
+    pub answer: AnswerHeld,
 }
 
 impl StageStatus {
@@ -1071,6 +1269,28 @@ pub struct AgentStatus {
     /// program an entry (56, 195).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub own: Option<OwnStatus>,
+    /// Its effort as its start passed it, with its layer, and the
+    /// account's variable that outranks it; none where no layer gave one
+    /// (56, 197).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<EffortStatus>,
+}
+
+/// An agent's effort at its start: `word`, as its layer wrote it, and
+/// `layer`, the first of the eight that gave it; `passed`, the value its
+/// profile passed, which takes its program's words as written; `read_back`,
+/// whether its program read it back, which no profile does; and
+/// `outranked_by`, the variable its program reads over the effort where
+/// the agent's account's environment names it, by its name and never its
+/// value, none otherwise (56, 197; core.30).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EffortStatus {
+    pub word: String,
+    pub layer: Layer,
+    pub passed: String,
+    pub read_back: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outranked_by: Option<String>,
 }
 
 /// An agent's own settings at its start beyond their keys: `passed`, its
@@ -1120,8 +1340,8 @@ pub struct AgentSettings {
     pub settings: Settings,
     pub env: BTreeMap<String, String>,
     /// Each setting's layer and value as written, by `program`, `model`,
-    /// `instructions` or `env.<NAME>`, an environment variable's value
-    /// [`flume_seams::SET`] and its layer `account`.
+    /// `instructions`, `mode`, `keep_open` or `env.<NAME>`, an environment
+    /// variable's value [`flume_seams::SET`] and its layer `account`.
     #[serde(default)]
     pub from: BTreeMap<String, Given>,
 }
@@ -1195,9 +1415,14 @@ pub struct KeptPlace {
     pub why: Kept,
 }
 
+/// A branch a tidy kept, named once: the commits it holds whose change
+/// its base lacks, or, for a base place's branch the merge queue kept at
+/// its close, the merge queue's words (67, 206).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BranchKept {
     pub place: PlaceId,
     pub branch: String,
     pub commits: Vec<Revision>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }

@@ -2,7 +2,7 @@
 //! scenarios a profile does (106).
 
 use crate::seams::{
-    agent::{AgentHarness, CarryAccounts, LiveSessions, Modes, OwnWay},
+    agent::{AgentHarness, CarryAccounts, Efforts, LiveSessions, Modes, OwnWay},
     change::ChangeHarness,
     history::HistoryHarness,
     kinds::{KindsHarness, SourceDir},
@@ -362,6 +362,9 @@ pub struct FakeAgentHarness {
     /// How the harness scripted the fake to take own settings, by
     /// [`fake_own`], or left it keeping the seam's defaults (195, 196).
     own: OwnWay,
+    /// The efforts the harness scripted the fake to take, by
+    /// [`fake_efforts`], or none where it keeps the seam's defaults (197).
+    efforts: Efforts,
 }
 
 impl FakeAgentHarness {
@@ -382,12 +385,42 @@ impl FakeAgentHarness {
         let host = Arc::new(FakeHost::default());
         let terminal = Arc::new(FakeTerminal::new(host.clone()));
         FakeAgentHarness {
-            agent: scripted(FakeAgent::new(terminal.clone()), &OwnWay::default()),
+            agent: scripted(
+                FakeAgent::new(terminal.clone()),
+                &OwnWay::default(),
+                &fake_efforts(),
+            ),
             terminal,
             host,
             carries: true,
             own: OwnWay::default(),
+            efforts: fake_efforts(),
         }
+    }
+
+    /// The fake left taking no effort and naming no variable read over
+    /// one, as a profile that keeps the seam's defaults (197).
+    pub fn taking_no_effort() -> Self {
+        let host = Arc::new(FakeHost::default());
+        let terminal = Arc::new(FakeTerminal::new(host.clone()));
+        let own = fake_own();
+        FakeAgentHarness {
+            agent: scripted(FakeAgent::new(terminal.clone()), &own, &Efforts::default()),
+            terminal,
+            host,
+            carries: true,
+            own,
+            efforts: Efforts::default(),
+        }
+    }
+}
+
+/// The fake agent's efforts the seam's scenarios run with: `low` and
+/// `high` taken, and `FAKE_EFFORT` read over them (197).
+pub fn fake_efforts() -> Efforts {
+    Efforts {
+        words: vec!["low".into(), "high".into()],
+        variable: Some("FAKE_EFFORT"),
     }
 }
 
@@ -410,9 +443,10 @@ pub fn fake_own() -> OwnWay {
     }
 }
 
-/// `agent` scripted with [`fake_modes`], reading the mode back, and
-/// taking own settings as `own` says (161, 169, 195).
-fn scripted(agent: FakeAgent, own: &OwnWay) -> FakeAgent {
+/// `agent` scripted with [`fake_modes`], reading the mode back, taking
+/// own settings as `own` says, and taking the efforts `efforts` gives
+/// (161, 169, 195, 197).
+fn scripted(agent: FakeAgent, own: &OwnWay, efforts: &Efforts) -> FakeAgent {
     let modes = fake_modes();
     for (mode, value) in &modes.four {
         agent.map_mode(*mode, value);
@@ -426,6 +460,13 @@ fn scripted(agent: FakeAgent, own: &OwnWay) -> FakeAgent {
     }
     for Reserved { key, owner } in &own.reserved {
         agent.reserve(key, owner);
+    }
+    let words: Vec<&str> = efforts.words.iter().map(String::as_str).collect();
+    if !words.is_empty() {
+        agent.take_efforts(&words);
+    }
+    if let Some(variable) = efforts.variable {
+        agent.read_effort_over(variable);
     }
     agent
 }
@@ -447,17 +488,19 @@ pub fn fake_modes() -> Modes {
 
 impl Default for FakeAgentHarness {
     /// The fake agent scripted with [`fake_modes`], reading the mode
-    /// back, and with [`fake_own`] (161, 169, 195).
+    /// back, with [`fake_own`] and with [`fake_efforts`] (161, 169, 195,
+    /// 197).
     fn default() -> Self {
         let host = Arc::new(FakeHost::default());
         let terminal = Arc::new(FakeTerminal::new(host.clone()));
         let own = fake_own();
         FakeAgentHarness {
-            agent: scripted(FakeAgent::new(terminal.clone()), &own),
+            agent: scripted(FakeAgent::new(terminal.clone()), &own, &fake_efforts()),
             terminal,
             host,
             carries: true,
             own,
+            efforts: fake_efforts(),
         }
     }
 }
@@ -623,6 +666,10 @@ impl AgentHarness for FakeAgentHarness {
     /// The JSON object of the file the command names by `--own`, read
     /// from the files it lists; an empty one where it lists no such file,
     /// and none where it names none (196).
+    fn efforts(&self) -> Efforts {
+        self.efforts.clone()
+    }
+
     fn own_passed(&self, command: &AgentCommand) -> Option<BTreeMap<String, serde_json::Value>> {
         let file = command
             .args
@@ -641,7 +688,7 @@ impl AgentHarness for FakeAgentHarness {
 
 pub struct FakeTerminalHarness {
     pub host: Arc<FakeHost>,
-    pub terminal: FakeTerminal,
+    pub terminal: Arc<FakeTerminal>,
     sends: bool,
 }
 
@@ -649,7 +696,7 @@ impl FakeTerminalHarness {
     /// A terminal that sends, or, as the printed command, one that cannot.
     pub fn new(sends: bool) -> Self {
         let host = Arc::new(FakeHost::default());
-        let terminal = FakeTerminal::new(host.clone());
+        let terminal = Arc::new(FakeTerminal::new(host.clone()));
         if sends {
             terminal.set_session(Some("pane-1"));
         } else {
@@ -668,6 +715,10 @@ impl TerminalHarness for FakeTerminalHarness {
 
     fn seam(&self) -> &FakeTerminal {
         &self.terminal
+    }
+
+    fn shared(&self) -> Arc<dyn Terminal> {
+        self.terminal.clone()
     }
 
     fn place(&self) -> PlaceRef {
@@ -803,6 +854,13 @@ impl TerminalHarness for FakeTerminalHarness {
 
     fn logged(&self) -> Option<Vec<String>> {
         Some(self.terminal.log.calls())
+    }
+
+    /// The fake scripts the agent in the part, waiting (132).
+    fn named_agent(&self, session: &str, name: &str) -> bool {
+        self.terminal
+            .add_agent(Some(session), name, AgentState::Waiting);
+        true
     }
 }
 
@@ -984,6 +1042,10 @@ impl MergeQueueHarness for FakeMergeQueueHarness {
             &format!("{other}'s policy cannot be read"),
         );
         other.into()
+    }
+
+    fn branch_head(&self, repository: &str, branch: &str) -> Option<Revision> {
+        self.git.branch_head(repository, branch)
     }
 }
 

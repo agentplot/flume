@@ -6,10 +6,10 @@
 //! stream whose multiplexer names a terminal profile the resolver does
 //! not carry refuses its launches and its starts, naming it, and nothing
 //! else (4, 107). The terminals the host binds are its own and each
-//! declared stream's, each once: flume runs attended while any of them
-//! keeps no watch, the calling command's session is the first that names
-//! one, and a recipient is reached in the first that holds its session
-//! (7, 43, 119). A place's clues go to the terminal of its live start,
+//! declared stream's, each once: none decides whether flume runs
+//! attended, which the host's watch alone does (119, 208), the calling
+//! command's session is the first that names one, and a recipient is
+//! reached in the first that holds its session (7, 43). A place's clues go to the terminal of its live start,
 //! else its newest, else its stream's, and its tidy to each terminal its
 //! starts recorded (137, 139).
 
@@ -270,14 +270,15 @@ impl Engine {
 
     /// The terminals the host binds as status gives them, the host's own
     /// named by the profile the resolver gives it by where no stream
-    /// takes it (56, 119, 190).
+    /// takes it, each with its watch none, since no terminal keeps one
+    /// or settles (56, 122, 190, 208).
     pub(crate) fn terminals_status(&self) -> Vec<crate::TerminalStatus> {
         self.host_terminals()
             .into_iter()
             .map(|bound| crate::TerminalStatus {
                 profile: bound.profile.or_else(|| self.profile_of(&bound.terminal)),
                 kept: bound.terminal.kept(),
-                watch: bound.terminal.watch(),
+                watch: Watch::None,
             })
             .collect()
     }
@@ -292,17 +293,9 @@ impl Engine {
         })
     }
 
-    /// Whether flume runs attended: a terminal the host binds, its own or
-    /// a stream's, keeps no watch (119, 190).
-    pub(crate) fn attended(&self) -> bool {
-        self.host_terminals()
-            .iter()
-            .any(|bound| bound.terminal.watch() == Watch::None)
-    }
-
     /// The calling command's session, as the first terminal the host
     /// binds that names one names it (7, 190).
-    pub(crate) fn caller_session(&self) -> Option<String> {
+    pub fn caller_session(&self) -> Option<String> {
         self.host_terminals()
             .iter()
             .find_map(|bound| bound.terminal.session())
