@@ -41,13 +41,27 @@ since flume runs none (core.13).
 `services.flume.settings` SHALL be free-form TOML whose keys are the
 managed file's, as 143 and C.7 name them. It SHALL declare `host`,
 `streams`, `pools` with their `accounts`, `kinds`, `repos` and `agents`,
-SHALL type each key C.7 gives one type, and SHALL leave an agents table
-free-form whole (record 0055).
+SHALL type each key C.7 gives one type that flume reads at the revision
+the module is built from, and SHALL leave an agents table free-form
+whole (record 0055).
 
 #### Scenario: A mistyped declared key
 
 - **WHEN** `nix:test` evaluates the options with `settings.streams.work.agents = "five"`
 - **THEN** evaluation fails naming `services.flume.settings.streams.work.agents`
+
+### Requirement: Only the keys flume reads are declared
+
+The module SHALL declare no key flume does not read at the revision it
+is built from, so a stream's `points` and `pace` pass undeclared until
+flume reads them (record 0025). It SHALL declare no word written before
+the current one, so `host.terminal`, which flume reads as `multiplexer`
+and refuses beside it, passes undeclared (record 0055).
+
+#### Scenario: The declared keys
+
+- **WHEN** `nix:test` reads the options `services.flume.settings` declares
+- **THEN** `host` declares `multiplexer` and no `terminal`, and a stream declares neither `points` nor `pace`
 
 ### Requirement: An unset key is left out and an undeclared key passes
 
@@ -58,7 +72,7 @@ when it reads the file.
 
 #### Scenario: A key the module does not declare
 
-- **WHEN** `nix:test` renders `settings` holding `host.terminal = "printed"` and a key under a stream no declaration names
+- **WHEN** `nix:test` renders `settings` holding `host.terminal = "printed"` and a stream's `points = 8`, neither declared
 - **THEN** the file holds both as written, and no key that `settings` left unset
 
 ### Requirement: Each table merges across modules

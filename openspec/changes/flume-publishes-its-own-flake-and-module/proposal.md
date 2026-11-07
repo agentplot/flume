@@ -31,8 +31,9 @@ name the file's tables and keys this module writes.
   `enable`, `package`, `settings` and, on NixOS, `user`. `settings` is
   flume's managed file, each key named as C.7 names it: `host`,
   `streams`, `pools` with their `accounts`, `kinds`, `repos` and
-  `agents`. The tables and keys C.7 types are declared for their types.
-  A key it does not declare passes to the file, and flume judges it.
+  `agents`. The tables and keys C.7 types and flume reads at the
+  module's revision are declared for their types. A key it does not
+  declare passes to the file, and flume judges it.
   Nothing flume defaults is defaulted again.
 - **The whole managed file, and no other.** The module renders
   `settings` to TOML at evaluation, puts it in the store, and links the

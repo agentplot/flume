@@ -202,7 +202,8 @@ agent or a systemd unit.
 ### 6. `settings`: the file's tables and keys
 
 `settings` follows RFC 42: free-form TOML, with the tables and keys
-C.7 names declared for their types and documentation. Each declared
+C.7 names and flume reads declared for their types and documentation.
+Each declared
 key, a table among them, is nullable with no default, and a null is
 left out of the file, so flume's own default holds and the two never
 drift (Boomdrive's Decision 8). So a table the host never sets writes
@@ -213,23 +214,36 @@ reads the file.
 | table | declared keys |
 |---|---|
 | `host` | `agents` (unsigned), `multiplexer`, `pool`, `terminal_app` (strings), `view` (`terminal` or `app`), `pin` (list of strings) |
-| `streams.<stream>` | `agents`, `points` (unsigned), `priority` (integer), `pool`, `session`, `multiplexer`, `terminal_app`, `title` (strings), `view` (`terminal` or `app`), `pace` (`points` unsigned, `per` one of `hour`, `day`, `week`), `labels.<label>` (`reserve`, `keep_free`, unsigned), `kinds.<kind>` (`session`, and `stages.<stage>.session`) |
+| `streams.<stream>` | `agents` (unsigned), `priority` (integer), `pool`, `session`, `multiplexer`, `terminal_app`, `title` (strings), `view` (`terminal` or `app`), `labels.<label>` (`reserve`, `keep_free`, unsigned), `kinds.<kind>` (`session`, and `stages.<stage>.session`) |
 | `pools.<pool>` | `strategy` (`fill-first`, `least-busy` or `most-left`), `threshold` (1 to 100), `accounts`, a list of `name`, `program`, `usage` (strings), `env` (attribute set of strings) and `agents` (unsigned) |
 | `kinds.<kind>` | `stream`, `label` (strings), `agents` (a free-form table) |
 | `repos.<repository>` | `stream` (string), `agents` (a free-form table), `kinds.<kind>` (`stream`, `label`, `agents`) |
 | `agents` | a free-form table |
 
 The rule is that a key is typed where C.7 gives it one type and a fixed
-set of words, and an agents table is free-form whole. An agents table's
-keys are many, layered and judged at each start with status naming each
-(32, 195 to 198), and a second copy of those rules in Nix would drift
-from flume's.
+set of words and flume reads it at the revision the module is built
+from, and an agents table is free-form whole. An agents table's keys are
+many, layered and judged at each start with status naming each (32, 195
+to 198), and a second copy of those rules in Nix would drift from
+flume's.
+
+The module declares only the keys flume reads at the revision it is
+built from, since a declared option that renders a file flume refuses is
+a trap for a host. A stream's `points` and `pace`, which C.7 names and
+record 0025 (accepted) decides, are not declared: flume's reader refuses
+them in a stream until the change that builds record 0025 makes it read
+them, and that change declares them in the module and adds them to
+`nix/tests/every-key.nix`, as `LOCAL_KEYS`' own comment has a change
+that gives a layer a key add it there. Until then they pass undeclared,
+and flume judges them.
 
 The module names no tool (core.1). A multiplexer, a terminal app or a
 program is a string the host writes, and flume reads it against its
-profiles (190; C.8). `host.terminal`, the older word for `multiplexer`,
-is not declared, so it passes to the file as written and flume reads it
-as C.7 says.
+profiles (190; C.8). A module writes the current word only, so it
+declares `host.multiplexer` and never offers `host.terminal`, the word
+written before it, which flume still reads as `multiplexer` and refuses
+beside it. `host.terminal` passes undeclared, as any key the module does
+not declare.
 
 The module never checks a `repos` key. It may be an address,
 `<owner>/<name>`, or a folder, as record 0055 has it.
@@ -243,6 +257,10 @@ Alternatives:
 
 - **Only declared keys.** Not taken: a key a later flume reads would
   need the module first.
+- **Every key C.7 names declared, a stream's `points` and `pace` among
+  them.** Not taken: flume refuses a file holding them until record
+  0025's change is built, so a declared option would offer a host a file
+  flume refuses.
 - **One option per key at the top**, `services.flume.streams`. Not
   taken: the option and the file would give each key two names, where
   record 0055 asks for the file's names.
