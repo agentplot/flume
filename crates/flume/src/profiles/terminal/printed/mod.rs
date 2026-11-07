@@ -10,9 +10,11 @@
 //! nothing and shows no clue (138, 139); there is no watch, so flume runs attended
 //! (119); it names no session (7), and attach refuses, since it holds
 //! no session a person can be shown (187), and runs answers it holds no
-//! part, in the same words (201). A command printed once for an
-//! identity is printed for it never again, kept as a mark in the place's
-//! own folder (98, 128). The command's environment is kept beside the
+//! part, in the same words (201); agents_in keeps the seam's default, not
+//! read, since it holds no agent a name finds, so a standing agent is
+//! never found under it and nothing is run (132, C.5). A command printed
+//! once for an identity is printed for it never again, kept as a mark in
+//! the place's own folder (98, 128). The command's environment is kept beside the
 //! mark in a file the host's user alone may read, which the line names,
 //! so no value of it, a secret's or a token's, is printed (32, 56).
 

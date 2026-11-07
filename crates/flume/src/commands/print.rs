@@ -5,8 +5,8 @@
 
 use flume_core::{
     group_name, percentage, AgentStatus, Answer, HostStatus, OwnStatus, PlaceStatus, PoolStatus,
-    Queued, ReadingStatus, Reserves, SessionWait, SourceStatus, StageStatus, StreamOpened,
-    StreamStatus, Tidied, TitleFrom, WindowOutcome, Woke,
+    Queued, ReadingStatus, Reserves, SessionWait, SourceStatus, StageStatus, StandingFound,
+    StandingStatus, StreamOpened, StreamStatus, Tidied, TitleFrom, WindowOutcome, Woke,
 };
 use flume_seams::{
     AccountFrom, Act, BaseFrom, CarryCause, ConfigLayer, ConfigValue, Conversation, Given, HoldOn,
@@ -116,6 +116,20 @@ pub fn person(answer: &Answer) -> String {
                 Woke::Waiting => format!("{address}'s run {} waits; nothing made", place.place),
             });
             lines.extend(place_lines(place));
+        }
+        Answer::Held {
+            address,
+            standing,
+            pending,
+        } => {
+            lines.push(format!(
+                "{address} is held by {}, so nothing was launched; {}",
+                standing_words(standing),
+                pending_words(pending.len())
+            ));
+            for end in pending {
+                lines.push(format!("  {}: {}", end.place, end.what));
+            }
         }
         Answer::Locked {
             lock_file,
@@ -919,6 +933,50 @@ fn and_list(items: &[String]) -> String {
     }
 }
 
+/// Where a standing agent lives and what its stream's terminal found of
+/// it: `the standing agent madswan-planner in the session madswan (the
+/// entry's), found waiting`; none of its name there, several, or why the
+/// terminal could not read (56, 132, 190).
+fn standing_words(standing: &StandingStatus) -> String {
+    let session = match &standing.session.name {
+        Some(name) => {
+            let from = match standing.session.from {
+                SessionFrom::Role => "the entry's".to_string(),
+                SessionFrom::Stream => format!("the stream {}'s", standing.stream),
+                SessionFrom::StreamName => format!("the stream {}'s name", standing.stream),
+                from => session_from(from).to_string(),
+            };
+            format!("the session {name} ({from})")
+        }
+        None => format!(
+            "the terminal's own session (the stream {}'s)",
+            standing.stream
+        ),
+    };
+    let found = match &standing.found {
+        StandingFound::One { state, .. } => format!("found {}", word(json!(state))),
+        StandingFound::None => "none of that name there".to_string(),
+        StandingFound::Several { count } => {
+            format!("{count} of that name there, so none takes a notice")
+        }
+        StandingFound::Unread { reason } => format!("not read: {reason}"),
+    };
+    format!(
+        "the standing agent {} in {session}, {found}",
+        standing.agent
+    )
+}
+
+/// How many ends stand pending for an address: `nothing pending`, `1 end
+/// pending`, `3 ends pending` (56, 132).
+fn pending_words(count: usize) -> String {
+    match count {
+        0 => "nothing pending".to_string(),
+        1 => "1 end pending".to_string(),
+        count => format!("{count} ends pending"),
+    }
+}
+
 /// Where a session's name came from (56, 107, 143, 199).
 fn session_from(from: SessionFrom) -> &'static str {
     match from {
@@ -928,6 +986,7 @@ fn session_from(from: SessionFrom) -> &'static str {
         SessionFrom::Stream => "the stream's",
         SessionFrom::StreamName => "the stream's name",
         SessionFrom::Own => "the terminal's own",
+        SessionFrom::Role => "the entry's",
     }
 }
 
@@ -1107,6 +1166,18 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         });
     }
     for address in &host.addresses {
+        if let Some(standing) = &address.standing {
+            lines.push(format!(
+                "  {}: {}; {}",
+                address.address,
+                standing_words(standing),
+                pending_words(address.pending.len())
+            ));
+            for end in &address.pending {
+                lines.push(format!("    {}: {}", end.place, end.what));
+            }
+            continue;
+        }
         let run = match (&address.run, &address.role) {
             (Some(run), _) => format!("its run {run}"),
             (None, Some(role)) => format!("no run; it wakes {} in {}", role.kind, role.repository),
@@ -1324,9 +1395,9 @@ mod tests {
     use super::*;
     use flume_core::EndStatus;
     use flume_core::{
-        AccountStatus, AgentSettings, EffortStatus, Listed, ModeStatus, MoveStatus, OwnFileStatus,
-        OwnStatus, Past, PlaceLine, RoomWanted, StreamListed, StreamStatus, TitleFrom, TitleHeld,
-        WindowStatus,
+        AccountStatus, AddressStatus, AgentSettings, EffortStatus, Listed, ModeStatus, MoveStatus,
+        OwnFileStatus, OwnStatus, Past, PendingEnd, PlaceLine, RoomWanted, StreamListed,
+        StreamStatus, TitleFrom, TitleHeld, WindowStatus,
     };
     use flume_seams::{
         AccountFrom, AccountHeld, AccountMove, AgentState, Declared, EndHeld, EndOf, Given, Layer,
@@ -2664,6 +2735,173 @@ mod tests {
         assert_eq!(
             person(&status),
             "no place stands on this host\nhost: 0 agents running, no bound\n  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet"
+        );
+    }
+
+    /// The standing agent `agent` in the session `madswan`, its name from
+    /// `from`, sought in the stream `madswan`, and what was found of it.
+    fn standing(agent: &str, from: SessionFrom, found: StandingFound) -> StandingStatus {
+        StandingStatus {
+            agent: agent.into(),
+            stream: "madswan".into(),
+            session: SessionHeld {
+                name: Some("madswan".into()),
+                from,
+            },
+            terminal: Some("fake".into()),
+            found,
+        }
+    }
+
+    /// `count` ends pending, of the fixes `one`, `two` and so on.
+    fn pending(count: usize) -> Vec<PendingEnd> {
+        ["one", "two", "three"][..count]
+            .iter()
+            .map(|name| PendingEnd {
+                place: PlaceId(format!("/places/fix--{name}")),
+                key: format!("{name}:code:1"),
+                what: "code delivered".into(),
+            })
+            .collect()
+    }
+
+    /// The host's lines for the one address `address`, held by `standing`
+    /// with `count` ends pending, the host's first line and its watch's
+    /// left out.
+    fn standing_lines(address: &str, standing: StandingStatus, count: usize) -> Vec<String> {
+        let lines = host_lines(&HostStatus {
+            addresses: vec![AddressStatus {
+                address: address.into(),
+                role: None,
+                run: None,
+                pending: pending(count),
+                unwoken: None,
+                standing: Some(standing),
+            }],
+            ..HostStatus::default()
+        });
+        lines[1..lines.len() - 1].to_vec()
+    }
+
+    #[test]
+    fn a_standing_address_found_waiting() {
+        // 56, 132, design 7: the agent, its session with where it came
+        // from, what was found and how many ends wait, each beneath.
+        assert_eq!(
+            standing_lines(
+                "madswan/planner",
+                standing(
+                    "madswan-planner",
+                    SessionFrom::Role,
+                    StandingFound::One {
+                        at: "fake:1@w".into(),
+                        state: AgentState::Waiting,
+                    },
+                ),
+                3,
+            ),
+            [
+                "  madswan/planner: the standing agent madswan-planner in the session madswan (the entry's), found waiting; 3 ends pending",
+                "    /places/fix--one: code delivered",
+                "    /places/fix--two: code delivered",
+                "    /places/fix--three: code delivered",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_standing_address_with_none_of_its_name() {
+        // 132, design 7: the session the stream's name gives it.
+        assert_eq!(
+            standing_lines(
+                "madswan/ops",
+                standing("madswan-ops", SessionFrom::StreamName, StandingFound::None),
+                1,
+            ),
+            [
+                "  madswan/ops: the standing agent madswan-ops in the session madswan (the stream madswan's name), none of that name there; 1 end pending",
+                "    /places/fix--one: code delivered",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_standing_address_with_two_of_its_name() {
+        // 132: two of one name take no notice.
+        assert_eq!(
+            standing_lines(
+                "madswan/planner",
+                standing(
+                    "madswan-planner",
+                    SessionFrom::Stream,
+                    StandingFound::Several { count: 2 },
+                ),
+                1,
+            )[0],
+            "  madswan/planner: the standing agent madswan-planner in the session madswan (the stream madswan's), 2 of that name there, so none takes a notice; 1 end pending"
+        );
+    }
+
+    #[test]
+    fn a_standing_address_not_read() {
+        // 132, 190: why the terminal could not read, in its words, and the
+        // terminal's own session where the default stream names none.
+        let mut gone = standing(
+            "w-planner",
+            SessionFrom::Own,
+            StandingFound::Unread {
+                reason: "the host declares no stream gone".into(),
+            },
+        );
+        gone.session.name = None;
+        gone.stream = "gone".into();
+        gone.terminal = None;
+        assert_eq!(
+            standing_lines("w/planner", gone, 2)[0],
+            "  w/planner: the standing agent w-planner in the terminal's own session (the stream gone's), not read: the host declares no stream gone; 2 ends pending"
+        );
+    }
+
+    #[test]
+    fn a_standing_address_with_nothing_pending() {
+        // 56, design 7: the entry read and the agent found, with no end
+        // beneath.
+        assert_eq!(
+            standing_lines(
+                "madswan/planner",
+                standing(
+                    "madswan-planner",
+                    SessionFrom::Role,
+                    StandingFound::One {
+                        at: "fake:1@w".into(),
+                        state: AgentState::Working,
+                    },
+                ),
+                0,
+            ),
+            ["  madswan/planner: the standing agent madswan-planner in the session madswan (the entry's), found working; nothing pending"]
+        );
+    }
+
+    #[test]
+    fn a_wake_of_a_standing_address_is_held() {
+        // 132, design 5: the agent, its session, what was found, nothing
+        // launched, and each end pending beneath.
+        let answer = Answer::Held {
+            address: "madswan/planner".into(),
+            standing: standing(
+                "madswan-planner",
+                SessionFrom::Role,
+                StandingFound::One {
+                    at: "fake:1@w".into(),
+                    state: AgentState::Asking,
+                },
+            ),
+            pending: pending(2),
+        };
+        assert_eq!(
+            person(&answer),
+            "madswan/planner is held by the standing agent madswan-planner in the session madswan (the entry's), found asking, so nothing was launched; 2 ends pending\n  /places/fix--one: code delivered\n  /places/fix--two: code delivered"
         );
     }
 
