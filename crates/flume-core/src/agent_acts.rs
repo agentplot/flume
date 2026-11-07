@@ -2,12 +2,15 @@
 //! stop-short, taken only under the current start's identity and secret
 //! while its agent is live, saying whether it needs an answer or found
 //! work, and the stop check, which keeps at work an agent that
-//! would go quiet with its deliverable missing and nothing said.
+//! would go quiet with its deliverable missing and nothing said. An
+//! agent that stops short needing an answer, found work from a stage
+//! before the kind's last among it, is kept open for that answer where
+//! its start's terminal hands a running agent words (131, 198).
 
 use crate::prompt::group_text;
 use crate::reading::find_group;
 use crate::start::Starts;
-use crate::{Act, Answer, Engine, Step};
+use crate::{Act, Answer, Engine, Step, KEEP_OPEN};
 use flume_seams::*;
 
 impl Engine {
@@ -27,7 +30,12 @@ impl Engine {
     /// short with the words whole, the kind and a repetition's task group
     /// (142), and no next stage starts,
     /// except that found work from the kind's last stage starts its fix
-    /// round once the agent is quiet (41, 42, 131).
+    /// round once the agent is quiet (41, 42, 131). One that needs an
+    /// answer, found work from any other stage among it, keeps its agent
+    /// open for the answer until now and the start's `keep_open`, where
+    /// the terminal its start opened in hands a running agent words, and
+    /// records that time on the end; none is kept open otherwise (53, 95,
+    /// 198, C.5).
     pub fn needs(&self, identity: &str, secret: &str, words: &str, kind: StopKind) -> Answer {
         self.settle_attended();
         let Some((held, index)) = self.current_start(identity) else {
@@ -46,6 +54,9 @@ impl Engine {
         }
         let id = held.place.id.clone();
         let made = self.made_since(&id, &start);
+        let answers = kind == StopKind::NeedsAnswer || index + 1 < held.stages.len();
+        let open_until = (answers && self.sends(&start))
+            .then(|| self.host.now().saturating_add(keep_open(&start)));
         let taken = self
             .update(&id, |held| {
                 let Some(index) = held.index_of(&start.identity) else {
@@ -61,6 +72,7 @@ impl Engine {
                     needs: Some(kind),
                     made: made.clone(),
                     group: start.group.clone().map(Box::new),
+                    open_until,
                     ..StageEnd::default()
                 });
                 Step::Write(true)
@@ -70,6 +82,14 @@ impl Engine {
             return Answer::refused(format!("the stage of {identity} is not running"));
         }
         self.acted(Act::Needs, &id)
+    }
+
+    /// Whether the terminal the start opened its agent in hands a running
+    /// agent words, as a tell's send does; not where no profile answers
+    /// for that terminal now (95, 190, 198).
+    fn sends(&self, start: &StartHeld) -> bool {
+        self.terminal_of(start)
+            .is_ok_and(|terminal| terminal.sends())
     }
 
     /// The place's own folder, where the agent of the live current start
@@ -199,6 +219,19 @@ impl Engine {
             declared.name,
         ))
     }
+}
+
+/// How long the start's agent is kept open once it stops short needing an
+/// answer: its settings' `keep_open` as resolved at its start, and
+/// flume's own hour for a start written before it resolved one, or one
+/// whose value no longer reads (32, 198).
+fn keep_open(start: &StartHeld) -> Seconds {
+    start
+        .settings
+        .keep_open
+        .as_deref()
+        .and_then(|given| read_span(given).ok())
+        .unwrap_or(KEEP_OPEN)
 }
 
 /// What a repetition delivers, in the stop check's words: its group, by
