@@ -60,10 +60,11 @@ const RUN: &[&str] = &[
 const STANDING: &[&str] = &["agent", "session", "answers", "answerer"];
 
 /// The settings an entry's `agents` table gives, as `--agent` gives them
-/// (7, 32, 107, 162, 195).
+/// (7, 32, 107, 162, 195, 197).
 const AGENTS: &[&str] = &[
     "program",
     "model",
+    "effort",
     "instructions",
     "beside",
     "session",
@@ -377,6 +378,7 @@ fn settings_of(
     Ok(Settings {
         program: entry.name("program")?,
         model: entry.text("model")?,
+        effort: entry.text("effort")?,
         instructions: entry.text("instructions")?,
         beside: entry.name("beside")?,
         session: entry.name("session")?,

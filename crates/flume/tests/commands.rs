@@ -62,8 +62,9 @@ const UNSTARTED: &str = "stand-in-unstarted";
 /// received its prompt at once, never asks or keeps own work, and reads
 /// its session ended once the test writes the mark
 /// `stand-in/<stage>-<start>` in the place's folder. It maps each mode to
-/// its own word and reads none back, and takes its program's own
-/// settings, passing them nowhere (195).
+/// its own word and reads none back, takes its program's own settings,
+/// passing them nowhere (195), and takes every effort, passing it as
+/// `--effort <word>` (197).
 struct StandInAgent {
     says_started: bool,
 }
@@ -91,6 +92,9 @@ impl Agent for StandInAgent {
         let mut args = vec![];
         if let Some(model) = &settings.model {
             args.extend(["--model".to_string(), model.clone()]);
+        }
+        if let Some(effort) = &settings.effort {
+            args.extend(["--effort".to_string(), effort.clone()]);
         }
         if let Some(instructions) = &settings.instructions {
             args.extend(["--instructions".to_string(), instructions.clone()]);
@@ -141,6 +145,10 @@ impl Agent for StandInAgent {
         Ok(entry.to_string())
     }
     fn own(&self, _given: &BTreeMap<String, serde_json::Value>) -> Result<(), String> {
+        Ok(())
+    }
+    /// Every word, passed as written.
+    fn effort(&self, _word: &str) -> Result<(), String> {
         Ok(())
     }
     fn send_back(&self) -> Offered {
@@ -1099,6 +1107,53 @@ fn a_session_for_every_stage_and_for_one_at_the_launch() {
 }
 
 #[test]
+fn an_effort_for_every_stage_and_for_one_at_the_launch() {
+    // 7, 32, 197: `--agent effort=high` for every stage and
+    // `verify.effort=max` for one, each kept as written at the launch's
+    // layer in the place's held settings, and each agent given its effort
+    // from the launch.
+    let host = Host::new("agent-effort");
+    let repository = repository("agent-effort", None);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch",
+            "--kind",
+            "change",
+            "--name",
+            "one",
+            "--kinds",
+            &kinds,
+            "--agent",
+            "effort=high",
+            "--agent",
+            "verify.effort=max",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "change--one");
+    let held = held_of(&host, &place).state.place;
+    assert_eq!(held.every_stage.effort.as_deref(), Some("high"));
+    assert_eq!(held.settings["verify"].effort.as_deref(), Some("max"));
+    for (stage, effort) in [("construct", "high"), ("code", "high"), ("verify", "max")] {
+        let agent = current_agent(&host, &repository.dir, &place);
+        assert_eq!(agent["stage"], stage, "{agent}");
+        assert_eq!(agent["settings"]["effort"], effort, "{agent}");
+        assert_eq!(
+            agent["settings"]["from"]["effort"],
+            serde_json::json!({"layer": "launch", "value": effort}),
+            "{agent}"
+        );
+        if stage != "verify" {
+            deliver(&host, &repository.dir, &place, stage);
+        }
+    }
+}
+
+#[test]
 fn the_settings_agent_gives_are_named_in_its_refusal() {
     // 7, 32: a field no setting names is refused, the words naming
     // session among the settings `--agent` gives, and nothing launched.
@@ -1123,7 +1178,9 @@ fn the_settings_agent_gives_are_named_in_its_refusal() {
     );
     assert_eq!(refused.code, 1, "{}", refused.text);
     assert!(
-        refused.text.contains("colour") && refused.text.contains("session"),
+        refused.text.contains("colour")
+            && refused.text.contains("session")
+            && refused.text.contains("effort"),
         "{}",
         refused.text
     );
@@ -1133,6 +1190,11 @@ fn the_settings_agent_gives_are_named_in_its_refusal() {
     assert!(
         help.text.contains("session"),
         "--help names no session: {}",
+        help.text
+    );
+    assert!(
+        help.text.contains("effort"),
+        "--help names no effort: {}",
         help.text
     );
 }

@@ -168,7 +168,7 @@ fn given(layer: Layer, value: &str) -> Option<Given> {
 }
 
 /// flume's own fix@1, its agents given `agents`.
-fn fix_kind(agents: KindSettings) -> Result<Kind, String> {
+pub(super) fn fix_kind(agents: KindSettings) -> Result<Kind, String> {
     let mut fix = flumes_own()
         .into_iter()
         .find(|kind| kind.name == "fix")
@@ -178,7 +178,7 @@ fn fix_kind(agents: KindSettings) -> Result<Kind, String> {
 }
 
 /// flume's own change@1, its agents given `agents`.
-fn change_kind(agents: KindSettings) -> Result<Kind, String> {
+pub(super) fn change_kind(agents: KindSettings) -> Result<Kind, String> {
     let mut change = flumes_own()
         .into_iter()
         .find(|kind| kind.name == "change" && kind.version == 1)
@@ -194,7 +194,7 @@ fn talk_kind() -> Kind {
 
 /// Nothing made for a refused launch: no place, and no held state for
 /// `id`.
-fn nothing_made(world: &World, id: &PlaceId) -> Outcome {
+pub(super) fn nothing_made(world: &World, id: &PlaceId) -> Outcome {
     ensure_eq!(world.place.log.count("make"), 0, "places made");
     ensure!(world.held(id).is_none(), "held state written");
     Ok(())

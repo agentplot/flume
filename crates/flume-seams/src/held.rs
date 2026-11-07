@@ -834,8 +834,9 @@ pub struct StartHeld {
     /// (32, 56).
     pub settings: Settings,
     /// Each setting's layer and value as written, by `program`, `model`,
-    /// `instructions` or `env.<NAME>`, a variable's from its account and
-    /// its value [`crate::SET`], so no value is kept (32, 56, 144).
+    /// `effort`, `instructions` or `env.<NAME>`, a variable's from its
+    /// account and its value [`crate::SET`], so no value is kept (32, 56,
+    /// 144, 197).
     #[serde(default)]
     pub from: BTreeMap<String, Given>,
     /// The account it runs under, none where its stream and the host

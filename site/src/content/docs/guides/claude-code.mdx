@@ -20,7 +20,7 @@ under `$XDG_DATA_HOME/flume/plugins/claude/<version>-<digest>`, and
 starts each agent with it:
 
 ```sh
-claude --plugin-dir <plugin> [--settings <file>] [--resume <session>] [--model <model>] [--permission-mode <mode>] [--append-system-prompt-file <file>] '<prompt>'
+claude --plugin-dir <plugin> [--settings <file>] [--resume <session>] [--model <model>] [--effort <word>] [--permission-mode <mode>] [--append-system-prompt-file <file>] '<prompt>'
 ```
 
 `--settings` is there only where a layer gives Claude Code's own
@@ -38,6 +38,17 @@ Each agent in the fork gets this file:
 ```json
 {"attribution":{"commit":"","pr":"","sessionUrl":false}}
 ```
+
+`--effort` is there only where a layer gives the agent an effort, one
+of the pinned release's five words, `low`, `medium`, `high`, `xhigh`
+and `max` ([the effort](/flume/guides/agent-settings/#the-effort)).
+It is the session's own level, which Claude Code reads over every
+settings file's. So Claude Code's `effortLevel` setting is flume's
+`effort`'s: a layer's `settings` that writes it is refused, and a
+named file's is left out, naming flume's `effort` as its owner. Claude
+Code reads one thing over `--effort`, `CLAUDE_CODE_EFFORT_LEVEL` in
+its environment. An account whose `env` sets it outranks the layers,
+and status says so on the agent's line, naming the variable.
 
 `--resume` is there only for a start that carries a spent agent's
 conversation ([a conversation carried](#a-conversation-carried)).
@@ -69,7 +80,9 @@ Claude Code is the one agent program flume runs.
 flume checks the plugin's hooks against the Claude Code release its
 repository pins, 2.1.296. It checks there too the `--settings` option,
 the order Claude Code reads its settings in, each key flume reserves
-for another setting, and `attribution`'s two texts.
+for another setting, `effortLevel` among them, and `attribution`'s two
+texts. It checks the `--effort` option and its five words there, and
+the variable Claude Code reads over it.
 
 ## What each hook does
 

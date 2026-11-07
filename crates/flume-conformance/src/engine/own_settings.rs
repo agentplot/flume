@@ -132,6 +132,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_peoples_file_with_keys_another_setting_owns,
         },
         Scenario {
+            name: "own settings: an effort's key the profile reserves for flume's effort, written in the host's table, refuses every launch and the next start of a place launched before, naming the key, host and flume's effort",
+            cites: &["195", "197", "4", "32"],
+            run: an_efforts_key_written_in_a_table,
+        },
+        Scenario {
+            name: "own settings: an effort's key the profile reserves for flume's effort, in the host's named file, is left out, the file's other keys passed, and status names it with the file, host and flume's effort",
+            cites: &["195", "197", "56"],
+            run: an_efforts_key_in_a_named_file,
+        },
+        Scenario {
             name: "own settings: a credential under a key left out of a file is never read, and nothing of it is in status, a log line or held state",
             cites: &["195", "29", "56"],
             run: a_credential_under_a_key_left_out,
@@ -1013,6 +1023,107 @@ fn a_peoples_file_with_keys_another_setting_owns(_: &()) -> Outcome {
     ensure!(
         key_from(&world, &id, "env")?.is_none(),
         "status names env as given"
+    );
+    Ok(())
+}
+
+/// The fake reserving `effortLevel` for flume's effort, as a profile
+/// whose program's own settings hold an effort does (197).
+fn reserving_the_effort(world: &World) {
+    world.agent.take_own();
+    world.agent.reserve("effortLevel", "flume's `effort`");
+}
+
+fn an_efforts_key_written_in_a_table(_: &()) -> Outcome {
+    let world = World::new();
+    reserving_the_effort(&world);
+    let id = World::id("change", "plan");
+    launched(
+        &world
+            .engine
+            .launch(&launch("change", "plan", Some("plan it"))),
+    )?;
+    to_code(&world, &id, "plan")?;
+    world
+        .host
+        .set_every_agent(inline("agent", json!({ "effortLevel": "xhigh" })));
+    let named = |reason: &str| -> Outcome {
+        for named in [
+            "`programs.agent.settings.effortLevel`",
+            "`host`",
+            "flume's `effort`",
+        ] {
+            ensure!(reason.contains(named), "{named} in the refusal: {reason}");
+        }
+        Ok(())
+    };
+    let reason = refused(&world.engine.launch(&launch("fix", "one", Some("mend it"))))?;
+    named(&reason)?;
+    ensure_eq!(world.place.log.count("make"), 1, "places made");
+    ensure!(
+        world.held(&World::id("fix", "one")).is_none(),
+        "held state written"
+    );
+    world.terminal.log.clear();
+    world.tick("change/plan", "plan", 1, 1);
+    world.settle(&id);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "verify"),
+        Some(StageState::Refused),
+        "verify"
+    );
+    ensure_eq!(world.terminal.log.count("open"), 0, "agents opened");
+    let refusal = world.status(&id)?.stages[2]
+        .refused_setting
+        .clone()
+        .ok_or("no setting named")?;
+    named(&refusal)
+}
+
+fn an_efforts_key_in_a_named_file(_: &()) -> Outcome {
+    let world = World::new();
+    reserving_the_effort(&world);
+    world.host.set_every_agent(by_file(
+        "agent",
+        HOST_FILE,
+        json!({
+            "effortLevel": "xhigh",
+            "maxEffortLevel": "high",
+            "tui": "fullscreen",
+        }),
+        json!({}),
+    ));
+    let id = fix_begun(&world, &launch("fix", "one", Some("mend it")))?;
+    ensure_eq!(
+        own_passed(&world, &World::identity("fix", "one", "code", 1))?,
+        Some(json!({ "maxEffortLevel": "high", "tui": "fullscreen" })),
+        "the keys passed"
+    );
+    let own = world
+        .status(&id)?
+        .agent
+        .ok_or("no agent")?
+        .own
+        .ok_or("no own settings in status")?;
+    ensure_eq!(
+        own.files
+            .iter()
+            .map(|file| (file.layer, file.read.clone(), file.left_out.clone()))
+            .collect::<Vec<_>>(),
+        vec![(
+            Layer::Host,
+            HOST_FILE.to_string(),
+            vec![Reserved {
+                key: "effortLevel".into(),
+                owner: "flume's `effort`".into(),
+            }]
+        )],
+        "the key left out of the file"
+    );
+    ensure!(
+        key_from(&world, &id, "effortLevel")?.is_none(),
+        "status names effortLevel as given"
     );
     Ok(())
 }

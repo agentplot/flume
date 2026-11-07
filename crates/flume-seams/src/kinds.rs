@@ -94,6 +94,12 @@ pub enum Deliverable {
 pub struct Settings {
     pub program: Option<String>,
     pub model: Option<String>,
+    /// How hard the agent's model works on each turn, its program's own
+    /// word as its layer wrote it, which its profile takes or refuses;
+    /// none where the layer gives none, and in settings written before
+    /// (197).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
     pub instructions: Option<String>,
     /// The pane the agent opens beside, named by the launch's settings.
     pub beside: Option<String>,
@@ -308,7 +314,7 @@ pub const SET: &str = "<set>";
 
 impl Settings {
     /// These settings with `over`'s fields set over them, field by field,
-    /// each taken whole: a mode's table of programs is never merged with
+    /// each taken whole, the effort as the model (197): a mode's table of programs is never merged with
     /// another's (32, 169). Own settings are taken whole too, `over`'s
     /// where they give any: folding them key by key, each table's file
     /// kept beneath its own keys, is the core's (195).
@@ -316,6 +322,7 @@ impl Settings {
         Settings {
             program: over.program.clone().or_else(|| self.program.clone()),
             model: over.model.clone().or_else(|| self.model.clone()),
+            effort: over.effort.clone().or_else(|| self.effort.clone()),
             instructions: over
                 .instructions
                 .clone()
@@ -585,6 +592,10 @@ pub struct KindFrom {
 /// read (84).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "one answer read at a launch and taken apart at once, never held in bulk, so boxing its settings would buy nothing"
+)]
 pub enum KindsRead {
     Read {
         kinds: Vec<Kind>,
