@@ -389,7 +389,7 @@ fn the_herdr_terminal_keeps_no_watch_without_the_plugin() {
 /// records it, the first that reads locks. A version keeps its content in
 /// every later release, so a change to what one holds is a version of its
 /// own (156; design 7).
-const OWN_HASHES: [(&str, &str); 4] = [
+const OWN_HASHES: [(&str, &str); 5] = [
     (
         "flume/change@1",
         "sha256:2dbf6a11e877872619f56a51c192292b306dc7a8f1b7c2728cccdb8992e7d883",
@@ -397,6 +397,10 @@ const OWN_HASHES: [(&str, &str); 4] = [
     (
         "flume/change@2",
         "sha256:c47df4b93a579d76b62c1cf284af218bbc724ae81be67099c678a2cf5765e8ec",
+    ),
+    (
+        "flume/change@3",
+        "sha256:faf88896b4bf2be5e0ae9980bc5e17265909f8a6eea3468393548b483c8cb5d3",
     ),
     (
         "flume/chore@1",

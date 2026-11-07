@@ -248,7 +248,7 @@ fn a_working_fix_and_a_construct_on_hold(_: &()) -> Outcome {
             .iter()
             .map(|place| place.kind.as_str())
             .collect::<Vec<_>>(),
-        vec!["change@2", "fix@1"],
+        vec!["change@3", "fix@1"],
         "the kinds"
     );
     ensure_eq!(

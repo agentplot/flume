@@ -4,12 +4,13 @@
 //! an agents table's session read as no setting (32, 158),
 //! an elaboration section, the binding
 //! from the default branch, a place profile flume does not hold, flume's
-//! own kinds, one declaration per version with change@1 and change@2
-//! side by side, and what their prompts ask (22, 141, 157); a host's
-//! source's listing, its packages and their hashes wherever they lie, the
-//! repository's lock at a revision, a lock written and read back, and the
-//! packages refused at another identity, naming a part outside them, an
-//! environment or a program by a location (155 to 160, 192; S63).
+//! own kinds, one declaration per version with change@1, change@2 and
+//! change@3 side by side, and what their prompts ask (22, 141, 157); a
+//! host's source's listing, its packages and their hashes wherever they
+//! lie, the repository's lock at a revision, a lock written and read
+//! back, and the packages refused at another identity, naming a part
+//! outside them, an environment or a program by a location (155 to 160,
+//! 192; S63).
 
 use crate::common::engine::{base_at, engine, PLACE_PROFILE};
 use crate::common::*;
@@ -1347,8 +1348,9 @@ type Summary = (
 
 #[test]
 fn flumes_own_kinds_are_built_in() {
-    // 22, 140, 157, C.2: fix@1, chore@1, change@1 and change@2, change@2's
-    // code stage repeating per task group and change@1's not.
+    // 22, 140, 157, C.2: fix@1, chore@1, change@1, change@2 and change@3,
+    // change@2's code stage repeating per task group and change@1's and
+    // change@3's not, all landing, each last stage's `on_fail` `code`.
     let own = own_kinds();
     let summary: Vec<Summary> = own
         .iter()
@@ -1392,6 +1394,7 @@ fn flumes_own_kinds_are_built_in() {
         vec![
             change(1, false),
             change(2, true),
+            change(3, false),
             (
                 "chore".into(),
                 1,
@@ -1438,10 +1441,12 @@ fn own(name: &str, version: u32) -> Kind {
 
 #[test]
 fn each_versions_prompts_are_its_own() {
-    // 157, C.2, design 7: each of flume's own versions is a declaration of
-    // its own, under `own/<name>@<version>/`, whose prompts lie beside it;
-    // what the binary holds is what each directory holds, read as a
-    // launch's declaration is read from disk.
+    // 22, 156, 157, C.2, design 7: each of flume's own versions is a
+    // declaration of its own, under `own/<name>@<version>/`, whose prompts
+    // lie beside it; what the binary holds is what each directory holds,
+    // read as a launch's declaration is read from disk; change@1's and
+    // change@2's prompts are as before, and change@3's three are none of
+    // theirs.
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/profiles/kinds/weir/own");
     let mut versions: Vec<String> = std::fs::read_dir(&dir)
         .expect("flume's own kinds' directory")
@@ -1454,7 +1459,10 @@ fn each_versions_prompts_are_its_own() {
         })
         .collect();
     versions.sort();
-    assert_eq!(versions, ["change@1", "change@2", "chore@1", "fix@1"]);
+    assert_eq!(
+        versions,
+        ["change@1", "change@2", "change@3", "chore@1", "fix@1"]
+    );
     let mut read = vec![];
     for version in &versions {
         let declaration = dir.join(version).join("kind.toml");
@@ -1487,6 +1495,20 @@ fn each_versions_prompts_are_its_own() {
             "change@2's {} is change@1's",
             one.stages[stage].name
         );
+    }
+    let three = own("change", 3);
+    for (stage, prompt) in three
+        .stages
+        .iter()
+        .map(|stage| (&stage.name, &stage.prompt))
+    {
+        for earlier in one.stages.iter().chain(&two.stages) {
+            assert_ne!(
+                prompt, &earlier.prompt,
+                "change@3's {stage} is an earlier version's {}",
+                earlier.name
+            );
+        }
     }
     assert_eq!(
         own("fix", 1).stages[0].prompt,
@@ -1541,8 +1563,10 @@ fn asks_nothing_it_may_not(prompt: &str) {
 
 #[test]
 fn no_prompt_of_flumes_own_asks_to_submit() {
+    // 28, 71, 112: every prompt of fix@1, chore@1, change@1, change@2 and
+    // change@3 rendered for a place.
     let mut prompts = vec![];
-    for version in [1, 2] {
+    for version in [1, 2, 3] {
         let world = world_with_own_kinds(version);
         fix_begun(&world, "one").expect("a fix begun");
         prompts.push(opened(&world, "fix", "one", "code", 1));
@@ -1593,6 +1617,8 @@ fn sent_back_with_a_conflict(world: &World, kind: &str, name: &str) -> (String, 
 
 #[test]
 fn a_code_prompt_sent_back_with_a_conflict_merges_the_base_never_rebasing() {
+    // 112: fix@1's, chore@1's, change@2's and change@3's code prompts sent
+    // back with a conflict's words.
     let world = world_with_own_kinds(2);
     let mut prompts = vec![];
 
@@ -1613,7 +1639,15 @@ fn a_code_prompt_sent_back_with_a_conflict_merges_the_base_never_rebasing() {
     change_at_verify(&world, "plan").expect("a change at verify");
     archive(&world, "plan");
     prompts.push((
-        "change",
+        "change@2",
+        sent_back_with_a_conflict(&world, "change", "plan"),
+    ));
+
+    let world = world_with_own_kinds(3);
+    change_at_verify(&world, "plan").expect("a change@3 at verify");
+    archive(&world, "plan");
+    prompts.push((
+        "change@3",
         sent_back_with_a_conflict(&world, "change", "plan"),
     ));
 
@@ -1636,6 +1670,154 @@ fn a_code_prompt_sent_back_with_a_conflict_merges_the_base_never_rebasing() {
         let merge = prompt.find("git merge").expect("the merge");
         let fix = prompt.find("Then fix").expect("the fix");
         assert!(merge < fix, "{kind}: the merge comes after the fix");
+    }
+}
+
+/// A change place carried to its verify by a flume holding change@3, and
+/// the prompts its construct, code and verify were opened with (22, C.2).
+fn change_3_rendered() -> (World, PlaceId, [String; 3]) {
+    let world = world_with_own_kinds(3);
+    let id = change_at_verify(&world, "plan").expect("a change@3 at verify");
+    assert_eq!(
+        world.held(&id).expect("the place").place.kind.version,
+        3,
+        "the place's kind"
+    );
+    let prompts =
+        ["construct", "code", "verify"].map(|stage| opened(&world, "change", "plan", stage, 1));
+    for prompt in &prompts {
+        assert!(!prompt.contains("{{"), "a part left unfilled: {prompt}");
+    }
+    (world, id, prompts)
+}
+
+/// Asserts `prompt`, `stage`'s, names each of `named`.
+fn names_each(stage: &str, prompt: &str, named: &[&str]) {
+    for named in named {
+        assert!(
+            prompt.contains(named),
+            "change@3's {stage} prompt names not {named:?}: {prompt}"
+        );
+    }
+}
+
+#[test]
+fn change_3s_construct_prompt_gives_each_task_its_own_check() {
+    // 22, C.2, S119: change@3's construct prompt rendered for a place asks
+    // each task for the narrowest check that shows it done, and rules out
+    // a task running the repository's whole checks or a task group's.
+    let (_, _, [construct, _, _]) = change_3_rendered();
+    names_each(
+        "construct",
+        &construct,
+        &[
+            "Give each task the narrowest check that shows that task done",
+            "one test by name, one package's tests, or a lint of the files the task touches",
+            "No task runs the repository's whole checks",
+            "no task checks a task group",
+            "the task groups are headings for reading",
+            "the verify stage runs the repository's whole checks once",
+        ],
+    );
+}
+
+#[test]
+fn change_3s_code_prompt_runs_each_tasks_own_check_alone() {
+    // 22, C.2, S119: change@3's code prompt rendered for a place has its
+    // one agent build the whole change, run each task's own check before
+    // its tick, and rules out the repository's whole checks and a task
+    // group's; it names no group and no notes, as change@2's does.
+    let (_, _, [_, code, _]) = change_3_rendered();
+    names_each(
+        "code",
+        &code,
+        &[
+            "You build the whole change, every task of it",
+            "Work through its tasks in order, the task groups only headings",
+            "run the check it names as it names it",
+            "tick the task in the change's tasks file once its check passes",
+            "Run no check but a task's own",
+            "not the repository's whole checks",
+            "not a task group's",
+            "tasks ticked",
+        ],
+    );
+    let check = code.find("run the check it names").expect("the check");
+    let tick = code.find("tick the task").expect("the tick");
+    assert!(check < tick, "the tick comes before the check: {code}");
+    for named in ["The notes: ", "repetition", "Group 1"] {
+        assert!(
+            !code.contains(named),
+            "{named:?} in change@3's code: {code}"
+        );
+    }
+}
+
+#[test]
+fn change_3s_code_prompt_puts_a_retrys_words_last() {
+    // 131, core.33: change@3's code prompt rendered for one place without
+    // words, and again with its verify's words: the two are equal up to
+    // the first character of the words' section, and the second holds the
+    // words and asks the fix be recorded as a task naming its own check.
+    let (world, id, [_, first, _]) = change_3_rendered();
+    let verify = world.held(&id).expect("the place").stages[2]
+        .start
+        .clone()
+        .expect("verify's start");
+    let findings = "Task 2.1 is ticked and its test fails.";
+    let stopped = world.engine.needs(
+        &verify.identity.to_string(),
+        &verify.secret.0,
+        findings,
+        StopKind::FoundWork,
+    );
+    assert!(stopped.refusal().is_none(), "the stop-short: {stopped:?}");
+    world.settle(&id);
+    let second = opened(&world, "change", "plan", "code", 2);
+    let words = second
+        .find("This stage was started again with these words:")
+        .expect("the words' section");
+    assert_eq!(first, &second[..words], "the prompts up to the words");
+    names_each(
+        "code",
+        &second[words..],
+        &[
+            findings,
+            "record the fix as a task of the change naming its own check, ticked once that \
+             check passes",
+        ],
+    );
+}
+
+#[test]
+fn change_3s_verify_prompt_runs_the_whole_checks_once_first() {
+    // 22, 131, C.2, S119: change@3's verify prompt rendered for a place
+    // runs the repository's whole checks once, as the repository's
+    // instructions name them, before it checks the specs and the tasks,
+    // names their outcome in `verify.md`, and archives the change only
+    // where both hold; it names no tool, serving any host's repository.
+    let (_, _, [_, _, verify]) = change_3_rendered();
+    names_each(
+        "verify",
+        &verify,
+        &[
+            "First run the repository's whole checks once",
+            "as the repository's instructions name them",
+            "run them no second time",
+            "every requirement and scenario of its specs met, and every task ticked done",
+            "verify.md",
+            "the whole checks' outcome among it",
+            "Where the whole checks pass and the work holds, archive the change",
+            "Where the whole checks fail or the work falls short, archive nothing",
+            "stop short having found work",
+        ],
+    );
+    let checks = verify.find("whole checks once").expect("the whole checks");
+    let specs = verify.find("its specs met").expect("the specs");
+    assert!(checks < specs, "the specs checked before the whole checks");
+    let lower = verify.to_lowercase();
+    for tool in ["sluice", "moon", "cargo", "devenv", "openspec"] {
+        assert!(!lower.contains(tool), "change@3's verify names {tool}");
     }
 }
 
@@ -1725,6 +1907,47 @@ fn a_place_launched_at_change_1_keeps_it() {
     world.settle(&id);
     assert_eq!(world.stage_state(&id, "verify"), Some(StageState::Begun));
     assert_eq!(world.held(&id).expect("the place").stages[1].starts, 1);
+}
+
+#[test]
+fn a_place_launched_at_change_2_keeps_it() {
+    // 21, 22: a place launched by a flume holding change@1 and change@2
+    // alone is settled by one holding all three; it keeps change@2's
+    // stages, its code stage repeating per task group, and status names
+    // change@2.
+    let world = World::new();
+    world.kinds.set_own(
+        own_kinds()
+            .into_iter()
+            .filter(|kind| kind.name != "change" || kind.version <= 2)
+            .collect(),
+    );
+    let id = change_code_begun(&world, "old");
+    world.kinds.set_own_packages(Weir.flumes_own());
+    world.tick_groups("change/old", "old", GROUPS, 2);
+    world.settle(&id);
+    let held = world.held(&id).expect("the place");
+    assert_eq!(held.place.kind.version, 2, "the place's kind");
+    assert!(held.place.kind.stages[1].repeats, "code repeats not");
+    assert_eq!(held.stages[1].starts, 2, "code's starts");
+    assert_eq!(world.stage_state(&id, "code"), Some(StageState::Begun));
+    let status = world.status(&id).expect("status");
+    assert_eq!(
+        (
+            status.kind.as_str(),
+            status.version,
+            status.identity.as_deref()
+        ),
+        ("change", 2, Some("flume/change@2"))
+    );
+    assert_eq!(
+        status.stages[1]
+            .group
+            .as_ref()
+            .map(|group| (group.place, group.of, group.number.clone())),
+        Some((2, 3, Some("2".to_string()))),
+        "the group status names"
+    );
 }
 
 /// The package `<name>@<version>` of the source `acme` in `kinds_dir`,
@@ -1931,6 +2154,7 @@ fn flumes_own_as_packages() {
         [
             ("flume/change@1".to_string(), length),
             ("flume/change@2".to_string(), length),
+            ("flume/change@3".to_string(), length),
             ("flume/chore@1".to_string(), length),
             ("flume/fix@1".to_string(), length),
         ]

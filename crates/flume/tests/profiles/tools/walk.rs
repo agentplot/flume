@@ -21,7 +21,6 @@
 //! keep their scratch in the walkthrough's own folder.
 
 use crate::common::*;
-use flume::profiles::place::git_worktree;
 use serde_json::Value;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -309,18 +308,17 @@ impl Walk {
         answer
     }
 
-    /// Launches `<kind>--<name>` with `words` beside, and gives the
-    /// place's location.
+    /// Launches `kind`, a version named or not, as `name` with `words`
+    /// beside, and gives the place's location as the launch answers it,
+    /// `<kind>--<name>` with no version.
     pub fn launch(&self, kind: &str, name: &str, words: &[&str]) -> String {
         let mut launch = vec!["launch", "--kind", kind, "--name", name];
         launch.extend(words);
-        self.flume(&launch);
-        git_worktree::location(
-            &self.repository.name(),
-            &format!("{kind}--{name}"),
-            Some(&self.home.join("data/flume")),
-        )
-        .expect("the place's location")
+        let launched = self.flume(&launch);
+        launched["launched"]["place"]["place"]
+            .as_str()
+            .unwrap_or_else(|| panic!("a place launched: {launched}"))
+            .to_string()
     }
 
     /// Every place's status and the host's.
