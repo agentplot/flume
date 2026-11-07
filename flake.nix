@@ -77,5 +77,9 @@
         flume = moduleOf "darwin" ./nix/modules/darwin.nix;
         default = flume;
       };
+      nixosModules = rec {
+        flume = moduleOf "nixos" ./nix/modules/nixos.nix;
+        default = flume;
+      };
     };
 }

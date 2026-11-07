@@ -53,4 +53,10 @@ in
   "The nix-darwin module" =
     t.expect (builtins.tryEval (t.darwinSystem { }).system.drvPath).success
       "a nix-darwin system with services.flume enabled does not evaluate";
+
+  # The NixOS module in a minimal system of its platform, whose toplevel
+  # throws on a failed assertion.
+  "The NixOS module" =
+    t.expect (builtins.tryEval (t.nixosSystem { }).config.system.build.toplevel.drvPath).success
+      "a NixOS system with services.flume enabled does not evaluate";
 }

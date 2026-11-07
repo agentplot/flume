@@ -23,5 +23,6 @@ in
     // import ./credential.nix t
     // import ./options.nix t
     // import ./darwin.nix t
+    // import ./nixos.nix t
   );
 }
