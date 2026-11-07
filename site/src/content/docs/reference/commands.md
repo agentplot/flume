@@ -445,7 +445,8 @@ Removes what is over, for each place whose work landed, was dropped
 or is done and whose agent stopped:
 
 - its worktree, through the repository's teardown and
-  `git worktree remove`;
+  `git worktree remove`, then whatever a tool left in its folder, and
+  its repository's folder under `places/` once that holds no place;
 - its branch, where the base holds every commit of it;
 - in each multiplexer its agents opened in, under herdr its tab, and
   its base's workspace once that holds nothing else of flume's or
