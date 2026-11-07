@@ -637,7 +637,6 @@ pub(crate) fn waiting_on(held: &HeldState, on_branch: Option<usize>) -> Option<W
     if base_place(&place.kind) {
         return base_waiting_on(held, on_branch.unwrap_or(0));
     }
-    let stages = &place.kind.stages;
     let last = held.stages.len().checked_sub(1)?;
     let waits = |act, stage: Option<usize>, why, since, words| {
         Some(WaitingOn {
@@ -660,14 +659,9 @@ pub(crate) fn waiting_on(held: &HeldState, on_branch: Option<usize>) -> Option<W
             Some(Verdict::Failed { .. } | Verdict::Conflict { .. })
         );
         if found || failed {
-            let target = stages[last]
-                .send_back_to
-                .as_ref()
-                .and_then(|name| held.stages.iter().position(|stage| &stage.name == name))
-                .unwrap_or(last);
             return waits(
                 Act::Retry,
-                Some(target),
+                crate::submit::fix_round_of(held),
                 Waits::PastBound,
                 submission.waiting_since,
                 Some(words.clone()),
@@ -723,11 +717,10 @@ pub(crate) fn waiting_on(held: &HeldState, on_branch: Option<usize>) -> Option<W
             )
         }
         StageState::EndedShort => {
-            let end = stage.end.as_ref();
-            let found = end.and_then(|end| end.needs) == Some(StopKind::FoundWork);
-            if found && index == last {
+            if crate::submit::sent_back_by(held, index) {
                 return None;
             }
+            let end = stage.end.as_ref();
             let closed = end.and_then(|end| end.closed);
             retry(Waits::Answer, end.and_then(|end| end.words.clone())).map(|on| WaitingOn {
                 open_until: end

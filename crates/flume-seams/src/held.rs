@@ -262,8 +262,8 @@ pub enum Act {
 pub enum Waits {
     /// A stage, or the submission, on hold (47).
     OnHold,
-    /// A stage ended short needing an answer, or having found work
-    /// outside the kind's last stage (42, 131).
+    /// A stage ended short needing an answer, or having found work that
+    /// sends the place back to no fix round before it (42, 131).
     Answer,
     /// A stage whose agent was lost (45).
     Lost,

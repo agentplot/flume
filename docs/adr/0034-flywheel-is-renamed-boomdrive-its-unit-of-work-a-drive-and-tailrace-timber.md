@@ -1,7 +1,7 @@
 ---
 number: 34
 title: Flywheel is renamed Boomdrive, its unit of work a drive and tailrace timber, and flume's tree names them so
-status: proposed
+status: accepted
 date: 2026-11-04
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # Flywheel is renamed Boomdrive, its unit of work a drive and tailrace timber, and flume's tree names them so
 
-Status: proposed, on the user's words below, until they have seen it as a record.
+Status: accepted by the user on 2026-11-07, on their card, on their words below.
 
 Deciders: the user, renaming Flywheel across every repository at once, in the brief of the chore `flywheel-is-renamed-boomdrive` on 2026-11-04: "the ecosystem, the org, the branding, the cloud and the opensource runner tool are all boomdrive. There is also a "boom" open source tool that does the claim reconciliation."; and, as the brief carries their rulings, that a customer's unit of work becomes a drive, which they approved for ubiquitous language so the interface's words and the code's are the same; that crew's word for a partition's state branch follows the unit's word; that tailrace becomes timber; and that the same pass spells enroll and enrollment, never enrol or enrolment. Which of flume's mentions are live and which are history, and how flume names what the map does not rename, are the renaming agent's.
 Sources: the chore's brief of 2026-11-04, its map below; the repositories as GitHub answers for them on 2026-11-04: agentplot/flywheel-cloud as agentplot/boomdrive-cloud, agentplot/flywheel-runner as agentplot/boomdrive, agentplot/flywheel-web as agentplot/boomdrive-web, agentplot/tailrace as agentplot/timber, agentplot/flywheel archived, and agentplot/flywheel-next private, unarchived and under that name, its twelve crates, `flywheel-engine` among them, still so named; `agentplot/blueprints:design/flume/requirements.md` at ebfbc0d, C.2 ("the original Flywheel's flywheel-engine moved into agentplot/weir"); records 0004, 0008, 0020, 0021, 0023, 0025, 0027, 0028 and 0029; rules core.19, core.35 and core.42; `styles/Flume/Headings.yml`; `@agentplot/site-theme` at v0.1.3, its `src/family.ts`, which flume's site takes for its family bar and footer.

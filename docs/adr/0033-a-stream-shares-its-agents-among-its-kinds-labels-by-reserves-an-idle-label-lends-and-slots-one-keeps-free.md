@@ -1,7 +1,7 @@
 ---
 number: 33
 title: A stream shares its agents among its kinds' labels, by reserves an idle label lends and slots one keeps free, and a label has no pool, points or pace of its own
-status: proposed
+status: accepted
 date: 2026-11-03
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # A stream shares its agents among its kinds' labels, by reserves an idle label lends and slots one keeps free, and a label has no pool, points or pace of its own
 
-Status: proposed. The user decided it on 2026-11-03 on their Pending You cards, and what a kind's label is called and how a host's MCP servers reach an agent on 2026-11-05 in the Plannotator Inbox, in the words quoted below. It is stated on agentplot/blueprints main at 2c95a70, and the two rulings of 2026-11-05 on blueprints' branch `design/flume-weir-a-kinds-label-and-a-hosts-mcp-servers` at 157e899. The record waits on the user's yes once they have seen it as a record, on their review of the change `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`.
+Status: accepted by the user on 2026-11-07, on their card. The user decided it on 2026-11-03 on their Pending You cards, and what a kind's label is called and how a host's MCP servers reach an agent on 2026-11-05 in the Plannotator Inbox, in the words quoted below. It is stated on agentplot/blueprints main at 2c95a70, and the two rulings of 2026-11-05 on blueprints' branch `design/flume-weir-a-kinds-label-and-a-hosts-mcp-servers` at 157e899.
 
 Deciders: the user, who decided where a label comes from, that a label has no budget of its own, reserves and the slot kept free, where an MCP server names its labels, what a kind's label is called, and how a host's MCP servers reach an agent. The writing agent's: what a label is spelled as, a label that keeps more free than its reserve, how one settle ranks stages as it starts them, which label an agent's share counts under, what status gives, and what this change leaves unbuilt.
 Sources: the Plannotator Inbox thread msg_01M6P77HNP8KR9P83WNB98PA4N; `agentplot/blueprints:design/flume/requirements.md` at 2c95a70 and at 157e899, clauses 70 and 143, the vocabulary's label, reserve and room, 180 to 183, C.2's `label`, C.7, section 10's question on MCP servers, S84 and S85; `agentplot/blueprints:design/weir/requirements.md`, clauses 52 and 94 and C.4; records 0004, 0010, 0020 and 0025; rules core.4, core.26, core.32, core.38; `crates/flume-core/src/room.rs` (`Queue`, `StreamRoom`, `Waiting::rank`, `wants`, `must_wait`, `start_waiting`), `crates/flume/src/host/config.rs` (`streams_declared`, `kinds_streams`), `crates/flume-seams/src/kinds.rs` (`Kind`); weir-kinds at the revision `Cargo.toml` pins, whose `Kind` holds no label.

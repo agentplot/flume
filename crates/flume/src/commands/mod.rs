@@ -177,7 +177,7 @@ enum Command {
     /// answer, or found work, its end going to the place's recipients, or
     /// to the role `--to` names alone (41, 43, 132, C.4).
     Needs {
-        /// The stage found work it cannot deliver past.
+        /// The stage found work a stage before its own must do again.
         #[arg(long)]
         found: bool,
         /// The role the words are for, one the stage's prompt lists: a
