@@ -34,6 +34,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s35_a_change_runs_through,
         },
         Scenario {
+            name: "run through: a bare change runs change@3, its code stage one start of one agent for a change of four task groups, status and its line giving `code` with no group count, and the place submitted once verify archives the change",
+            cites: &["22", "154", "S119"],
+            run: s119_one_agent_codes_the_change,
+        },
+        Scenario {
             name: "run through: two fixes launched with notes as briefs each land with no further word",
             cites: &["S36", "40", "111", "131"],
             run: s36_two_fixes_land,
@@ -151,6 +156,96 @@ fn s35_a_change_runs_through(_: &()) -> Outcome {
     ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
     ensure!(world.held(&id).is_none(), "the landed place is kept");
     ensure_eq!(world.terminal.log.count("open"), 3, "agents opened");
+    Ok(())
+}
+
+/// A change of four task groups, seven tasks in all.
+const FOUR_GROUPS: &[(&str, &str, usize)] = &[
+    ("1", "One", 2),
+    ("2", "Two", 2),
+    ("3", "Three", 2),
+    ("4", "Four", 1),
+];
+
+/// The place's code stage as status gives it: its label, its group and
+/// its starts.
+fn code_as_status_gives_it(
+    world: &World,
+    id: &PlaceId,
+) -> Result<(String, Option<flume_core::GroupStatus>, u32), String> {
+    let status = world.status(id)?;
+    let code = status
+        .stages
+        .iter()
+        .find(|stage| stage.name == "code")
+        .ok_or("no code stage")?;
+    Ok((code.label(), code.group.clone(), code.starts))
+}
+
+fn s119_one_agent_codes_the_change(_: &()) -> Outcome {
+    let world = World::new();
+    let id = construct_begun(&world, "plan")?;
+    let status = world.status(&id)?;
+    ensure_eq!(
+        (status.version, status.identity.as_deref()),
+        (3, Some("flume/change@3")),
+        "the kind a bare change runs"
+    );
+    world.tick_groups("change/plan", "plan", FOUR_GROUPS, 0);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "code once construct delivered"
+    );
+    ensure_eq!(
+        code_as_status_gives_it(&world, &id)?,
+        ("code".to_string(), None, 1),
+        "code as status gives it"
+    );
+    let line = world.status(&id)?.line;
+    ensure_eq!(
+        (line.stage.as_deref(), line.full.as_str()),
+        (
+            Some("code"),
+            "change--plan · change@3 · code · run 1 · tasks 0/7 · working"
+        ),
+        "the place's line"
+    );
+    world.tick_groups("change/plan", "plan", FOUR_GROUPS, 4);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "code once two of its groups are ticked"
+    );
+    ensure_eq!(
+        code_as_status_gives_it(&world, &id)?,
+        ("code".to_string(), None, 1),
+        "code as status gives it once two of its groups are ticked"
+    );
+    world.tick_groups("change/plan", "plan", FOUR_GROUPS, 7);
+    world.settle(&id);
+    ensure!(
+        world
+            .stage_state(&id, "verify")
+            .is_some_and(StageState::running),
+        "verify did not start in code's settle"
+    );
+    ensure_eq!(
+        code_as_status_gives_it(&world, &id)?.2,
+        1,
+        "code's starts once every task is ticked"
+    );
+    archive(&world, "plan");
+    world.settle(&id);
+    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
+    ensure!(world.held(&id).is_none(), "the landed place is kept");
+    ensure_eq!(
+        world.terminal.log.count("open"),
+        3,
+        "agents opened: construct's, code's one and verify's"
+    );
     Ok(())
 }
 

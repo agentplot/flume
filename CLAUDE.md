@@ -69,15 +69,18 @@ branch requires:
 Run suites through sluice, so the agents on this host take turns under
 its bound, against your place's base, `<base>` here: the branch your
 place was cut from and your work lands on (sluice S66: a session runs
-its branch's checks). Once your work is committed, `sluice exec <base>`
-for the gate's checks, and while iterating `sluice exec <base> -- moon
-run <project>:<task>`. A place on a bolt so runs the bolt's
-`check-fast` and leaves `check-tools` to the bolt's merge onto main; a
-place on main runs both. A task line names the base the same way:
-"True when `sluice exec <base>` passes". The projects are those `.moon/workspace.yml` lists:
+its branch's checks). `sluice exec <base>` runs the gate's checks,
+which a change's verify stage runs once and no task of a change runs
+(record 0054); while iterating, `sluice exec <base> -- moon run
+<project>:<task>`. A place on a bolt so runs the bolt's `check-fast`
+and leaves `check-tools` to the bolt's merge onto main; a place on main
+runs both. A task line names the base the same way, `sluice exec <base>
+-- moon run <project>:<task>`. The projects are those
+`.moon/workspace.yml` lists:
 `seams`, `core`, `fakes`, `conformance` and `flume` (the crates under
-`crates/`), `plugin-claude` (`plugins/claude`), `plugin-herdr` (`plugins/herdr`), `site` and `root`. A quick, narrow call, `cargo check` or one unit test,
-is fine to run directly. `devenv shell -- moon run :#check-fast` runs
+`crates/`), `plugin-claude` (`plugins/claude`), `plugin-herdr` (`plugins/herdr`), `site` and `root`. A task's own check runs as the task
+names it, and beside it a quick, narrow call, `cargo check` or one unit
+test, is fine to run directly. `devenv shell -- moon run :#check-fast` runs
 the fast layer, `:#check-tools` the tools layer; `site-build` and
 `prose` run one each, `lint` the workspace's clippy, `disk` what `target/` has grown to, and `moon run
 <crate>:test` one crate's tests (`seams`, `core`, `fakes`,

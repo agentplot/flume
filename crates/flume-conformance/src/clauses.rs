@@ -104,10 +104,6 @@ pub const ORIGIN: &str =
 /// renamed in flume by one act.
 pub const RENAME: &str = "record 0053's change, a repository renamed by one act, once accepted";
 
-/// The change that builds record 0054: flume's own change at version 3,
-/// coded by one agent.
-pub const CHANGE_3: &str = "record 0054's change, flume's own change@3";
-
 /// Each clause or scenario no change has built yet, with the change that
 /// builds it: no scenario of the suite cites one, and the coverage check
 /// asks none to be cited.
@@ -137,7 +133,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
     let mcp_servers = std::iter::once(("183".to_string(), MCP_SERVERS));
     let origin = std::iter::once(("S92".to_string(), ORIGIN));
     let rename = std::iter::once(("209".to_string(), RENAME));
-    let change_3 = std::iter::once(("S119".to_string(), CHANGE_3));
     standing
         .chain(plan)
         .chain(points)
@@ -146,7 +141,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain(mcp_servers)
         .chain(origin)
         .chain(rename)
-        .chain(change_3)
         .collect()
 }
 
@@ -208,7 +202,7 @@ mod tests {
     #[test]
     fn the_clauses_unbuilt_are_named_by_the_changes_that_build_them() {
         let unbuilt = unbuilt();
-        assert_eq!(unbuilt.len(), 3 + 2 + 3 + 6 + 10 + 6 + 1 + 1 + 1 + 1);
+        assert_eq!(unbuilt.len(), 3 + 2 + 3 + 6 + 10 + 6 + 1 + 1 + 1);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
@@ -219,7 +213,7 @@ mod tests {
             "S61", "S62", "S63", "S95", "S96", "S97", "200", "201", "S108", "199", "S106", "S107",
             "207", "S113", "S114", "S115", "S116", "S117", "195", "196", "S100", "S101", "S102",
             "197", "S103", "198", "S104", "S105", "202", "203", "204", "205", "206", "208", "S109",
-            "S110", "S111", "S112", "S118", "193", "S93", "S94", "S98", "S99",
+            "S110", "S111", "S112", "S118", "193", "S93", "S94", "S98", "S99", "S119",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),
