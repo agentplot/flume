@@ -226,11 +226,25 @@ The host:
 | `watch` | the host's own multiplexer's watch, `{"bound":{"seconds":…}}`, or `none` with no herdr plugin running |
 | `terminals` | each multiplexer the host binds, the host's own first, then each stream's by the stream's name, each once: `profile`, `kept`, what a tidy kept there, and `watch`. Where any keeps no watch, every command of flume's that acts settles every place first |
 | `bases` | for each repository and base, its places running, asking, waiting on their caller and stalled, and the line shown in herdr |
-| `addresses` | each role's address with ends pending, and why its run was not woken |
+| `addresses` | each role's address with ends pending, and every address the host's configuration gives an agent that already runs, pending or not: `address`; `role`, the run's entry, `null` for an agent's address; `run`, the place of its run that stands; `pending`, each end with its `place`, `key` and `what`; `unwoken`, why its run was not woken, `null` for an agent's address; and `standing`, `null` for a run's address, else `agent`, the name the multiplexer knows it by, `stream`, `session`, its `name`, left out for the multiplexer's own, and `from`: `role`, the entry's own, `stream`, `stream-name` or `own`, `terminal`, the profile the stream's multiplexer names, `null` where the host declares no such stream, and `found`, what the multiplexer found when asked: `{"one":{"at":…,"state":…}}`, the agent at the session name a notice reaches it by with its state, `working`, `waiting`, `asking`, `stopped` or `unknown`; `"none"`; `{"several":{"count":…}}`; or `{"unread":{"reason":…}}`, in the multiplexer's words or flume's |
 | `terminal_kept` | what a tidy kept in the host's own multiplexer because something flume did not make holds it |
 | `terminal_setup` | what the host's own multiplexer's configuration lacks for flume's plugin there, each in words a person acts on, naming the file read: under herdr, the popup's `[[keys.command]]` entry or the sidebar rows' `$flume`, as the plugin's watch last read herdr's configuration; empty where nothing is missing, there is no watch or the terminal reads none |
 | `configuration` | the host's configuration: `local`, its local layer's `state`, `no-file`, `taken` or `not-taken` with each of its `keys` the local layer may not set or its `fault`; `values`, every value by its dotted `key`, as TOML writes it, with its `layer`, `managed` or `local`, an account's variables `<set>`; and `passed_over`, each local `key` a `pin` holds |
 | `sources` | each source of kinds the host declares, read when asked: `name`, `source_file`, `kinds_dir`, `kinds`, the identity of every package its directory holds, and `cannot_read`, the fault where the file or the directory cannot be read |
+
+## The answer of flume wake --json
+
+```json
+{"woken":{"address":"acme/planner","woke":"launched","place":{…}}}
+{"held":{"address":"acme/ops","standing":{…},"pending":[{…}]}}
+```
+
+`woken` answers a run's address: `woke`, `launched` where this wake
+launched the run, else `live` or `waiting` for the run that stands, and
+`place`, that run's place as status gives one. `held` answers an
+address an agent already holds, where nothing was launched: `standing`
+and `pending` as the host's `addresses` give them, read in the same
+ask.
 
 ## The answer of flume list --json
 
