@@ -26,6 +26,7 @@
 //! address is the configuration's at each delivery and each wake (132;
 //! core.13, core.28).
 
+use crate::standing::Standing;
 use crate::start::Starts;
 use crate::{what_ended, AddressStatus, Answer, Engine, PendingEnd, Step, Woke};
 use flume_seams::*;
@@ -171,15 +172,17 @@ impl Engine {
     }
 
     /// Each role's address an end stands pending for, of every place on
-    /// the host, and each the configuration gives a standing agent,
-    /// pending or not: with the run the configuration names for it, its
-    /// run standing and why it was not woken, or, for a standing address,
-    /// where its agent lives, each terminal and part asked once (56, 132,
-    /// 190; core.15, core.28).
-    pub(crate) fn addresses(&self) -> Vec<AddressStatus> {
+    /// the host, and each a source gives a standing agent, pending or
+    /// not, as `roles`, read once for the status, declares them: with the
+    /// run a source declares for it, its run standing and why it was not
+    /// woken; for a standing address, where its agent lives, each
+    /// terminal and part asked once; for a carried one, its entry; and,
+    /// where no source declares anything for it, why (56, 132, 190, 193;
+    /// core.15, core.28).
+    pub(crate) fn addresses(&self, roles: &HostRoles) -> Vec<AddressStatus> {
         let every = self.every_held();
         let mut by = pending_addresses(&every);
-        let mut standing = self.standing();
+        let mut standing = Standing::of(roles);
         for address in standing.addresses() {
             by.entry(address.clone())
                 .or_insert_with(|| AddressStatus::of(address));
@@ -188,9 +191,15 @@ impl Engine {
             status.standing = self
                 .reach(&mut standing, &status.address)
                 .map(|reach| reach.status);
-            match status.standing {
-                Some(_) => status.unwoken = None,
-                None => status.role = self.host.role(&status.address),
+            if status.standing.is_some() {
+                status.unwoken = None;
+            } else {
+                match roles.declared(&status.address) {
+                    Ok(RoleEntry::Run(run)) => status.role = Some(*run),
+                    Ok(RoleEntry::Carried(carried)) => status.carried = Some(carried),
+                    Ok(RoleEntry::Standing(_)) => {}
+                    Err(why) => status.wakes_nothing = Some(why),
+                }
             }
             status.run = every
                 .iter()
@@ -251,6 +260,8 @@ impl AddressStatus {
             pending: vec![],
             unwoken: None,
             standing: None,
+            carried: None,
+            wakes_nothing: None,
         }
     }
 }

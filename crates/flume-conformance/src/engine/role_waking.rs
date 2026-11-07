@@ -172,6 +172,18 @@ fn planner_run(base: Option<&str>, brief: Option<&str>) -> RoleRun {
     }
 }
 
+/// acme declares a run of `<stream>/operator` standing behind `stream`,
+/// so a launch into it may name an address that wakes nothing (193).
+pub fn answerer_behind(world: &World, stream: &str) {
+    world.host.set_role(
+        &format!("{stream}/operator"),
+        Some(RoleRun {
+            answerer: true,
+            ..planner_run(None, None)
+        }),
+    );
+}
+
 /// acme holds `turn@1`, one conversation stage `plan` whose prompt is
 /// `prompt`, which the host's lock records; the host declares the stream
 /// `address` names; and acme declares `run` for `address` (132, 155,
@@ -331,6 +343,7 @@ fn a_base_and_a_brief(_: &()) -> Outcome {
 
 fn an_address_with_no_kind(_: &()) -> Outcome {
     let world = World::new();
+    answerer_behind(&world, DEFAULT_STREAM);
     let id = fix_for(&world, "one", &["madswan/ops"])?;
     deliver_fix(&world, &id);
     world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
@@ -506,6 +519,8 @@ fn three_ends_one_run(_: &()) -> Outcome {
         world.terminal.opened(&identity).is_some(),
         "the run's agent did not start once there was room"
     );
+    // The run's command, whose environment names no recipient.
+    world.host.set_recipient(None);
     let run = world.engine();
     let recipient = run
         .recipient(Some(&planner_id()))
@@ -585,6 +600,8 @@ fn the_run_starts(_: &()) -> Outcome {
     deliver_fix(&world, &one);
     world.settle(&one);
     ensure_eq!(runs(&world), vec![planner_id()], "the run woken");
+    // The run's command, whose environment names no recipient.
+    world.host.set_recipient(None);
     let run = world.engine();
     let recipient = run
         .recipient(Some(&planner_id()))

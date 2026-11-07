@@ -9,6 +9,11 @@ use std::sync::Arc;
 
 pub const REPOSITORY: &str = "/repository";
 
+/// The recipient the calling command's environment names in every
+/// world, so a launch that names none takes it (7, 193): the session no
+/// terminal holds until a scenario adds it, its ends left pending.
+pub const CALLER: &str = "caller";
+
 /// Every fake, the resolver over them, and an engine for one command.
 pub struct World {
     pub git: Arc<FakeGit>,
@@ -45,6 +50,7 @@ impl World {
         let git = FakeGit::new();
         git.init(REPOSITORY, "main");
         let host = Arc::new(FakeHost::default());
+        host.set_recipient(Some(CALLER));
         let place = Arc::new(FakePlace::new(git.clone()));
         let kinds = Arc::new(FakeKinds::default());
         kinds.set_own(flumes_own());

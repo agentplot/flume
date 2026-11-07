@@ -346,6 +346,11 @@ pub struct PlaceStatus {
     /// The recipients of the place's ends, as its launch fixed them (7,
     /// 8, 43).
     pub recipients: Vec<String>,
+    /// Where the launch took them from, the answerer behind the place's
+    /// stream with the source that declares it; none for a role's run
+    /// and a place launched before flume kept it (7, 56, 193).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recipients_from: Option<RecipientsFrom>,
     /// The words of each hold the launch put, by stage name (7, 130).
     pub hold_words: BTreeMap<String, String>,
     /// The move the place waits on its caller for, and since when; none
@@ -579,10 +584,13 @@ pub struct HostStatus {
     pub sources: Vec<SourceStatus>,
 }
 
-/// A source the host declares as status gives it (56, 191): its name, its
-/// file, the directory its packages lie in, the identity of every package
-/// that directory holds, and why the file or the directory cannot be read
-/// where either cannot.
+/// A source the host declares as status gives it (56, 191, 193): its
+/// name, its file, the directory its packages lie in, the identity of
+/// every package that directory holds, and why the file or the directory
+/// cannot be read where either cannot; and its roles: the file its
+/// declaration names for them, none where it names none, each address
+/// it declares, each entry of it that declares nothing for its address,
+/// with why, and why the roles file cannot be read where it cannot.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceStatus {
     pub name: String,
@@ -593,6 +601,14 @@ pub struct SourceStatus {
     pub kinds: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cannot_read: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub roles_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub roles: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub roles_refused: Vec<RoleRefused>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub roles_cannot_read: Option<String>,
 }
 
 fn no_watch() -> Watch {
@@ -646,14 +662,14 @@ pub struct PlaceClues {
     pub shown_at: ShownAt,
 }
 
-/// A role's address with ends pending for it, or one the host's
-/// configuration gives a standing agent, pending or not (132): the run
-/// the configuration names for it, none where it names none and nothing
-/// wakes it, or a standing agent holds it; its run where one stands;
-/// each end pending for it; why the last settle did not wake it, none
-/// for a standing address; and, for a standing address, where it lives,
-/// read at the ask, none for a run's and in a status written before
-/// (56, 190; core.14, core.15).
+/// A role's address with ends pending for it, or one a source gives a
+/// standing agent, pending or not (132, 193): the run a source declares
+/// for it, none where it declares none; its run where one stands; each
+/// end pending for it; why the last settle did not wake it, none for a
+/// standing address; for a standing address, where it lives; for a
+/// carried one, its entry; and, where no source declares anything for
+/// it, why, so it wakes nothing: each read at the ask, and none in a
+/// status written before (56, 190, 191, 193; core.14, core.15).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AddressStatus {
     pub address: String,
@@ -663,6 +679,10 @@ pub struct AddressStatus {
     pub unwoken: Option<String>,
     #[serde(default)]
     pub standing: Option<StandingStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub carried: Option<CarriedRole>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wakes_nothing: Option<String>,
 }
 
 /// Where a role's address a standing agent holds lives, read at the ask
@@ -795,8 +815,8 @@ impl RoomWanted {
 /// naming a terminal profile flume does not carry, or, for a terminal
 /// view, its terminal app naming a window profile flume does not carry,
 /// that last also given alone, since it refuses the stream's open and
-/// none of its stages; none where none holds (4, 56, 70, 107, 181, 182,
-/// 186, 188, 190, 199, C.7; core.14).
+/// none of its stages, none where none holds; and who stands behind it
+/// (4, 56, 70, 107, 181, 182, 186, 188, 190, 193, 199, C.7; core.14).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamStatus {
     pub name: String,
@@ -824,6 +844,11 @@ pub struct StreamStatus {
     /// it holds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view_refused: Option<String>,
+    /// Who stands behind the stream as the host's sources declare it:
+    /// the one role, with its source, or the roles that each declare to;
+    /// none where no role does (143, 193).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answerer: Option<StreamAnswerer>,
 }
 
 /// The title a window on a stream's part of its terminal carries, and

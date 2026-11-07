@@ -109,15 +109,23 @@ fn count(agents: &AgentsIn, agent: &str) -> StandingFound {
     }
 }
 
+impl Standing {
+    /// The standing entries `roles` declares, read once for one status
+    /// (132, 193; core.15).
+    pub(crate) fn of(roles: &HostRoles) -> Standing {
+        Standing {
+            entries: roles.standing(),
+            streams: None,
+            asked: vec![],
+        }
+    }
+}
+
 impl Engine {
     /// The host's standing entries as its sources stand now, for one
     /// delivery or one status (132, 193).
     pub(crate) fn standing(&self) -> Standing {
-        Standing {
-            entries: self.host.standing(),
-            streams: None,
-            asked: vec![],
-        }
+        Standing::of(&self.host.roles())
     }
 
     /// The standing agent the entries give `address`, sought in its

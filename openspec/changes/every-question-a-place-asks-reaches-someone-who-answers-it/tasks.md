@@ -172,7 +172,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 ## 3. A launch's recipients
 
-- [ ] 3.1 In `launch.rs`, `make_place`:
+- [x] 3.1 In `launch.rs`, `make_place`:
   - Have a launch's recipients end at the answerer behind its stream,
     after `$FLUME_RECIPIENT` and the terminal's session, with where each
     came from kept in held state.
@@ -186,7 +186,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   flume:test` passes. `engine/launching.rs` holds the launching spec's
   scenarios, and every existing scenario passes. The ones that launched
   from no session with no recipient name one now.
-- [ ] 3.2 Have status give each place's recipients with where each came
+- [x] 3.2 Have status give each place's recipients with where each came
   from, each stream's answerer with its source, each source's roles or
   why they cannot be read, and for each address an end stands pending
   for, its run, or that it is carried or wakes nothing and why, in the

@@ -38,7 +38,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: every_answer_reads_back,
         },
         Scenario {
-            name: "answers: a role's address written before the host gave where a standing agent lives reads with no standing",
+            name: "answers: a role's address written before the host gave where a standing agent lives, that it is carried or why it wakes nothing reads with none of them",
             cites: &["61", "132"],
             run: an_address_before_standing,
         },
@@ -295,7 +295,10 @@ fn place_status() -> PlaceStatus {
         refused_acts: vec!["a push".into()],
         cannot_read: vec!["the agent's state".into()],
         failures: vec!["did not end".into()],
-        recipients: vec!["operator".into()],
+        recipients: vec!["east/operator".into()],
+        recipients_from: Some(RecipientsFrom::Answerer {
+            source: "acme".into(),
+        }),
         hold_words: BTreeMap::from([("code".into(), "until the design lands".into())]),
         waiting_on: Some(WaitingOn {
             act: Act::Retry,
@@ -531,6 +534,10 @@ fn host_status() -> HostStatus {
             reserves: Reserves::Held,
             refused: Some("the stream work's reserves, operation 3 and construction 3, 6 in all, pass its bound of 5".into()),
             view_refused: None,
+            answerer: Some(StreamAnswerer::Stands(DeclaredBy {
+                address: "work/operator".into(),
+                source: "acme".into(),
+            })),
             multiplexer: ProfileHeld {
                 profile: "fake".into(),
                 from: NamedBy::Host,
@@ -613,6 +620,8 @@ fn host_status() -> HostStatus {
             }],
             unwoken: Some("the run of madswan/planner was not launched: the kind planner resolves to no declaration".into()),
             standing: None,
+            carried: None,
+            wakes_nothing: None,
         }, AddressStatus {
             address: "madswan/ops".into(),
             role: None,
@@ -624,6 +633,29 @@ fn host_status() -> HostStatus {
             }],
             unwoken: None,
             standing: Some(standing_status()),
+            carried: None,
+            wakes_nothing: None,
+        }, AddressStatus {
+            address: "north/planner".into(),
+            role: None,
+            run: None,
+            pending: vec![],
+            unwoken: None,
+            standing: None,
+            carried: Some(CarriedRole {
+                source: "acme".into(),
+                answers: Some("The work's scope.".into()),
+            }),
+            wakes_nothing: None,
+        }, AddressStatus {
+            address: "east/planner".into(),
+            role: None,
+            run: None,
+            pending: vec![],
+            unwoken: None,
+            standing: None,
+            carried: None,
+            wakes_nothing: Some("no source of the host declares east/planner".into()),
         }],
         watch: Watch::Bound { seconds: 30 },
         terminals: vec![TerminalStatus {
@@ -649,6 +681,14 @@ fn host_status() -> HostStatus {
             kinds_dir: Some("/kinds/acme".into()),
             kinds: vec!["acme/review@1".into()],
             cannot_read: Some("/kinds/acme/lint@1 could not be read".into()),
+            roles_file: Some("/state/acme/roles.toml".into()),
+            roles: vec!["east/operator".into()],
+            roles_refused: vec![RoleRefused {
+                address: "east/ops".into(),
+                source: "acme".into(),
+                reason: "its kind is not acme's".into(),
+            }],
+            roles_cannot_read: Some("/state/acme/roles.toml: no such file".into()),
         }],
         terminal_setup: vec![crate::fake_harness::SETUP.into()],
         configuration: HostConfiguration {
@@ -1002,20 +1042,25 @@ fn an_address_before_standing(_: &()) -> Outcome {
         .as_array_mut()
         .ok_or("no addresses")?
     {
-        address
-            .as_object_mut()
-            .ok_or("an address is no object")?
-            .remove("standing")
-            .ok_or("no standing")?;
+        let address = address.as_object_mut().ok_or("an address is no object")?;
+        address.remove("standing").ok_or("no standing")?;
+        address.remove("carried");
+        address.remove("wakes_nothing");
     }
     let back: Answer = serde_json::from_value(json).map_err(|error| error.to_string())?;
     let Answer::Status { host, .. } = back else {
         return Err(format!("read back as {back:?}"));
     };
-    ensure_eq!(host.addresses.len(), 2, "the addresses read");
+    ensure_eq!(host.addresses.len(), 4, "the addresses read");
     for address in &host.addresses {
         let name = &address.address;
         ensure_eq!(address.standing, None, format!("{name}'s standing"));
+        ensure_eq!(address.carried, None, format!("{name}'s carrying"));
+        ensure_eq!(
+            address.wakes_nothing,
+            None,
+            format!("why {name} wakes nothing")
+        );
     }
     Ok(())
 }
@@ -1045,6 +1090,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host",
             "status.host.addresses",
             "status.host.addresses[].address",
+            "status.host.addresses[].carried",
+            "status.host.addresses[].carried.answers",
+            "status.host.addresses[].carried.source",
             "status.host.addresses[].pending",
             "status.host.addresses[].pending[].key",
             "status.host.addresses[].pending[].place",
@@ -1068,6 +1116,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.addresses[].standing.stream",
             "status.host.addresses[].standing.terminal",
             "status.host.addresses[].unwoken",
+            "status.host.addresses[].wakes_nothing",
             "status.host.bases",
             "status.host.bases[].base",
             "status.host.bases[].count",
@@ -1107,8 +1156,19 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.sources[].kinds",
             "status.host.sources[].kinds_dir",
             "status.host.sources[].name",
+            "status.host.sources[].roles",
+            "status.host.sources[].roles_cannot_read",
+            "status.host.sources[].roles_file",
+            "status.host.sources[].roles_refused",
+            "status.host.sources[].roles_refused[].address",
+            "status.host.sources[].roles_refused[].reason",
+            "status.host.sources[].roles_refused[].source",
             "status.host.sources[].source_file",
             "status.host.streams",
+            "status.host.streams[].answerer",
+            "status.host.streams[].answerer.stands",
+            "status.host.streams[].answerer.stands.address",
+            "status.host.streams[].answerer.stands.source",
             "status.host.streams[].bound",
             "status.host.streams[].labels",
             "status.host.streams[].labels[].keep_free",
@@ -1349,6 +1409,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].readiness.steps[].step",
             "status.places[].readiness.steps[].words",
             "status.places[].recipients",
+            "status.places[].recipients_from",
+            "status.places[].recipients_from.from",
+            "status.places[].recipients_from.source",
             "status.places[].refused_acts",
             "status.places[].repository",
             "status.places[].role",
@@ -1574,6 +1637,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.readiness.steps[].step",
             "launched.place.readiness.steps[].words",
             "launched.place.recipients",
+            "launched.place.recipients_from",
+            "launched.place.recipients_from.from",
+            "launched.place.recipients_from.source",
             "launched.place.refused_acts",
             "launched.place.repository",
             "launched.place.role",
@@ -1792,6 +1858,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.readiness.steps[].step",
             "acted.status.readiness.steps[].words",
             "acted.status.recipients",
+            "acted.status.recipients_from",
+            "acted.status.recipients_from.from",
+            "acted.status.recipients_from.source",
             "acted.status.refused_acts",
             "acted.status.repository",
             "acted.status.role",
@@ -2152,6 +2221,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.readiness.steps[].step",
             "woken.place.readiness.steps[].words",
             "woken.place.recipients",
+            "woken.place.recipients_from",
+            "woken.place.recipients_from.from",
+            "woken.place.recipients_from.source",
             "woken.place.refused_acts",
             "woken.place.repository",
             "woken.place.role",

@@ -273,10 +273,23 @@ impl Walk {
         command
     }
 
+    /// flume's binary with the walkthrough's environment in its
+    /// repository, for `words`: a launch's environment names
+    /// `$FLUME_RECIPIENT` as `caller`, since a launch from no session that
+    /// names no recipient and finds no role behind its stream is refused
+    /// (7, 193).
+    fn flume_command(&self, words: &[&str]) -> Command {
+        let mut command = self.command(env!("CARGO_BIN_EXE_flume"), &self.repository.dir);
+        if words.contains(&"launch") {
+            command.env("FLUME_RECIPIENT", "caller");
+        }
+        command
+    }
+
     /// flume's answer to `words`, as JSON, and whether it refused.
     pub fn flume_ran(&self, words: &[&str]) -> (Value, bool) {
         let output = self
-            .command(env!("CARGO_BIN_EXE_flume"), &self.repository.dir)
+            .flume_command(words)
             .args(words)
             .arg("--json")
             .output()
@@ -303,7 +316,7 @@ impl Walk {
     /// refuse.
     pub fn person(&self, words: &[&str]) -> String {
         let output = self
-            .command(env!("CARGO_BIN_EXE_flume"), &self.repository.dir)
+            .flume_command(words)
             .args(words)
             .output()
             .expect("flume runs");

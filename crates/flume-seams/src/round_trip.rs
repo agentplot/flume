@@ -247,6 +247,7 @@ fn held() -> HeldState {
             hold_submission: true,
             hold_words: BTreeMap::from([("review".into(), "until the design is ruled".into())]),
             recipients: vec!["operator".into(), "role:planner".into()],
+            recipients_from: Some(RecipientsFrom::Launch),
             stream: StreamHeld {
                 name: "work".into(),
                 from: StreamFrom::HostRepository,
@@ -825,6 +826,42 @@ fn a_held_state_with_a_stream_an_account_and_a_record() {
     assert_eq!(start["start_record"]["account"], "work-2");
     assert_eq!(start["start_record"]["env"]["AGENT_HOME"], "9f2c");
     assert_eq!(start["from"]["env.AGENT_HOME"]["layer"], "account");
+}
+
+#[test]
+fn a_held_state_with_where_its_recipients_came_from() {
+    // Each of the four a launch takes its recipients from reads back
+    // unchanged, the answerer with its source; a state written before
+    // reads with none, and writes none (7, 193).
+    for from in [
+        RecipientsFrom::Launch,
+        RecipientsFrom::Environment,
+        RecipientsFrom::Session,
+        RecipientsFrom::Answerer {
+            source: "acme".into(),
+        },
+    ] {
+        let mut state = held();
+        state.place.recipients = vec!["east/operator".into()];
+        state.place.recipients_from = Some(from);
+        round_trips(state);
+    }
+    let mut state = held();
+    state.place.recipients_from = Some(RecipientsFrom::Answerer {
+        source: "acme".into(),
+    });
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(json["place"]["recipients_from"]["from"], "answerer");
+    assert_eq!(json["place"]["recipients_from"]["source"], "acme");
+    let mut before = json;
+    before["place"]
+        .as_object_mut()
+        .expect("the place")
+        .remove("recipients_from");
+    let read: HeldState = serde_json::from_value(before).expect("a state written before");
+    assert_eq!(read.place.recipients_from, None);
+    let written = serde_json::to_value(&read).expect("held state as JSON");
+    assert!(written["place"].get("recipients_from").is_none());
 }
 
 /// `value` with every `mode` key taken out, at any depth.

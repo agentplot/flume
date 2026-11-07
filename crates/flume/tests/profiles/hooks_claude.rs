@@ -179,6 +179,8 @@ impl Host {
             "fix the parser",
             "--kinds",
             &kinds,
+            "--recipient",
+            "caller",
             "--json",
         ];
         words.extend(more);

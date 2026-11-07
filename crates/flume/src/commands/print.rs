@@ -11,9 +11,9 @@ use flume_core::{
 use flume_seams::{
     AccountFrom, Act, BaseFrom, CarryCause, ConfigLayer, ConfigValue, Conversation, Given, HoldOn,
     HostConfiguration, IntentKey, Kept, KindFrom, LabelHeld, LiveProcess, LocalLayer, Made,
-    NamedBy, NamedSession, Phase, ProfileHeld, Readiness, SessionFrom, SessionHeld, StreamHeld,
-    SubmissionRead, UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch, LAUNCH_SOURCE,
-    OWN_SOURCE, REPO_SOURCE,
+    NamedBy, NamedSession, Phase, ProfileHeld, Readiness, RecipientsFrom, SessionFrom, SessionHeld,
+    StreamAnswerer, StreamHeld, SubmissionRead, UncarriedStart, UnsettledStart, WaitingOn, Waits,
+    Watch, LAUNCH_SOURCE, OWN_SOURCE, REPO_SOURCE,
 };
 use serde_json::{json, Value};
 
@@ -365,7 +365,15 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         lines.push(format!("  the run of {role}"));
     }
     if !place.recipients.is_empty() {
-        lines.push(format!("  recipients: {}", place.recipients.join(", ")));
+        let from = place
+            .recipients_from
+            .as_ref()
+            .map(|from| format!(", {}", recipients_from_words(from)))
+            .unwrap_or_default();
+        lines.push(format!(
+            "  recipients: {}{from}",
+            place.recipients.join(", ")
+        ));
     }
     for end in &place.ends {
         let mut line = format!("  ended: {}", flume_core::what_ended(&end.end.of));
@@ -438,7 +446,7 @@ fn kind_line(from: Option<&KindFrom>) -> Option<String> {
 /// A source the host declares: its file and its directory, then the
 /// kinds it holds by identity, or why the file or the directory cannot be
 /// read (56, 191; design 9).
-fn source_line(source: &SourceStatus) -> String {
+fn source_lines(source: &SourceStatus) -> Vec<String> {
     let mut line = format!("  source {} ({})", source.name, source.source_file);
     if let Some(kinds_dir) = &source.kinds_dir {
         line.push_str(&format!(" at {kinds_dir}"));
@@ -448,7 +456,63 @@ fn source_line(source: &SourceStatus) -> String {
         None if source.kinds.is_empty() => line.push_str(": holds no kind"),
         None => line.push_str(&format!(": {}", source.kinds.join(", "))),
     }
-    line
+    let mut lines = vec![line];
+    let file = source
+        .roles_file
+        .as_ref()
+        .map(|file| format!(" ({file})"))
+        .unwrap_or_default();
+    match &source.roles_cannot_read {
+        Some(fault) => lines.push(format!("    its roles{file}: cannot be read: {fault}")),
+        None if !source.roles.is_empty() => {
+            lines.push(format!("    its roles{file}: {}", source.roles.join(", ")))
+        }
+        None if source.roles_file.is_some() => {
+            lines.push(format!("    its roles{file}: declares none"))
+        }
+        None => {}
+    }
+    for refused in &source.roles_refused {
+        lines.push(format!(
+            "    declares nothing for {}: {}",
+            refused.address, refused.reason
+        ));
+    }
+    lines
+}
+
+/// Where a launch took a place's recipients from, as the person's form
+/// gives it (7, 56, 193).
+fn recipients_from_words(from: &RecipientsFrom) -> String {
+    match from {
+        RecipientsFrom::Launch => "from the launch".into(),
+        RecipientsFrom::Environment => "from $FLUME_RECIPIENT".into(),
+        RecipientsFrom::Session => "from the session that launched it".into(),
+        RecipientsFrom::Answerer { source } => {
+            format!("from the stream's answerer, declared by {source}")
+        }
+    }
+}
+
+/// Who stands behind a stream, the one role with its source or the roles
+/// that each declare to; none where no role does (143, 193).
+fn answerer_line(answerer: &StreamAnswerer) -> String {
+    match answerer {
+        StreamAnswerer::Stands(by) => {
+            format!(
+                "    its answerer: {}, declared by {}",
+                by.address, by.source
+            )
+        }
+        StreamAnswerer::Contested { roles } => format!(
+            "    no one answerer: {} each stand behind it",
+            roles
+                .iter()
+                .map(|by| format!("{}, declared by {}", by.address, by.source))
+                .collect::<Vec<_>>()
+                .join(" and ")
+        ),
+    }
 }
 
 /// What a place waits on its caller for, since when, and its words; a
@@ -1120,6 +1184,7 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         ));
         lines.extend(named_lines(stream));
         lines.push(display_line(stream));
+        lines.extend(stream.answerer.as_ref().map(answerer_line));
         lines.extend(label_lines(stream));
         for queued in &stream.queue {
             lines.push(format!("    {}", queued_line(queued)));
@@ -1129,7 +1194,7 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         lines.extend(pool_lines(pool));
     }
     for source in &host.sources {
-        lines.push(source_line(source));
+        lines.extend(source_lines(source));
     }
     lines.extend(configuration_lines(&host.configuration));
     for kept in &host.terminal_kept {
@@ -1162,10 +1227,19 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
             }
             continue;
         }
-        let run = match (&address.run, &address.role) {
-            (Some(run), _) => format!("its run {run}"),
-            (None, Some(role)) => format!("no run; it wakes {} in {}", role.kind, role.repository),
-            (None, None) => "no role configured".to_string(),
+        let run = match (&address.run, &address.role, &address.carried) {
+            (Some(run), _, _) => format!("its run {run}"),
+            (None, Some(role), _) => {
+                format!("no run; it wakes {} in {}", role.kind, role.repository)
+            }
+            (None, None, Some(carried)) => format!(
+                "no run; {} declares it carried, its run on another host",
+                carried.source
+            ),
+            (None, None, None) => match &address.wakes_nothing {
+                Some(why) => format!("no run; it wakes nothing: {why}"),
+                None => "no run; no source declares it".to_string(),
+            },
         };
         lines.push(format!(
             "  {} ends pending for {}, {run}",
@@ -1666,6 +1740,7 @@ mod tests {
             reserves: Reserves::None,
             refused: refused.map(str::to_string),
             view_refused: view_refused.map(str::to_string),
+            answerer: None,
         };
         let kitty = "the stream office names the terminal app kitty, and no window profile is named kitty; the window profiles there are: printed";
         let fault = "the label ops of the stream office holds pool, which no label takes";
@@ -1727,6 +1802,7 @@ mod tests {
             reserves: Reserves::None,
             refused: None,
             view_refused: None,
+            answerer: None,
         };
         let two = stream(
             vec![
@@ -2426,6 +2502,167 @@ mod tests {
     }
 
     #[test]
+    fn recipients_with_where_they_came_from() {
+        // 7, 56, 193: each place's recipients with where its launch took
+        // them, the answerer with its source; a place launched before
+        // flume kept it gives them alone.
+        let line = |recipients: &[&str], from: Option<RecipientsFrom>| {
+            place_lines(&PlaceStatus {
+                recipients: recipients.iter().map(|name| name.to_string()).collect(),
+                recipients_from: from,
+                ..a_place()
+            })
+            .into_iter()
+            .find(|line| line.starts_with("  recipients: "))
+        };
+        assert_eq!(
+            line(&["ops"], Some(RecipientsFrom::Launch)).as_deref(),
+            Some("  recipients: ops, from the launch")
+        );
+        assert_eq!(
+            line(
+                &["east/operator"],
+                Some(RecipientsFrom::Answerer {
+                    source: "acme".into()
+                })
+            )
+            .as_deref(),
+            Some("  recipients: east/operator, from the stream's answerer, declared by acme")
+        );
+        assert_eq!(
+            line(&["conductor"], Some(RecipientsFrom::Environment)).as_deref(),
+            Some("  recipients: conductor, from $FLUME_RECIPIENT")
+        );
+        assert_eq!(
+            line(&["pane-7"], Some(RecipientsFrom::Session)).as_deref(),
+            Some("  recipients: pane-7, from the session that launched it")
+        );
+        assert_eq!(line(&["ops"], None).as_deref(), Some("  recipients: ops"));
+        assert_eq!(line(&[], None), None);
+    }
+
+    #[test]
+    fn a_streams_answerer() {
+        // 143, 193: the one role standing behind a stream with its
+        // source, or the roles that each declare to.
+        let by = |address: &str, source: &str| flume_seams::DeclaredBy {
+            address: address.into(),
+            source: source.into(),
+        };
+        assert_eq!(
+            answerer_line(&StreamAnswerer::Stands(by("east/operator", "acme"))),
+            "    its answerer: east/operator, declared by acme"
+        );
+        assert_eq!(
+            answerer_line(&StreamAnswerer::Contested {
+                roles: vec![by("east/door", "beta"), by("east/operator", "acme")]
+            }),
+            "    no one answerer: east/door, declared by beta and east/operator, declared by acme each stand behind it"
+        );
+    }
+
+    #[test]
+    fn a_sources_roles() {
+        // 56, 191, 193: each source's roles file with the addresses it
+        // declares, none, or why it cannot be read, and each entry that
+        // declares nothing with why.
+        let source = |roles: &[&str], file: Option<&str>, fault: Option<&str>| SourceStatus {
+            name: "acme".into(),
+            source_file: "/c/flume/sources/acme.toml".into(),
+            kinds_dir: Some("/k/acme".into()),
+            kinds: vec!["acme/turn@1".into()],
+            cannot_read: None,
+            roles_file: file.map(str::to_string),
+            roles: roles.iter().map(|role| role.to_string()).collect(),
+            roles_refused: vec![],
+            roles_cannot_read: fault.map(str::to_string),
+        };
+        let first = "  source acme (/c/flume/sources/acme.toml) at /k/acme: acme/turn@1";
+        assert_eq!(
+            source_lines(&source(
+                &["east/operator", "east/ops"],
+                Some("/s/acme/roles.toml"),
+                None
+            )),
+            [
+                first,
+                "    its roles (/s/acme/roles.toml): east/operator, east/ops"
+            ]
+        );
+        assert_eq!(
+            source_lines(&source(&[], Some("/s/acme/roles.toml"), None)),
+            [first, "    its roles (/s/acme/roles.toml): declares none"]
+        );
+        assert_eq!(
+            source_lines(&source(&[], None, Some("/s/acme/roles.toml: no such file"))),
+            [
+                first,
+                "    its roles: cannot be read: /s/acme/roles.toml: no such file"
+            ]
+        );
+        assert_eq!(source_lines(&source(&[], None, None)), [first]);
+        let refused = SourceStatus {
+            roles_refused: vec![flume_seams::RoleRefused {
+                address: "east/ops".into(),
+                source: "acme".into(),
+                reason: "its kind beta/ops is not acme's".into(),
+            }],
+            ..source(&["east/operator"], Some("/s/acme/roles.toml"), None)
+        };
+        assert_eq!(
+            source_lines(&refused),
+            [
+                first,
+                "    its roles (/s/acme/roles.toml): east/operator",
+                "    declares nothing for east/ops: its kind beta/ops is not acme's"
+            ]
+        );
+    }
+
+    #[test]
+    fn an_address_carried_or_waking_nothing() {
+        // 56, 132, 193: an address with ends pending that a source
+        // declares carried, or that no source declares, with why.
+        let address = |name: &str, carried, wakes_nothing: Option<&str>| AddressStatus {
+            address: name.into(),
+            role: None,
+            run: None,
+            pending: pending(1),
+            unwoken: None,
+            standing: None,
+            carried,
+            wakes_nothing: wakes_nothing.map(str::to_string),
+        };
+        let lines = host_lines(&HostStatus {
+            addresses: vec![
+                address(
+                    "north/planner",
+                    Some(flume_seams::CarriedRole {
+                        source: "acme".into(),
+                        answers: None,
+                    }),
+                    None,
+                ),
+                address(
+                    "east/planner",
+                    None,
+                    Some("no source of the host declares east/planner"),
+                ),
+            ],
+            ..HostStatus::default()
+        });
+        assert_eq!(
+            lines[1..lines.len() - 1],
+            [
+                "  1 ends pending for north/planner, no run; acme declares it carried, its run on another host",
+                "    /places/fix--one: code delivered",
+                "  1 ends pending for east/planner, no run; it wakes nothing: no source of the host declares east/planner",
+                "    /places/fix--one: code delivered",
+            ]
+        );
+    }
+
+    #[test]
     fn the_hosts_sources_with_a_fault() {
         // S96, 56, 191: acme with its file, its directory and the kinds
         // it holds, an empty source, a directory that cannot be read, and
@@ -2437,6 +2674,10 @@ mod tests {
                 kinds_dir: kinds_dir.map(str::to_string),
                 kinds: kinds.iter().map(|kind| kind.to_string()).collect(),
                 cannot_read: fault.map(str::to_string),
+                roles_file: None,
+                roles: vec![],
+                roles_refused: vec![],
+                roles_cannot_read: None,
             }
         };
         let host = HostStatus {
@@ -2653,6 +2894,8 @@ mod tests {
                 pending: pending(count),
                 unwoken: None,
                 standing: Some(standing),
+                carried: None,
+                wakes_nothing: None,
             }],
             ..HostStatus::default()
         });
@@ -2870,6 +3113,7 @@ mod tests {
             cannot_read: vec![],
             failures: vec![],
             recipients: vec![],
+            recipients_from: None,
             hold_words: BTreeMap::new(),
             waiting_on: None,
             stalled: false,
@@ -3205,6 +3449,7 @@ mod tests {
                     reserves: Reserves::None,
                     refused: None,
                     view_refused: None,
+                    answerer: None,
                 },
                 StreamStatus {
                     name: "personal".into(),
@@ -3239,6 +3484,7 @@ mod tests {
                     reserves: Reserves::None,
                     refused: None,
                     view_refused: None,
+                    answerer: None,
                 },
                 StreamStatus {
                     name: "default".into(),
@@ -3273,6 +3519,7 @@ mod tests {
                     reserves: Reserves::None,
                     refused: None,
                     view_refused: None,
+                    answerer: None,
                 },
             ],
             ..HostStatus::default()
@@ -3413,6 +3660,7 @@ mod tests {
             reserves,
             refused: refused.map(str::to_string),
             view_refused: None,
+            answerer: None,
         };
         let host = HostStatus {
             streams: vec![

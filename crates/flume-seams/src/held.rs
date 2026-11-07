@@ -376,6 +376,20 @@ pub enum DeliveredBy {
     Inbox,
 }
 
+/// Where a launch took a place's recipients from, the first of these
+/// that gave any: the recipients the launch named, `FLUME_RECIPIENT` in
+/// the launching command's environment, the session the launching
+/// command ran in as the terminal names it, or the answerer behind the
+/// place's stream, with the source that declares it (7, 190, 193).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "from", rename_all = "kebab-case")]
+pub enum RecipientsFrom {
+    Launch,
+    Environment,
+    Session,
+    Answerer { source: String },
+}
+
 /// Where a launch read its base's revision (9, 56, 126, C.1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -440,10 +454,15 @@ pub struct PlaceRecord {
     /// The words of each hold the launch put, by stage name (7, 130).
     #[serde(default)]
     pub hold_words: BTreeMap<String, String>,
-    /// The recipients of the place's ends, as the launch named them (7,
-    /// 8, 43).
+    /// The recipients of the place's ends, as the launch fixed them (7,
+    /// 8, 43, 193).
     #[serde(default)]
     pub recipients: Vec<String>,
+    /// Where the launch took its recipients from, the first of the four
+    /// that gave any; none for a role's run, which has none, and for a
+    /// place launched before flume kept it (7, 56, 193).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recipients_from: Option<RecipientsFrom>,
     /// The stream the place runs in, fixed at its launch, and where it
     /// came from (8, 143).
     pub stream: StreamHeld,

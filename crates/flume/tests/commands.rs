@@ -32,6 +32,21 @@ use std::sync::Arc;
 /// The stand-in agent program's name.
 const STAND_IN: &str = "stand-in";
 
+/// The recipient a launch's environment names, `$FLUME_RECIPIENT`, where
+/// the test gives none of its own: a launch from no session that names
+/// none and finds no role behind its stream is refused (7, 193).
+const CALLER: &str = "caller";
+
+/// `env` for the command `words`: a launch's names `$FLUME_RECIPIENT` as
+/// `CALLER` where `env` names none, and every other command's is `env`.
+fn launch_env<'a>(words: &[&str], env: &[(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {
+    let mut env = env.to_vec();
+    if words.contains(&"launch") && !env.iter().any(|(name, _)| *name == "FLUME_RECIPIENT") {
+        env.push(("FLUME_RECIPIENT", CALLER));
+    }
+    env
+}
+
 /// The stand-in merge queue's name.
 const STAND_IN_QUEUE: &str = "stand-in-queue";
 
@@ -379,8 +394,9 @@ impl Host {
 
     /// flume's own binary.
     fn flume(&self, dir: &Path, words: &[&str], env: &[(&str, &str)]) -> Ran {
+        let env = launch_env(words, env);
         let output = self
-            .command(Path::new(env!("CARGO_BIN_EXE_flume")), dir, env)
+            .command(Path::new(env!("CARGO_BIN_EXE_flume")), dir, &env)
             .args(words)
             .output()
             .expect("flume runs");
@@ -393,8 +409,9 @@ impl Host {
     /// This test binary as flume, with the stand-ins.
     fn stand_in(&self, dir: &Path, words: &[&str], env: &[(&str, &str)]) -> Ran {
         let me = std::env::current_exe().expect("the test binary");
+        let env = launch_env(words, env);
         let output = self
-            .command(&me, dir, env)
+            .command(&me, dir, &env)
             .env(AS_FLUME, serde_json::to_string(words).expect("words"))
             .args([
                 "--exact",
@@ -799,6 +816,7 @@ fn holds_and_recipients_at_the_launch() {
     let host = Host::new("holds");
     let repository = repository("holds", None);
     let kinds = kinds_file(&host, false);
+    carried_by_acme(&host, &["madswan/planner", "madswan/conductor"]);
     let first = host.stand_in(
         &repository.dir,
         &[
@@ -831,6 +849,7 @@ fn holds_and_recipients_at_the_launch() {
         .answer();
     let one = the_place(&one);
     assert_eq!(one.recipients, vec!["madswan/planner".to_string()]);
+    assert_eq!(one.recipients_from, Some(RecipientsFrom::Launch));
     assert_eq!(
         one.hold_words,
         BTreeMap::from([("verify".to_string(), "after review".to_string())])
@@ -840,6 +859,7 @@ fn holds_and_recipients_at_the_launch() {
         .answer();
     let two = the_place(&two);
     assert_eq!(two.recipients, vec!["madswan/conductor".to_string()]);
+    assert_eq!(two.recipients_from, Some(RecipientsFrom::Environment));
     assert!(two.hold_words.is_empty());
 }
 
@@ -1651,8 +1671,16 @@ fn a_place_made_in_the_repositorys_directory_is_read_and_tidied_where_it_stands(
         assert_eq!(git(&dir, &["branch", "--list", "fix/one"]), "");
     }
     assert!(!host.data().join("places").exists(), "a place was moved");
+    // Each place's document alone is kept, tidied, for its ends pending for
+    // the recipient its launch took (43, 62).
     let every = host.flume(&clone.dir, &["status", "--json"], &[]);
-    assert_eq!(every.json()["status"]["places"], serde_json::json!([]));
+    let places = every.json()["status"]["places"].clone();
+    assert!(
+        places.as_array().is_some_and(|places| places
+            .iter()
+            .all(|place| place["phase"]["tidied"]["pending_for"] == json!([CALLER]))),
+        "{places}"
+    );
 }
 
 /// Every file under `dir` and its bytes.
@@ -2162,6 +2190,7 @@ fn the_recipient_a_wait_and_an_inbox_default_to() {
     let host = Host::new("recipients");
     let repository = repository("recipients", None);
     let kinds = kinds_file(&host, false);
+    carried_by_acme(&host, &["madswan/planner"]);
     for (name, recipient) in [("one", "ops"), ("two", "madswan/planner")] {
         let launched = host.stand_in(
             &repository.dir,
@@ -2385,6 +2414,29 @@ fn kinds_dir_of(host: &Host, source: &str) -> PathBuf {
 /// The host's sources directory, beside its configuration (191, C.7).
 fn sources_of(host: &Host) -> PathBuf {
     host.scratch.path("config/flume/sources")
+}
+
+/// The host's source acme declares each of `addresses` carried to another
+/// host in its roles file, so a launch naming one is taken, its ends left
+/// pending, in a stream no role stands behind (132, 193, C.7).
+fn carried_by_acme(host: &Host, addresses: &[&str]) {
+    let roles = host.scratch.path("state/acme/roles.toml");
+    std::fs::create_dir_all(roles.parent().unwrap()).expect("the roles file's directory");
+    let entries: String = addresses
+        .iter()
+        .map(|address| format!("[roles.\"{address}\"]\ncarried = true\n"))
+        .collect();
+    std::fs::write(&roles, entries).expect("the roles file");
+    std::fs::create_dir_all(sources_of(host)).expect("the sources directory");
+    std::fs::write(
+        sources_of(host).join("acme.toml"),
+        format!(
+            "kinds_dir = \"{}\"\nroles = \"{}\"\n",
+            kinds_dir_of(host, "acme").display(),
+            roles.display()
+        ),
+    )
+    .expect("the source's file");
 }
 
 /// The host's lock of kinds, beside its configuration (155, C.7).

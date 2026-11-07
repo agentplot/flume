@@ -107,6 +107,7 @@ agents = [{}]
         base: "main".into(),
         brief: Some("look around".into()),
         declaration: Some(scratch.path("kinds/kinds.toml").to_string_lossy().into()),
+        recipients: vec!["caller".into()],
         ..Launch::default()
     });
     let Answer::Launched { place } = answer else {

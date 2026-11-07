@@ -12,8 +12,11 @@
 //! with the host's configuration as it stands, so a program no agent
 //! profile runs refuses the launch (4, 32). Its recipients are the launch's, or the
 //! one the caller's environment names, or the session the terminal says
-//! launched it (7, 8), and a role's run has none, its agents' session
-//! named by its address (132). The newest submission the merge queue
+//! launched it, or the answerer behind its stream, with where they came
+//! from kept, and a launch that finds none, or names an address that
+//! wakes nothing where no answerer stands behind its stream, is refused
+//! (7, 8, 193); a role's run has none, its agents' session named by its
+//! address (132). The newest submission the merge queue
 //! holds of the branch at the launch is an earlier place's of the same
 //! name, kept so it is never read as this place's (3, 99). A refusal
 //! after the place's held state
@@ -686,17 +689,7 @@ impl Engine {
             },
             _ => None,
         };
-        let recipients = if role.is_some() {
-            vec![]
-        } else if launch.recipients.is_empty() {
-            self.host
-                .recipient()
-                .or_else(|| self.caller_session())
-                .into_iter()
-                .collect()
-        } else {
-            launch.recipients.clone()
-        };
+        let (recipients, recipients_from) = self.recipients_of(launch, role, &stream.name)?;
         let held = HeldState {
             place: PlaceRecord {
                 id: id.clone(),
@@ -721,6 +714,7 @@ impl Engine {
                 hold_submission: launch.hold_submission,
                 hold_words: launch.hold_words.clone(),
                 recipients,
+                recipients_from,
                 stream,
                 intent,
             },
@@ -818,6 +812,80 @@ impl Engine {
 }
 
 impl Engine {
+    /// A launch's recipients and where they came from, the first of
+    /// these that gives any: the recipients it names, `FLUME_RECIPIENT`
+    /// in the launching command's environment, the session the launching
+    /// command runs in as the terminal names it, or the answerer behind
+    /// the place's stream as the host's sources declare it; a role's run
+    /// has none (7, 132, 190, 193). Refused, before anything is made, a
+    /// launch that finds none of the four, one whose stream two roles
+    /// stand behind where it comes to the fourth, and one whose recipients
+    /// hold a role's address no source declares, or two declare, where no
+    /// answerer stands behind its stream; an address a source declares
+    /// carried, or gives a standing agent, is taken (4, 8, 132, 193;
+    /// core.8, core.54). The sources' roles are read once, and only where
+    /// a step needs them.
+    fn recipients_of(
+        &self,
+        launch: &Launch,
+        role: Option<&str>,
+        stream: &str,
+    ) -> Result<(Vec<String>, Option<RecipientsFrom>), String> {
+        if role.is_some() {
+            return Ok((vec![], None));
+        }
+        let read = std::cell::OnceCell::new();
+        let roles = || read.get_or_init(|| self.host.roles());
+        let (recipients, from) = if !launch.recipients.is_empty() {
+            (launch.recipients.clone(), RecipientsFrom::Launch)
+        } else if let Some(recipient) = self.host.recipient() {
+            (vec![recipient], RecipientsFrom::Environment)
+        } else if let Some(session) = self.caller_session() {
+            (vec![session], RecipientsFrom::Session)
+        } else {
+            match roles().answerer(stream) {
+                Some(StreamAnswerer::Stands(by)) => (
+                    vec![by.address.clone()],
+                    RecipientsFrom::Answerer {
+                        source: by.source.clone(),
+                    },
+                ),
+                Some(StreamAnswerer::Contested { roles }) => {
+                    return Err(format!(
+                        "the launch names no recipient, and no one role stands behind the stream \
+                         {stream} to answer it: {} each stand behind it; name a recipient by \
+                         --recipient",
+                        roles
+                            .iter()
+                            .map(|by| format!("{}, declared by {}", by.address, by.source))
+                            .collect::<Vec<_>>()
+                            .join(" and ")
+                    ))
+                }
+                None => {
+                    return Err(format!(
+                        "the launch finds no one to answer it: it names no --recipient, \
+                         $FLUME_RECIPIENT is unset, the terminal names no session it runs in, \
+                         and no source of the host declares a role standing behind the stream \
+                         {stream}; give it one of the four"
+                    ))
+                }
+            }
+        };
+        for address in recipients.iter().filter(|name| is_address(name)) {
+            let Err(reason) = roles().declared(address) else {
+                continue;
+            };
+            if !matches!(roles().answerer(stream), Some(StreamAnswerer::Stands(_))) {
+                return Err(format!(
+                    "the recipient {address} wakes nothing: {reason}; and no role stands behind \
+                     the stream {stream} to take its questions"
+                ));
+            }
+        }
+        Ok((recipients, Some(from)))
+    }
+
     /// The stream a launch's place runs in, chosen once (8, 143): the
     /// launch's, else the stream of its intent's affinity where one
     /// stands (147), else the one the host's configuration names for the

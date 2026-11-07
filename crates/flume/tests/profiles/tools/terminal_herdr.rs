@@ -2295,7 +2295,9 @@ fn engine(server: &TestServer, world: &World) -> Engine {
         herdr,
         Arc::new(StateDir::at(&state)),
         world.history.clone(),
-        Arc::new(RealHost::new(&state, config, None)),
+        // The command's environment names a recipient, so a launch from
+        // no pane is taken (7, 193).
+        Arc::new(RealHost::new(&state, config, Some("caller".into()))),
         world.defaults.clone(),
     )
 }
