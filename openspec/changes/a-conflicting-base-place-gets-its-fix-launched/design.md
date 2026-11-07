@@ -357,10 +357,11 @@ place's branch lives (126), made ready by its merge queue's equipping
 
 A fix's own settle that reads its work over writes how it ended onto
 the base place's `fixes`, by compare-and-set: landed with its commit,
-or dropped. A base place whose document is gone takes nothing. A fix
-tidied before its base place was written stays live in `fixes` until a
-settle of the base place finds no place for it, and is then written
-over, its end unread. Once its fix ended:
+or dropped. It writes it before the fix's tidy removes anything, and
+the tidy waits on that write, so a fix's end is never lost and a fix
+held live whose place does not stand is always one written and not yet
+launched, which decision 6 launches. A base place whose document is
+gone takes nothing. Once its fix ended:
 
 - **landed**: the base place is forecast again at its next settle,
   and waits on its caller where that forecast is clear (203);
@@ -630,6 +631,12 @@ for Boomdrive, whose runner keeps the watch that settles (208).
   the branch or the base to move.
 - **Count no refused launch.** A structural refusal would be tried at
   every watch for ever.
+- **Tidy a fix whether or not its end reached its base place**, a fix
+  held live with no place standing written over at the base place's
+  next settle, its end unread. That settle could not tell such a fix
+  from one written and never launched, which decision 6 launches, so it
+  would launch a landed fix again; the build's own choice, cheap to
+  change.
 - **Carry the words as the fix's first start's words** rather than in
   its brief, so a kind's `{{#words}}` renders them. A launch's first
   start carries no words (27, 49), and the brief reaches a fix of any
