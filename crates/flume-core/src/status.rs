@@ -517,7 +517,6 @@ pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
         return None;
     }
     let place = &held.place;
-    let stages = &place.kind.stages;
     let last = held.stages.len().checked_sub(1)?;
     let waits = |act, stage: Option<usize>, why, since, words| {
         Some(WaitingOn {
@@ -538,14 +537,9 @@ pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
             Some(Verdict::Failed { .. } | Verdict::Conflict { .. })
         );
         if found || failed {
-            let target = stages[last]
-                .send_back_to
-                .as_ref()
-                .and_then(|name| held.stages.iter().position(|stage| &stage.name == name))
-                .unwrap_or(last);
             return waits(
                 Act::Retry,
-                Some(target),
+                crate::submit::fix_round_of(held),
                 Waits::PastBound,
                 submission.waiting_since,
                 Some(words.clone()),

@@ -40,6 +40,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: verify_finds_work,
         },
         Scenario {
+            name: "fix round: a fix's failed submission starts code, the stage its code names for a failed submission, with a fresh agent and the merge queue's words, counting one going-back, and the fix is submitted again once code delivers",
+            cites: &["112", "131", "23"],
+            run: a_fixs_failed_submission,
+        },
+        Scenario {
             name: "fix round: a conflict starts code with words naming the files and the base's revision, and flume merges nothing",
             cites: &["112", "14", "133"],
             run: a_conflict,
@@ -189,6 +194,43 @@ fn verify_finds_work(_: &()) -> Outcome {
         Some(2),
         "verify's starts"
     );
+    Ok(())
+}
+
+fn a_fixs_failed_submission(_: &()) -> Outcome {
+    let world = World::new();
+    let id = fix_begun(&world, "one")?;
+    let words = "check test-x failed";
+    world
+        .queue
+        .plan_submits(vec![Plan::Fail(words.into()), Plan::Hold]);
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    let code = World::identity("fix", "one", "code", 2);
+    let prompt = world.prompt(&id, &code).ok_or("code did not start again")?;
+    ensure!(prompt.contains(words), "{words} is not in {prompt}");
+    ensure!(
+        world
+            .stage_state(&id, "code")
+            .is_some_and(StageState::running),
+        "code, sent back: {:?}",
+        world.stage_state(&id, "code")
+    );
+    ensure_eq!(world.terminal.log.count("open"), 2, "agents opened");
+    let status = world.status(&id)?;
+    ensure_eq!(
+        status.submission.map(|submission| submission.send_backs),
+        Some(1),
+        "goings-back"
+    );
+    ensure!(
+        status.waiting_on.is_none(),
+        "the place waits on its caller: {:?}",
+        status.waiting_on
+    );
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    ensure_eq!(world.queue.log.count("submit"), 2, "submissions");
     Ok(())
 }
 

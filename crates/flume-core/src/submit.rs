@@ -465,25 +465,47 @@ fn sent_back_by(held: &HeldState, index: usize) -> bool {
         && held.submission.waiting.is_none()
 }
 
-/// The kind's fix round decided in held state: the stage the kind's
-/// last stage names for a failed submission, that last stage where it
-/// names none, and every stage from it not reached again, counted as one
-/// going-back against the last stage's bound, flume's default where it
-/// sets none; past the bound, the place waits on its caller with `cause`
-/// and the words (23, 112, 130, 131). The stage to start and its words.
+/// The kind's fix round, the one reading of it the send-back, the move a
+/// place past its bound waits on and a found all take: the position of
+/// the stage the kind's last stage names for a failed submission, that
+/// last stage where it names none, and none for a kind with no stages.
+/// weir refuses a name that is no stage of the kind, so the last stage
+/// stands only where it names none (23, 112, 131; core.4).
+pub(crate) fn fix_round_of(held: &HeldState) -> Option<usize> {
+    let last = held.stages.len().checked_sub(1)?;
+    let named = held
+        .place
+        .kind
+        .stages
+        .last()
+        .and_then(|stage| stage.send_back_to.as_ref());
+    Some(
+        named
+            .and_then(|name| held.stages.iter().position(|stage| &stage.name == name))
+            .unwrap_or(last),
+    )
+}
+
+/// The kind's fix round decided in held state: the stage
+/// [`fix_round_of`] reads, and every stage from it not reached again,
+/// counted as one going-back against the last stage's bound, flume's
+/// default where it sets none; past the bound, the place waits on its
+/// caller with `cause` and the words (23, 112, 130, 131). The stage to
+/// start and its words.
 fn fix_round(
     held: &mut HeldState,
     limit: u32,
     cause: &str,
     words: &str,
 ) -> Option<(usize, String)> {
-    let last = held.place.kind.stages.last()?;
-    let allowed = last.send_back_limit.unwrap_or(limit);
-    let target = last
-        .send_back_to
-        .as_ref()
-        .and_then(|name| held.stages.iter().position(|stage| &stage.name == name))
-        .unwrap_or(held.stages.len() - 1);
+    let allowed = held
+        .place
+        .kind
+        .stages
+        .last()?
+        .send_back_limit
+        .unwrap_or(limit);
+    let target = fix_round_of(held)?;
     if held.submission.send_backs >= allowed {
         held.submission.waiting = Some(format!(
             "{cause}: {words}. The place went back {} times, as many as its kind allows",
