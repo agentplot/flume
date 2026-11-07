@@ -1,7 +1,7 @@
 ---
 number: 32
 title: A host's configuration has a managed layer and a local one over it, the local one setting only how the host's work runs and the managed one pinning what it keeps
-status: proposed
+status: accepted
 date: 2026-11-03
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # A host's configuration has a managed layer and a local one over it, the local one setting only how the host's work runs and the managed one pinning what it keeps
 
-Status: proposed. The user decided it on 2026-11-03 on their Pending You card (req_99408baa): "Yes: operational keys only, manager may pin." It is stated on agentplot/blueprints main at 4b4c5e0, which amends record 0020 and the capture design's storage rule. The record waits on the user's yes once they have seen it as a record, on their review of the change `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`.
+Status: accepted by the user on 2026-11-07, on their card. The user decided it on 2026-11-03 on their Pending You card (req_99408baa): "Yes: operational keys only, manager may pin." It is stated on agentplot/blueprints main at 4b4c5e0, which amends record 0020 and the capture design's storage rule.
 
 Deciders: the user, who chose two layers, the local one setting only the keys that run the host's work, and the managed one pinning keys. The writing agent's: what a local file that cannot be read does, how a pin names its keys, what a pin that names nothing is, how status names a key the local layer may not set, a stream the local layer alone names, and how status gives each value and its layer.
 Sources: `agentplot/blueprints:design/flume/requirements.md` at 4b4c5e0, clause 32, section 9, C.7 and S83; `agentplot/blueprints:design/capture/design.md` at 4b4c5e0, "Host state goes by kind"; records 0010, 0017 and 0020; rules core.16, core.30; `crates/flume/src/host/config.rs` (`HostConfig::read`, `parse`, `config_file`), `crates/flume/src/host/mod.rs` (`RealHost::of_host`).
