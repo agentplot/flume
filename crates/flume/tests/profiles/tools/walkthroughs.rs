@@ -569,16 +569,23 @@ fn a_pull_requests_failure_goes_back_to_code_once_and_its_next_request_lands() {
 
 #[test]
 fn a_change_runs_construct_code_and_verify() {
-    // S2, S35: construct writes the change, code ticks its tasks, status
+    // S2, S35, S119: a bare `change` runs flume's newest, change@3;
+    // construct writes the change, code's one agent ticks its tasks, status
     // showing them ticked along the way, and verify commits its report and
-    // archives the change; the place lands with the report in the archive.
+    // archives the change, the code stage started once; the place lands
+    // with the report in the archive.
     let walk = Walk::new("walk-change");
     let place = walk.launch("change", "add-parser", &["--brief", "add a parser"]);
+    let status = walk.status(&place);
+    assert_eq!(status["identity"], "flume/change@3", "{status}");
+    assert_eq!(status["version"], 3, "{status}");
     walk.agent(&place, construct("add-parser"));
     let status = walk.until(&place, "its code stage", |status| {
         status["current"] == "code" && !status["agent"].is_null()
     });
     assert_eq!(stage(&status, "construct")["state"], "delivered");
+    assert_eq!(stage(&status, "code")["starts"], 1, "{status}");
+    assert!(stage(&status, "code")["group"].is_null(), "{status}");
     let ticked = |status: &Value| -> Vec<bool> {
         status["tasks"]
             .as_array()
@@ -622,6 +629,7 @@ fn a_change_runs_construct_code_and_verify() {
         status["current"] == "verify" && !status["agent"].is_null()
     });
     assert_eq!(ticked(&status), vec![true, true], "{status}");
+    assert_eq!(stage(&status, "code")["starts"], 1, "{status}");
     walk.agent(&place, verify_holds("add-parser"));
     until_landed(&walk, &place);
 

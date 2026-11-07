@@ -31,7 +31,7 @@ is passed by moon to the task's `cargo test`.
 ## 4. The walkthroughs
 
 - [x] 4.1 Have `a_change_code_agents_line_names_its_group_its_run_and_its_tasks`, `a_change_of_three_task_groups_takes_three_agents_in_turn` and `a_failed_submission_sends_a_repeating_stage_back_for_one_repetition_with_no_group` in `crates/flume/tests/profiles/tools/walkthroughs.rs` launch `change@2`, and the module's doc comment say so (140 to 142, S50, S52). Check: `devenv shell -- moon run flume:tools -- a_change_code_agents_line_names_its_group`, `devenv shell -- moon run flume:tools -- a_change_of_three_task_groups_takes_three_agents_in_turn` and `devenv shell -- moon run flume:tools -- a_failed_submission_sends_a_repeating_stage_back`.
-- [ ] 4.2 Have `a_change_runs_construct_code_and_verify` keep its bare `change` and read that the place runs `flume/change@3` and its code stage started once (S2, S35, S119). Check: `devenv shell -- moon run flume:tools -- a_change_runs_construct_code_and_verify`.
+- [x] 4.2 Have `a_change_runs_construct_code_and_verify` keep its bare `change` and read that the place runs `flume/change@3` and its code stage started once (S2, S35, S119). Check: `devenv shell -- moon run flume:tools -- a_change_runs_construct_code_and_verify`.
 
 ## 5. The clause list
 
