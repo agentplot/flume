@@ -330,7 +330,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   with who gave it and when (56; core.14). True when `sluice exec main
   -- moon run core:test conformance:test flume:test` passes, with the
   place-status spec's scenario of an answered question.
-- [ ] 7.4 Run the checks of the projects this group touched. True when
+- [x] 7.4 Run the checks of the projects this group touched. True when
   `sluice exec main -- moon run seams:format seams:lint seams:test
   core:format core:lint core:test conformance:format conformance:lint
   conformance:test flume:format flume:lint flume:test` passes.

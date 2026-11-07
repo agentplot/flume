@@ -1165,6 +1165,28 @@ session or a fresh agent: the key is read before either. A tell
 answers only an agent kept open, and is refused naming the retry
 otherwise (53), so `--answers` on a tell is read only there.
 
+The held key, `EndOf::key`, stays as it is: a settle records an end
+once by it, and every document written before keys as it did. The
+token callers see is made from the same parts and read back from the
+token alone. A token in any other form is refused, naming the forms. A
+number written otherwise than the key writes it, `/0` or `01`, is
+refused too, so each end has one token. A stuck start's token leaves out
+the quiet reading its held key names. A stall's stop-short carries the
+token, since only this change writes it.
+
+An answer naming a key is checked before anything is ended, started or
+typed. It is refused where the place does not wait on that stop-short,
+or where its end holds an answer already; the refusal names the answer,
+who gave it and when where there is one, and the move the place waits
+on now in either case. It is refused too where it names another stage
+than the stop-short's, or gives no words. Every retry with words of the
+stage whose stop-short the place waits on records the answer on that
+end, whether the agent kept open takes it or a fresh agent carries it,
+the session recorded only for the first. The command line records as
+who gave it the recipient the command acts as where it names none:
+`$FLUME_RECIPIENT`, the role of the run it runs in, or the terminal's
+session.
+
 ### 9. What a restarted recipient sees
 
 **The inbox gives what waits on it.** `flume inbox`'s answer keeps its
