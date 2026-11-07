@@ -450,7 +450,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   change's named unbuilt (clause-coverage spec; core.19). True when
   `sluice exec main -- moon run conformance:test conformance:coverage`
   passes.
-- [ ] 11.2 Run the checks of the projects this change touched. True when
+- [x] 11.2 Run the checks of the projects this change touched. True when
   `sluice exec main -- moon run seams:format seams:lint seams:test
   core:format core:lint core:test fakes:format fakes:lint fakes:test
   conformance:format conformance:lint conformance:test
