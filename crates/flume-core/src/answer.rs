@@ -518,9 +518,10 @@ pub struct HostStatus {
     /// named with what holds it (56, 137, 138).
     #[serde(default)]
     pub terminal_kept: Vec<String>,
-    /// Each role's address an end stands pending for, with the run the
-    /// host's configuration names for it, the run standing, and why it
-    /// was not woken (132; core.28).
+    /// Each role's address an end stands pending for, and each the
+    /// host's configuration gives a standing agent, with the run the
+    /// configuration names for it, the run standing, why it was not
+    /// woken, and where a standing agent lives (132, 190; core.28).
     #[serde(default)]
     pub addresses: Vec<AddressStatus>,
     /// The watch the terminal keeps, with its bound, or none (122).
@@ -619,10 +620,14 @@ pub struct PlaceClues {
     pub shown_at: ShownAt,
 }
 
-/// A role's address with ends pending for it (132): the run the host's
-/// configuration names for it, none where it names none and nothing
-/// wakes it; its run where one stands; each end pending for it; and why
-/// the last settle did not wake it.
+/// A role's address with ends pending for it, or one the host's
+/// configuration gives a standing agent, pending or not (132): the run
+/// the configuration names for it, none where it names none and nothing
+/// wakes it, or a standing agent holds it; its run where one stands;
+/// each end pending for it; why the last settle did not wake it, none
+/// for a standing address; and, for a standing address, where it lives,
+/// read at the ask, none for a run's and in a status written before
+/// (56, 190; core.14, core.15).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AddressStatus {
     pub address: String,
@@ -630,6 +635,8 @@ pub struct AddressStatus {
     pub run: Option<PlaceId>,
     pub pending: Vec<PendingEnd>,
     pub unwoken: Option<String>,
+    #[serde(default)]
+    pub standing: Option<StandingStatus>,
 }
 
 /// Where a role's address a standing agent holds lives, read at the ask
@@ -649,8 +656,8 @@ pub struct StandingStatus {
 
 /// What the terminal found of a standing agent in its session (132,
 /// C.5): the one agent of its name, at the session name a notice reaches
-/// it by, with its state; none of that name; more than one, which herdr
-/// never lists and which takes no notice; or why it could not read, the
+/// it by, with its state; none of that name; more than one, which takes
+/// no notice; or why it could not read, the
 /// host declaring no such stream or its terminal naming no profile flume
 /// carries among the reasons.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

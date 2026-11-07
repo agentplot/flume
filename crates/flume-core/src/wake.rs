@@ -168,13 +168,27 @@ impl Engine {
     }
 
     /// Each role's address an end stands pending for, of every place on
-    /// the host, with the run the configuration names for it, its run
-    /// standing and why it was not woken (132; core.28).
+    /// the host, and each the configuration gives a standing agent,
+    /// pending or not: with the run the configuration names for it, its
+    /// run standing and why it was not woken, or, for a standing address,
+    /// where its agent lives, each terminal and part asked once (56, 132,
+    /// 190; core.15, core.28).
     pub(crate) fn addresses(&self) -> Vec<AddressStatus> {
         let every = self.every_held();
         let mut by = pending_addresses(&every);
+        let mut standing = self.standing();
+        for address in standing.addresses() {
+            by.entry(address.clone())
+                .or_insert_with(|| AddressStatus::of(address));
+        }
         for status in by.values_mut() {
-            status.role = self.host.role(&status.address);
+            status.standing = self
+                .reach(&mut standing, &status.address)
+                .map(|reach| reach.status);
+            match status.standing {
+                Some(_) => status.unwoken = None,
+                None => status.role = self.host.role(&status.address),
+            }
             status.run = every
                 .iter()
                 .filter(|held| !matches!(held.phase, Phase::Tidied { .. }))
@@ -207,13 +221,9 @@ fn pending_addresses(every: &[HeldState]) -> BTreeMap<String, AddressStatus> {
                 if !is_address(&address) {
                     continue;
                 }
-                let status = by.entry(address.clone()).or_insert_with(|| AddressStatus {
-                    address: address.clone(),
-                    role: None,
-                    run: None,
-                    pending: vec![],
-                    unwoken: None,
-                });
+                let status = by
+                    .entry(address.clone())
+                    .or_insert_with(|| AddressStatus::of(address.clone()));
                 status.pending.push(PendingEnd {
                     place: held.place.id.clone(),
                     key: end.of.key(),
@@ -226,6 +236,20 @@ fn pending_addresses(every: &[HeldState]) -> BTreeMap<String, AddressStatus> {
         }
     }
     by
+}
+
+impl AddressStatus {
+    /// The address with nothing read of it yet.
+    fn of(address: String) -> AddressStatus {
+        AddressStatus {
+            address,
+            role: None,
+            run: None,
+            pending: vec![],
+            unwoken: None,
+            standing: None,
+        }
+    }
 }
 
 /// A standing run as a wake answers it: live while its agent is, and

@@ -770,7 +770,7 @@ fn ends_pending_while_the_agent_is_away(_: &()) -> Outcome {
         ensure_eq!(
             held.pending_for(),
             vec![PLANNER.to_string()],
-            "pending for {id}"
+            format!("pending for {id}")
         );
         ensure!(
             held.unwoken.is_empty(),

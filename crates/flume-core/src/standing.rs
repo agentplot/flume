@@ -36,6 +36,11 @@ struct Asked {
 }
 
 impl Standing {
+    /// Each address the entries give a standing agent.
+    pub fn addresses(&self) -> Vec<String> {
+        self.entries.keys().cloned().collect()
+    }
+
     /// Whether the entries give `address` a standing agent.
     pub fn holds(&self, address: &str) -> bool {
         self.entries.contains_key(address)

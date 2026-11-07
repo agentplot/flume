@@ -951,7 +951,7 @@ fn fix_for(world: &World, name: &str, recipient: &str) -> Result<PlaceId, String
     ensure_eq!(
         world.stage_state(&id, "code"),
         Some(StageState::Begun),
-        "{name}'s code"
+        format!("{name}'s code")
     );
     Ok(id)
 }

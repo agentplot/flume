@@ -32,6 +32,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["2", "61"],
             run: a_refusal_is_an_answer,
         },
+        Scenario {
+            name: "answers: every answer reads back as it was written",
+            cites: &["61", "60"],
+            run: every_answer_reads_back,
+        },
+        Scenario {
+            name: "answers: a role's address written before the host gave where a standing agent lives reads with no standing",
+            cites: &["61", "132"],
+            run: an_address_before_standing,
+        },
     ]
 }
 
@@ -582,6 +592,18 @@ fn host_status() -> HostStatus {
                 what: "verify needs an answer".into(),
             }],
             unwoken: Some("the run of madswan/planner was not launched: the kind planner resolves to no declaration".into()),
+            standing: None,
+        }, AddressStatus {
+            address: "madswan/ops".into(),
+            role: None,
+            run: None,
+            pending: vec![PendingEnd {
+                place: PlaceId::new("/r/places/fix--one"),
+                key: "stage code 1".into(),
+                what: "code delivered".into(),
+            }],
+            unwoken: None,
+            standing: Some(standing_status()),
         }],
         watch: Watch::Bound { seconds: 30 },
         terminals: vec![TerminalStatus {
@@ -736,6 +758,18 @@ pub fn full() -> Vec<(&'static str, Answer)> {
             },
         ),
         (
+            "held",
+            Answer::Held {
+                address: "madswan/ops".into(),
+                standing: standing_status(),
+                pending: vec![PendingEnd {
+                    place: PlaceId::new("/r/places/fix--one"),
+                    key: "stage code 1".into(),
+                    what: "code delivered".into(),
+                }],
+            },
+        ),
+        (
             "locked",
             Answer::Locked {
                 lock_file: "/config/flume/flume.lock".into(),
@@ -754,6 +788,24 @@ pub fn full() -> Vec<(&'static str, Answer)> {
         ),
         ("list", list()),
     ]
+}
+
+/// Where a standing agent lives, found waiting in the entry's own
+/// session of its stream's terminal (132, 190).
+pub fn standing_status() -> StandingStatus {
+    StandingStatus {
+        agent: "madswan-ops".into(),
+        stream: "madswan".into(),
+        session: SessionHeld {
+            name: Some("madswan".into()),
+            from: SessionFrom::Role,
+        },
+        terminal: Some("fake".into()),
+        found: StandingFound::One {
+            at: "fake:1@madswan".into(),
+            state: AgentState::Waiting,
+        },
+    }
 }
 
 /// A list of a place waiting on the host and a place kept by its
@@ -880,6 +932,62 @@ fn a_status_before_terminal_setup(_: &()) -> Outcome {
     Ok(())
 }
 
+fn every_answer_reads_back(_: &()) -> Outcome {
+    for (name, answer) in full() {
+        let back: Answer =
+            serde_json::from_str(&answer.to_json()).map_err(|error| error.to_string())?;
+        ensure_eq!(back, answer, format!("the answer {name} read back"));
+    }
+    let found = [
+        StandingFound::None,
+        StandingFound::Several { count: 2 },
+        StandingFound::Unread {
+            reason: "the host declares no stream gone".into(),
+        },
+    ];
+    for found in found {
+        let answer = Answer::Held {
+            address: "madswan/ops".into(),
+            standing: StandingStatus {
+                found,
+                terminal: None,
+                ..standing_status()
+            },
+            pending: vec![],
+        };
+        let back: Answer =
+            serde_json::from_str(&answer.to_json()).map_err(|error| error.to_string())?;
+        ensure_eq!(back, answer, "the held answer read back");
+    }
+    Ok(())
+}
+
+fn an_address_before_standing(_: &()) -> Outcome {
+    let (_, answer) = full().remove(0);
+    let mut json: Value =
+        serde_json::from_str(&answer.to_json()).map_err(|error| error.to_string())?;
+    for address in json["status"]["host"]["addresses"]
+        .as_array_mut()
+        .ok_or("no addresses")?
+    {
+        address
+            .as_object_mut()
+            .ok_or("an address is no object")?
+            .remove("standing")
+            .ok_or("no standing")?;
+    }
+    let back: Answer = serde_json::from_value(json).map_err(|error| error.to_string())?;
+    let Answer::Status { host, .. } = back else {
+        return Err(format!("read back as {back:?}"));
+    };
+    ensure_eq!(host.addresses.len(), 2, "the addresses read");
+    for address in &host.addresses {
+        let name = &address.address;
+        ensure_eq!(address.standing, None, format!("{name}'s standing"));
+    }
+    Ok(())
+}
+
 fn a_refusal_is_an_answer(_: &()) -> Outcome {
     let world = super::world::World::new();
     let refused = world
@@ -916,6 +1024,17 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.addresses[].role.priority",
             "status.host.addresses[].role.repository",
             "status.host.addresses[].run",
+            "status.host.addresses[].standing",
+            "status.host.addresses[].standing.agent",
+            "status.host.addresses[].standing.found",
+            "status.host.addresses[].standing.found.one",
+            "status.host.addresses[].standing.found.one.at",
+            "status.host.addresses[].standing.found.one.state",
+            "status.host.addresses[].standing.session",
+            "status.host.addresses[].standing.session.from",
+            "status.host.addresses[].standing.session.name",
+            "status.host.addresses[].standing.stream",
+            "status.host.addresses[].standing.terminal",
             "status.host.addresses[].unwoken",
             "status.host.bases",
             "status.host.bases[].base",
@@ -2010,6 +2129,28 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.waiting_on.why",
             "woken.place.waiting_on.words",
             "woken.woke",
+        ],
+    ),
+    (
+        "held",
+        &[
+            "held",
+            "held.address",
+            "held.pending",
+            "held.pending[].key",
+            "held.pending[].place",
+            "held.pending[].what",
+            "held.standing",
+            "held.standing.agent",
+            "held.standing.found",
+            "held.standing.found.one",
+            "held.standing.found.one.at",
+            "held.standing.found.one.state",
+            "held.standing.session",
+            "held.standing.session.from",
+            "held.standing.session.name",
+            "held.standing.stream",
+            "held.standing.terminal",
         ],
     ),
     (
