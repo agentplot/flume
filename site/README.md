@@ -12,6 +12,12 @@ cd site && bun run dev         # http://localhost:4321/flume/
 devenv shell -- site-shots <dir>   # screenshots: every page, both widths, both themes, and diagram frames
 ```
 
+`site:install`, which `site:build` runs first, installs `bun.lock`'s
+packages with no network, from bun's cache as `packages.nix` builds it.
+The devenv shell fetches that cache outside the gate's sandbox, each
+package by the integrity the lock gives it, so a moved lock is fetched by
+the next shell and no hash is kept for it (record 0059).
+
 The family's look is `@agentplot/site-theme`: its `starlight.css` carries
 the type, the ink and paper of both themes and the accent, `--ap-accent`,
 which its family bar sets from the family list (flume's teal). Its header
