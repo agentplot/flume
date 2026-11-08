@@ -12,9 +12,12 @@
 //! the first reading answering at once an end that stands pending
 //! before a settle could deliver it by notice and tidy its place away. The inbox gives
 //! every end pending for a recipient, of every place on the host, a
-//! tidied place's kept document among them, and records each delivered
-//! to it in the same write that reads it, so two inboxes at once deliver
-//! each end once (75). A recipient's default is the caller's
+//! tidied place's kept document among them, or, naming a place, of the
+//! documents status reads under that name alone, and records each
+//! delivered to it in the same write that reads it, so two inboxes at
+//! once deliver each end once (75). An end is pending for a recipient as
+//! a recipient of its place or as the caller the end of the place's work
+//! waits for (43, 62). A recipient's default is the caller's
 //! environment's, else the role a role's run serves, else the calling
 //! session as the terminal names it, as a launch's (7, 132).
 
@@ -102,10 +105,9 @@ impl Engine {
         of: &WaitFor,
         recipient: &str,
     ) -> Result<Option<Answer>, String> {
-        let Some(read) = self.document(place) else {
+        let Some(held) = self.document(place) else {
             return Err(format!("no place {place} stands on this host"));
         };
-        let held = read.state;
         let Some(key) = newest(&held, of)? else {
             let over = !matches!(held.phase, Phase::Live | Phase::Making { .. });
             if over {
@@ -167,33 +169,46 @@ impl Engine {
         }))
     }
 
-    /// The document a wait reads for the place: its live one, else the
-    /// newest kept for its pending ends once it was tidied (43, 62).
-    fn document(&self, place: &PlaceId) -> Option<Versioned> {
-        if let Some(read) = self.store.read(place) {
-            return Some(read);
-        }
-        self.tidied_of(place)
-            .iter()
-            .filter_map(|id| self.store.read(id))
-            .max_by_key(|read| match read.state.phase {
+    /// The document a wait reads for the place: of those its name reads,
+    /// its live one, else the newest kept for its pending ends once it was
+    /// tidied (43, 62).
+    fn document(&self, place: &PlaceId) -> Option<HeldState> {
+        self.documents_of(place)
+            .into_iter()
+            .max_by_key(|held| match held.phase {
                 Phase::Tidied { at, .. } => at,
-                _ => 0,
+                _ => Seconds::MAX,
             })
     }
 
     /// Collects every end pending for `recipient` of every place on the
-    /// host, each recorded delivered by the inbox in the write that reads
-    /// it, and gives every place that waits on its caller and on
-    /// `recipient`, marking nothing for it; an act on places, so while no
-    /// caller keeps watch it settles every place first (43, 119, 130, 193,
-    /// 208; design 9).
-    pub fn inbox(&self, recipient: &str) -> Answer {
+    /// host, or, where `place` names one, of the documents status reads
+    /// under its name alone, each recorded delivered by the inbox in the
+    /// write that reads it, and gives every place of those that waits on
+    /// its caller and on `recipient`, marking nothing for it; refused,
+    /// marking nothing, where no document stands under the name. An act
+    /// on places, so while no caller keeps watch it settles every place
+    /// first (43, 62, 119, 130, 193, 208; design 9).
+    pub fn inbox(&self, recipient: &str, place: Option<&PlaceId>) -> Answer {
         self.settle_attended();
+        let documents = match place {
+            Some(id) => {
+                let named = self.documents_of(id);
+                if named.is_empty() {
+                    return Answer::refused(format!("no place {id} stands on this host"));
+                }
+                named
+            }
+            None => self
+                .store
+                .read_every()
+                .into_iter()
+                .map(|read| read.state)
+                .collect(),
+        };
         let mut ends = vec![];
         let mut waiting = vec![];
-        for read in self.store.read_every() {
-            let held = read.state;
+        for held in documents {
             waiting.extend(waits_on(&held, recipient));
             let caller = held.place.caller.as_deref();
             if !held
@@ -251,7 +266,7 @@ impl Engine {
     /// C.4; design 9).
     pub fn session_inbox(&self) -> Option<Answer> {
         let session = self.caller_session()?;
-        Some(self.inbox(&session))
+        Some(self.inbox(&session, None))
     }
 }
 

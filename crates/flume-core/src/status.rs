@@ -71,21 +71,13 @@ impl Engine {
     /// whose document stays for its pending ends among them (43, 62).
     pub fn status(&self, place: Option<&PlaceId>) -> Answer {
         let held: Vec<HeldState> = match place {
-            Some(id) => match self.store.read(id) {
-                Some(read) => vec![read.state],
-                None => {
-                    let tidied: Vec<HeldState> = self
-                        .tidied_of(id)
-                        .iter()
-                        .filter_map(|id| self.store.read(id))
-                        .map(|read| read.state)
-                        .collect();
-                    if tidied.is_empty() {
-                        return Answer::refused(format!("no place {id} stands on this host"));
-                    }
-                    tidied
+            Some(id) => {
+                let named = self.documents_of(id);
+                if named.is_empty() {
+                    return Answer::refused(format!("no place {id} stands on this host"));
                 }
-            },
+                named
+            }
             None => self
                 .store
                 .read_every()

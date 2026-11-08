@@ -249,7 +249,7 @@ fn an_address_carried_whole(_: &()) -> Outcome {
         Answer::Waited { end: Some(end), .. } if carried(&end.end.of) => {}
         other => return Err(format!("the wait answered {other:?}")),
     }
-    match world.engine().inbox("ops") {
+    match world.engine().inbox("ops", None) {
         Answer::Inbox { ends, .. } if ends.len() == 1 && carried(&ends[0].end.end.of) => {}
         other => return Err(format!("the inbox answered {other:?}")),
     }

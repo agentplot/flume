@@ -668,7 +668,7 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
         Command::Inbox { recipient } => {
             let core = build()?;
             let recipient = recipient_of(&core, recipient)?;
-            core.inbox(&recipient)
+            core.inbox(&recipient, None)
         }
         Command::Wake { address } => build()?.wake(address),
         Command::Kinds {

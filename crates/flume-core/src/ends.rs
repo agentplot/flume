@@ -266,6 +266,21 @@ impl Engine {
         .unwrap_or(false)
     }
 
+    /// The documents a place's name reads, as status and the inbox read
+    /// them: its live document, else those kept for it once it was
+    /// tidied, `<location>@<at>` naming one; none where no document
+    /// stands under the name (43, 62; core.14).
+    pub(crate) fn documents_of(&self, id: &PlaceId) -> Vec<HeldState> {
+        if let Some(read) = self.store.read(id) {
+            return vec![read.state];
+        }
+        self.tidied_of(id)
+            .iter()
+            .filter_map(|id| self.store.read(id))
+            .map(|read| read.state)
+            .collect()
+    }
+
     /// The tidied documents of the place `id` names: the one under that
     /// id, and those kept for the place at that location (43, 62).
     pub(crate) fn tidied_of(&self, id: &PlaceId) -> Vec<PlaceId> {
