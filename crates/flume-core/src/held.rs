@@ -109,10 +109,11 @@ impl Engine {
 /// delivered, ended short, finished, lost or never begun, or stuck once
 /// what was read of it is written, with what was read; each outcome of
 /// a submission the merge queue gave, and a landing read from its
-/// record. A stage's end carries the answers its start had taken in its
-/// session, so a stop-short after an answer is an end of its own (42).
-/// Written in the same write as the end itself, so whatever act or settle
-/// reads an end records it, and a repeat records nothing (43, 74, 133).
+/// record; and a drop or a done, as the end of the place's work. A
+/// stage's end carries the answers its start had taken in its session,
+/// so a stop-short after an answer is an end of its own (42). Written in
+/// the same write as the end itself, so whatever act or settle reads an
+/// end records it, and a repeat records nothing (43, 52, 74, 114, 133).
 fn record_ends(next: &mut HeldState, now: Seconds) {
     if matches!(next.phase, Phase::Tidied { .. }) {
         return;
@@ -174,6 +175,17 @@ fn record_ends(next: &mut HeldState, now: Seconds) {
                 },
             });
         }
+    }
+    if let Phase::Over {
+        over: over @ (Over::Dropped | Over::Done),
+        ..
+    }
+    | Phase::Gone {
+        over: over @ (Over::Dropped | Over::Done),
+        ..
+    } = &next.phase
+    {
+        read.push(EndOf::Over { over: over.clone() });
     }
     for of in read {
         if !next.ends.iter().any(|end| end.same(&of)) {

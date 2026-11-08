@@ -421,7 +421,7 @@ impl Engine {
             ends: held
                 .ends
                 .iter()
-                .map(|end| EndStatus::of(end, &place.recipients))
+                .map(|end| EndStatus::of(end, &place.recipients, place.caller.as_deref()))
                 .collect(),
             role: held.role.clone(),
             clues: self.place_clues(held, agent_state, group.as_ref()),

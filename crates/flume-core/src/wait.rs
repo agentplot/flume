@@ -117,18 +117,24 @@ impl Engine {
             return Ok(None);
         };
         let id = held.place.id.clone();
+        let caller = held.place.caller.as_deref();
         let pending = held.ends.iter().any(|end| {
-            end.of.key() == key && end.pending_to(&held.place.recipients, None, recipient)
+            end.of.key() == key && end.pending_to(&held.place.recipients, caller, recipient)
         });
         let mut delivered = false;
         let mut answered = held;
         if pending {
             let now = self.host.now();
             let Some(written) = self.update(&id, |held| {
+                let recipients = held.place.recipients.clone();
+                let caller = held.place.caller.clone();
                 let Some(end) = held.ends.iter_mut().find(|end| end.of.key() == key) else {
                     return Step::Keep(None);
                 };
-                if end.delivered_to(recipient) {
+                // Owed to the recipient as a recipient or as the caller: a
+                // notice to the caller's name leaves the end of the work
+                // owed it, and the wait collects it (43).
+                if !end.pending_to(&recipients, caller.as_deref(), recipient) {
                     return Step::Keep(Some((held.clone(), false)));
                 }
                 end.deliveries.push(Delivery {
@@ -152,7 +158,11 @@ impl Engine {
         Ok(Some(Answer::Waited {
             place: place.clone(),
             recipient: recipient.into(),
-            end: Some(EndStatus::of(end, &answered.place.recipients)),
+            end: Some(EndStatus::of(
+                end,
+                &answered.place.recipients,
+                answered.place.caller.as_deref(),
+            )),
             delivered,
         }))
     }
@@ -185,10 +195,11 @@ impl Engine {
         for read in self.store.read_every() {
             let held = read.state;
             waiting.extend(waits_on(&held, recipient));
+            let caller = held.place.caller.as_deref();
             if !held
                 .ends
                 .iter()
-                .any(|end| end.pending_to(&held.place.recipients, None, recipient))
+                .any(|end| end.pending_to(&held.place.recipients, caller, recipient))
             {
                 continue;
             }
@@ -197,8 +208,9 @@ impl Engine {
                 .update(&held.place.id, |held| {
                     let mut collected = vec![];
                     let recipients = held.place.recipients.clone();
+                    let caller = held.place.caller.clone();
                     for end in &mut held.ends {
-                        if !end.pending_to(&recipients, None, recipient) {
+                        if !end.pending_to(&recipients, caller.as_deref(), recipient) {
                             continue;
                         }
                         end.deliveries.push(Delivery {
@@ -206,7 +218,7 @@ impl Engine {
                             at: now,
                             by: DeliveredBy::Inbox,
                         });
-                        collected.push(EndStatus::of(end, &held.place.recipients));
+                        collected.push(EndStatus::of(end, &recipients, caller.as_deref()));
                     }
                     if collected.is_empty() {
                         Step::Keep(collected)

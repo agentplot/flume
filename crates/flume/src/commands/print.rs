@@ -3932,7 +3932,7 @@ mod tests {
                 place: PlaceId::new("/d/places/1/fix--one"),
                 kind: "fix".into(),
                 name: "one".into(),
-                end: EndStatus::of(&end, &["ops".to_string()]),
+                end: EndStatus::of(&end, &["ops".to_string()], None),
             }],
             waiting: vec![],
         };

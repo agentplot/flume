@@ -560,12 +560,13 @@ pub struct EndStatus {
 
 impl EndStatus {
     /// The end `end` as status gives it to a place whose recipients are
-    /// `recipients` (43, 198).
-    pub fn of(end: &EndHeld, recipients: &[String]) -> EndStatus {
+    /// `recipients` and whose caller is `caller`, pending for each it is
+    /// owed to, the caller for the end of the place's work (43, 198).
+    pub fn of(end: &EndHeld, recipients: &[String], caller: Option<&str>) -> EndStatus {
         EndStatus {
             end: end.clone(),
             key: end.of.end_key(),
-            pending_for: end.pending(recipients),
+            pending_for: end.owed(recipients, caller),
             open_until: match &end.of {
                 EndOf::Stage {
                     state: StageState::EndedShort,

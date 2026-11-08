@@ -190,11 +190,16 @@ impl Engine {
         if matches!(held.phase, Phase::Making { .. }) {
             return;
         }
-        let addresses: Vec<String> = held
-            .pending_for()
-            .into_iter()
-            .filter(|name| is_address(name))
-            .collect();
+        // The recipients' pending alone: the end of the place's work owed
+        // its caller wakes no role, whatever the caller's name (43, 132).
+        let mut addresses: Vec<String> = vec![];
+        for end in &held.ends {
+            for name in end.pending(&held.place.recipients) {
+                if is_address(&name) && !addresses.contains(&name) {
+                    addresses.push(name);
+                }
+            }
+        }
         let roles = if addresses.is_empty() {
             HostRoles::default()
         } else {

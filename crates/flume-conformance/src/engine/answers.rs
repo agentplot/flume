@@ -517,6 +517,20 @@ fn place_status() -> PlaceStatus {
             },
             EndStatus {
                 end: EndHeld {
+                    of: EndOf::Over {
+                        over: Over::Dropped,
+                    },
+                    read_at: 125,
+                    deliveries: vec![],
+                    answer: None,
+                    claim: None,
+                },
+                key: "over/dropped".parse().unwrap(),
+                pending_for: vec!["boomdrive".into()],
+                open_until: None,
+            },
+            EndStatus {
+                end: EndHeld {
                     of: EndOf::Submission {
                         submit: 2,
                         verdict: Verdict::Landed {
@@ -1485,6 +1499,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].ends[].end.report",
             "status.places[].ends[].end.words",
             "status.places[].ends[].of",
+            "status.places[].ends[].over",
             "status.places[].ends[].pending_for",
             "status.places[].ends[].key",
             "status.places[].ends[].read_at",
@@ -1781,6 +1796,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.ends[].end.report",
             "launched.place.ends[].end.words",
             "launched.place.ends[].of",
+            "launched.place.ends[].over",
             "launched.place.ends[].pending_for",
             "launched.place.ends[].key",
             "launched.place.ends[].read_at",
@@ -2032,6 +2048,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.ends[].end.report",
             "acted.status.ends[].end.words",
             "acted.status.ends[].of",
+            "acted.status.ends[].over",
             "acted.status.ends[].pending_for",
             "acted.status.ends[].key",
             "acted.status.ends[].read_at",
@@ -2319,6 +2336,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "inbox.ends[].end.end.screen",
             "inbox.ends[].end.end.words",
             "inbox.ends[].end.of",
+            "inbox.ends[].end.over",
             "inbox.ends[].end.pending_for",
             "inbox.ends[].end.read_at",
             "inbox.ends[].end.since",
@@ -2430,6 +2448,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.ends[].end.report",
             "woken.place.ends[].end.words",
             "woken.place.ends[].of",
+            "woken.place.ends[].over",
             "woken.place.ends[].pending_for",
             "woken.place.ends[].key",
             "woken.place.ends[].read_at",
