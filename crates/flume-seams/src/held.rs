@@ -5,8 +5,8 @@
 
 use crate::{
     Binding, Declared, Given, Holds, Identity, Kind, KindFrom, KindSettings, LabelHeld, PassedOver,
-    PlaceId, PlaceRef, ProfileHeld, Prompt, Readiness, Revision, Seconds, Secret, SessionHeld,
-    Settings, StopKind, StreamHeld, Unsettled, Verdict,
+    PlaceId, PlaceRef, ProfileHeld, Prompt, Readiness, RepositoryName, Revision, Seconds, Secret,
+    SessionHeld, Settings, StopKind, StreamHeld, Unsettled, Verdict,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -802,6 +802,12 @@ pub enum BaseFrom {
 pub struct PlaceRecord {
     pub id: PlaceId,
     pub repository: String,
+    /// The repository's address, `<owner>/<name>`, as the launch read it
+    /// from its clone's origin; none where the clone had no forge origin
+    /// or the place was launched before flume kept one. No other part of
+    /// the origin's URL is kept (8, 56, 143, C.7; core.30).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
     /// The kind as it resolved at the launch, its stages with it (21).
     pub kind: Kind,
     pub declared: Declared,
@@ -890,6 +896,15 @@ impl IntentKey {
 }
 
 impl PlaceRecord {
+    /// The repository as the host's configuration names it: by the
+    /// address its launch kept, else by its folder (143, C.7).
+    pub fn repository_name(&self) -> RepositoryName {
+        RepositoryName {
+            address: self.address.clone(),
+            folder: self.repository.clone(),
+        }
+    }
+
     pub fn place_ref(&self) -> PlaceRef {
         PlaceRef {
             repository: self.repository.clone(),

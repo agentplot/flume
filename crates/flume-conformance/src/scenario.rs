@@ -110,6 +110,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
         place: PlaceRecord {
             id: id.clone(),
             repository: repository.into(),
+            address: None,
             kind,
             declared: Declared::Flume,
             kind_from: None,

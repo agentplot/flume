@@ -34,6 +34,72 @@ flume --version
 A release comes out of every landing on `main` whose commits call for a
 new version, and its notes list those commits.
 
+## Install with Nix
+
+The repository is also a flake. It gives the `flume` package for each
+platform above, built from the tagged tree, and a module for nix-darwin
+and NixOS that installs flume and writes its host's configuration from
+your Nix configuration. Take the flake at a release's tag:
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flume = {
+      url = "github:agentplot/flume/v<version>";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+}
+```
+
+Import `flume.darwinModules.default` on nix-darwin, or
+`flume.nixosModules.default` on NixOS, and set `services.flume`:
+
+```nix
+{
+  imports = [ flume.darwinModules.default ];
+
+  services.flume = {
+    enable = true;
+    settings = {
+      host = {
+        agents = 4;
+        multiplexer = "herdr";
+      };
+      pools.work = {
+        strategy = "fill-first";
+        accounts = [
+          {
+            name = "work";
+            program = "claude";
+            env.CLAUDE_CONFIG_DIR = "$HOME/.claude-work";
+          }
+        ];
+      };
+    };
+  };
+}
+```
+
+`settings` is the host's configuration, each key named as the
+[configuration reference](/flume/reference/configuration/) names it. A
+key the module does not know passes to the file as you write it, and
+flume reads it as it reads any key of the file. On nix-darwin the file
+is the primary user's; on NixOS, `services.flume.user` names the user.
+
+Each activation links that user's `~/.config/flume/config.toml` to the
+file the module writes into the Nix store. A file already there that is
+no link moves aside once, to `config.toml.before-nix`. The module never
+writes `config.local.toml`, so the local layer stays yours.
+
+Every user on the host can read the Nix store, so `settings` holds no
+credential. A value shaped as one fails the evaluation, naming its key.
+Name a variable of your login environment in its place, as `$NAME`,
+which flume reads at each agent's start. With
+`services.flume.package = null` the module writes the file and installs
+no `flume`.
+
 ## The host's configuration
 
 flume reads one file on the host, `$XDG_CONFIG_HOME/flume/config.toml`,

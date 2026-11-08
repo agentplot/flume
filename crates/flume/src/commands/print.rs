@@ -3511,6 +3511,7 @@ mod tests {
         PlaceStatus {
             place: PlaceId::new("/d/places/1/fix--one"),
             repository: "/r".into(),
+            address: None,
             kind: "fix".into(),
             version: 1,
             identity: None,

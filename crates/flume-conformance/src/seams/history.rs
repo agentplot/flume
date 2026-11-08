@@ -29,6 +29,13 @@ pub trait HistoryHarness {
 
     /// The repository's `origin` out of reach, so a fetch from it fails.
     fn origin_gone(&self, repository: &str);
+
+    /// The repository's remote `origin` named by `url`, as written, added
+    /// or its URL set where one stands (143).
+    fn origin_named(&self, repository: &str, url: &str);
+
+    /// The repository's remote `origin` removed (143).
+    fn origin_removed(&self, repository: &str);
 }
 
 // ---- git's history: a unit that reads git appends its own scenarios at the list's end ----
@@ -71,7 +78,38 @@ pub fn scenarios<H: HistoryHarness>() -> Vec<Scenario<H>> {
             cites: &["9", "126"],
             run: a_branch_at_origin::<H>,
         },
+        Scenario {
+            name: "history: a repository's origin URL as its configuration holds it, a credential in it among it, and none once origin is removed",
+            cites: &["143"],
+            run: the_origin_url_as_written::<H>,
+        },
     ]
+}
+
+/// The origin's URL read as `remote.origin.url` holds it, a user and a
+/// token in it kept as written, for the core to read its address from
+/// and drop; none where the repository has no origin (143, C.7).
+fn the_origin_url_as_written<H: HistoryHarness>(harness: &H) -> Outcome {
+    let (repository, _, _) = harness.branch();
+    ensure_eq!(
+        harness.seam().origin_url(&repository),
+        None,
+        "a repository with no origin"
+    );
+    let url = "https://user:token@github.com/acme/acme.git";
+    harness.origin_named(&repository, url);
+    ensure_eq!(
+        harness.seam().origin_url(&repository),
+        Some(url.to_string()),
+        "the origin's URL as written"
+    );
+    harness.origin_removed(&repository);
+    ensure_eq!(
+        harness.seam().origin_url(&repository),
+        None,
+        "the origin removed"
+    );
+    Ok(())
 }
 
 fn a_branch_at_origin<H: HistoryHarness>(harness: &H) -> Outcome {
