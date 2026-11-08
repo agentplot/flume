@@ -269,6 +269,11 @@ let
   # outside the gate's sandbox (nix/inputs.nix).
   flakeInputs = import ./nix/inputs.nix { };
 
+  # The site's packages as site/bun.lock locks them, fetched by this shell
+  # outside the gate's sandbox into bun's cache (site/packages.nix; record
+  # 0059).
+  sitePackages = import ./site/packages.nix { inherit pkgs lib; };
+
   # OpenSpec, which root:specs and root:changes validate with and the
   # change profile reads other schemas through: sluice's release, built as
   # nixpkgs builds its older one. Bump the version, then each hash from
@@ -432,6 +437,11 @@ in
   # given to nix:typecheck and nix:test by their store paths, which they
   # read with no network and no nix daemon (nix/check.sh).
   env.FLUME_FLAKE_INPUTS = builtins.toJSON flakeInputs.paths;
+
+  # The site's packages, fetched by this shell outside the gate's sandbox
+  # and given to site:install by their store path, from which it installs
+  # with no network (site/scripts/install.sh).
+  env.FLUME_SITE_PACKAGES = "${sitePackages}";
 
   env.PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers-chromium}";
 
