@@ -588,6 +588,63 @@ fn a_kind_with_no_stages_names_its_landing_fix_and_its_bound() {
     );
 }
 
+#[test]
+fn a_landing_fix_weir_refuses_is_named_in_weirs_words() {
+    // The kinds-profile spec's "A landing fix weir refuses": a bare name, a
+    // name with no version, and either field on a kind with stages are
+    // answered as could not be read in weir's words, naming the field (57;
+    // weir record 0005).
+    let repository = Repository::new("landing-fix-refused");
+    for named in ["mend", "repo/mend"] {
+        declaring_trained(
+            &repository,
+            &trained(&format!("landing_fix = \"{named}\"")),
+            &format!("train names {named} its landing fix"),
+        );
+        let reason = could_not_read(&repository);
+        assert!(
+            reason.contains("kinds.train.landing_fix") && reason.contains("is no identity"),
+            "{named} not refused as no identity: {reason}"
+        );
+    }
+    declaring_trained(
+        &repository,
+        &format!(
+            "{}\n[kinds.bump]\nbranch = \"bump\"\n\
+             landing_fix = \"flume/fix@1\"\nmax_landing_fixes = 1\n\n\
+             [[kinds.bump.stages]]\nname = \"code\"\nprompt = \"prompts/code.md\"\n\
+             deliverables = [\"commits\"]\nagents = [{{}}]\n",
+            trained("")
+        ),
+        "a one-stage kind names a landing fix",
+    );
+    let reason = could_not_read(&repository);
+    for field in ["kinds.bump.landing_fix", "kinds.bump.max_landing_fixes"] {
+        assert!(
+            reason.contains(&format!("{field}: is on a kind with stages")),
+            "{field} not refused as on a kind with stages: {reason}"
+        );
+    }
+}
+
+#[test]
+fn a_landing_fix_bound_past_what_flume_counts_is_refused() {
+    // The kinds-profile spec's "A bound past what flume counts": weir reads
+    // the count, and the profile refuses the declaration naming the field
+    // (4, 84).
+    let repository = Repository::new("landing-fix-bound");
+    declaring_trained(
+        &repository,
+        &trained("landing_fix = \"repo/mend@1\"\nmax_landing_fixes = 4294967296"),
+        "train's bound past what flume counts",
+    );
+    let reason = could_not_read(&repository);
+    assert!(
+        reason.contains("kinds.train.max_landing_fixes: is more than flume counts"),
+        "{reason}"
+    );
+}
+
 /// A one-stage kind `bump` of the repository's at `version`, not landing.
 fn bump(version: u32, stages: &[&str]) -> Kind {
     Kind {
