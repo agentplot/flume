@@ -725,6 +725,7 @@ impl Engine {
                 hold_words: launch.hold_words.clone(),
                 recipients,
                 recipients_from,
+                caller: None,
                 stream,
                 intent,
             },

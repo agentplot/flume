@@ -861,6 +861,11 @@ pub struct PlaceRecord {
     /// place launched before flume kept it (7, 56, 193).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recipients_from: Option<RecipientsFrom>,
+    /// The caller the launch named, fixed by it, for which the end of the
+    /// place's work waits besides its recipients; none where the launch
+    /// named none, and in held state written before (7, 8, 43).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caller: Option<String>,
     /// The stream the place runs in, fixed at its launch, and where it
     /// came from (8, 143).
     pub stream: StreamHeld,

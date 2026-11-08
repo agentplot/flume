@@ -251,6 +251,7 @@ fn held() -> HeldState {
             hold_words: BTreeMap::from([("review".into(), "until the design is ruled".into())]),
             recipients: vec!["operator".into(), "role:planner".into()],
             recipients_from: Some(RecipientsFrom::Launch),
+            caller: None,
             stream: StreamHeld {
                 name: "work".into(),
                 from: StreamFrom::HostRepository,
@@ -680,6 +681,7 @@ fn a_launch() {
         stall_after: Some(30 * 60),
         stream: Some("work".into()),
         intent: Some("the-surfaces".into()),
+        caller: Some("boomdrive".into()),
     });
 }
 
@@ -935,6 +937,30 @@ fn a_held_state_with_where_its_recipients_came_from() {
     assert_eq!(read.place.recipients_from, None);
     let written = serde_json::to_value(&read).expect("held state as JSON");
     assert!(written["place"].get("recipients_from").is_none());
+}
+
+#[test]
+fn a_held_state_with_a_caller() {
+    // The seam-contracts spec's "A caller and a drop round-trip", for its
+    // caller, and "State written before": a place naming its caller reads
+    // back equal; a state written before reads with none, and writes none
+    // (7, 61, 75).
+    let mut state = held();
+    state.place.caller = Some("boomdrive".into());
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(json["place"]["caller"], "boomdrive");
+    let mut before = json;
+    before["place"]
+        .as_object_mut()
+        .expect("the place")
+        .remove("caller");
+    let read: HeldState = serde_json::from_value(before).expect("a state written before");
+    assert_eq!(read.place.caller, None);
+    let written = serde_json::to_value(&read).expect("held state as JSON");
+    assert!(written["place"].get("caller").is_none());
+    let launch = serde_json::to_value(Launch::default()).expect("a launch as JSON");
+    assert!(launch.get("caller").is_none(), "no caller written");
 }
 
 /// `value` with every `mode` key taken out, at any depth.

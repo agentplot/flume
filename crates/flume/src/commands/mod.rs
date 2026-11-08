@@ -817,6 +817,7 @@ fn launch_of(args: &LaunchArgs, given: Option<&Path>) -> Result<Launch, String> 
         stall_after: args.stall_after.as_deref().map(read_span).transpose()?,
         stream: args.stream.clone(),
         intent: args.intent.clone(),
+        caller: None,
     })
 }
 
