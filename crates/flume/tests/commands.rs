@@ -2948,11 +2948,13 @@ fn needs_to_a_role_and_to_another_streams() {
 
 #[test]
 fn the_helps_of_needs_hold_retry_tell_and_launch() {
-    // 7, 41, 42, 49, 53, 130, 132, 193; core.35: needs --to's help says a
-    // role alone is the place's own stream's, hold's names the waiting
-    // move and its bound, retry's and tell's the key an answer names, and
-    // launch --recipient's a role's address of any stream and the answerer
-    // behind the place's stream.
+    // 7, 41, 42, 43, 49, 53, 130, 132, 193; core.35: needs --to's help
+    // says a role alone is the place's own stream's, hold's names the
+    // waiting move and its bound, retry's and tell's the key an answer
+    // names, launch --recipient's a role's address of any stream and the
+    // answerer behind the place's stream, launch --caller's that the end
+    // of the place's work waits for it, and inbox's the place it may be
+    // given: the command-line spec's "The helps".
     let host = Host::new("helps");
     let help = |command: &str| {
         let ran = host.flume(&outside(&host, "elsewhere"), &[command, "--help"], &[]);
@@ -2973,6 +2975,13 @@ fn the_helps_of_needs_hold_retry_tell_and_launch() {
         ("tell", "its agent kept open for its answer"),
         ("launch", "a role's address, `<stream>/<role>`, of any stream"),
         ("launch", "the answerer behind the place's stream"),
+        ("launch", "--caller <NAME>"),
+        ("launch", "The end of the place's work, its landing, drop or done, waits for it"),
+        ("launch", "until it collects it by `flume inbox` or `flume wait` as that name"),
+        ("launch", "no notice is sent to it"),
+        ("inbox", "[PLACE]"),
+        ("inbox", "an inbox naming a place collects that place's ends alone"),
+        ("inbox", "a tidied document's `<place>@<at>` naming that one alone"),
     ] {
         let words = help(command);
         assert!(
@@ -2980,7 +2989,7 @@ fn the_helps_of_needs_hold_retry_tell_and_launch() {
             "{command}'s help says not {said:?}: {words}"
         );
     }
-    for command in ["needs", "hold", "retry", "tell", "launch"] {
+    for command in ["needs", "hold", "retry", "tell", "launch", "inbox"] {
         let words = help(command);
         assert!(
             !words.contains("partition"),
@@ -4010,4 +4019,71 @@ fn a_streams_multiplexer_flume_does_not_carry() {
     let launched = launch("two", "personal");
     assert_eq!(launched.code, 0, "{}", launched.text);
     assert!(Path::new(&host.place_of(&repository, "change--two")).exists());
+}
+
+#[test]
+fn a_callers_place_collected_by_its_inbox() {
+    // 7, 43, 52: the command-line spec's "A caller named and its place's
+    // end collected": status gives the caller before the drop, the inbox
+    // naming the place as the caller gives its drop delivered by the
+    // inbox, and a second gives nothing.
+    let host = Host::new("caller-inbox");
+    let repository = repository("caller-inbox", None);
+    let dir = &repository.dir;
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        dir,
+        &[
+            "launch",
+            "--kind",
+            "fix",
+            "--name",
+            "one",
+            "--kinds",
+            &kinds,
+            "--caller",
+            "boomdrive",
+            "--recipient",
+            "ops",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "fix--one");
+    let status = host.flume(dir, &["status", "fix--one", "--json"], &[]);
+    assert_eq!(status.code, 0, "{}", status.text);
+    let answer = status.answer();
+    let one = the_place(&answer);
+    assert_eq!(one.caller.as_deref(), Some("boomdrive"), "{}", status.text);
+    assert_eq!(one.recipients, vec!["ops".to_string()], "{}", status.text);
+    host.end_agent(&place, "code", 1);
+    let dropped = host.stand_in(dir, &["drop", "fix--one", "--json"], &[]);
+    assert_eq!(dropped.code, 0, "{}", dropped.text);
+    let inbox = || {
+        answered(
+            &host.stand_in(
+                dir,
+                &["inbox", "fix--one", "--recipient", "boomdrive", "--json"],
+                &[],
+            ),
+            0,
+        )
+    };
+    let collected = inbox();
+    assert_eq!(collected["inbox"]["recipient"], "boomdrive", "{collected}");
+    let ends = collected["inbox"]["ends"].as_array().expect("ends");
+    assert_eq!(ends.len(), 1, "{collected}");
+    assert_eq!(ends[0]["kind"], "fix", "{collected}");
+    assert_eq!(ends[0]["name"], "one", "{collected}");
+    let end = &ends[0]["end"];
+    assert_eq!(end["key"], "over/dropped", "{collected}");
+    assert_eq!(end["of"], "over", "{collected}");
+    assert_eq!(end["over"], "dropped", "{collected}");
+    let deliveries = end["deliveries"].as_array().expect("deliveries");
+    assert_eq!(deliveries.len(), 1, "{collected}");
+    assert_eq!(deliveries[0]["recipient"], "boomdrive", "{collected}");
+    assert_eq!(deliveries[0]["by"], "inbox", "{collected}");
+    let again = inbox();
+    assert_eq!(again["inbox"]["ends"], json!([]), "{again}");
 }
