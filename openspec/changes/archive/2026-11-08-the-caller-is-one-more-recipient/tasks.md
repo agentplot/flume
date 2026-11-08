@@ -33,4 +33,4 @@ pre-commit hook's clippy.
 
 ## 5. The gate and the archive
 
-- [ ] 5.1 Run the gate's checks once, `sluice exec bolt/a-tidied-places-end-stays-readable`, then archive the change, `devenv shell -- openspec archive the-caller-is-one-more-recipient --yes`, and check the merged specs with `sluice exec bolt/a-tidied-places-end-stays-readable -- moon run root:specs`.
+- [x] 5.1 Run the gate's checks once, `sluice exec bolt/a-tidied-places-end-stays-readable`, then archive the change, `devenv shell -- openspec archive the-caller-is-one-more-recipient --yes`, and check the merged specs with `sluice exec bolt/a-tidied-places-end-stays-readable -- moon run root:specs`.

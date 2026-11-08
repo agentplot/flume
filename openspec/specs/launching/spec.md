@@ -349,15 +349,20 @@ declaration SHALL give none (32, 158, 198).
 
 ### Requirement: A recipient a launch names
 
-A recipient the launch names SHALL be a session's name, or a role's
-address of any stream written whole, `<stream>/<role>`, and SHALL be
-recorded as from the launch, whatever the place's own stream
-(7, 132, 193).
+A recipient the launch names SHALL be a session's name, whether or not
+a pane holds it, or a role's address of any stream written whole,
+`<stream>/<role>`, and SHALL be recorded as from the launch, whatever
+the place's own stream (7, 132, 193).
 
 #### Scenario: Another stream's role named
 
 - **WHEN** a launch in the stream `east` names the recipient `west/planner`, which the scratch source `acme` declares
 - **THEN** the place's one recipient is `west/planner`, from the launch
+
+#### Scenario: A role's address and a reader beside it
+
+- **WHEN** a launch names the recipients `madswan/planner` and `boomdrive`, a name no pane holds
+- **THEN** status gives the place's recipients `madswan/planner` and `boomdrive`, from the launch, and a hold and a retry after the launch leave them as they were (7, 8)
 
 ### Requirement: A launch no one would answer is refused
 
@@ -462,38 +467,3 @@ tool where a repository is (143; record 0055).
 
 - **WHEN** `flume launch --repository acme/acme` runs in a folder holding nothing at `acme/acme`
 - **THEN** the launch is refused naming the folder it was given, and nothing is made (4; record 0055)
-
-### Requirement: A launch may name its caller
-
-A launch SHALL take a caller, a name of the launching caller's own, and
-SHALL record it on the place, where nothing after the launch changes it;
-status SHALL give it, and a tidied place's document SHALL keep it. A
-caller written empty SHALL refuse the launch whole, naming it (7, 8,
-56).
-
-#### Scenario: A caller named
-
-- **WHEN** a launch names the recipient `madswan/planner` and the caller `boomdrive`
-- **THEN** status gives the place's one recipient `madswan/planner`, from the launch, and its caller `boomdrive`, and a retry and a hold after the launch leave the caller as it was (7, 8, 56)
-
-#### Scenario: An empty caller
-
-- **WHEN** a launch names an empty caller
-- **THEN** it is refused naming the caller, and nothing of it is made (4, 7; core.8)
-
-### Requirement: A caller is no recipient and no owner
-
-A caller SHALL change none of the place's recipients, and SHALL give no
-right over the place that another caller lacks. A launch that names no
-caller SHALL have none, whatever `FLUME_RECIPIENT` or its session give,
-and a role's run, launched by a wake, SHALL have none (7, 69, 132).
-
-#### Scenario: No caller named
-
-- **WHEN** a launch names no recipient and no caller, with `FLUME_RECIPIENT` set to `ops`
-- **THEN** the place's recipient is `ops`, from the variable, and status gives it no caller (7)
-
-#### Scenario: A woken run has no caller
-
-- **WHEN** an end pending for `east/ops`, which the scratch source `acme` declares with a run, wakes that run
-- **THEN** status gives the run's place no caller (132)
