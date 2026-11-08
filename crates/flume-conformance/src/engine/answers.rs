@@ -163,6 +163,7 @@ fn place_status() -> PlaceStatus {
     PlaceStatus {
         place: PlaceId::new("/r/places/fix--one"),
         repository: "/r".into(),
+        address: None,
         kind: "fix".into(),
         version: 1,
         declared: Declared::Flume,

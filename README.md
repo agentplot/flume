@@ -111,6 +111,7 @@ gives them.
 | `crates/` | the crates, each a moon project: `flume-seams` (`seams`), `flume-core` (`core`), `flume-fakes` (`fakes`), `flume-conformance` (`conformance`) and the binary `flume` (`flume`), whose `tests/profiles/stand-in/` stands in for Claude Code |
 | `plugins/claude` | flume's Claude Code plugin, the project `plugin-claude` |
 | `plugins/herdr` | flume's herdr plugin, the project `plugin-herdr` |
+| `flake.nix`, `nix/` | the flake: flume's package for each platform and the `services.flume` module for nix-darwin and NixOS, the project `nix` |
 | `docs/architecture/`, `docs/adr/` | the rules and the decisions behind them |
 | `site/` | the project `site`: the site, Astro with Starlight; its diagrams are drawn at build time (`site/README.md`) |
 | `docs/diagrams/` | the README's diagram, generated from the site's |

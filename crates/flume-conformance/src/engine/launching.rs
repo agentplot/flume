@@ -112,9 +112,14 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_change_name_taken,
         },
         Scenario {
-            name: "launch: a change launched naming no version runs change@2, the newest of flume's own, and status names change@2",
-            cites: &["22", "154", "19"],
+            name: "launch: a change launched naming no version runs change@3, the newest of flume's own, its code stage one agent for the whole change, and status names change@3",
+            cites: &["22", "154", "19", "S119"],
             run: no_version_named,
+        },
+        Scenario {
+            name: "launch: a change launched as change@2 runs change@2, its code stage repeating per task group, and status names change@2",
+            cites: &["22", "154", "19", "140"],
+            run: change_2_named,
         },
         Scenario {
             name: "launch: a change launched as change@1 runs change@1, its code stage one agent for the whole change, and status names change@1",
@@ -122,7 +127,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: change_1_named,
         },
         Scenario {
-            name: "launch: a launch naming change@3 is refused naming it and the versions flume holds, 1 and 2, nothing made",
+            name: "launch: a launch naming change@4 is refused naming it and the versions flume holds, 1, 2 and 3, nothing made",
             cites: &["4", "22", "154"],
             run: a_version_flume_does_not_hold,
         },
@@ -132,7 +137,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_version_the_repository_does_not_hold,
         },
         Scenario {
-            name: "launch: a change named with no version, in a repository that locks nothing, is named flume/change@2 by status, and one named change@1 flume/change@1",
+            name: "launch: a change named with no version, in a repository that locks nothing, is named flume/change@3 by status, one named change@2 flume/change@2, and one named change@1 flume/change@1",
             cites: &["22", "154", "19"],
             run: the_identity_status_names,
         },
@@ -186,16 +191,176 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["4", "132", "193"],
             run: a_carried_address,
         },
+        Scenario {
+            name: "launch: a chore in a repository whose origin carries a user and a token runs in work, the stream the host names for its address, status giving the address acme/acme beside its repository and nothing holding the token",
+            cites: &["56", "143"],
+            run: the_address_kept_and_given,
+        },
+        Scenario {
+            name: "launch: a place in a repository whose address is acme/acme takes the model and the label the host gives that address's tables at its start",
+            cites: &["32", "180"],
+            run: its_starts_take_the_addresss_tables,
+        },
+        Scenario {
+            name: "launch: a place held with no address takes its folder's tables at its start, its repository's origin read as acme/acme only after its launch",
+            cites: &["32"],
+            run: a_place_held_with_no_address,
+        },
     ]
+}
+
+/// The host's settings giving every stage of a kind's agents `model`.
+fn every_stage_model(model: &str) -> KindSettings {
+    KindSettings {
+        every_stage: Settings {
+            model: Some(model.into()),
+            ..Settings::default()
+        },
+        stages: Default::default(),
+    }
+}
+
+/// Where the current agent of `place` took its model.
+fn model_given(world: &World, place: &PlaceId) -> Result<Option<Given>, String> {
+    Ok(world
+        .status(place)?
+        .agent
+        .ok_or("no agent")?
+        .settings
+        .from
+        .get("model")
+        .cloned())
+}
+
+fn the_address_kept_and_given(_: &()) -> Outcome {
+    // 56, 143; core.30: the address read from the origin and kept, the URL
+    // dropped.
+    let world = World::new();
+    world
+        .git
+        .set_origin_url(REPOSITORY, "https://user:token@github.com/acme/acme.git");
+    world.host.set_stream("work", Some(Stream::default()));
+    world
+        .host
+        .name_stream(Some("acme/acme"), None, Some("work"));
+    let place = launched(&world.engine.launch(&launch("chore", "one", Some("x"))))?;
+    ensure_eq!(
+        place.stream,
+        StreamHeld {
+            name: "work".into(),
+            from: StreamFrom::HostRepository,
+        },
+        "the place's stream"
+    );
+    let id = World::id("chore", "one");
+    let status = world.status(&id)?;
+    ensure_eq!(
+        (status.repository.as_str(), status.address.as_deref()),
+        (REPOSITORY, Some("acme/acme")),
+        "the repository and its address in status"
+    );
+    let held = world.held(&id).ok_or("no place")?;
+    ensure_eq!(
+        held.place.address.as_deref(),
+        Some("acme/acme"),
+        "the held address"
+    );
+    let held = serde_json::to_string(&held).map_err(|error| error.to_string())?;
+    ensure!(!held.contains("token"), "the held state holds the token");
+    let status = serde_json::to_string(&status).map_err(|error| error.to_string())?;
+    ensure!(!status.contains("token"), "status holds the token");
+    Ok(())
+}
+
+fn its_starts_take_the_addresss_tables(_: &()) -> Outcome {
+    // 32, 180: the address's tables read at the start, for the model and
+    // the label.
+    let world = World::new();
+    world
+        .git
+        .set_origin_url(REPOSITORY, "git@github.com:acme/acme.git");
+    world
+        .host
+        .set_settings(Some("acme/acme"), "chore", every_stage_model("haiku"));
+    world
+        .host
+        .name_label(Some("acme/acme"), "chore", Some("construction"));
+    let place = launched(&world.engine.launch(&launch("chore", "one", Some("x"))))?;
+    let id = World::id("chore", "one");
+    ensure_eq!(
+        model_given(&world, &id)?,
+        Some(Given {
+            layer: Layer::HostRepository,
+            value: "haiku".into(),
+            file: None,
+        }),
+        "the agent's model"
+    );
+    ensure_eq!(
+        place.label,
+        Some(LabelHeld {
+            name: "construction".into(),
+            from: LabelFrom::HostRepositoryKind,
+        }),
+        "the place's label"
+    );
+    Ok(())
+}
+
+fn a_place_held_with_no_address(_: &()) -> Outcome {
+    // 32: a place launched with no address held takes its folder's tables
+    // at a later start, though its origin now gives an address.
+    let world = World::new();
+    world
+        .host
+        .set_settings(Some(REPOSITORY), "chore", every_stage_model("opus"));
+    world
+        .host
+        .set_settings(Some("acme/acme"), "chore", every_stage_model("haiku"));
+    let mut held = launch("chore", "one", Some("x"));
+    held.hold = vec!["code".into()];
+    launched(&world.engine.launch(&held))?;
+    let id = World::id("chore", "one");
+    ensure_eq!(
+        world.held(&id).ok_or("no place")?.place.address,
+        None,
+        "the held address"
+    );
+    world
+        .git
+        .set_origin_url(REPOSITORY, "git@github.com:acme/acme.git");
+    if let Some(reason) = world
+        .engine
+        .retry(&id, Retry::Stage("code".into()), None, false)
+        .refusal()
+    {
+        return Err(format!("the retry was refused: {reason}"));
+    }
+    ensure_eq!(
+        model_given(&world, &id)?,
+        Some(Given {
+            layer: Layer::HostRepository,
+            value: "opus".into(),
+            file: None,
+        }),
+        "the agent's model"
+    );
+    Ok(())
 }
 
 fn the_identity_status_names(_: &()) -> Outcome {
     let world = World::new();
-    let two = launched_as(&world, "change", "two")?;
+    let three = launched_as(&world, "change", "three")?;
+    ensure_eq!(
+        three.identity.as_deref(),
+        Some("flume/change@3"),
+        "the identity of a change named with no version"
+    );
+    let two = launched_as(&world, "change@2", "two")?;
     ensure_eq!(
         two.identity.as_deref(),
         Some("flume/change@2"),
-        "the identity of a change named with no version"
+        "the identity of change@2"
     );
     let one = launched_as(&world, "change@1", "one")?;
     ensure_eq!(
@@ -245,11 +410,36 @@ fn no_version_named(_: &()) -> Outcome {
     let world = World::new();
     let status = launched_as(&world, "change", "plan")?;
     ensure_eq!(
-        (status.kind.as_str(), status.version),
-        ("change", 2),
+        (
+            status.kind.as_str(),
+            status.version,
+            status.identity.as_deref()
+        ),
+        ("change", 3, Some("flume/change@3")),
         "the kind status names"
     );
     let held = world.held(&World::id("change", "plan")).ok_or("no place")?;
+    ensure!(
+        !held.place.kind.stages[1].repeats,
+        "change@3's code repeats"
+    );
+    Ok(())
+}
+
+fn change_2_named(_: &()) -> Outcome {
+    let world = World::new();
+    let status = launched_as(&world, "change@2", "plan")?;
+    ensure_eq!(
+        (
+            status.kind.as_str(),
+            status.version,
+            status.identity.as_deref()
+        ),
+        ("change", 2, Some("flume/change@2")),
+        "the kind status names"
+    );
+    let held = world.held(&World::id("change", "plan")).ok_or("no place")?;
+    ensure_eq!(held.place.branch, "change/plan", "the place's branch");
     ensure!(
         held.place.kind.stages[1].repeats,
         "change@2's code does not repeat"
@@ -276,9 +466,9 @@ fn change_1_named(_: &()) -> Outcome {
 
 fn a_version_flume_does_not_hold(_: &()) -> Outcome {
     let world = World::new();
-    let reason = refused(&world.engine.launch(&launch("change@3", "plan", Some("x"))))?;
+    let reason = refused(&world.engine.launch(&launch("change@4", "plan", Some("x"))))?;
     ensure!(
-        reason.contains("change@3") && reason.contains("versions 1, 2"),
+        reason.contains("change@4") && reason.contains("versions 1, 2, 3"),
         "the refusal names not the version and the versions held: {reason}"
     );
     nothing_made(&world)

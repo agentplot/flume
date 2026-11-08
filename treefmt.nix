@@ -44,6 +44,9 @@ in
     # The engine's own declarations, as the pinned Claude Code writes them,
     # compared byte for byte (plugins/claude/tests/engine-types.sh).
     "plugins/claude/engine-types/**"
+    # The files the flake's module renders, compared byte for byte by
+    # nix:test (nix/tests/file.nix) and read whole by flume:test.
+    "nix/tests/files/**"
     # Build outputs and caches.
     "target/**"
     ".devenv/**"

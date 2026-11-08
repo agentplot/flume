@@ -306,6 +306,7 @@ mod tests {
         let place = PlaceRecord {
             id: PlaceId::new("/d/places/1/train--spring"),
             repository: "/r".into(),
+            address: None,
             kind: Kind {
                 name: "train".into(),
                 version: 1,

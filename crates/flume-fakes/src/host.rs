@@ -3,9 +3,9 @@ use flume_seams::{CarriedRole, HostRoles};
 use flume_seams::{
     ConfigLayer, ConfigValue, Host, HostConfiguration, HostSettings, HostSource, HostSourceRead,
     KindSessions, KindSettings, LabelFrom, LabelHeld, NamedBy, Pool, PoolFrom, PoolNamed,
-    ProfileHeld, RoleEntry, RoleRefused, RoleRun, RolesUnread, RoomGuard, Seconds, Secret,
-    Settings, Share, StandingAgent, Stream, StreamDisplay, StreamFrom, StreamHeld, Usage, View,
-    ViewHeld, DEFAULT_STREAM,
+    ProfileHeld, RepositoryName, RoleEntry, RoleRefused, RoleRun, RolesUnread, RoomGuard, Seconds,
+    Secret, Settings, Share, StandingAgent, Stream, StreamDisplay, StreamFrom, StreamHeld, Usage,
+    View, ViewHeld, DEFAULT_STREAM,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex};
@@ -109,6 +109,31 @@ struct HostState {
     configuration: HostConfiguration,
     /// The sources the configuration declares, by name (191).
     sources: BTreeMap<String, HostSource>,
+}
+
+impl HostState {
+    /// The key of `repository`'s tables: its address where any of the
+    /// repository-keyed maps holds it, else its folder, as the host's
+    /// configuration takes the address's table whole (143, C.7).
+    fn table_for<'a>(&self, repository: &'a RepositoryName) -> &'a str {
+        let holds = |address: &str| {
+            self.repos.keys().any(|(named, _)| named == address)
+                || self.repos_agents.contains_key(address)
+                || self
+                    .streams_named
+                    .keys()
+                    .any(|(named, _)| named.as_deref() == Some(address))
+                || self
+                    .labels_named
+                    .keys()
+                    .any(|(named, _)| named.as_deref() == Some(address))
+        };
+        repository
+            .address
+            .as_deref()
+            .filter(|address| holds(address))
+            .unwrap_or(&repository.folder)
+    }
 }
 
 /// Where the fake host's configuration keeps its sources' files (C.7).
@@ -627,9 +652,10 @@ impl Host for FakeHost {
         streams
     }
 
-    fn stream_for(&self, repository: &str, kind: &str) -> Option<StreamHeld> {
-        self.log.push(format!("stream_for {repository} {kind}"));
+    fn stream_for(&self, repository: &RepositoryName, kind: &str) -> Option<StreamHeld> {
         let state = lock(&self.state);
+        let repository = state.table_for(repository);
+        self.log.push(format!("stream_for {repository} {kind}"));
         let (repository, kind) = (Some(repository.to_string()), Some(kind.to_string()));
         [
             (
@@ -648,9 +674,10 @@ impl Host for FakeHost {
         })
     }
 
-    fn label_for(&self, repository: &str, kind: &str) -> Option<LabelHeld> {
-        self.log.push(format!("label_for {repository} {kind}"));
+    fn label_for(&self, repository: &RepositoryName, kind: &str) -> Option<LabelHeld> {
         let state = lock(&self.state);
+        let repository = state.table_for(repository);
+        self.log.push(format!("label_for {repository} {kind}"));
         [
             (Some(repository.to_string()), LabelFrom::HostRepositoryKind),
             (None, LabelFrom::HostKind),
@@ -737,10 +764,11 @@ impl Host for FakeHost {
             .unwrap_or_else(|| Err("the file is missing".to_string()))
     }
 
-    fn settings(&self, repository: &str, kind: &str, stream: &str) -> HostSettings {
+    fn settings(&self, repository: &RepositoryName, kind: &str, stream: &str) -> HostSettings {
+        let state = lock(&self.state);
+        let repository = state.table_for(repository);
         self.log
             .push(format!("settings {repository} {kind} {stream}"));
-        let state = lock(&self.state);
         HostSettings {
             repository: state
                 .repos

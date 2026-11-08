@@ -6,7 +6,8 @@
 use crate::{
     Binding, Declared, Forecast, Given, Holds, Identity, Kind, KindFrom, KindIdentity,
     KindSettings, LabelHeld, PassedOver, PlaceId, PlaceRef, ProfileHeld, Prompt, Readiness,
-    Revision, Seconds, Secret, SessionHeld, Settings, StopKind, StreamHeld, Unsettled, Verdict,
+    RepositoryName, Revision, Seconds, Secret, SessionHeld, Settings, StopKind, StreamHeld,
+    Unsettled, Verdict,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -339,8 +340,8 @@ pub enum Act {
 pub enum Waits {
     /// A stage, or the submission, on hold (47).
     OnHold,
-    /// A stage ended short needing an answer, or having found work
-    /// outside the kind's last stage (42, 131).
+    /// A stage ended short needing an answer, or having found work that
+    /// sends the place back to no fix round before it (42, 131).
     Answer,
     /// A stage whose agent was lost (45).
     Lost,
@@ -884,6 +885,12 @@ pub enum BaseFrom {
 pub struct PlaceRecord {
     pub id: PlaceId,
     pub repository: String,
+    /// The repository's address, `<owner>/<name>`, as the launch read it
+    /// from its clone's origin; none where the clone had no forge origin
+    /// or the place was launched before flume kept one. No other part of
+    /// the origin's URL is kept (8, 56, 143, C.7; core.30).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
     /// The kind as it resolved at the launch, its stages with it (21).
     pub kind: Kind,
     pub declared: Declared,
@@ -981,6 +988,15 @@ impl IntentKey {
 }
 
 impl PlaceRecord {
+    /// The repository as the host's configuration names it: by the
+    /// address its launch kept, else by its folder (143, C.7).
+    pub fn repository_name(&self) -> RepositoryName {
+        RepositoryName {
+            address: self.address.clone(),
+            folder: self.repository.clone(),
+        }
+    }
+
     pub fn place_ref(&self) -> PlaceRef {
         PlaceRef {
             repository: self.repository.clone(),

@@ -60,19 +60,25 @@ Nothing waits on your word unless the launch or a hold asks for it
 ([callers, holds and ends](/flume/guides/callers-and-holds/)). Three
 things send the work back to the stage the kind names for a failure,
 with words for its agent: a failed submission, a conflicting one, and
-found work from the kind's last stage, `flume needs --found`. Each
-going-back counts toward the kind's bound, three unless the last stage
-sets `max_send_backs`. Past the bound the place waits for you. A
-conflict's words name the contested files and the base revision the
-merge queue tested against. The built-in prompts tell the agent to
-merge that revision into the place's branch, resolve the files and
-commit, never to rebase.
+found work from the kind's last stage, `flume needs --found`, where the
+stage it names is one before the last, as a change's `code` is before
+its `verify`. Each going-back counts toward the kind's bound, three
+unless the last stage sets `max_send_backs`. Past the bound the place
+waits for you. A conflict's words name the contested files and the base
+revision the merge queue tested against. The built-in prompts tell the
+agent to merge that revision into the place's branch, resolve the files
+and commit, never to rebase.
 
 A stop-short that needs an answer, `flume needs "<words>"`, starts no
-next stage, and nor does found work from any other stage. The place
-waits until a retry carries the answer, or a tell while its agent is
-kept open for it
+next stage: the place waits until a retry carries the answer, or a tell
+while its agent is kept open for it
 ([the agent kept open](/flume/guides/callers-and-holds/#the-agent-kept-open)).
+Found work is work a stage before the agent's own must do again, so
+found work from any stage but the last waits the same way, and so does
+found work from a last stage whose `on_fail` names that stage itself or
+names none, as fix's and chore's `code` does: no stage before it can do
+the work again. The answer carries the findings with your words, and
+counts no going-back.
 
 ## Where kinds come from
 
@@ -102,9 +108,17 @@ flume's for a bare `fix`, and `flume/fix` still names flume's. A name
 that resolves to nothing refuses the launch, naming what each source
 holds, and makes nothing.
 
-flume's own kinds are `flume/fix@1`, `flume/chore@1`, `flume/change@1`
-and `flume/change@2`. A bare `change` takes the newest, `change@2`,
-unless a lock records another.
+flume's own kinds are `flume/fix@1`, `flume/chore@1`, `flume/change@1`,
+`flume/change@2` and `flume/change@3`. A bare `change` takes the
+newest, `change@3`, unless a lock records another. The three versions
+of `change` share their stages and differ in how they code a change:
+
+- `change@1` codes the whole change with one agent.
+- `change@2` codes it with a fresh agent for each task group, one after
+  another.
+- `change@3` codes it with one agent that checks each task by its own
+  check, the narrowest that shows it done, and its `verify` runs the
+  repository's whole checks once.
 
 A place keeps the kind its launch read for its whole life
 ([a place keeps its kind](#a-place-keeps-its-kind)). `flume status`
@@ -169,6 +183,8 @@ complete and flume tidies it.
 | `lands` | flume submits the place once the last stage delivers | `false` |
 | `agents` | settings for every stage's agent, and for the stages named under `agents.stages.<stage>` | none |
 | `stages` | the stages, in order: at least one, or `stages = []` for a kind that lands with no stages ([a kind with no stages](#a-kind-with-no-stages)) | refused |
+| `landing_fix` | on a kind that lands with no stages, the kind its fixes run as when the merge queue sends its branch back, by that kind's identity with its version, as `flume/fix@1` | no fix |
+| `max_landing_fixes` | on such a kind, how many fixes it runs before its place waits on you | 3 |
 
 ### A kind with no stages
 
@@ -182,7 +198,25 @@ submission once every place on its branch is over:
 branch = "train"
 lands = true
 stages = []
+landing_fix = "flume/fix@1"
+max_landing_fixes = 2
 ```
+
+`landing_fix` names the kind a fix of the branch runs as, launched when
+the merge queue forecasts the branch in conflict with its base or its
+submission fails. It's that kind's whole identity, its source and its
+version: `flume/fix@1` for flume's own fix, or `repo/mend@1` for a kind
+the repository declares. A bare name, or an identity with no version,
+refuses the launch, naming the field. flume resolves it when the base
+place launches. Where it names no kind, or a kind that does not land or
+has no stages, the launch is refused. It's no part of a package that
+names it, or of the package's hash. `max_landing_fixes` is how many
+fixes it runs before its place waits on you; left out, three. A kind
+with stages that gives either field refuses the launch, naming it: such
+a kind sends a failed submission back to a stage, by `on_fail`. A base
+place whose kind names no landing fix waits on you after a failed or
+conflicting submission. [Its
+fixes](/flume/guides/merge-queue/#its-fixes) follows one through.
 
 A kind that does not land and declares `stages = []` refuses the
 launch, naming its stages. A table that leaves `stages` out is no
@@ -204,7 +238,7 @@ follows a base place from its launch to its tidy.
 | `makes` | names of what the stage makes besides its deliverable | none |
 | `wait` | the stage is held before it starts, until a retry names it | `false` |
 | `quiet` | how long its agent may be quiet with nothing delivered before status says it is stuck, as `45m` | 30 minutes |
-| `on_fail` | the stage a failed submission or found work sends the place back to, read from the last stage; that stage and every one after it run again | the last stage |
+| `on_fail` | the stage a failed submission sends the place back to, and found work from the last stage where it names a stage before the last, read from the last stage; that stage and every one after it run again. Found work from a last stage that names itself or none waits on an answer | the last stage |
 | `max_send_backs` | how many times the place may go back, read from the last stage | 3 |
 
 flume ignores every table and key it does not know, so a declaration

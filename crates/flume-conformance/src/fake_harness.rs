@@ -21,9 +21,10 @@ use std::time::Duration;
 const REPOSITORY: &str = "/repository";
 
 /// flume's own kinds as Part C's table gives them: fix@1, chore@1,
-/// change@1 and change@2 side by side, each sent back to code, and
+/// change@1, change@2 and change@3 side by side, each sent back to code,
 /// change@2's code stage repeating per task group with its group, notes
-/// and words last (22, 140, 141, C.2; core.31).
+/// and words last, and change@3's one agent for the whole change with a
+/// code prompt of its own (22, 140, 141, 157, C.2; core.31).
 pub fn flumes_own() -> Vec<Kind> {
     let stage = |name: &str, deliverable: Deliverable, prompt: &str| Stage {
         name: name.into(),
@@ -78,6 +79,9 @@ pub fn flumes_own() -> Vec<Kind> {
     repeating.version = 2;
     repeating.stages[1].repeats = true;
     repeating.stages[1].prompt = "Build {{change}}, one task group of it, ticking each task.\n\n{{needs}}\n\n{{group}}\n\nThe notes: {{notes}}{{#words}}\n\n{{words}}{{/words}}".into();
+    let mut one_agent = change.clone();
+    one_agent.version = 3;
+    one_agent.stages[1].prompt = "Build {{change}}, every task of it, running each task's own check and ticking it once the check passes.\n\n{{needs}}{{#words}}\n\n{{words}}{{/words}}".into();
     vec![
         Kind {
             name: "fix".into(),
@@ -105,6 +109,7 @@ pub fn flumes_own() -> Vec<Kind> {
         },
         change,
         repeating,
+        one_agent,
     ]
 }
 
@@ -1161,5 +1166,13 @@ impl HistoryHarness for FakeHistoryHarness {
     fn origin_gone(&self, repository: &str) {
         self.git
             .origin_fails(repository, "origin does not appear to be a git repository");
+    }
+
+    fn origin_named(&self, repository: &str, url: &str) {
+        self.git.set_origin_url(repository, url);
+    }
+
+    fn origin_removed(&self, repository: &str) {
+        self.git.remove_origin_url(repository);
     }
 }

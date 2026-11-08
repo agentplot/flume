@@ -1152,7 +1152,7 @@ dependencies = [
 [[package]]
 name = "weir-capture"
 version = "0.0.0"
-source = "git+https://github.com/agentplot/weir?rev=5562af52cb7e065e7de7109135dfd7eecb1d61c5#5562af52cb7e065e7de7109135dfd7eecb1d61c5"
+source = "git+https://github.com/agentplot/weir?rev=daacda39e59469029b2841f889c6cbd8cd7839d9#daacda39e59469029b2841f889c6cbd8cd7839d9"
 dependencies = [
  "jsonschema",
  "serde",
@@ -1165,7 +1165,7 @@ dependencies = [
 [[package]]
 name = "weir-kinds"
 version = "0.0.0"
-source = "git+https://github.com/agentplot/weir?rev=5562af52cb7e065e7de7109135dfd7eecb1d61c5#5562af52cb7e065e7de7109135dfd7eecb1d61c5"
+source = "git+https://github.com/agentplot/weir?rev=daacda39e59469029b2841f889c6cbd8cd7839d9#daacda39e59469029b2841f889c6cbd8cd7839d9"
 dependencies = [
  "toml",
  "weir-capture",

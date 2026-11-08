@@ -436,84 +436,50 @@ mod tests {
         }
     }
 
+    /// The cases of the three tests below, one table that flume's module
+    /// holds its own port of the shapes to as well (the change
+    /// flume-publishes-its-own-flake-and-module, design 8): each a key's
+    /// `name`, its `text`, whether it is `shaped` as a credential, the
+    /// `test` that holds it, and, where the case needs one, `why`.
+    const CASES: &str = include_str!("../tests/credential-shapes.json");
+
+    /// Each case of the table that `test` holds, every one read by
+    /// `shaped_as_credential` as the table says, a failure naming the
+    /// case's key and text.
+    fn holds_its_cases(test: &str) {
+        let cases: Vec<Value> = serde_json::from_str(CASES).expect("credential-shapes.json");
+        let field = |case: &Value, key: &str| case[key].as_str().map(str::to_string);
+        let mut held = 0;
+        for case in cases.iter().filter(|case| case["test"] == test) {
+            let name = field(case, "name").expect("a case's name");
+            let text = field(case, "text").expect("a case's text");
+            let shaped = case["shaped"].as_bool().expect("a case's shaped");
+            let why = field(case, "why")
+                .map(|why| format!(": {why}"))
+                .unwrap_or_default();
+            assert_eq!(
+                shaped_as_credential(&name, &text),
+                shaped,
+                "{name} = {text}{why}"
+            );
+            held += 1;
+        }
+        assert!(held > 0, "credential-shapes.json holds no case of {test}");
+    }
+
     #[test]
     fn each_shape_is_a_credential() {
-        let shapes = [
-            ("line", format!("ghp_{TWENTY}")),
-            ("line", format!("run --key sk-{TWENTY}")),
-            ("line", format!("AKIA{}", "IOSFODNN7EXAMPLE")),
-            ("line", format!("ya29.{TWENTY}")),
-            ("line", format!("github_pat_{TWENTY}")),
-            ("line", format!("sk_live_{TWENTY}")),
-            (
-                "line",
-                "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----"
-                    .into(),
-            ),
-            (
-                "line",
-                "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl".into(),
-            ),
-            (
-                "line",
-                "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2ln".into(),
-            ),
-            ("line", format!("x={TWENTY}{TWENTY}")),
-            ("Authorization", "Bearer abc".into()),
-            ("api_key", "short".into()),
-            ("clientSecret", "s".into()),
-            ("GITHUB_TOKEN", "t".into()),
-            ("credentials", "c".into()),
-        ];
-        for (name, text) in &shapes {
-            assert!(shaped_as_credential(name, text), "{name} = {text}");
-        }
+        holds_its_cases("each_shape_is_a_credential");
     }
 
     #[test]
     fn a_value_that_passes() {
-        let passing = [
-            ("line", "fullscreen"),
-            ("line", "~/bin/line $HOME"),
-            // A store path's digest is lower case, and a prefix inside a
-            // word opens no token.
-            (
-                "command",
-                "/nix/store/0c4wbxzh7m2l1nyjzcpdv0ydr3crkx2l-status-line/bin/line",
-            ),
-            ("command", "task-cleanup-0123456789abcdefghij"),
-            ("commit", "Co-Authored-By: Agent <noreply@example.com>"),
-            ("commit", "Assisted-by: an agent"),
-            ("commit", ""),
-            ("maxTokens", "4096"),
-            // A short run, and a long one of one case.
-            ("line", "ghp_short"),
-            ("line", "abcdefghijklmnopqrstuvwxyz0123456789"),
-        ];
-        for (name, text) in &passing {
-            assert!(!shaped_as_credential(name, text), "{name} = {text}");
-        }
+        holds_its_cases("a_value_that_passes");
     }
 
     #[test]
     fn a_variable_named_rather_than_a_value() {
-        assert!(!shaped_as_credential(
-            "Authorization",
-            "Bearer ${API_TOKEN}"
-        ));
-        assert!(!shaped_as_credential("token", "$AGENT_TOKEN"));
-        assert!(!shaped_as_credential(
-            "line",
-            "run ${A_VERY_LONG_VARIABLE_NAME_FOR_THE_TOKEN_0123456789}"
-        ));
-        assert!(
-            shaped_as_credential("Authorization", "Bearer $"),
-            "a bare `$` names no variable"
-        );
-        assert!(
-            shaped_as_credential("line", &format!("$HOME/ghp_{TWENTY}")),
-            "a variable beside a token hides none of it"
-        );
+        holds_its_cases("a_variable_named_rather_than_a_value");
     }
 
     #[test]

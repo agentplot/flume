@@ -4,14 +4,19 @@
 //! an agents table's session read as no setting (32, 158),
 //! an elaboration section, the binding
 //! from the default branch, a place profile flume does not hold, flume's
-//! own kinds, one declaration per version with change@1 and change@2
-//! side by side, and what their prompts ask (22, 141, 157); a host's
-//! source's listing, its packages and their hashes wherever they lie, the
-//! repository's lock at a revision, a lock written and read back, and the
-//! packages refused at another identity, naming a part outside them, an
-//! environment or a program by a location (155 to 160, 192; S63); and a
-//! kind that lands with no stages beside one that does not and a table of
-//! settings (18, 202; weir 51, 57).
+//! own kinds, one declaration per version with change@1, change@2 and
+//! change@3 side by side, and what their prompts ask (22, 141, 157); a
+//! host's source's listing, its packages and their hashes wherever they
+//! lie, the repository's lock at a revision, a lock written and read
+//! back, and the packages refused at another identity, naming a part
+//! outside them, an environment or a program by a location (155 to 160,
+//! 192; S63); and a kind that lands with no stages beside one that does
+//! not and a table of settings (18, 202; weir 51, 57); and such a kind
+//! naming its landing fix, by an identity with its version, and its
+//! bound, in a repository's declaration and a package, and what weir and
+//! flume refuse of them, and a base place's launch holding it, or refused
+//! where it resolves to no kind (23, 154, 157, 203; weir 52, 57, 89; weir
+//! record 0005).
 
 use crate::common::engine::{base_at, engine, PLACE_PROFILE};
 use crate::common::*;
@@ -521,6 +526,146 @@ fn a_kind_that_lands_with_no_stages_beside_one_that_does_not_and_settings() {
     }
 }
 
+/// A declaration of `train`, landing with no stages and `more` in its
+/// table, and `mend` at version 1, landing with one code stage delivering
+/// commits, its prompt at `prompts/code.md` (23, 202).
+fn trained(more: &str) -> String {
+    format!(
+        "[kinds.train]\nbranch = \"train\"\nlands = true\nstages = []\n{more}\n\n\
+         [kinds.mend]\nversion = 1\nbranch = \"mend\"\nlands = true\n\n\
+         [[kinds.mend.stages]]\nname = \"code\"\nprompt = \"prompts/code.md\"\n\
+         deliverables = [\"commits\"]\nagents = [{{}}]\n"
+    )
+}
+
+/// `repository` declaring `declaration`, mend's prompt beside it,
+/// committed as `message`; the revision.
+fn declaring_trained(repository: &Repository, declaration: &str, message: &str) -> Revision {
+    repository.write(DECLARATION, declaration);
+    repository.write(".config/prompts/code.md", "{{brief}}");
+    Revision::new(repository.commit(message))
+}
+
+/// Each kind `repository` declares at `revision`, by name, with the kind
+/// of its fixes and its bound; panics naming why where it could not be
+/// read.
+fn landing_fixes(
+    repository: &Repository,
+    revision: &Revision,
+) -> BTreeMap<String, (Option<String>, Option<u32>)> {
+    match Weir.read_kinds(&repository.name(), revision) {
+        KindsRead::Read { kinds, .. } => kinds
+            .into_iter()
+            .map(|kind| (kind.name, (kind.fix, kind.fix_limit)))
+            .collect(),
+        other => panic!("the declaration read as {other:?}"),
+    }
+}
+
+#[test]
+fn a_kind_with_no_stages_names_its_landing_fix_and_its_bound() {
+    // The kinds-profile spec's "A landing fix and its bound over a scratch
+    // repository": weir's crate reads a kind's `landing_fix` and
+    // `max_landing_fixes`, and the profile maps them onto the kind of its
+    // fixes, spelled as weir spells the identity, and its bound; a kind
+    // that gives neither names neither (23; weir 52; weir record 0005;
+    // core.4).
+    let repository = Repository::new("landing-fix");
+    let declared = format!(
+        "{}\n[kinds.yard]\nbranch = \"yard\"\nlands = true\nstages = []\n",
+        trained("landing_fix = \"repo/mend@1\"\nmax_landing_fixes = 2")
+    );
+    let revision = declaring_trained(&repository, &declared, "train names its landing fix");
+    let none = (None, None);
+    assert_eq!(
+        landing_fixes(&repository, &revision),
+        BTreeMap::from([
+            ("mend".to_string(), none.clone()),
+            (
+                "train".to_string(),
+                (Some("repo/mend@1".to_string()), Some(2))
+            ),
+            ("yard".to_string(), none),
+        ]),
+        "each kind's landing fix and its bound"
+    );
+}
+
+#[test]
+fn a_landing_fix_weir_refuses_is_named_in_weirs_words() {
+    // The kinds-profile spec's "A landing fix weir refuses": a bare name, a
+    // name with no version, and either field on a kind with stages are
+    // answered as could not be read in weir's words, naming the field (57;
+    // weir record 0005).
+    let repository = Repository::new("landing-fix-refused");
+    for named in ["mend", "repo/mend"] {
+        declaring_trained(
+            &repository,
+            &trained(&format!("landing_fix = \"{named}\"")),
+            &format!("train names {named} its landing fix"),
+        );
+        let reason = could_not_read(&repository);
+        assert!(
+            reason.contains("kinds.train.landing_fix") && reason.contains("is no identity"),
+            "{named} not refused as no identity: {reason}"
+        );
+    }
+    declaring_trained(
+        &repository,
+        &format!(
+            "{}\n[kinds.bump]\nbranch = \"bump\"\n\
+             landing_fix = \"flume/fix@1\"\nmax_landing_fixes = 1\n\n\
+             [[kinds.bump.stages]]\nname = \"code\"\nprompt = \"prompts/code.md\"\n\
+             deliverables = [\"commits\"]\nagents = [{{}}]\n",
+            trained("")
+        ),
+        "a one-stage kind names a landing fix",
+    );
+    let reason = could_not_read(&repository);
+    for field in ["kinds.bump.landing_fix", "kinds.bump.max_landing_fixes"] {
+        assert!(
+            reason.contains(&format!("{field}: is on a kind with stages")),
+            "{field} not refused as on a kind with stages: {reason}"
+        );
+    }
+}
+
+#[test]
+fn a_landing_fix_bound_past_what_flume_counts_is_refused() {
+    // The kinds-profile spec's "A bound past what flume counts": weir reads
+    // the count, and the profile refuses the declaration naming the field
+    // (4, 84).
+    let repository = Repository::new("landing-fix-bound");
+    declaring_trained(
+        &repository,
+        &trained("landing_fix = \"repo/mend@1\"\nmax_landing_fixes = 4294967296"),
+        "train's bound past what flume counts",
+    );
+    let reason = could_not_read(&repository);
+    assert!(
+        reason.contains("kinds.train.max_landing_fixes: is more than flume counts"),
+        "{reason}"
+    );
+}
+
+#[test]
+fn fix_and_max_fixes_are_sections_naming_no_landing_fix() {
+    // The kinds-profile spec's "The fields' old spellings": weir returns
+    // `fix` and `max_fixes` as sections, and flume reads no fix and no
+    // bound from them (23; weir record 0005; core.4).
+    let repository = Repository::new("old-spellings");
+    let revision = declaring_trained(
+        &repository,
+        &trained("fix = \"repo/mend@1\"\nmax_fixes = 2"),
+        "train names its fix in the old spelling",
+    );
+    assert_eq!(
+        landing_fixes(&repository, &revision).get("train"),
+        Some(&(None, None)),
+        "train's landing fix and its bound"
+    );
+}
+
 /// A one-stage kind `bump` of the repository's at `version`, not landing.
 fn bump(version: u32, stages: &[&str]) -> Kind {
     Kind {
@@ -609,6 +754,92 @@ fn s33_a_repository_with_no_table_refuses_a_fix_naming_the_merge_queue_it_needs(
         "the refusal names not the kind and the merge queue: {reason}"
     );
     assert_eq!(world.place.log.count("make"), 0, "places made");
+    assert!(world.store.places().is_empty(), "held state was left");
+}
+
+/// A scratch repository `label` binding the fakes' merge queue by the
+/// name the world binds it by, and declaring `train` naming `landing_fix`
+/// its landing fix with a bound of 2 beside `mend` at version 1; and the
+/// launch of `train--spring` on `main` for the recipient `ops`, a session
+/// that asks nothing, through the kinds profile, with the world it was
+/// launched in and its answer (21, 203).
+fn spring_through_the_profile(label: &str, landing_fix: &str) -> (Repository, World, Answer) {
+    let repository = Repository::new(label);
+    let revision = declaring_trained(
+        &repository,
+        &format!(
+            "[profiles]\nmerge_queue = \"queue\"\n\n{}",
+            trained(&format!(
+                "landing_fix = \"{landing_fix}\"\nmax_landing_fixes = 2"
+            ))
+        ),
+        "train names its landing fix",
+    );
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    base_at(&world, &repository.name(), &revision.0);
+    let spring = Launch {
+        repository: repository.name(),
+        recipients: vec!["ops".into()],
+        ..launch("train", "spring", None)
+    };
+    let answer = engine(&world, Arc::new(Weir)).launch(&spring);
+    (repository, world, answer)
+}
+
+#[test]
+fn a_base_places_launch_holds_the_landing_fix_the_profile_reads() {
+    // The kinds-profile spec's "The landing fix held through the profile":
+    // the core resolves the landing fix the profile read as a launch's
+    // whole identity, holds it with where it came from, and status gives
+    // it with the kind's bound (21, 56, 203).
+    let (repository, world, answer) = spring_through_the_profile("landing-fix-held", "repo/mend@1");
+    launched(&answer).expect("the launch taken");
+    let id = PlaceId::new(flume_fakes::place_location(
+        &repository.name(),
+        "train--spring",
+    ));
+    let held = world.held(&id).expect("the base place held");
+    let fixes_as = held.place.fixes_as.expect("the kind of its fixes held");
+    assert_eq!(fixes_as.identity.spelled, "repo/mend@1");
+    assert_eq!(fixes_as.from.source, REPO_SOURCE, "where it came from");
+    assert_eq!(
+        (
+            fixes_as.from.declaration_file.as_deref(),
+            fixes_as.from.revision.clone()
+        ),
+        (Some(DECLARATION), Some(Revision::new(repository.head()))),
+        "the repository's declaration at the launch's revision"
+    );
+    let places = match engine(&world, Arc::new(Weir)).status(Some(&id)) {
+        Answer::Status { places, .. } => places,
+        other => panic!("status answered {other:?}"),
+    };
+    assert_eq!(
+        places
+            .iter()
+            .map(|place| (place.fix_kind.clone(), place.fix_limit))
+            .collect::<Vec<_>>(),
+        vec![(Some(fixes_as), Some(2))],
+        "train--spring's fix kind and its bound in status"
+    );
+}
+
+#[test]
+fn a_landing_fix_at_a_version_not_declared_refuses_the_launch() {
+    // The kinds-profile spec's "A landing fix at a version the repository
+    // does not declare": the identity resolves at the version it names, so
+    // `repo/mend@2` beside `mend` at version 1 refuses the launch before the
+    // merge queue opens anything, and nothing is held (4, 154; core.8,
+    // core.34).
+    let (_repository, world, answer) =
+        spring_through_the_profile("landing-fix-undeclared", "repo/mend@2");
+    let reason = refused(&answer).expect("the launch refused");
+    assert!(
+        reason.contains("repo/mend@2") && reason.contains("declares mend at version 1"),
+        "the refusal names neither the landing fix nor the version declared: {reason}"
+    );
+    assert_eq!(world.queue.log.count("open"), 0, "the merge queue's opens");
     assert!(world.store.places().is_empty(), "held state was left");
 }
 
@@ -1579,8 +1810,9 @@ type Summary = (
 
 #[test]
 fn flumes_own_kinds_are_built_in() {
-    // 22, 140, 157, C.2: fix@1, chore@1, change@1 and change@2, change@2's
-    // code stage repeating per task group and change@1's not.
+    // 22, 140, 157, C.2: fix@1, chore@1, change@1, change@2 and change@3,
+    // change@2's code stage repeating per task group and change@1's and
+    // change@3's not, all landing, each last stage's `on_fail` `code`.
     let own = own_kinds();
     let summary: Vec<Summary> = own
         .iter()
@@ -1624,6 +1856,7 @@ fn flumes_own_kinds_are_built_in() {
         vec![
             change(1, false),
             change(2, true),
+            change(3, false),
             (
                 "chore".into(),
                 1,
@@ -1670,10 +1903,12 @@ fn own(name: &str, version: u32) -> Kind {
 
 #[test]
 fn each_versions_prompts_are_its_own() {
-    // 157, C.2, design 7: each of flume's own versions is a declaration of
-    // its own, under `own/<name>@<version>/`, whose prompts lie beside it;
-    // what the binary holds is what each directory holds, read as a
-    // launch's declaration is read from disk.
+    // 22, 156, 157, C.2, design 7: each of flume's own versions is a
+    // declaration of its own, under `own/<name>@<version>/`, whose prompts
+    // lie beside it; what the binary holds is what each directory holds,
+    // read as a launch's declaration is read from disk; change@1's and
+    // change@2's prompts are as before, and change@3's three are none of
+    // theirs.
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/profiles/kinds/weir/own");
     let mut versions: Vec<String> = std::fs::read_dir(&dir)
         .expect("flume's own kinds' directory")
@@ -1686,7 +1921,10 @@ fn each_versions_prompts_are_its_own() {
         })
         .collect();
     versions.sort();
-    assert_eq!(versions, ["change@1", "change@2", "chore@1", "fix@1"]);
+    assert_eq!(
+        versions,
+        ["change@1", "change@2", "change@3", "chore@1", "fix@1"]
+    );
     let mut read = vec![];
     for version in &versions {
         let declaration = dir.join(version).join("kind.toml");
@@ -1719,6 +1957,20 @@ fn each_versions_prompts_are_its_own() {
             "change@2's {} is change@1's",
             one.stages[stage].name
         );
+    }
+    let three = own("change", 3);
+    for (stage, prompt) in three
+        .stages
+        .iter()
+        .map(|stage| (&stage.name, &stage.prompt))
+    {
+        for earlier in one.stages.iter().chain(&two.stages) {
+            assert_ne!(
+                prompt, &earlier.prompt,
+                "change@3's {stage} is an earlier version's {}",
+                earlier.name
+            );
+        }
     }
     assert_eq!(
         own("fix", 1).stages[0].prompt,
@@ -1773,8 +2025,10 @@ fn asks_nothing_it_may_not(prompt: &str) {
 
 #[test]
 fn no_prompt_of_flumes_own_asks_to_submit() {
+    // 28, 71, 112: every prompt of fix@1, chore@1, change@1, change@2 and
+    // change@3 rendered for a place.
     let mut prompts = vec![];
-    for version in [1, 2] {
+    for version in [1, 2, 3] {
         let world = world_with_own_kinds(version);
         fix_begun(&world, "one").expect("a fix begun");
         prompts.push(opened(&world, "fix", "one", "code", 1));
@@ -1825,6 +2079,8 @@ fn sent_back_with_a_conflict(world: &World, kind: &str, name: &str) -> (String, 
 
 #[test]
 fn a_code_prompt_sent_back_with_a_conflict_merges_the_base_never_rebasing() {
+    // 112: fix@1's, chore@1's, change@2's and change@3's code prompts sent
+    // back with a conflict's words.
     let world = world_with_own_kinds(2);
     let mut prompts = vec![];
 
@@ -1845,7 +2101,15 @@ fn a_code_prompt_sent_back_with_a_conflict_merges_the_base_never_rebasing() {
     change_at_verify(&world, "plan").expect("a change at verify");
     archive(&world, "plan");
     prompts.push((
-        "change",
+        "change@2",
+        sent_back_with_a_conflict(&world, "change", "plan"),
+    ));
+
+    let world = world_with_own_kinds(3);
+    change_at_verify(&world, "plan").expect("a change@3 at verify");
+    archive(&world, "plan");
+    prompts.push((
+        "change@3",
         sent_back_with_a_conflict(&world, "change", "plan"),
     ));
 
@@ -1868,6 +2132,154 @@ fn a_code_prompt_sent_back_with_a_conflict_merges_the_base_never_rebasing() {
         let merge = prompt.find("git merge").expect("the merge");
         let fix = prompt.find("Then fix").expect("the fix");
         assert!(merge < fix, "{kind}: the merge comes after the fix");
+    }
+}
+
+/// A change place carried to its verify by a flume holding change@3, and
+/// the prompts its construct, code and verify were opened with (22, C.2).
+fn change_3_rendered() -> (World, PlaceId, [String; 3]) {
+    let world = world_with_own_kinds(3);
+    let id = change_at_verify(&world, "plan").expect("a change@3 at verify");
+    assert_eq!(
+        world.held(&id).expect("the place").place.kind.version,
+        3,
+        "the place's kind"
+    );
+    let prompts =
+        ["construct", "code", "verify"].map(|stage| opened(&world, "change", "plan", stage, 1));
+    for prompt in &prompts {
+        assert!(!prompt.contains("{{"), "a part left unfilled: {prompt}");
+    }
+    (world, id, prompts)
+}
+
+/// Asserts `prompt`, `stage`'s, names each of `named`.
+fn names_each(stage: &str, prompt: &str, named: &[&str]) {
+    for named in named {
+        assert!(
+            prompt.contains(named),
+            "change@3's {stage} prompt names not {named:?}: {prompt}"
+        );
+    }
+}
+
+#[test]
+fn change_3s_construct_prompt_gives_each_task_its_own_check() {
+    // 22, C.2, S119: change@3's construct prompt rendered for a place asks
+    // each task for the narrowest check that shows it done, and rules out
+    // a task running the repository's whole checks or a task group's.
+    let (_, _, [construct, _, _]) = change_3_rendered();
+    names_each(
+        "construct",
+        &construct,
+        &[
+            "Give each task the narrowest check that shows that task done",
+            "one test by name, one package's tests, or a lint of the files the task touches",
+            "No task runs the repository's whole checks",
+            "no task checks a task group",
+            "the task groups are headings for reading",
+            "the verify stage runs the repository's whole checks once",
+        ],
+    );
+}
+
+#[test]
+fn change_3s_code_prompt_runs_each_tasks_own_check_alone() {
+    // 22, C.2, S119: change@3's code prompt rendered for a place has its
+    // one agent build the whole change, run each task's own check before
+    // its tick, and rules out the repository's whole checks and a task
+    // group's; it names no group and no notes, as change@2's does.
+    let (_, _, [_, code, _]) = change_3_rendered();
+    names_each(
+        "code",
+        &code,
+        &[
+            "You build the whole change, every task of it",
+            "Work through its tasks in order, the task groups only headings",
+            "run the check it names as it names it",
+            "tick the task in the change's tasks file once its check passes",
+            "Run no check but a task's own",
+            "not the repository's whole checks",
+            "not a task group's",
+            "tasks ticked",
+        ],
+    );
+    let check = code.find("run the check it names").expect("the check");
+    let tick = code.find("tick the task").expect("the tick");
+    assert!(check < tick, "the tick comes before the check: {code}");
+    for named in ["The notes: ", "repetition", "Group 1"] {
+        assert!(
+            !code.contains(named),
+            "{named:?} in change@3's code: {code}"
+        );
+    }
+}
+
+#[test]
+fn change_3s_code_prompt_puts_a_retrys_words_last() {
+    // 131, core.33: change@3's code prompt rendered for one place without
+    // words, and again with its verify's words: the two are equal up to
+    // the first character of the words' section, and the second holds the
+    // words and asks the fix be recorded as a task naming its own check.
+    let (world, id, [_, first, _]) = change_3_rendered();
+    let verify = world.held(&id).expect("the place").stages[2]
+        .start
+        .clone()
+        .expect("verify's start");
+    let findings = "Task 2.1 is ticked and its test fails.";
+    let stopped = world.engine.needs(
+        &verify.identity.to_string(),
+        &verify.secret.0,
+        findings,
+        StopKind::FoundWork,
+    );
+    assert!(stopped.refusal().is_none(), "the stop-short: {stopped:?}");
+    world.settle(&id);
+    let second = opened(&world, "change", "plan", "code", 2);
+    let words = second
+        .find("This stage was started again with these words:")
+        .expect("the words' section");
+    assert_eq!(first, &second[..words], "the prompts up to the words");
+    names_each(
+        "code",
+        &second[words..],
+        &[
+            findings,
+            "record the fix as a task of the change naming its own check, ticked once that \
+             check passes",
+        ],
+    );
+}
+
+#[test]
+fn change_3s_verify_prompt_runs_the_whole_checks_once_first() {
+    // 22, 131, C.2, S119: change@3's verify prompt rendered for a place
+    // runs the repository's whole checks once, as the repository's
+    // instructions name them, before it checks the specs and the tasks,
+    // names their outcome in `verify.md`, and archives the change only
+    // where both hold; it names no tool, serving any host's repository.
+    let (_, _, [_, _, verify]) = change_3_rendered();
+    names_each(
+        "verify",
+        &verify,
+        &[
+            "First run the repository's whole checks once",
+            "as the repository's instructions name them",
+            "run them no second time",
+            "every requirement and scenario of its specs met, and every task ticked done",
+            "verify.md",
+            "the whole checks' outcome among it",
+            "Where the whole checks pass and the work holds, archive the change",
+            "Where the whole checks fail or the work falls short, archive nothing",
+            "stop short having found work",
+        ],
+    );
+    let checks = verify.find("whole checks once").expect("the whole checks");
+    let specs = verify.find("its specs met").expect("the specs");
+    assert!(checks < specs, "the specs checked before the whole checks");
+    let lower = verify.to_lowercase();
+    for tool in ["sluice", "moon", "cargo", "devenv", "openspec"] {
+        assert!(!lower.contains(tool), "change@3's verify names {tool}");
     }
 }
 
@@ -1963,6 +2375,47 @@ fn a_place_launched_at_change_1_keeps_it() {
     assert_eq!(world.held(&id).expect("the place").stages[1].starts, 1);
 }
 
+#[test]
+fn a_place_launched_at_change_2_keeps_it() {
+    // 21, 22: a place launched by a flume holding change@1 and change@2
+    // alone is settled by one holding all three; it keeps change@2's
+    // stages, its code stage repeating per task group, and status names
+    // change@2.
+    let world = World::new();
+    world.kinds.set_own(
+        own_kinds()
+            .into_iter()
+            .filter(|kind| kind.name != "change" || kind.version <= 2)
+            .collect(),
+    );
+    let id = change_code_begun(&world, "old");
+    world.kinds.set_own_packages(Weir.flumes_own());
+    world.tick_groups("change/old", "old", GROUPS, 2);
+    world.settle(&id);
+    let held = world.held(&id).expect("the place");
+    assert_eq!(held.place.kind.version, 2, "the place's kind");
+    assert!(held.place.kind.stages[1].repeats, "code repeats not");
+    assert_eq!(held.stages[1].starts, 2, "code's starts");
+    assert_eq!(world.stage_state(&id, "code"), Some(StageState::Begun));
+    let status = world.status(&id).expect("status");
+    assert_eq!(
+        (
+            status.kind.as_str(),
+            status.version,
+            status.identity.as_deref()
+        ),
+        ("change", 2, Some("flume/change@2"))
+    );
+    assert_eq!(
+        status.stages[1]
+            .group
+            .as_ref()
+            .map(|group| (group.place, group.of, group.number.clone())),
+        Some((2, 3, Some("2".to_string()))),
+        "the group status names"
+    );
+}
+
 /// The package `<name>@<version>` of the source `acme` in `kinds_dir`,
 /// read; panics naming why where it could not be.
 fn package_at(kinds_dir: &Path, name: &str, version: u32) -> Packaged {
@@ -2022,6 +2475,29 @@ fn a_packages_hash_wherever_it_lies() {
     assert_ne!(edited.hash, first.hash, "a prompt's byte changed its hash");
     assert_eq!(edited.kind.stages[0].prompt, "Review {{brief}}!\n");
     assert_eq!(package_at(&linked.join("kinds"), "review", 1), second);
+}
+
+#[test]
+fn a_packages_kind_names_its_landing_fix() {
+    // The kinds-profile spec's "A package's landing fix": the package's
+    // kind is mapped by the same reader as a repository's, naming the kind
+    // of its fixes and its bound (157; weir 89; weir record 0005).
+    let scratch = Scratch::new("package-landing-fix");
+    let kinds_dir = scratch.path("kinds");
+    write_package(
+        &kinds_dir,
+        "train@1",
+        "[kinds.train]\nversion = 1\nbranch = \"train\"\nlands = true\nstages = []\n\
+         landing_fix = \"flume/fix@1\"\nmax_landing_fixes = 1\n",
+        &[],
+    );
+    let package = package_at(&kinds_dir, "train", 1);
+    assert_eq!(package.identity.spelled, "acme/train@1");
+    assert_eq!(
+        (package.kind.fix.as_deref(), package.kind.fix_limit),
+        (Some("flume/fix@1"), Some(1)),
+        "the package's landing fix and its bound"
+    );
 }
 
 #[test]
@@ -2167,6 +2643,7 @@ fn flumes_own_as_packages() {
         [
             ("flume/change@1".to_string(), length),
             ("flume/change@2".to_string(), length),
+            ("flume/change@3".to_string(), length),
             ("flume/chore@1".to_string(), length),
             ("flume/fix@1".to_string(), length),
         ]

@@ -6,7 +6,12 @@
 //! weir refuses is answered as could not be read, naming every field that
 //! fails (84). A kind that lands and declares `stages = []` is mapped to a
 //! kind with no stages, which weir refuses on a kind that does not land
-//! (18, 202; weir 51, 57). A kind's `agents` table, and a `[kinds.<kind>]` table that
+//! (18, 202; weir 51, 57). Such a kind's `landing_fix`, the identity with
+//! its version of the kind its fixes run as, and its `max_landing_fixes`
+//! are mapped onto the seam's kind of its fixes and its bound, the
+//! identity spelled as weir's crate spells it, which the core resolves at
+//! its place's launch as a launch's name (23, 154, 203; weir 52, 57; weir
+//! record 0005). A kind's `agents` table, and a `[kinds.<kind>]` table that
 //! gives settings to a kind declared elsewhere, are weir's too: each is
 //! mapped onto the seam's settings for every stage and for each stage it
 //! names, the latter returned apart from the kinds (32, C.2; weir 52,
@@ -17,7 +22,7 @@
 //! to its declaration's file, read beside it: at the same revision for a
 //! repository's, on disk for a launch's, and from the binary for flume's
 //! own, whose versions are each a declaration of its own with its prompts
-//! beside it (157).
+//! beside it, change@1, change@2 and change@3 side by side (157).
 //!
 //! flume's own kinds are packages, each read through weir-kinds' package
 //! reader at its identity, `flume/<name>@<version>`, with its content's
@@ -103,8 +108,9 @@ const KIND_TOML: &str = "kind.toml";
 
 /// flume's own kinds, one declaration per version, each in a directory of
 /// its own under `own/`, `<name>@<version>/kind.toml` with its prompts
-/// beside it under `prompts/`: change@1 and change@2 side by side, and
-/// fix@1 and chore@1 (22, 157, C.2; record 0022).
+/// beside it under `prompts/`: change@1, change@2 and change@3 side by
+/// side, in ascending order so the last is the newest, and fix@1 and
+/// chore@1 (22, 154, 157, C.2; records 0022, 0054).
 const OWN: &[Own] = &[
     Own {
         identity: "flume/change@1",
@@ -139,6 +145,24 @@ const OWN: &[Own] = &[
             (
                 "prompts/change-verify.md",
                 include_str!("own/change@2/prompts/change-verify.md"),
+            ),
+        ],
+    },
+    Own {
+        identity: "flume/change@3",
+        declaration: include_str!("own/change@3/kind.toml"),
+        prompts: &[
+            (
+                "prompts/change-construct.md",
+                include_str!("own/change@3/prompts/change-construct.md"),
+            ),
+            (
+                "prompts/change-code.md",
+                include_str!("own/change@3/prompts/change-code.md"),
+            ),
+            (
+                "prompts/change-verify.md",
+                include_str!("own/change@3/prompts/change-verify.md"),
             ),
         ],
     },
@@ -745,7 +769,13 @@ fn refused(refusal: &Refusal) -> String {
 /// weir 52 and C.4 name none and weir 94 gives a statechart kind's
 /// `label` another meaning, and flume reads no field of the format
 /// itself; until then only the host's configuration gives a place a
-/// label (180; record 0033; core.4).
+/// label (180; record 0033; core.4). Its kind of fixes is the kind's
+/// `landing_fix` as weir-kinds reads it, an identity with its version
+/// spelled by weir's `Display`, and its bound is the kind's
+/// `max_landing_fixes`, a count past what flume counts a problem naming
+/// the field; nothing else feeds either, so a kind's `fix` and
+/// `max_fixes`, which weir returns as sections, are ignored (23; weir 52,
+/// 57; weir record 0005; core.4).
 fn map_kind(kind: &weir_kinds::Kind, beside: Reader, problems: &mut Vec<String>) -> Kind {
     let at = format!("kinds.{}", kind.name);
     let version = u32::try_from(kind.version).unwrap_or_else(|_| {
@@ -766,8 +796,13 @@ fn map_kind(kind: &weir_kinds::Kind, beside: Reader, problems: &mut Vec<String>)
             .map(|(n, stage)| map_stage(stage, &format!("{at}.stages[{n}]"), beside, problems))
             .collect(),
         label: None,
-        fix: None,
-        fix_limit: None,
+        fix: kind.landing_fix.as_ref().map(ToString::to_string),
+        fix_limit: kind.max_landing_fixes.map(|times| {
+            u32::try_from(times).unwrap_or_else(|_| {
+                problems.push(format!("{at}.max_landing_fixes: is more than flume counts"));
+                0
+            })
+        }),
     }
 }
 

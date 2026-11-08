@@ -1,7 +1,7 @@
 ---
 number: 43
 title: An agent's program settings come from flume's layers, a named file and keys for each program, each key taken whole, and a repository's word for every kind
-status: proposed
+status: accepted
 date: 2026-11-05
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # An agent's program settings come from flume's layers, a named file and keys for each program, each key taken whole, and a repository's word for every kind
 
-Status: proposed. The user approved its design on 2026-11-05 in the Plannotator Inbox, answering "An agent's program settings come from Flume's layers: approve, so its code starts?" with "Approve: start its code (your recommendation)". That approval took the design as it stood, with the recommended answers to its two questions: the host's new tables give the model, the mode and the instructions too, and they come before the repository's and the kind's. The record waits on the user's yes once they have seen it as a record, at their review of the change `an-agents-program-settings-come-from-flumes-layers`.
+Status: accepted by the user on 2026-11-07, on their card. The user approved its design on 2026-11-05 in the Plannotator Inbox, answering "An agent's program settings come from Flume's layers: approve, so its code starts?" with "Approve: start its code (your recommendation)". That approval took the design as it stood, with the recommended answers to its two questions: the host's new tables give the model, the mode and the instructions too, and they come before the repository's and the kind's.
 
 Amended in part by record 0055, accepted on 2026-11-06: the host's `[repos."<repository>"]` tables name a repository by its address, `<owner>/<name>` as its clone's `origin` gives it, and by its folder only where it has no forge origin.
 

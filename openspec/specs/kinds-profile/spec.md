@@ -69,20 +69,21 @@ never as empty (20, C.2).
 
 flume's own kinds SHALL be built into the binary one declaration per
 version, each with its prompts beside it, and each read like any other:
-fix@1, chore@1, change@1 and change@2 as C.2 gives them, change@2's
-code stage repeating per task group and change@1's not, each prompt
-naming its deliverable and the way to stop short, and none asking for
-a submit, a push or a rebase (22, 28, 71, 140, 157, C.2).
+fix@1, chore@1, change@1, change@2 and change@3 as C.2 gives them,
+change@2's code stage repeating per task group and change@1's and
+change@3's not, each prompt naming its deliverable and the way to stop
+short, and none asking for a submit, a push or a rebase (22, 28, 71,
+140, 157, C.2).
 
 #### Scenario: The kinds built in
 
 - **WHEN** flume's own kinds are read
-- **THEN** they are fix@1 on `fix/`, chore@1 on `chore/`, and change@1 and change@2 on `change/`, each change with construct, code and verify, change@2's code repeating per task group and change@1's not, all landing, each last stage's `on_fail` `code`
+- **THEN** they are fix@1 on `fix/`, chore@1 on `chore/`, and change@1, change@2 and change@3 on `change/`, each change with construct, code and verify, change@2's code repeating per task group and change@1's and change@3's not, all landing, each last stage's `on_fail` `code`
 
 #### Scenario: Each version's prompts are its own
 
 - **WHEN** flume's own declarations are read
-- **THEN** each version's prompts are read from its own directory, and change@1's code prompt is the one flume held before change@2 (157)
+- **THEN** each version's prompts are read from its own directory, change@1's code prompt is the one flume held before change@2, change@2's construct and verify are change@1's, and change@3's three prompts are none of change@1's or change@2's (156, 157)
 
 #### Scenario: No prompt asks to submit
 
@@ -94,18 +95,24 @@ a submit, a push or a rebase (22, 28, 71, 140, 157, C.2).
 - **WHEN** a place launched at change@1 is settled by a flume that holds change@1 and change@2
 - **THEN** it keeps change@1's stages as its launch read them, its code stage not repeating, and status names change@1 (21)
 
+#### Scenario: A place launched at change@2
+
+- **WHEN** a place launched at change@2 is settled by a flume that holds change@1, change@2 and change@3
+- **THEN** it keeps change@2's stages as its launch read them, its code stage repeating per task group, and status names change@2 (21)
+
 ### Requirement: What flume's own prompts ask
 
-change@2's verify prompt SHALL commit `verify.md` in the change's
-directory and archive the change, or stop short having found work; its
-code prompt sent with words SHALL restore an archived change and record
-the fix as a ticked task; every code prompt sent back with a conflict's
-words SHALL have its agent `git merge` the base's revision named, resolve
-the files contested and commit, first, and never rebase (22, 112, C.2).
+change@2's and change@3's verify prompts SHALL commit `verify.md` in the
+change's directory and archive the change, or stop short having found
+work; their code prompts sent with words SHALL restore an archived
+change and record the fix as a ticked task; every code prompt sent back
+with a conflict's words SHALL have its agent `git merge` the base's
+revision named, resolve the files contested and commit, first, and
+never rebase (22, 112, C.2).
 
 #### Scenario: A code prompt sent back with a conflict
 
-- **WHEN** fix@1's, chore@1's and change@2's code prompts are rendered with a conflict's words naming the files contested and the base's revision
+- **WHEN** fix@1's, chore@1's, change@2's and change@3's code prompts are rendered with a conflict's words naming the files contested and the base's revision
 - **THEN** each tells the agent to `git merge` that revision into the place's branch, resolve those files and commit, before anything else, and never to rebase (112)
 
 ### Requirement: A stage's repeat read through weir's crate
@@ -190,7 +197,7 @@ none (core.4; weir 88 to 93, C.4).
 #### Scenario: Flume's own as packages
 
 - **WHEN** flume's own kinds are read
-- **THEN** each is a package with its identity, `flume/fix@1`, `flume/chore@1`, `flume/change@1` and `flume/change@2`, and its hash (156, 157)
+- **THEN** each is a package with its identity, `flume/fix@1`, `flume/chore@1`, `flume/change@1`, `flume/change@2` and `flume/change@3`, and its hash (156, 157)
 
 ### Requirement: A declaration's agents tables give own settings
 
@@ -304,3 +311,106 @@ elsewhere, as before (4, 18, 23, 202; weir 51, 57; core.4).
 
 - **WHEN** a scratch repository's `.config/flume.toml` declares `train` with `lands = true` and `stages = []`, `idle` with `lands = false` and `stages = []`, and a `[kinds.fix.agents]` table with no stages
 - **THEN** `train` reads as a kind that lands with no stages, `idle` is refused naming its stages, and `fix`'s table is read as settings for flume's own fix (18, 57)
+
+### Requirement: change@3's construct gives each task its own check
+
+change@3's construct prompt SHALL ask each task to name the narrowest
+check that shows it done, one test by name, one package's tests or a
+lint of the files it touches, and SHALL rule out a task that runs the
+repository's whole checks or checks a task group (22, C.2, S119).
+
+#### Scenario: change@3's construct prompt rendered
+
+- **WHEN** change@3's construct prompt is rendered for a place
+- **THEN** it asks each task for the narrowest check that shows it done, and rules out a task running the repository's whole checks or a task group's (22, C.2)
+
+### Requirement: change@3's code runs each task's own check alone
+
+change@3's code prompt SHALL have its one agent work through every task
+of the change in order, run each task's own check and tick the task once
+that check passes, run no other check, and put a retry's words last
+(22, 131, C.2; core.33).
+
+#### Scenario: change@3's code prompt rendered
+
+- **WHEN** change@3's code prompt is rendered for a place
+- **THEN** it asks for each task's own check before its tick and rules out the repository's whole checks and a task group's (22, C.2)
+
+#### Scenario: A retry's words come last
+
+- **WHEN** change@3's code prompt is rendered for one place without words and with a verify's words
+- **THEN** the two texts are equal up to the first character of the words' section, and the second holds the words and asks the fix be recorded as a task naming its own check (131; core.33)
+
+### Requirement: change@3's verify runs the whole checks once
+
+change@3's verify prompt SHALL run the repository's whole checks once,
+as the repository's instructions name them, before it checks the work
+against the change, and SHALL stop short having found work where the
+checks fail or the work falls short (22, 131, C.2, S119).
+
+#### Scenario: change@3's verify prompt rendered
+
+- **WHEN** change@3's verify prompt is rendered for a place
+- **THEN** it runs the repository's whole checks once before it checks the specs and the tasks, names their outcome in `verify.md`, and archives the change only where both hold (22, 131, C.2)
+
+### Requirement: A kind with no stages names its landing fix through weir's crate
+
+The kinds profile SHALL map a kind's `landing_fix`, as `weir-kinds`
+reads it, onto the seam's kind of its fixes, spelled as weir's crate
+spells the identity, and its `max_landing_fixes` onto the seam's bound,
+taking neither from anything else, in a repository's declaration, a
+launch's and a package's alike; a kind that gives neither SHALL name no
+fix and no bound (23, 157; weir 52, 89; weir record 0005; core.4).
+
+#### Scenario: A landing fix and its bound over a scratch repository
+
+- **WHEN** a scratch repository's `.config/flume.toml` declares `train`, landing with `stages = []`, `landing_fix = "repo/mend@1"` and `max_landing_fixes = 2`; `yard`, landing with `stages = []` and neither field; and `mend`, landing with one code stage delivering commits
+- **THEN** `train` reads naming `repo/mend@1` the kind of its fixes with a bound of 2, and `yard` and `mend` name no fix and no bound (23; weir 52)
+
+#### Scenario: A package's landing fix
+
+- **WHEN** a scratch source's `kinds_dir` holds `train@1/kind.toml`, declaring `train` landing with `stages = []`, `landing_fix = "flume/fix@1"` and `max_landing_fixes = 1`, and the package is read at `acme/train@1`
+- **THEN** its kind names `flume/fix@1` the kind of its fixes with a bound of 1 (157; weir 89)
+
+### Requirement: A landing fix weir or flume refuses
+
+A `landing_fix` weir refuses, a bare name or a name with no source or
+no version among them, and either field on a kind with stages, SHALL be
+answered as could not be read in weir's words, naming the field; a
+bound past what flume counts SHALL be refused naming the field; and
+`fix` and `max_fixes` SHALL be read as the sections weir returns them
+as, and ignored (4, 23, 84; weir 57; weir record 0005; core.4).
+
+#### Scenario: A landing fix weir refuses
+
+- **WHEN** the scratch repository's `train` gives `landing_fix = "mend"`, then `landing_fix = "repo/mend"`, each at a revision of its own, and then a one-stage kind `bump` gives `landing_fix = "flume/fix@1"` and `max_landing_fixes = 1`
+- **THEN** each revision's kinds are answered as could not be read: the first two naming `kinds.train.landing_fix` and that it is no identity, the third naming `kinds.bump.landing_fix` and `kinds.bump.max_landing_fixes` and that each is on a kind with stages, all in weir's words (57; weir record 0005)
+
+#### Scenario: A bound past what flume counts
+
+- **WHEN** the scratch repository's `train` gives `landing_fix = "repo/mend@1"` and `max_landing_fixes = 4294967296`
+- **THEN** its kinds are answered as could not be read, naming `kinds.train.max_landing_fixes` and that it is more than flume counts (4)
+
+#### Scenario: The fields' old spellings
+
+- **WHEN** the scratch repository's `train`, landing with `stages = []`, gives `fix = "repo/mend@1"` and `max_fixes = 2`
+- **THEN** `train` reads naming no fix and no bound (23; weir record 0005)
+
+### Requirement: A base place's launch resolves the landing fix the profile reads
+
+A base place launched under a kind the kinds profile read SHALL resolve
+the landing fix its kind names as a launch's whole identity resolves,
+at the version the identity names, and hold it with where it came from;
+a landing fix that resolves to no kind SHALL refuse the launch, naming
+it, before the merge queue opens anything (4, 21, 23, 154, 203; core.8,
+core.34).
+
+#### Scenario: The landing fix held through the profile
+
+- **WHEN** a scratch repository binds the fakes' merge queue and declares `train`, landing with `stages = []`, `landing_fix = "repo/mend@1"` and `max_landing_fixes = 2`, and `mend` at version 1, landing with one code stage delivering commits, and `train--spring` is launched on `main`
+- **THEN** the launch is taken, the place holds `repo/mend@1` from the repository's declaration as the kind its fixes run as, and status gives `train--spring` that fix kind and a bound of 2 (21, 56, 203)
+
+#### Scenario: A landing fix at a version the repository does not declare
+
+- **WHEN** the scratch repository's `train` gives `landing_fix = "repo/mend@2"` while it declares `mend` at version 1, and `train--spring` is launched on `main`
+- **THEN** the launch is refused naming `repo/mend@2` and that the repository declares `mend` at version 1, the fake merge queue logs no open, and the store holds no document of the place (4, 154; core.8, core.34)

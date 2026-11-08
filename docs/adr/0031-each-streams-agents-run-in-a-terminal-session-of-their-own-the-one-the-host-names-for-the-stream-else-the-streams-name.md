@@ -1,7 +1,7 @@
 ---
 number: 31
 title: Each stream's agents run in a terminal session of their own, the one the host names for the stream, else the stream's name
-status: proposed
+status: accepted
 date: 2026-11-03
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # Each stream's agents run in a terminal session of their own, the one the host names for the stream, else the stream's name
 
-Status: proposed. The user decided it on 2026-11-03 on their Pending You card (req_7e8ef2d0): "Yes: a session per stream, its name by default." It is stated on agentplot/blueprints main at 7367604, which amends record 0020. The record waits on the user's yes once they have seen it as a record, on their review of the change `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`.
+Status: accepted by the user on 2026-11-07, on their card. The user decided it on 2026-11-03 on their Pending You card (req_7e8ef2d0): "Yes: a session per stream, its name by default." It is stated on agentplot/blueprints main at 7367604, which amends record 0020.
 
 Deciders: the user, who chose a session per stream, named by the stream's name unless the host names another. The writing agent's: that the host's default stream keeps flume's own session unless its own table names one, that a launch names a session for its place by its settings alone, that the session is read at each start, how status names it, and how the herdr profile keeps a place's tabs and its base's workspaces across sessions.
 Sources: `agentplot/blueprints:design/flume/requirements.md` at 7367604, clauses 32, 107 and 143, C.5's herdr row, C.7 and S82; records 0018 and 0020; rules core.1, core.18, core.29, core.30; `crates/flume/src/profiles/terminal/herdr/mod.rs` (`SESSION`, `Server`, `Herdr::socket`, `start_session`, the workspace and tab records), `crates/flume-seams/src/terminal.rs` (`Terminal::open`'s `beside`), `crates/flume-core/src/settings.rs` (`placeless`).

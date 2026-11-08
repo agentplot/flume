@@ -19,13 +19,16 @@ tasks:
     command: 'bun ./node_modules/astro/bin/astro.mjs build'
     env:
       ASTRO_TELEMETRY_DISABLED: '1'
-    inputs: ['src/**/*', 'public/**/*', 'astro.config.mjs', 'package.json', 'bun.lock', 'tsconfig.json', '/devenv.nix', '/devenv.lock', '/.prototools']
+    inputs: ['src/**/*', 'public/**/*', 'astro.config.mjs', 'package.json', 'bun.lock', 'packages.nix', 'scripts/install.sh', 'tsconfig.json', '/devenv.nix', '/devenv.lock', '/.prototools']
     outputs: ['dist']
     deps: ['~:install']
     tags: [check-fast]
   # No layer: it checks nothing, and build, which the gate runs, runs it
-  # first.
+  # first. It installs bun.lock's packages with no network, from bun's cache
+  # as the devenv shell fetched it outside the gate's sandbox, which lets a
+  # run reach no registry (site/packages.nix, scripts/install.sh; record
+  # 0059).
   install:
-    command: 'bun install --frozen-lockfile'
-    inputs: ['package.json', 'bun.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    command: 'sh scripts/install.sh'
+    inputs: ['package.json', 'bun.lock', 'packages.nix', 'scripts/install.sh', '/devenv.nix', '/devenv.lock', '/.prototools']
     options: {cache: false}

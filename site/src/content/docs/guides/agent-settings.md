@@ -137,12 +137,19 @@ model = "opus"
 [kinds.fix.agents]
 model = "sonnet"
 
-[repos."~/src/acme".kinds.fix.agents]
+[repos."acme/acme".kinds.fix.agents]
 instructions = "This repository's tests need the database: run them with `just test`."
 ```
 
-A repository's key is its location, with a leading `~` read as your
-home. Settings for a kind or a stage the place does not run are
+A repository's key is its address, `<owner>/<name>` as its clone's
+`origin` remote gives it on its forge, matched exactly: a clone whose
+origin is `git@github.com:acme/acme.git` is `acme/acme`. A clone with
+no origin on a forge goes by its folder, with a leading `~` read as your
+home. Where the configuration has a table
+under a repository's address, that table is the repository's whole, and
+a table under its folder is not read for it
+([a repository's name](/flume/reference/configuration/#a-repositorys-name)).
+Settings for a kind or a stage the place does not run are
 ignored. Each agent runs under whichever account its stage's pool
 gives.
 
@@ -157,7 +164,7 @@ model = "haiku"
 [agents.streams.personal]
 model = "sonnet"
 
-[repos."~/src/acme".agents]
+[repos."acme/acme".agents]
 instructions = "Every commit in this repository names its ticket."
 ```
 
@@ -793,7 +800,7 @@ A host whose fork of another project must carry no tagline says so for
 every kind and every stage run there, in its table for the repository:
 
 ```toml
-[repos."~/src/upstream-fork".agents.programs.claude.settings]
+[repos."acme/upstream-fork".agents.programs.claude.settings]
 attribution = { commit = "", pr = "", sessionUrl = false }
 ```
 
@@ -866,7 +873,7 @@ accounts = [
 strategy = "least-busy"
 accounts = [{ name = "personal", program = "claude", env = { CLAUDE_CONFIG_DIR = "~/.claude-personal" } }]
 
-[repos."~/src/acme"]
+[repos."acme/acme"]
 stream = "work"
 ```
 
@@ -1035,7 +1042,7 @@ reserve = 2
 [kinds.fix]
 label = "construction"
 
-[repos."~/src/acme".kinds.deploy]
+[repos."acme/acme".kinds.deploy]
 label = "operation"
 ```
 

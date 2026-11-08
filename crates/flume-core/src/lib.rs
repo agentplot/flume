@@ -9,6 +9,7 @@
 
 mod accounts;
 mod acts;
+pub mod address;
 mod agent_acts;
 mod answer;
 mod base;
@@ -270,6 +271,7 @@ mod tests {
         PlaceRecord {
             id: PlaceId::new("/r/places/fix--one"),
             repository: "/r".into(),
+            address: None,
             kind: Kind {
                 name: "fix".into(),
                 version: 1,

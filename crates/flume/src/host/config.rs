@@ -17,8 +17,12 @@
 //! long an agent is kept open for an answer, one time for every program,
 //! `<n>`, `<n>s`, `<n>m` or `<n>h` (32, 162, 169, 197, 198, C.7; records
 //! 0017, 0020, 0024, 0044, 0046); a
-//! repository's key has a leading `~` read as the home, so it names the
-//! repository by its location as a launch does. Its
+//! repository's key is its address, `<owner>/<name>` as its clone's
+//! `origin` gives it on its forge, read as written, or its folder, a
+//! leading `~` read as the home, as a launch names it: the address's
+//! table is the repository's, whole, where `[repos]` holds one, and the
+//! folder's otherwise, each key matched exactly (143, C.7; record 0055).
+//! Its
 //! `[repos."<repository>".agents]` gives the same for every kind in one
 //! repository, its `[agents]` for every agent on the host and its
 //! `[agents.streams.<stream>]` for every agent in one stream the host
@@ -75,8 +79,8 @@ use crate::profiles::kinds::weir::source_fault;
 use flume_seams::{
     read_span, Account, ConfigLayer, ConfigValue, HostConfiguration, HostSource, HostSourceRead,
     KindSessions, KindSettings, LabelFrom, LabelHeld, LocalLayer, NamedBy, PinnedKey, Pool,
-    PoolFrom, PoolNamed, ProfileHeld, Settings, Share, StageSession, Strategy, Stream,
-    StreamDisplay, StreamFrom, StreamHeld, View, ViewHeld, DEFAULT_STREAM, SET,
+    PoolFrom, PoolNamed, ProfileHeld, RepositoryName, Settings, Share, StageSession, Strategy,
+    Stream, StreamDisplay, StreamFrom, StreamHeld, View, ViewHeld, DEFAULT_STREAM, SET,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -170,10 +174,11 @@ pub struct HostConfig {
     /// kind's name (32).
     pub kinds: BTreeMap<String, KindSettings>,
     /// The settings given each kind's agents in one repository, by its
-    /// location and the kind's name (32).
+    /// key, an address or a location, and the kind's name; every table
+    /// read under `[repos]` is a key here (32, 143).
     pub repos: BTreeMap<String, BTreeMap<String, KindSettings>>,
     /// The settings given every kind's agents in one repository, by its
-    /// location, its `[repos."<repository>".agents]` (32, 195).
+    /// key, its `[repos."<repository>".agents]` (32, 195).
     pub repos_agents: BTreeMap<String, Settings>,
     /// The settings given every agent in one stream, by the stream's
     /// name, its `[agents.streams.<stream>]` (32, 143).
@@ -209,9 +214,9 @@ pub struct HostConfig {
 /// in `[kinds.<kind>]` (143, C.7).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StreamsNamed {
-    /// By the repository's location and the kind's name.
+    /// By the repository's key and the kind's name.
     pub repository_kind: BTreeMap<(String, String), String>,
-    /// By the repository's location.
+    /// By the repository's key.
     pub repository: BTreeMap<String, String>,
     /// By the kind's name.
     pub kind: BTreeMap<String, String>,
@@ -222,7 +227,7 @@ pub struct StreamsNamed {
 /// C.7).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LabelsNamed {
-    /// By the repository's location and the kind's name.
+    /// By the repository's key and the kind's name.
     pub repository_kind: BTreeMap<(String, String), String>,
     /// By the kind's name.
     pub kind: BTreeMap<String, String>,
@@ -510,10 +515,23 @@ impl HostConfig {
         Ok(config)
     }
 
+    /// The key of `repository`'s table: its address where `[repos]`
+    /// holds a table under it, else its folder, so the address's table is
+    /// taken whole and the folder's only where none names the address;
+    /// matched exactly, with no star (143, C.7; record 0055).
+    pub fn table_for<'a>(&self, repository: &'a RepositoryName) -> &'a str {
+        repository
+            .address
+            .as_deref()
+            .filter(|address| self.repos.contains_key(*address))
+            .unwrap_or(&repository.folder)
+    }
+
     /// The stream the configuration names for `kind` in `repository`:
-    /// for the repository and kind, else the repository, else the kind
-    /// (143).
-    pub fn stream_for(&self, repository: &str, kind: &str) -> Option<StreamHeld> {
+    /// for the repository and kind, else the repository, else the kind,
+    /// the repository's words read from its one table (143).
+    pub fn stream_for(&self, repository: &RepositoryName, kind: &str) -> Option<StreamHeld> {
+        let repository = self.table_for(repository);
         let named = &self.streams_named;
         let held = |name: &String, from| StreamHeld {
             name: name.clone(),
@@ -538,8 +556,10 @@ impl HostConfig {
     }
 
     /// The label the configuration gives `kind` in `repository`: for the
-    /// repository and kind, else the kind (180).
-    pub fn label_for(&self, repository: &str, kind: &str) -> Option<LabelHeld> {
+    /// repository and kind, else the kind, the repository's word read from
+    /// its one table (180).
+    pub fn label_for(&self, repository: &RepositoryName, kind: &str) -> Option<LabelHeld> {
+        let repository = self.table_for(repository);
         let named = &self.labels_named;
         let held = |name: &String, from| LabelHeld {
             name: name.clone(),
@@ -1043,7 +1063,8 @@ pub(crate) fn quoted(key: &str) -> String {
     }
 }
 
-/// A repository's location with a leading `~` read as `$HOME`.
+/// A repository's key with a leading `~` read as `$HOME`; an address, or
+/// any key with no leading `~`, as written (143).
 pub(crate) fn home(location: &str) -> String {
     match (location.strip_prefix('~'), std::env::var("HOME")) {
         (Some(rest), Ok(home)) if rest.is_empty() || rest.starts_with('/') => {
@@ -1667,6 +1688,11 @@ mod tests {
     use super::*;
     use flume_seams::{Mode, ModeSetting};
 
+    /// A repository named by its folder alone.
+    fn folder(repository: &str) -> RepositoryName {
+        RepositoryName::of_folder(repository)
+    }
+
     #[test]
     fn a_bound_and_a_terminal_stated() {
         let config = HostConfig::parse("[host]\nagents = 2\nterminal = \"pane\"\n").unwrap();
@@ -1764,7 +1790,7 @@ mod tests {
         assert_eq!(repository.stages["code"].effort.as_deref(), Some("xhigh"));
         let scratch = Scratch::new("effort-layers");
         let host = super::super::RealHost::new(scratch.0.join("state"), config, None);
-        let settings = flume_seams::Host::settings(&host, "/r", "fix", "default");
+        let settings = flume_seams::Host::settings(&host, &folder("/r"), "fix", "default");
         assert_eq!(
             settings.kind.every_stage.effort.as_deref(),
             Some("high"),
@@ -2022,7 +2048,7 @@ label = "inception"
             vec!["default", "personal", "work"]
         );
         let acme = &format!("{}/Code/acme", std::env::var("HOME").expect("the home"));
-        let stream = config.stream_for(acme, "fix").unwrap();
+        let stream = config.stream_for(&folder(acme), "fix").unwrap();
         assert_eq!(
             stream,
             StreamHeld {
@@ -2065,7 +2091,7 @@ label = "inception"
         );
         assert_eq!(config.pools["personal"].accounts[0].usage, None);
         assert_eq!(config.pools["personal"].strategy, Strategy::LeastBusy);
-        assert_eq!(config.stream_for("/elsewhere", "fix"), None);
+        assert_eq!(config.stream_for(&folder("/elsewhere"), "fix"), None);
         assert_eq!(config.pool_for("default"), None, "no pool for default");
         // 180, 181: two of work's five owed to operation, one of them kept
         // free for it, and two to construction; research's places
@@ -2093,13 +2119,13 @@ label = "inception"
         );
         assert_eq!(config.streams["personal"].labels, BTreeMap::new());
         assert_eq!(
-            config.label_for(acme, "research"),
+            config.label_for(&folder(acme), "research"),
             Some(LabelHeld {
                 name: "inception".into(),
                 from: LabelFrom::HostKind,
             })
         );
-        assert_eq!(config.label_for(acme, "fix"), None);
+        assert_eq!(config.label_for(&folder(acme), "fix"), None);
         assert_eq!(
             config.streams["work"].session, None,
             "work's agents in the session of its name"
@@ -2139,26 +2165,30 @@ label = "inception"
         )
         .unwrap();
         assert_eq!(
-            config.label_for("/r", "deploy"),
+            config.label_for(&folder("/r"), "deploy"),
             Some(LabelHeld {
                 name: "construction".into(),
                 from: LabelFrom::HostRepositoryKind,
             })
         );
         assert_eq!(
-            config.label_for("/s", "deploy"),
+            config.label_for(&folder("/s"), "deploy"),
             Some(LabelHeld {
                 name: "operation".into(),
                 from: LabelFrom::HostKind,
             })
         );
         assert_eq!(
-            config.label_for("/r", "research").map(|held| held.from),
+            config
+                .label_for(&folder("/r"), "research")
+                .map(|held| held.from),
             Some(LabelFrom::HostKind)
         );
-        assert_eq!(config.label_for("/r", "fix"), None);
+        assert_eq!(config.label_for(&folder("/r"), "fix"), None);
         assert_eq!(
-            config.stream_for("/r", "deploy").map(|held| held.name),
+            config
+                .stream_for(&folder("/r"), "deploy")
+                .map(|held| held.name),
             Some("work".into()),
             "a kind's table holds its label beside its stream"
         );
@@ -2185,7 +2215,7 @@ label = "inception"
             assert_eq!(
                 HostConfig::parse(&text)
                     .unwrap()
-                    .label_for("/r", "fix")
+                    .label_for(&folder("/r"), "fix")
                     .map(|held| held.name),
                 Some(word.to_string())
             );
@@ -2353,7 +2383,9 @@ label = "inception"
         assert_eq!(work.labels["operation"].reserve, 3);
         assert_eq!(work.agents, Some(6));
         assert_eq!(
-            config.label_for("/r", "research").map(|held| held.name),
+            config
+                .label_for(&folder("/r"), "research")
+                .map(|held| held.name),
             Some("operation".into())
         );
         assert_eq!(
@@ -2493,7 +2525,7 @@ label = "inception"
             config.streams,
             BTreeMap::from([("default".to_string(), Stream::default())])
         );
-        assert_eq!(config.stream_for("/r", "fix"), None);
+        assert_eq!(config.stream_for(&folder("/r"), "fix"), None);
         assert_eq!(config.pool_for("default"), None);
     }
 
@@ -2524,7 +2556,7 @@ label = "inception"
              [repos.\"/r\".kinds.fix.agents]\nmodel = \"sonnet\"\n",
         )
         .unwrap();
-        let named = |repository, kind| config.stream_for(repository, kind).unwrap();
+        let named = |repository, kind| config.stream_for(&folder(repository), kind).unwrap();
         assert_eq!(
             named("/r", "fix"),
             StreamHeld {
@@ -3275,7 +3307,7 @@ label = "inception"
         assert_eq!(config.configuration.local, LocalLayer::Taken);
         assert_eq!(config.streams["nightly"].agents, Some(1));
         assert_eq!(
-            config.stream_for("/r", "chore"),
+            config.stream_for(&folder("/r"), "chore"),
             Some(StreamHeld {
                 name: "nightly".into(),
                 from: StreamFrom::HostKind,
@@ -3353,7 +3385,9 @@ label = "inception"
         assert_eq!(config.streams["work"].agents, Some(6));
         assert_eq!(config.streams["work"].session, None);
         assert_eq!(
-            config.stream_for("/r", "fix").map(|held| held.name),
+            config
+                .stream_for(&folder("/r"), "fix")
+                .map(|held| held.name),
             Some("work".into())
         );
     }
@@ -3493,11 +3527,13 @@ label = "inception"
                 "{pinned} pinning {local}"
             );
             assert_eq!(
-                config.stream_for(&at_home, "chore").map(|held| held.name),
+                config
+                    .stream_for(&folder(&at_home), "chore")
+                    .map(|held| held.name),
                 Some("work".into())
             );
             assert_eq!(
-                config.stream_for(&at_home, "fix"),
+                config.stream_for(&folder(&at_home), "fix"),
                 Some(StreamHeld {
                     name: "nightly".into(),
                     from: StreamFrom::HostRepositoryKind,
@@ -3597,14 +3633,14 @@ label = "inception"
         );
         let every = every.clone();
         let host = super::super::RealHost::new(scratch.0.join("state"), config, None);
-        let in_work = flume_seams::Host::settings(&host, "/r", "fix", "work");
+        let in_work = flume_seams::Host::settings(&host, &folder("/r"), "fix", "work");
         assert_eq!(in_work.every_agent, every);
         assert_eq!(in_work.stream.model.as_deref(), Some("opus"));
         assert_eq!(
             in_work.every_kind.instructions.as_deref(),
             Some("Mind the tagline.")
         );
-        let in_default = flume_seams::Host::settings(&host, "/s", "fix", "default");
+        let in_default = flume_seams::Host::settings(&host, &folder("/s"), "fix", "default");
         assert_eq!(in_default.stream, Settings::default());
         assert_eq!(in_default.every_kind, Settings::default());
         assert_eq!(in_default.every_agent.model.as_deref(), Some("sonnet"));
@@ -3883,5 +3919,160 @@ label = "inception"
             "{fault:?}"
         );
         assert!(config.every_agent.programs["agent"].file.is_none());
+    }
+
+    /// The repository at `/r` named by its address `acme/acme`.
+    fn acme_at_r() -> RepositoryName {
+        RepositoryName {
+            address: Some("acme/acme".into()),
+            folder: "/r".into(),
+        }
+    }
+
+    #[test]
+    fn by_address_the_address_table_gives_stream_label_and_settings() {
+        // 32, 143, 180, C.7: every table under the address's key read for
+        // the repository its clone's origin names so.
+        let config = HostConfig::parse(
+            "[repos.\"acme/acme\"]\nstream = \"work\"\n\
+             [repos.\"acme/acme\".kinds.fix]\nlabel = \"operation\"\n\
+             [repos.\"acme/acme\".kinds.fix.agents]\nmodel = \"haiku\"\n\
+             [repos.\"acme/acme\".agents]\nkeep_open = \"2h\"\n",
+        )
+        .unwrap();
+        let acme = acme_at_r();
+        assert_eq!(config.table_for(&acme), "acme/acme");
+        assert_eq!(
+            config.stream_for(&acme, "fix"),
+            Some(StreamHeld {
+                name: "work".into(),
+                from: StreamFrom::HostRepository,
+            })
+        );
+        assert_eq!(
+            config.label_for(&acme, "fix"),
+            Some(LabelHeld {
+                name: "operation".into(),
+                from: LabelFrom::HostRepositoryKind,
+            })
+        );
+        let scratch = Scratch::new("by-address");
+        let host = super::super::RealHost::new(scratch.0.join("state"), config, None);
+        let settings = flume_seams::Host::settings(&host, &acme, "fix", "default");
+        assert_eq!(
+            settings.repository.every_stage.model.as_deref(),
+            Some("haiku")
+        );
+        assert_eq!(settings.every_kind.keep_open.as_deref(), Some("2h"));
+        let unnamed = flume_seams::Host::settings(&host, &folder("/r"), "fix", "default");
+        assert_eq!(
+            unnamed,
+            flume_seams::HostSettings::default(),
+            "no table for /r"
+        );
+    }
+
+    #[test]
+    fn by_address_a_folder_table_reads_where_no_table_names_the_address() {
+        // 143; record 0055: a file written by folder reads as it did.
+        let home = std::env::var("HOME").expect("the home");
+        let config = HostConfig::parse("[repos.\"~/Code/acme\"]\nstream = \"work\"\n").unwrap();
+        let acme = RepositoryName {
+            address: Some("acme/acme".into()),
+            folder: format!("{home}/Code/acme"),
+        };
+        assert_eq!(
+            config.stream_for(&acme, "fix"),
+            Some(StreamHeld {
+                name: "work".into(),
+                from: StreamFrom::HostRepository,
+            })
+        );
+    }
+
+    #[test]
+    fn by_address_the_address_table_stands_whole_over_the_folders() {
+        // 143: one table per repository, the folder's not read once the
+        // address has one.
+        let config = HostConfig::parse(
+            "[repos.\"acme/acme\"]\nstream = \"work\"\n\
+             [repos.\"/r\".kinds.fix]\nstream = \"personal\"\nlabel = \"operation\"\n",
+        )
+        .unwrap();
+        let acme = acme_at_r();
+        assert_eq!(
+            config.stream_for(&acme, "fix"),
+            Some(StreamHeld {
+                name: "work".into(),
+                from: StreamFrom::HostRepository,
+            })
+        );
+        assert_eq!(config.label_for(&acme, "fix"), None);
+    }
+
+    #[test]
+    fn by_address_a_repository_with_no_address_takes_its_folders_table() {
+        // 143: a clone with no forge origin named by its folder.
+        let config = HostConfig::parse(
+            "[repos.\"/r\"]\nstream = \"work\"\n\
+             [repos.\"acme/acme\"]\nstream = \"personal\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            config.stream_for(&folder("/r"), "fix"),
+            Some(StreamHeld {
+                name: "work".into(),
+                from: StreamFrom::HostRepository,
+            })
+        );
+    }
+
+    #[test]
+    fn by_address_a_key_is_matched_exactly() {
+        // 143: no case folded and no star.
+        let config = HostConfig::parse(
+            "[repos.\"Acme/acme\"]\nstream = \"work\"\n\
+             [repos.\"acme/*\"]\nstream = \"personal\"\n",
+        )
+        .unwrap();
+        let acme = acme_at_r();
+        assert_eq!(config.table_for(&acme), "/r");
+        assert_eq!(config.stream_for(&acme, "fix"), None);
+    }
+
+    #[test]
+    fn by_address_a_stream_is_set_locally_and_pinned() {
+        // C.7; core.45: the local layer sets an address's key under the
+        // same key, and a pin names it as any other.
+        let managed = "[repos.\"acme/acme\"]\nstream = \"work\"\n";
+        let local = "[repos.\"acme/acme\"]\nstream = \"personal\"\n";
+        let acme = acme_at_r();
+        let config = HostConfig::layers(managed, Some(local)).unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        assert_eq!(
+            config.stream_for(&acme, "fix").map(|held| held.name),
+            Some("personal".into())
+        );
+        assert_eq!(
+            value_at(&config, "repos.\"acme/acme\".stream"),
+            Some(("\"personal\"".into(), ConfigLayer::Local))
+        );
+        let pinned = format!("[host]\npin = ['repos.\"acme/acme\".stream']\n{managed}");
+        let config = HostConfig::layers(&pinned, Some(local)).unwrap();
+        assert_eq!(
+            config.stream_for(&acme, "fix").map(|held| held.name),
+            Some("work".into())
+        );
+        assert_eq!(
+            value_at(&config, "repos.\"acme/acme\".stream"),
+            Some(("\"work\"".into(), ConfigLayer::Managed))
+        );
+        assert_eq!(
+            config.configuration.passed_over,
+            vec![PinnedKey {
+                key: "repos.\"acme/acme\".stream".into(),
+                pin: "repos.\"acme/acme\".stream".into(),
+            }]
+        );
     }
 }
