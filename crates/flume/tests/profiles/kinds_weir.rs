@@ -12,8 +12,9 @@
 //! environment or a program by a location (155 to 160, 192; S63); and a
 //! kind that lands with no stages beside one that does not and a table of
 //! settings (18, 202; weir 51, 57); and such a kind naming its landing
-//! fix, by an identity with its version, and its bound, and what weir and
-//! flume refuse of them (23; weir 52, 57; weir record 0005).
+//! fix, by an identity with its version, and its bound, in a repository's
+//! declaration and a package, and what weir and flume refuse of them (23,
+//! 157; weir 52, 57, 89; weir record 0005).
 
 use crate::common::engine::{base_at, engine, PLACE_PROFILE};
 use crate::common::*;
@@ -642,6 +643,24 @@ fn a_landing_fix_bound_past_what_flume_counts_is_refused() {
     assert!(
         reason.contains("kinds.train.max_landing_fixes: is more than flume counts"),
         "{reason}"
+    );
+}
+
+#[test]
+fn fix_and_max_fixes_are_sections_naming_no_landing_fix() {
+    // The kinds-profile spec's "The fields' old spellings": weir returns
+    // `fix` and `max_fixes` as sections, and flume reads no fix and no
+    // bound from them (23; weir record 0005; core.4).
+    let repository = Repository::new("old-spellings");
+    let revision = declaring_trained(
+        &repository,
+        &trained("fix = \"repo/mend@1\"\nmax_fixes = 2"),
+        "train names its fix in the old spelling",
+    );
+    assert_eq!(
+        landing_fixes(&repository, &revision).get("train"),
+        Some(&(None, None)),
+        "train's landing fix and its bound"
     );
 }
 
@@ -2146,6 +2165,29 @@ fn a_packages_hash_wherever_it_lies() {
     assert_ne!(edited.hash, first.hash, "a prompt's byte changed its hash");
     assert_eq!(edited.kind.stages[0].prompt, "Review {{brief}}!\n");
     assert_eq!(package_at(&linked.join("kinds"), "review", 1), second);
+}
+
+#[test]
+fn a_packages_kind_names_its_landing_fix() {
+    // The kinds-profile spec's "A package's landing fix": the package's
+    // kind is mapped by the same reader as a repository's, naming the kind
+    // of its fixes and its bound (157; weir 89; weir record 0005).
+    let scratch = Scratch::new("package-landing-fix");
+    let kinds_dir = scratch.path("kinds");
+    write_package(
+        &kinds_dir,
+        "train@1",
+        "[kinds.train]\nversion = 1\nbranch = \"train\"\nlands = true\nstages = []\n\
+         landing_fix = \"flume/fix@1\"\nmax_landing_fixes = 1\n",
+        &[],
+    );
+    let package = package_at(&kinds_dir, "train", 1);
+    assert_eq!(package.identity.spelled, "acme/train@1");
+    assert_eq!(
+        (package.kind.fix.as_deref(), package.kind.fix_limit),
+        (Some("flume/fix@1"), Some(1)),
+        "the package's landing fix and its bound"
+    );
 }
 
 #[test]
