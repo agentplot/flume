@@ -1,20 +1,20 @@
 # Verify: a-tidied-places-end-waits-for-its-caller
 
-Verified on 2026-11-08 at `e828e2f` on
+Verified on 2026-11-08 at `fef634c` on
 `change/a-tidied-places-end-waits-for-its-caller`, cut from
 `bolt/a-tidied-places-end-stays-readable` at `81d5722`.
 
 ## The whole checks
 
 `devenv shell -- sluice exec bolt/a-tidied-places-end-stays-readable`,
-run once, passed: sluice ran the checks `e828e2f` affects against the
+run once, passed: sluice ran the checks `fef634c` affects against the
 base (`81d5722`), the bolt's `#check-fast`. Moon completed 24 tasks in
-56s, and sluice recorded 23 results passed under their keys. It exited
-0.
+34s, and sluice recorded 23 results passed under their keys for
+`fef634c`. It exited 0.
 
 | project | tasks passed |
 |---|---|
-| `seams` | format, test |
+| `seams` | format, lint, test |
 | `core` | format, lint, test |
 | `fakes` | lint, test |
 | `conformance` | format, lint, test, coverage |
@@ -27,15 +27,25 @@ base (`81d5722`), the bolt's `#check-fast`. Moon completed 24 tasks in
 Moon warned that it could not write its shared cache's blobs or the
 outputs archive under the sandbox. Those are cache writes only, and no
 task failed on them. `conformance:coverage` reports every clause of the
-suite's list at 9c060ab cited. As the tasks say, S121 is left to the
-chore that adopts the revision that holds it.
+suite's list at 9c060ab cited by its 884 scenarios. As the tasks say,
+S121 is left to the chore that adopts the revision that holds it.
 
 `openspec validate a-tidied-places-end-waits-for-its-caller --strict`:
 valid.
 
+The gate's run does not reach `root:specs` while the change touches
+nothing under `openspec/specs/`, so the merged specs were checked by a
+trial archive, as task 5.1 names. `openspec archive
+a-tidied-places-end-waits-for-its-caller --yes` applied `+ 8, ~ 2`.
+`sluice exec bolt/a-tidied-places-end-stays-readable -- moon run
+root:specs` then passed, 48 specs of 48, from moon's cache of the same
+inputs. `openspec validate --specs --strict --no-interactive`, run
+directly, also passed 48 of 48, `end-delivery` among them. The trial
+was undone before this report was committed.
+
 ## Tasks
 
-All nine tasks, 1.1 to 4.1, are ticked done. Each task's named test
+All ten tasks, 1.1 to 5.1, are ticked done. Each task's named test
 ran in the gate and passed:
 
 - 1.1 `round_trip::a_held_state_with_a_caller` (seams:test)
@@ -48,6 +58,8 @@ ran in the gate and passed:
   `the_helps_of_needs_hold_retry_tell_and_launch` (flume:test)
 - 3.2 `commands::print::tests::a_places_caller` (flume:test)
 - 4.1 `site:prose` and `site:build`
+- 5.1 the change valid strict, and the trial archive's merged specs
+  passing `root:specs`, as above
 
 ## Requirements and scenarios
 
@@ -122,14 +134,14 @@ ran in the gate and passed:
     Met.
   - *A done*: `a_done` (a kind that does not land). Met.
   - *A drop with no caller*: `a_drop_with_no_caller`. Met.
-- **The inbox collects what is pending (modified).**
-  `Engine::inbox(recipient, place)` reads the name's documents through
-  `documents_of`, the one lookup that status shares. It reads them
-  before its settle, collects only their ends, and gives only their
-  entries of `waiting`. It is refused, marking nothing, where nothing
-  stands under the name.
-  - *Collected after a restart*: the existing `collected_after_a_restart`,
-    now calling `inbox(.., None)`. Met.
+- **An inbox naming a place.** `Engine::inbox(recipient, place)`
+  (`wait.rs`) reads the name's documents through `documents_of`
+  (`ends.rs`), the one lookup that status shares. It reads them before
+  its settle, collects only their ends, and gives only their entries of
+  `waiting`. It is refused, marking nothing, where nothing stands under
+  the name. "The inbox collects what is pending" stays as the base holds
+  it, and its *Collected after a restart* still passes
+  (`collected_after_a_restart`, calling `inbox(.., None)`).
   - *An inbox naming a place*: `an_inbox_naming_a_place`, which also
     names the second place's tidied document as `<location>@<at>`. Met.
   - *A name under which nothing stands*: `a_name_under_which_nothing_stands`.
@@ -173,39 +185,9 @@ ran in the gate and passed:
   built. No scenario of the change states it on its own, and this report
   counts that as no shortfall.
 
-## What falls short
-
-The archived specs fail the gate's `root:specs`.
-`openspec archive a-tidied-places-end-waits-for-its-caller --yes`
-applied the deltas, `+ 7, ~ 3`. Afterwards,
-`openspec validate --specs --strict` gave 47 specs passed and 1 failed,
-`end-delivery`:
-
-```text
-⚠ [WARNING] requirements[5]: Requirement text is very long (>500 characters). Move examples and edge cases into scenarios, or split it into separate requirements that each state one behavior.
-```
-
-`requirements[5]` is "The inbox collects what is pending". The
-change's MODIFIED text runs to about 656 characters, where the base's
-ran to 273. `root:specs` in `moon.yml` runs
-`openspec validate --specs --strict --no-interactive`, which fails a
-warning as an error. The gate's run above did not reach it: before the
-archive the change touched nothing under `openspec/specs/`, which is
-that task's input. The change itself validates strict, since the change
-validator does not apply the length rule to a delta's requirement.
-
-The delta requirement needs splitting, or its detail moving into
-scenarios, so that each requirement of the merged `end-delivery` spec
-stays under 500 characters. One way is to keep "The inbox collects what
-is pending" as it stood at the base and add a requirement of its own,
-"An inbox naming a place", that holds the naming, the waiting entries
-and the refusal, with *An inbox naming a place* and *A name under which
-nothing stands* under it. The archive was undone, leaving the tree as
-committed.
-
 ## Outcome
 
-The whole checks pass, and the code holds every requirement and
-scenario of the change. The change's `end-delivery` delta, once
-archived, fails the gate's `root:specs`, so nothing is archived and the
-change goes back to its code stage.
+The whole checks pass, every task is done, and the code holds every
+requirement and scenario of the change. The merged specs pass the
+gate's `root:specs`. The change is archived on
+`change/a-tidied-places-end-waits-for-its-caller`, this report with it.
