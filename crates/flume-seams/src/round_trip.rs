@@ -220,6 +220,7 @@ fn held() -> HeldState {
         place: PlaceRecord {
             id: PlaceId::new("/r/places/bump--one"),
             repository: "/r".into(),
+            address: Some("acme/acme".into()),
             kind: kind(),
             declared: Declared::Host,
             kind_from: Some(kind_from()),
@@ -817,6 +818,31 @@ fn a_moves_words() {
 #[test]
 fn a_held_state() {
     round_trips(held());
+    // The address the launch read from its clone's origin reads back; a
+    // document written before flume kept one reads with none, and writes
+    // none (8, 143, C.7).
+    let json = serde_json::to_value(held()).expect("held state as JSON");
+    assert_eq!(json["place"]["address"], "acme/acme");
+    assert_eq!(
+        held().place.repository_name(),
+        RepositoryName {
+            address: Some("acme/acme".into()),
+            folder: "/r".into(),
+        }
+    );
+    let mut before = json;
+    before["place"]
+        .as_object_mut()
+        .expect("the place")
+        .remove("address");
+    let read: HeldState = serde_json::from_value(before).expect("a state written before");
+    assert_eq!(read.place.address, None);
+    assert_eq!(
+        read.place.repository_name(),
+        RepositoryName::of_folder("/r")
+    );
+    let written = serde_json::to_value(&read).expect("held state as JSON");
+    assert!(written["place"].get("address").is_none());
     round_trips(start_record());
     round_trips(StartRecord {
         account: None,

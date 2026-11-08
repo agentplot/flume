@@ -29,7 +29,6 @@
 //! (core.29).
 
 use crate::common::*;
-use flume::profiles::place::git_worktree;
 use serde_json::Value;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -384,18 +383,17 @@ impl Walk {
         answer
     }
 
-    /// Launches `<kind>--<name>` with `words` beside, and gives the
-    /// place's location.
+    /// Launches `kind`, a version named or not, as `name` with `words`
+    /// beside, and gives the place's location as the launch answers it,
+    /// `<kind>--<name>` with no version.
     pub fn launch(&self, kind: &str, name: &str, words: &[&str]) -> String {
         let mut launch = vec!["launch", "--kind", kind, "--name", name];
         launch.extend(words);
-        self.flume(&launch);
-        git_worktree::location(
-            &self.repository.name(),
-            &format!("{kind}--{name}"),
-            Some(&self.home.join("data/flume")),
-        )
-        .expect("the place's location")
+        let launched = self.flume(&launch);
+        launched["launched"]["place"]["place"]
+            .as_str()
+            .unwrap_or_else(|| panic!("a place launched: {launched}"))
+            .to_string()
     }
 
     /// Every place's status and the host's.
@@ -1136,6 +1134,27 @@ impl UnderHerdr {
     pub fn log(&self, stage: &str, start: u32) -> String {
         std::fs::read_to_string(self.scripts().join(format!("{stage}-{start}.log")))
             .unwrap_or_default()
+    }
+
+    /// Every start's stand-in log, each under its `<stage>-<n>.log`, in
+    /// the order of their names, so a walkthrough that never came to what
+    /// it waited on says what each agent took and did.
+    pub fn logs(&self) -> String {
+        let mut logs: Vec<PathBuf> = std::fs::read_dir(self.scripts())
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "log"))
+            .collect();
+        logs.sort();
+        logs.iter()
+            .map(|path| {
+                let name = path.file_name().unwrap_or_default().to_string_lossy();
+                let log = std::fs::read_to_string(path).unwrap_or_default();
+                format!("--- {name}\n{log}")
+            })
+            .collect()
     }
 
     fn scripts(&self) -> &Path {

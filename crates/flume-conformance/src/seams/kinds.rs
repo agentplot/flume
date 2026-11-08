@@ -149,7 +149,7 @@ pub fn scenarios<H: KindsHarness>() -> Vec<Scenario<H>> {
             run: what_a_stage_makes::<H>,
         },
         Scenario {
-            name: "kinds: flume's own kinds are fix@1, chore@1, change@1 and change@2, each landing and sent back to code, change@2's code stage alone repeating",
+            name: "kinds: flume's own kinds are fix@1, chore@1, change@1, change@2 and change@3, each landing and sent back to code, change@2's code stage alone repeating",
             cites: &["22", "19", "S35", "140", "157"],
             run: flumes_own::<H>,
         },
@@ -303,7 +303,7 @@ fn flumes_own<H: KindsHarness>(harness: &H) -> Outcome {
     names.sort_unstable();
     ensure_eq!(
         names,
-        vec!["change@1", "change@2", "chore@1", "fix@1"],
+        vec!["change@1", "change@2", "change@3", "chore@1", "fix@1"],
         "flume's own kinds"
     );
     ensure!(

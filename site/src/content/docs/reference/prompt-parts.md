@@ -36,7 +36,8 @@ is left as written.
 
 `{{#words}}…{{/words}}` holds text sent only when the stage starts
 with words: a retry's `--words`, a failed or conflicting submission's
-words, or found work from the kind's last stage. With no words, the
+words, or found work that sends the place back to its fix round. With
+no words, the
 whole section is left out. flume's own code prompt uses it so:
 
 ```markdown
@@ -70,10 +71,10 @@ template does not place them itself:
   ```text
   run `flume needs "<words>"` when you cannot go on without an answer,
   saying what you need, or `flume needs --found "<words>"` when you found
-  work this stage cannot deliver past, saying what you found; then stop.
-  Stopping short is your one way to ask for what your stage needs: write
-  no card and no message to a person yourself, since whoever answers your
-  question decides whether it is a person's.
+  work a stage before this one must do again, saying what you found;
+  then stop. Stopping short is your one way to ask for what your stage
+  needs: write no card and no message to a person yourself, since
+  whoever answers your question decides whether it is a person's.
   ```
 
 - **A failed readiness.** A kind's first stage, started in a place

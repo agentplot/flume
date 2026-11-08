@@ -1,9 +1,13 @@
 //! A kind runs through on its own (40, 47, 111, 112, 130, 131): each
 //! delivery starts the next stage and the last submits, with no caller's
-//! word; a failed or conflicting submission, and found work from the
-//! kind's last stage, start the kind's fix round with the merge queue's or
-//! the agent's words, every going-back counted together toward the kind's
-//! bound; found work from any other stage waits on an answer.
+//! word; a failed or conflicting submission starts the kind's fix round
+//! with the merge queue's words, and found work from the kind's last stage
+//! starts it with the agent's words only where the fix round is a stage
+//! before the one that found, every going-back counted together toward
+//! the kind's bound; found work from any other stage, and from a last
+//! stage that is its kind's own fix round, is taken as needing an answer,
+//! no stage before it being able to do that work again, and waits on a
+//! retry of that stage, which counts no going-back (41, 42, 48, 49).
 
 use super::settling::{
     archive, change_at_verify, construct_begun, deliver_fix, fix_begun, write_change,
@@ -30,14 +34,24 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s35_a_change_runs_through,
         },
         Scenario {
+            name: "run through: a bare change runs change@3, its code stage one start of one agent for a change of four task groups, status and its line giving `code` with no group count, and the place submitted once verify archives the change",
+            cites: &["22", "154", "S119"],
+            run: s119_one_agent_codes_the_change,
+        },
+        Scenario {
             name: "run through: two fixes launched with notes as briefs each land with no further word",
             cites: &["S36", "40", "111", "131"],
             run: s36_two_fixes_land,
         },
         Scenario {
             name: "fix round: verify finding work starts code at once with the findings, and verify runs again after it",
-            cites: &["S35", "131", "41", "22", "30"],
+            cites: &["S35", "131", "41", "48", "22", "30"],
             run: verify_finds_work,
+        },
+        Scenario {
+            name: "fix round: a fix's failed submission starts code, the stage its code names for a failed submission, with a fresh agent and the merge queue's words, counting one going-back, and the fix is submitted again once code delivers",
+            cites: &["112", "131", "23"],
+            run: a_fixs_failed_submission,
         },
         Scenario {
             name: "fix round: a conflict starts code with words naming the files and the base's revision, and flume merges nothing",
@@ -78,6 +92,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "fix round: construct finding work starts nothing, and waits on an answer, status saying it found work",
             cites: &["131", "42", "41", "56"],
             run: construct_finds_work,
+        },
+        Scenario {
+            name: "fix round: a fix's code finding work, its stage naming itself for a failed submission, starts nothing and counts no going-back, and the place waits on a retry of code for an answer, its line, status and end saying code found work with the findings",
+            cites: &["131", "42", "41", "56", "130"],
+            run: a_fixs_code_finds_work,
+        },
+        Scenario {
+            name: "fix round: a caller's retry of a fix's code that found work, while code's agent is kept open, hands that agent the findings and then the answer in its session, code begun again under its first start, counting no going-back, and the fix lands once code delivers",
+            cites: &["42", "48", "49", "131", "198"],
+            run: the_retry_that_answers_a_fixs_found_in_its_session,
+        },
+        Scenario {
+            name: "fix round: a caller's retry of a fix's code that found work, once code's agent is no longer kept open, starts code once with a fresh agent, its prompt holding the findings and then the answer, counting no going-back, and the fix lands once code delivers",
+            cites: &["42", "48", "49", "131", "198"],
+            run: the_retry_that_answers_a_fixs_found,
+        },
+        Scenario {
+            name: "fix round: a kind's one stage, naming no stage for a failed submission, finding work starts nothing and counts no going-back, and the place waits on a retry of that stage for an answer with the words",
+            cites: &["23", "131", "42"],
+            run: a_last_stage_naming_none_finds_work,
         },
     ]
 }
@@ -122,6 +156,96 @@ fn s35_a_change_runs_through(_: &()) -> Outcome {
     ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
     ensure!(world.held(&id).is_none(), "the landed place is kept");
     ensure_eq!(world.terminal.log.count("open"), 3, "agents opened");
+    Ok(())
+}
+
+/// A change of four task groups, seven tasks in all.
+const FOUR_GROUPS: &[(&str, &str, usize)] = &[
+    ("1", "One", 2),
+    ("2", "Two", 2),
+    ("3", "Three", 2),
+    ("4", "Four", 1),
+];
+
+/// The place's code stage as status gives it: its label, its group and
+/// its starts.
+fn code_as_status_gives_it(
+    world: &World,
+    id: &PlaceId,
+) -> Result<(String, Option<flume_core::GroupStatus>, u32), String> {
+    let status = world.status(id)?;
+    let code = status
+        .stages
+        .iter()
+        .find(|stage| stage.name == "code")
+        .ok_or("no code stage")?;
+    Ok((code.label(), code.group.clone(), code.starts))
+}
+
+fn s119_one_agent_codes_the_change(_: &()) -> Outcome {
+    let world = World::new();
+    let id = construct_begun(&world, "plan")?;
+    let status = world.status(&id)?;
+    ensure_eq!(
+        (status.version, status.identity.as_deref()),
+        (3, Some("flume/change@3")),
+        "the kind a bare change runs"
+    );
+    world.tick_groups("change/plan", "plan", FOUR_GROUPS, 0);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "code once construct delivered"
+    );
+    ensure_eq!(
+        code_as_status_gives_it(&world, &id)?,
+        ("code".to_string(), None, 1),
+        "code as status gives it"
+    );
+    let line = world.status(&id)?.line;
+    ensure_eq!(
+        (line.stage.as_deref(), line.full.as_str()),
+        (
+            Some("code"),
+            "change--plan · change@3 · code · run 1 · tasks 0/7 · working"
+        ),
+        "the place's line"
+    );
+    world.tick_groups("change/plan", "plan", FOUR_GROUPS, 4);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "code once two of its groups are ticked"
+    );
+    ensure_eq!(
+        code_as_status_gives_it(&world, &id)?,
+        ("code".to_string(), None, 1),
+        "code as status gives it once two of its groups are ticked"
+    );
+    world.tick_groups("change/plan", "plan", FOUR_GROUPS, 7);
+    world.settle(&id);
+    ensure!(
+        world
+            .stage_state(&id, "verify")
+            .is_some_and(StageState::running),
+        "verify did not start in code's settle"
+    );
+    ensure_eq!(
+        code_as_status_gives_it(&world, &id)?.2,
+        1,
+        "code's starts once every task is ticked"
+    );
+    archive(&world, "plan");
+    world.settle(&id);
+    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
+    ensure!(world.held(&id).is_none(), "the landed place is kept");
+    ensure_eq!(
+        world.terminal.log.count("open"),
+        3,
+        "agents opened: construct's, code's one and verify's"
+    );
     Ok(())
 }
 
@@ -189,6 +313,43 @@ fn verify_finds_work(_: &()) -> Outcome {
         Some(2),
         "verify's starts"
     );
+    Ok(())
+}
+
+fn a_fixs_failed_submission(_: &()) -> Outcome {
+    let world = World::new();
+    let id = fix_begun(&world, "one")?;
+    let words = "check test-x failed";
+    world
+        .queue
+        .plan_submits(vec![Plan::Fail(words.into()), Plan::Hold]);
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    let code = World::identity("fix", "one", "code", 2);
+    let prompt = world.prompt(&id, &code).ok_or("code did not start again")?;
+    ensure!(prompt.contains(words), "{words} is not in {prompt}");
+    ensure!(
+        world
+            .stage_state(&id, "code")
+            .is_some_and(StageState::running),
+        "code, sent back: {:?}",
+        world.stage_state(&id, "code")
+    );
+    ensure_eq!(world.terminal.log.count("open"), 2, "agents opened");
+    let status = world.status(&id)?;
+    ensure_eq!(
+        status.submission.map(|submission| submission.send_backs),
+        Some(1),
+        "goings-back"
+    );
+    ensure!(
+        status.waiting_on.is_none(),
+        "the place waits on its caller: {:?}",
+        status.waiting_on
+    );
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    ensure_eq!(world.queue.log.count("submit"), 2, "submissions");
     Ok(())
 }
 
@@ -797,6 +958,221 @@ fn a_fix_runs_unattended(_: &()) -> Outcome {
             .iter()
             .all(|read| read.state.place.id != id),
         "a tidied document stands with every end delivered"
+    );
+    Ok(())
+}
+
+/// A fix named `one`, its ends to `ops`, whose code agent stopped short
+/// having found work, `findings` its words, settled once quiet.
+fn a_fixs_code_found(world: &World, findings: &str) -> Result<PlaceId, String> {
+    world.terminal.add_session("ops", AgentState::Waiting);
+    let mut fix = launch("fix", "one", Some("mend it"));
+    fix.recipients = vec!["ops".into()];
+    launched(&world.engine.launch(&fix))?;
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    let code = World::identity("fix", "one", "code", 1);
+    let answer = world.engine.needs(
+        &code.to_string(),
+        &secret(world, &id, 0)?.0,
+        findings,
+        StopKind::FoundWork,
+    );
+    ensure!(answer.refusal().is_none(), "the stop-short was refused");
+    world.settle(&id);
+    Ok(id)
+}
+
+fn a_fixs_code_finds_work(_: &()) -> Outcome {
+    let world = World::new();
+    let findings = "The landing is read from another host's queue, outside this place.";
+    let id = a_fixs_code_found(&world, findings)?;
+    ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
+    let status = world.status(&id)?;
+    ensure_eq!(status.stages[0].state, StageState::EndedShort, "code");
+    ensure_eq!(
+        status.stages[0].end.clone().and_then(|end| end.needs),
+        Some(StopKind::FoundWork),
+        "the kind status gives"
+    );
+    ensure_eq!(
+        status
+            .submission
+            .clone()
+            .map(|submission| submission.send_backs),
+        Some(0),
+        "goings-back"
+    );
+    let waiting = status
+        .waiting_on
+        .clone()
+        .ok_or("the place waits on nobody")?;
+    ensure_eq!(
+        (waiting.act, waiting.stage.as_deref(), waiting.why),
+        (Act::Retry, Some("code"), Waits::Answer),
+        "the move the place waits on"
+    );
+    ensure_eq!(waiting.words.as_deref(), Some(findings), "the words");
+    ensure!(
+        waiting.open_until.is_some() && waiting.closed.is_none(),
+        "code's agent is not kept open for the answer: {waiting:?}"
+    );
+    let line = world.engine().line(&id, None).ok_or("no line")?;
+    ensure_eq!(
+        line.state.as_str(),
+        "waiting on an answer",
+        "the line's state"
+    );
+    ensure!(
+        status.ends.iter().any(|end| matches!(&end.end.of,
+            EndOf::Stage { stage, state: StageState::EndedShort, end, .. }
+                if stage == "code"
+                    && end.needs == Some(StopKind::FoundWork)
+                    && end.words.as_deref() == Some(findings))),
+        "the ends: {:?}",
+        status.ends
+    );
+    ensure!(
+        world.terminal.notices("ops").iter().any(|notice| notice
+            .contains("fix--one (mend it) code found work, its agent kept open for the answer")),
+        "the notices to ops: {:?}",
+        world.terminal.notices("ops")
+    );
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.log.count("open"),
+        1,
+        "agents opened after a later settle"
+    );
+    ensure_eq!(
+        world.held(&id).map(|held| held.submission.send_backs),
+        Some(0),
+        "goings-back after a later settle"
+    );
+    Ok(())
+}
+
+/// The findings and the answer to them a fix's code is handed or a fresh
+/// start's prompt carries, and the caller's retry of code with that
+/// answer, taken (42, 49).
+const FIX_FINDINGS: &str = "The landing is read from another host's queue, outside this place.";
+const FIX_ANSWER: &str = "Read it from this host's queue alone; the other host's is not ours.";
+
+fn retried_with_the_answer(world: &World, id: &PlaceId) -> Outcome {
+    let retried = world.engine.retry(
+        id,
+        Retry::Stage("code".into()),
+        Some(FIX_ANSWER.into()),
+        false,
+    );
+    ensure!(
+        retried.refusal().is_none(),
+        "the retry was refused: {retried:?}"
+    );
+    Ok(())
+}
+
+/// The fix `id`, its code having taken its answer, delivered, settled
+/// with no going-back counted, and landed once.
+fn lands_with_no_going_back(world: &World, id: &PlaceId) -> Outcome {
+    ensure_eq!(
+        world.held(id).map(|held| held.submission.send_backs),
+        Some(0),
+        "goings-back"
+    );
+    deliver_fix(world, id);
+    world.settle(id);
+    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
+    ensure!(world.held(id).is_none(), "the landed place is kept");
+    Ok(())
+}
+
+fn the_retry_that_answers_a_fixs_found_in_its_session(_: &()) -> Outcome {
+    let world = World::new();
+    let id = a_fixs_code_found(&world, FIX_FINDINGS)?;
+    retried_with_the_answer(&world, &id)?;
+    let first = World::identity("fix", "one", "code", 1);
+    ensure_eq!(
+        world.terminal.sent_to(&first).last().cloned(),
+        Some(format!(
+            "The question: {FIX_FINDINGS}\n\nThe answer: {FIX_ANSWER}"
+        )),
+        "the last words code's agent was sent"
+    );
+    let held = world.held(&id).ok_or("no held state")?;
+    let stage = &held.stages[0];
+    ensure_eq!(
+        (
+            stage.state,
+            stage.starts,
+            stage.start.as_ref().map(|start| (start.n, start.live)),
+            world.terminal.log.count("open"),
+        ),
+        (StageState::Begun, 1, Some((1, true)), 1),
+        "code, its starts, its start and whether it is live, and the agents opened"
+    );
+    lands_with_no_going_back(&world, &id)
+}
+
+fn the_retry_that_answers_a_fixs_found(_: &()) -> Outcome {
+    let world = World::new();
+    let id = a_fixs_code_found(&world, FIX_FINDINGS)?;
+    world.host.advance(flume_core::KEEP_OPEN);
+    retried_with_the_answer(&world, &id)?;
+    world.settle(&id);
+    ensure_eq!(world.terminal.log.count("open"), 2, "agents opened");
+    let code = World::identity("fix", "one", "code", 2);
+    let prompt = world.prompt(&id, &code).ok_or("code did not start again")?;
+    match (prompt.find(FIX_FINDINGS), prompt.find(FIX_ANSWER)) {
+        (Some(question), Some(answered)) if question < answered => {}
+        _ => return Err(format!("the findings then the answer are not in {prompt}")),
+    }
+    lands_with_no_going_back(&world, &id)
+}
+
+fn a_last_stage_naming_none_finds_work(_: &()) -> Outcome {
+    let world = World::new();
+    let review = stage(
+        "review",
+        Some(Deliverable::CommittedReport {
+            path: "review.md".into(),
+        }),
+        "Review it.{{#words}} {{words}}{{/words}}",
+    );
+    world
+        .kinds
+        .set_kinds(REPOSITORY, vec![kind("audit", true, vec![review])]);
+    launched(&world.engine.launch(&launch("audit", "one", Some("x"))))?;
+    let id = World::id("audit", "one");
+    world.settle(&id);
+    let review = World::identity("audit", "one", "review", 1);
+    let findings = "The parser drops a trailing comment.";
+    let answer = world.engine.needs(
+        &review.to_string(),
+        &secret(&world, &id, 0)?.0,
+        findings,
+        StopKind::FoundWork,
+    );
+    ensure!(answer.refusal().is_none(), "the stop-short was refused");
+    world.settle(&id);
+    ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
+    ensure_eq!(
+        world.stage_state(&id, "review"),
+        Some(StageState::EndedShort),
+        "review"
+    );
+    let status = world.status(&id)?;
+    let waiting = status.waiting_on.ok_or("the place waits on nobody")?;
+    ensure_eq!(
+        (waiting.act, waiting.stage.as_deref(), waiting.why),
+        (Act::Retry, Some("review"), Waits::Answer),
+        "the move the place waits on"
+    );
+    ensure_eq!(waiting.words.as_deref(), Some(findings), "the words");
+    ensure_eq!(
+        status.submission.map(|submission| submission.send_backs),
+        Some(0),
+        "goings-back"
     );
     Ok(())
 }

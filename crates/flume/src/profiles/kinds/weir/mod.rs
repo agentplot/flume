@@ -22,7 +22,7 @@
 //! to its declaration's file, read beside it: at the same revision for a
 //! repository's, on disk for a launch's, and from the binary for flume's
 //! own, whose versions are each a declaration of its own with its prompts
-//! beside it (157).
+//! beside it, change@1, change@2 and change@3 side by side (157).
 //!
 //! flume's own kinds are packages, each read through weir-kinds' package
 //! reader at its identity, `flume/<name>@<version>`, with its content's
@@ -108,8 +108,9 @@ const KIND_TOML: &str = "kind.toml";
 
 /// flume's own kinds, one declaration per version, each in a directory of
 /// its own under `own/`, `<name>@<version>/kind.toml` with its prompts
-/// beside it under `prompts/`: change@1 and change@2 side by side, and
-/// fix@1 and chore@1 (22, 157, C.2; record 0022).
+/// beside it under `prompts/`: change@1, change@2 and change@3 side by
+/// side, in ascending order so the last is the newest, and fix@1 and
+/// chore@1 (22, 154, 157, C.2; records 0022, 0054).
 const OWN: &[Own] = &[
     Own {
         identity: "flume/change@1",
@@ -144,6 +145,24 @@ const OWN: &[Own] = &[
             (
                 "prompts/change-verify.md",
                 include_str!("own/change@2/prompts/change-verify.md"),
+            ),
+        ],
+    },
+    Own {
+        identity: "flume/change@3",
+        declaration: include_str!("own/change@3/kind.toml"),
+        prompts: &[
+            (
+                "prompts/change-construct.md",
+                include_str!("own/change@3/prompts/change-construct.md"),
+            ),
+            (
+                "prompts/change-code.md",
+                include_str!("own/change@3/prompts/change-code.md"),
+            ),
+            (
+                "prompts/change-verify.md",
+                include_str!("own/change@3/prompts/change-verify.md"),
             ),
         ],
     },

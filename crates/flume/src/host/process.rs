@@ -321,8 +321,10 @@ mod tests {
 
     #[test]
     fn this_process_and_a_child_are_listed() {
+        // Only arguments every sleep takes: GNU's refuses a word that is no
+        // interval and exits at once, its arguments gone from the table.
         let mut child = Command::new("sleep")
-            .args(["600", "listed"])
+            .arg("600")
             .stdin(Stdio::null())
             .spawn()
             .expect("sleep");
@@ -342,7 +344,7 @@ mod tests {
             .iter()
             .find(|process| process.pid == child.id())
             .expect("the child listed");
-        assert_eq!(sleeping.args, ["sleep", "600", "listed"]);
+        assert_eq!(sleeping.args, ["sleep", "600"]);
         assert!(sleeping.started + 60 > now && sleeping.started <= now + 1);
     }
 

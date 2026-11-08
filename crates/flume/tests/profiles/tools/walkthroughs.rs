@@ -9,20 +9,26 @@
 //! answers at the submit itself among them (133); a pull request the
 //! stand-in for sluice answers with no entry is followed until it is
 //! taken in, then to its landing, and a failure of the entry taken in
-//! from it goes back to code once and lands on the next (124, C.6); a change runs construct, code and
-//! verify, its report committed in the archived change (S2, S35); verify
-//! finding work sends the place back to code (131); a fix whose prompt
-//! Claude Code submits inside paste tags lands (89); a host's bound
-//! queues a launch and starts the waiting ones by priority (S37), and a
+//! from it goes back to code once and lands on the next (124, C.6); a bare
+//! `change` runs flume's newest, change@3, through construct, code started
+//! once and verify, its report committed in the archived change (S2, S35,
+//! S119); verify finding work sends the place back to code (131); a fix
+//! whose code finds work waits on an answer, with one agent opened, and
+//! its caller's retry with the answer starts code once more, the findings
+//! then the answer in its prompt, and lands (41, 42, 48, 49, 131); a fix
+//! whose prompt Claude Code submits inside paste tags lands (89); a
+//! host's bound queues a launch and starts the waiting ones by priority
+//! (S37), and a
 //! stage waiting for room starts at the next command of flume's once the
 //! host's configuration gives it room, status saying no watch is kept
 //! (70, 119); a fix launched on a stream whose pool holds only `codex`
 //! accounts is refused with nothing made, and a change whose pool the
 //! host's configuration leaves a `codex` account alone while construct
 //! works has code refused, no command printed for it, until a retry once
-//! the configuration is mended (S81; 4, 32, 145); and
-//! change@2's code stage works a change of three task groups one fresh
-//! agent at a time, and a failed submission sends it back for one
+//! the configuration is mended (S81; 4, 32, 145); and a change launched
+//! as `change@2`, named since a bare `change` runs change@3, has its
+//! repeating code stage work a change of three task groups one fresh
+//! agent at a time, and a failed submission send it back for one
 //! repetition with no group (S50, S52; 112, 140 to 142); and a fix whose
 //! code agent stops at its account's usage limit moves to the pool's
 //! second account and lands (S55; 146, 151), and, where the second's
@@ -44,8 +50,9 @@
 //! begun, and a retry leaves it be (35, 38, 50); a fix's code agent's
 //! line, asked by `flume hook status-line` in its environment as the
 //! plugin's module asks it, is status's line asked alone and in full, and
-//! the fix lands, while a change@2 code agent's names its group, its run
-//! and the change's tasks (56, 60, 142; S14); a host's people's file, the
+//! the fix lands, while the code agent's of a change launched as
+//! `change@2` names its group, its run and the change's tasks (56, 60,
+//! 142; S14); a host's people's file, the
 //! host's own status line over it, a stream's and a repository's file reach
 //! a fix's agent in `work` and in `default` by a `--settings` file of its
 //! start's own, which the stand-in reads over its account's settings, the
@@ -288,11 +295,12 @@ const TWO_GROUPS: &str = "## 1. Parser\n\n- [ ] 1.1 Write the parser\n- [ ] 1.2 
 
 #[test]
 fn a_change_code_agents_line_names_its_group_its_run_and_its_tasks() {
-    // change@2's code agent on the first of two groups, waiting on a
-    // file: its line names the stage with its group, its run and the
-    // change's tasks ticked at the head (56, 60, 140, 142; S14).
+    // The code agent of a change launched as `change@2` on the first of
+    // two groups, waiting on a file: its line names the stage with its
+    // group, its run and the change's tasks ticked at the head (56, 60,
+    // 140, 142; S14).
     let walk = Walk::new("walk-line-groups");
-    let place = walk.launch("change", "add-parser", &["--brief", "add a parser"]);
+    let place = walk.launch("change@2", "add-parser", &["--brief", "add a parser"]);
     walk.agent(&place, construct_tasks("add-parser", TWO_GROUPS));
     walk.until(&place, "code on group 1", |status| {
         status["current"] == "code" && !status["agent"].is_null()
@@ -586,16 +594,23 @@ fn a_pull_requests_failure_goes_back_to_code_once_and_its_next_request_lands() {
 
 #[test]
 fn a_change_runs_construct_code_and_verify() {
-    // S2, S35: construct writes the change, code ticks its tasks, status
+    // S2, S35, S119: a bare `change` runs flume's newest, change@3;
+    // construct writes the change, code's one agent ticks its tasks, status
     // showing them ticked along the way, and verify commits its report and
-    // archives the change; the place lands with the report in the archive.
+    // archives the change, the code stage started once; the place lands
+    // with the report in the archive.
     let walk = Walk::new("walk-change");
     let place = walk.launch("change", "add-parser", &["--brief", "add a parser"]);
+    let status = walk.status(&place);
+    assert_eq!(status["identity"], "flume/change@3", "{status}");
+    assert_eq!(status["version"], 3, "{status}");
     walk.agent(&place, construct("add-parser"));
     let status = walk.until(&place, "its code stage", |status| {
         status["current"] == "code" && !status["agent"].is_null()
     });
     assert_eq!(stage(&status, "construct")["state"], "delivered");
+    assert_eq!(stage(&status, "code")["starts"], 1, "{status}");
+    assert!(stage(&status, "code")["group"].is_null(), "{status}");
     let ticked = |status: &Value| -> Vec<bool> {
         status["tasks"]
             .as_array()
@@ -639,6 +654,7 @@ fn a_change_runs_construct_code_and_verify() {
         status["current"] == "verify" && !status["agent"].is_null()
     });
     assert_eq!(ticked(&status), vec![true, true], "{status}");
+    assert_eq!(stage(&status, "code")["starts"], 1, "{status}");
     walk.agent(&place, verify_holds("add-parser"));
     until_landed(&walk, &place);
 
@@ -714,6 +730,71 @@ fn verify_finding_work_sends_the_place_back_to_code() {
         walk.on_remote("parser.rs").as_deref(),
         Some("fn parse() { /* and empty input */ }\n")
     );
+}
+
+#[test]
+fn a_fixs_code_finding_work_waits_on_an_answer_and_its_retry_lands() {
+    // 131, 42: fix's code is its kind's own fix round, so its found sends
+    // the place back to no stage: no agent starts, no going-back is
+    // counted, and the place waits on an answer with the findings; under
+    // the printed command, which keeps no agent open (198, C.5), the
+    // caller's retry of code with an answer starts it once more, its
+    // prompt holding the findings and then the answer, counting no
+    // going-back (48, 49), and the fix lands.
+    let walk = Walk::new("walk-fix-found");
+    let place = walk.launch("fix", "found", &["--brief", "fix the parser"]);
+    let findings = "the landing is read from the queue of another host, outside this place";
+    walk.agent(
+        &place,
+        json!([{ "bash": format!("flume needs --found '{findings}'") }]),
+    );
+    walk.until(&place, "its code stage ended short", |status| {
+        stage(status, "code")["state"] == "ended_short"
+    });
+    for _ in 0..2 {
+        walk.settle(&place);
+    }
+    let status = walk.status(&place);
+    let code = stage(&status, "code");
+    assert_eq!(code["starts"], 1, "one agent opened: {status}");
+    assert_eq!(code["end"]["needs"], "found_work", "{status}");
+    assert_eq!(code["end"]["words"], findings, "{status}");
+    assert_eq!(status["submission"]["send_backs"], 0, "{status}");
+    assert_eq!(
+        (
+            &status["waiting_on"]["act"],
+            &status["waiting_on"]["stage"],
+            &status["waiting_on"]["why"],
+            &status["waiting_on"]["words"],
+        ),
+        (
+            &json!("retry"),
+            &json!("code"),
+            &json!("answer"),
+            &json!(findings)
+        ),
+        "{status}"
+    );
+    assert_eq!(status["line"]["state"], "waiting on an answer", "{status}");
+
+    let answer = "read it from this host's queue alone; the other host's is not ours";
+    walk.flume(&["retry", &place, "--stage", "code", "--words", answer]);
+    let status = walk.until(&place, "its code stage started once more", |status| {
+        stage(status, "code")["starts"] == 2 && !status["agent"].is_null()
+    });
+    assert_eq!(status["submission"]["send_backs"], 0, "{status}");
+    let prompt = walk.prompt(&place);
+    match (prompt.find(findings), prompt.find(answer)) {
+        (Some(question), Some(answered)) if question < answered => {}
+        _ => panic!("the findings then the answer are not in {prompt}"),
+    }
+    walk.agent(&place, commits("parser.rs", "fn parse() {}\n"));
+    until_landed(&walk, &place);
+    assert_eq!(
+        walk.on_remote("parser.rs").as_deref(),
+        Some("fn parse() {}\n")
+    );
+    assert!(!walk.has_branch("fix/found"));
 }
 
 #[test]
@@ -963,13 +1044,14 @@ fn group(status: &Value) -> (Value, Value) {
 
 #[test]
 fn a_change_of_three_task_groups_takes_three_agents_in_turn() {
-    // S50, 140 to 142: change@2's code stage on a change of three groups
+    // S50, 140 to 142: a change launched as `change@2`, its code stage
+    // repeating, on a change of three groups
     // starts a fresh agent for each in turn; each ticks its group, adds to
     // the notes its prompt names and commits; status between them gives
     // code 2/3; the three prompts are byte for byte the same up to the
     // group; verify archives and the place lands.
     let walk = Walk::new("walk-groups");
-    let place = walk.launch("change", "add-parser", &["--brief", "add a parser"]);
+    let place = walk.launch("change@2", "add-parser", &["--brief", "add a parser"]);
     assert_eq!(walk.status(&place)["version"], 2, "the change's version");
     walk.agent(&place, construct_tasks("add-parser", THREE_GROUPS));
     let tasks = "openspec/changes/add-parser/tasks.md";
@@ -1043,13 +1125,14 @@ fn a_change_of_three_task_groups_takes_three_agents_in_turn() {
 
 #[test]
 fn a_failed_submission_sends_a_repeating_stage_back_for_one_repetition_with_no_group() {
-    // S52, 112, 140: the gate fails the change's first submission with
+    // S52, 112, 140: a change launched as `change@2`, its code stage
+    // repeating; the gate fails the change's first submission with
     // every task ticked; code starts one repetition with no group and
     // sluice's words, which moves the change out of the archive, fixes
     // the tree and records the fix as a task ticked; verify archives
     // again and the second submission lands.
     let walk = Walk::new("walk-groups-failed");
-    let place = walk.launch("change", "add-parser", &["--brief", "add a parser"]);
+    let place = walk.launch("change@2", "add-parser", &["--brief", "add a parser"]);
     walk.agent(&place, construct("add-parser"));
     walk.until(&place, "its code stage", |status| {
         status["current"] == "code" && !status["agent"].is_null()
@@ -1111,7 +1194,7 @@ const CARRIED: &str = "Your last turn stopped at your account's usage limit. Thi
 
 /// The way to stop short the Claude Code profile gives every start, then
 /// the words that it is the agent's one way to ask (28; design 4).
-const STOP_SHORT: &str = "run `flume needs \"<words>\"` when you cannot go on without an answer, saying what you need, or `flume needs --found \"<words>\"` when you found work this stage cannot deliver past, saying what you found; then stop. Stopping short is your one way to ask for what your stage needs: write no card and no message to a person yourself, since whoever answers your question decides whether it is a person's.";
+const STOP_SHORT: &str = "run `flume needs \"<words>\"` when you cannot go on without an answer, saying what you need, or `flume needs --found \"<words>\"` when you found work a stage before this one must do again, saying what you found; then stop. Stopping short is your one way to ask for what your stage needs: write no card and no message to a person yourself, since whoever answers your question decides whether it is a person's.";
 
 /// The host's fill-first pool of two accounts, `stand-in-1` and
 /// `stand-in-2`, whose `CLAUDE_CONFIG_DIR`s are `first` and `second`.
@@ -3397,7 +3480,7 @@ fn east_with_its_roles(host: &UnderHerdr) {
 
 /// Settles every place, as a caller does between its commands, until
 /// `holds` holds, for up to three minutes; `what` names it where it never
-/// does, with every place's line.
+/// does, with every place's line and what each start's stand-in did.
 fn settled_until(host: &UnderHerdr, what: &str, holds: impl Fn() -> bool) {
     let began = std::time::Instant::now();
     loop {
@@ -3412,7 +3495,7 @@ fn settled_until(host: &UnderHerdr, what: &str, holds: impl Fn() -> bool) {
                 .flatten()
                 .map(|place| json!([place["place"], place["line"]["full"], place["waiting_on"]]))
                 .collect();
-            panic!("never came to {what}: {lines:?}");
+            panic!("never came to {what}: {lines:?}\n{}", host.logs());
         }
         std::thread::sleep(std::time::Duration::from_millis(300));
     }

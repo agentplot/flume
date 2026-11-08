@@ -468,7 +468,7 @@ fn the_hosts_sessions_labels_and_layers(_: &()) -> Outcome {
     );
     for repository in [REPOSITORY, "/another"] {
         ensure_eq!(
-            host.label_for(repository, "research"),
+            host.label_for(&RepositoryName::of_folder(repository), "research"),
             Some(LabelHeld {
                 name: "inception".into(),
                 from: LabelFrom::HostKind,

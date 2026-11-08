@@ -4,8 +4,10 @@
 # released (cliff.toml): its tag names a release commit cut from the pushed
 # one with the release's version written into the workspace and each
 # plugin's manifest (set-version.sh), and the release branch the
-# marketplace is read at is moved to it. flume's own gate is sluice
-# (.config/sluice.toml); this is the public check.
+# marketplace is read at is moved to it. The flake's package is built on
+# each runner's system (nix:build), which the gate's sandbox cannot run.
+# flume's own gate is sluice (.config/sluice.toml); this is the public
+# check.
 name: ci
 
 on:
@@ -45,6 +47,24 @@ jobs:
           key: fast-${{ runner.os }}-${{ hashFiles('Cargo.lock', '.prototools') }}
           restore-keys: fast-${{ runner.os }}-
       - run: devenv shell -- moon run ':#check-fast'
+
+  # The flake's package, built for each runner's system in the devenv
+  # shell: a package that no longer builds, a git crate's hash a weir bump
+  # left behind among causes, fails here before a release carries it.
+  flake:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v16
+        with:
+          name: devenv
+      - run: nix profile add nixpkgs#devenv
+      - run: devenv shell -- moon run nix:build
 
   # The commits since the last release are conventional (.versionrc): a
   # session can skip the commit-msg hook, and git-cliff releases from them.

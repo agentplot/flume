@@ -313,6 +313,11 @@ pub struct Refusal {
 pub struct PlaceStatus {
     pub place: PlaceId,
     pub repository: String,
+    /// The repository's address, `<owner>/<name>`, as the launch read it
+    /// from its clone's origin, by which the host's configuration names
+    /// it; none where it had none (56, 143).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
     pub kind: String,
     pub version: u32,
     pub declared: Declared,

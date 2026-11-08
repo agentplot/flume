@@ -62,21 +62,42 @@ branch requires:
 
 | layer | what | who requires it |
 |---|---|---|
-| `check-fast` | the site's prose (Vale) and its build; each crate's format (rustfmt), lint (clippy) and tests over the fakes, and every profile over real git and files on scratch repositories; the Claude Code plugin's hooks against the built binary; the herdr plugin's manifest, its lint (shellcheck) and its scripts against stand-in herdr and flume under sh and dash; the conformance suite's clause coverage; the root's format (treefmt), toolchain, records, specs, open changes, commit hooks, layers and versions, every file that carries flume's version giving the workspace's | every branch, and CI on Linux and macOS |
+| `check-fast` | the site's prose (Vale) and its build; each crate's format (rustfmt), lint (clippy) and tests over the fakes, and every profile over real git and files on scratch repositories; the Claude Code plugin's hooks against the built binary; the herdr plugin's manifest, its lint (shellcheck) and its scripts against stand-in herdr and flume under sh and dash; the conformance suite's clause coverage; the flake's format (nixfmt), lint (statix, deadnix), evaluation and tests against no store; the root's format (treefmt), toolchain, records, specs, open changes, commit hooks, layers and versions, every file that carries flume's version giving the workspace's | every branch, and CI on Linux and macOS |
 | `check-tools` | the sluice and herdr profiles against the pinned tools, the herdr plugin linked into the pinned herdr, and the walkthroughs with the stand-in for Claude Code (`crates/flume/tests/profiles/stand-in/`) | main |
 | `check-live` | the walkthroughs with the pinned Claude Code under herdr (`crates/flume/tests/profiles/live/`) | no branch: run by hand in the devenv shell, `FLUME_LIVE_CLAUDE_CODE_OAUTH_TOKEN=<token> devenv shell -- moon run flume:live`, the token a test account's from `claude setup-token` |
 
 Run suites through sluice, so the agents on this host take turns under
-its bound: once your work is committed, `sluice exec main` for the
-gate's checks, and while iterating `sluice exec main -- moon run
-<project>:<task>`. The projects are those `.moon/workspace.yml` lists:
+its bound, against your place's base, `<base>` here: the branch your
+place was cut from and your work lands on (sluice S66: a session runs
+its branch's checks). `sluice exec <base>` runs the gate's checks,
+which a change's verify stage runs once and no task of a change runs
+(record 0054); while iterating, `sluice exec <base> -- moon run
+<project>:<task>`. A place on a bolt so runs the bolt's `check-fast`
+and leaves `check-tools` to the bolt's merge onto main; a place on main
+runs both. A task line names the base the same way, `sluice exec <base>
+-- moon run <project>:<task>`. The projects are those
+`.moon/workspace.yml` lists:
 `seams`, `core`, `fakes`, `conformance` and `flume` (the crates under
-`crates/`), `plugin-claude` (`plugins/claude`), `plugin-herdr` (`plugins/herdr`), `site` and `root`. A quick, narrow call, `cargo check` or one unit test,
-is fine to run directly. `devenv shell -- moon run :#check-fast` runs
+`crates/`), `plugin-claude` (`plugins/claude`), `plugin-herdr` (`plugins/herdr`), `nix` (the flake, `nix/`), `site` and `root`. A task's own check runs as the task
+names it, and beside it a quick, narrow call, `cargo check` or one unit
+test, is fine to run directly. `devenv shell -- moon run :#check-fast` runs
 the fast layer, `:#check-tools` the tools layer; `site-build` and
 `prose` run one each, `lint` the workspace's clippy, `disk` what `target/` has grown to, and `moon run
 <crate>:test` one crate's tests (`seams`, `core`, `fakes`,
 `conformance`, `flume`). The site's own notes are `site/README.md`.
+
+## Claude Code
+
+**Claude Code.** The MCP servers are `devenv.nix`'s
+(`claude.code.mcpServers`), devenv's hosted `mcp.devenv.sh` among them,
+each approved by name, so a session in a trusted folder starts them
+unasked. devenv writes `.mcp.json` and `.claude/settings.json` on
+entering the shell, and as a place's readiness sources it, and git
+ignores both (agentplot/boomdrive's record 0022): a Claude Code setting
+of the repository's goes into devenv's options, never into those files.
+OpenSpec's skills and commands under `.claude/` are tracked as the
+pinned OpenSpec writes them (`openspec init --tools claude --profile
+custom`), and written again when its pin moves.
 
 ## Commits
 

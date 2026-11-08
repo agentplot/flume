@@ -1,6 +1,7 @@
 //! An agent kept open for its answer (42, 131, 198): a stage that ends
-//! short needing an answer, found work from a stage before the kind's last
-//! among it, keeps its agent live for that answer until its stop-short's
+//! short needing an answer, found work 131 takes as needing one among it,
+//! from a stage before the kind's last or from a last stage that is its
+//! kind's own fix round, keeps its agent live for that answer until its stop-short's
 //! time and its `keep_open`, where its terminal hands a running agent
 //! words; a settle reads the agent let go once its time has passed, its
 //! caller stopped it, it is read stopped or brought back bare, or its
@@ -47,6 +48,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "kept open: a construct agent finding work, construct not the kind's last stage, is kept open for an answer until the hour a question's would be",
             cites: &["131", "42", "198"],
             run: found_work_from_a_stage_before_the_last,
+        },
+        Scenario {
+            name: "kept open: a fix's code agent finding work, code the kind's last stage and its own fix round, is kept open for an answer until the hour a question's would be, and no stage starts",
+            cites: &["131", "42", "198"],
+            run: found_work_at_the_kinds_own_fix_round,
         },
         Scenario {
             name: "run through: construct finding work starts no stage, and the place waits on an answer with its agent kept open for it, status giving that it found work and its words",
@@ -620,6 +626,39 @@ fn construct_says_it_found_work(_: &()) -> Outcome {
         ),
         (Some(at + KEEP_OPEN), true, 1),
         "the time construct's agent is kept open until, whether it is live, and the agents opened"
+    );
+    Ok(())
+}
+
+fn found_work_at_the_kinds_own_fix_round(_: &()) -> Outcome {
+    let world = World::new();
+    let id = fix_begun(&world, "one")?;
+    let who = code("one", 1);
+    let at = stops_short(
+        &world,
+        &id,
+        0,
+        &who,
+        "The parser's tests read a fixture main lacks.",
+        StopKind::FoundWork,
+    )?;
+    world.settle(&id);
+    ensure_eq!(
+        end_of(&world, &id, "code")?
+            .open_until
+            .map(|until| until - at),
+        Some(KEEP_OPEN),
+        "how long code's finding keeps its agent open"
+    );
+    ensure_eq!(
+        (
+            live(&world, &id, &who)?,
+            closed(&world),
+            world.stage_state(&id, "code"),
+            world.prompt(&id, &code("one", 2)).is_some(),
+        ),
+        (true, vec![], Some(StageState::EndedShort), false),
+        "whether code's agent is live, the agents closed, code, and whether a second start of code began"
     );
     Ok(())
 }

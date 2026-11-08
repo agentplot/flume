@@ -527,7 +527,7 @@ fn the_repositorys_a_launchs_and_flumes_own(_: &()) -> Outcome {
     let mut carried = launch("spike", "one", Some("x"));
     carried.declaration = Some(declaration.into());
     launched(&world.engine.launch(&carried))?;
-    launched(&world.engine.launch(&launch("change", "plan", Some("x"))))?;
+    launched(&world.engine.launch(&launch("change@2", "plan", Some("x"))))?;
     let of = |kind: &str, name: &str| -> Result<(Option<String>, KindFrom), String> {
         let status = world.status(&World::id(kind, name))?;
         Ok((status.identity, status.kind_from.ok_or("no kind_from")?))

@@ -1,0 +1,46 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# The flake: flake.nix and flake.lock at the root, everything else of it
+# under nix/ (record 0055; the change
+# flume-publishes-its-own-flake-and-module, design 1 and 11). Each check is
+# one task, in the fast layer (core.21), run from the workspace root by the
+# tools devenv.nix pins (core.22). None but build builds: the type check
+# and the test evaluate against a dummy store, offline and read-only, in
+# the gate's sandbox with no network and no nix daemon.
+language: 'nix'
+
+tasks:
+  # nixfmt over the flake's own files, each by name; treefmt's root:format
+  # runs the same nixfmt over every .nix file of the tree.
+  format:
+    script: 'nixfmt --check flake.nix $(find nix -name "*.nix" | sort)'
+    inputs: ['/flake.nix', '/flake.lock', '/nix/**/*', '/devenv.nix', '/devenv.lock']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  # statix and deadnix over the same files.
+  lint:
+    script: 'statix check flake.nix && statix check nix && deadnix --fail flake.nix $(find nix -name "*.nix" | sort)'
+    inputs: ['/flake.nix', '/flake.lock', '/nix/**/*', '/devenv.nix', '/devenv.lock']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  # Every package of every system evaluates, and each module in a system of
+  # its platform, against no store (nix/check.sh).
+  typecheck:
+    command: 'sh nix/check.sh typecheck'
+    inputs: ['/flake.nix', '/flake.lock', '/nix/**/*', '/devenv.nix', '/devenv.lock', '/Cargo.toml', '/Cargo.lock', '/.prototools', '/crates/**/*']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  # The evaluated cases of the change's specs, under nix/tests, and the
+  # scripts' cases, nix/tests/scripts.sh.
+  test:
+    command: 'sh nix/check.sh test'
+    inputs: ['/flake.nix', '/flake.lock', '/nix/**/*', '/devenv.nix', '/devenv.lock', '/Cargo.toml', '/Cargo.lock', '/.prototools', '/crates/**/*', '/.github/workflows/**/*']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  # In no layer: the package built for the host's system, which needs the
+  # nix daemon and the network the gate's sandbox denies. CI's flake job
+  # runs it on Linux and macOS, in the devenv shell.
+  build:
+    command: 'nix --extra-experimental-features "nix-command flakes" build --no-link .#default'
+    inputs: ['/flake.nix', '/flake.lock', '/nix/**/*', '/devenv.nix', '/devenv.lock', '/Cargo.toml', '/Cargo.lock', '/.prototools', '/crates/**/*', '/plugins/claude/**/*', '/.config/flume.toml']
+    options: {runFromWorkspaceRoot: true}

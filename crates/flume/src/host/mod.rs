@@ -21,7 +21,7 @@ pub mod usage;
 use config::HostConfig;
 use flume_seams::{
     Host, HostConfiguration, HostRoles, HostSettings, HostSource, LabelHeld, Pool, PoolNamed,
-    RoomGuard, Seconds, Secret, Stream, StreamDisplay, StreamHeld, Usage,
+    RepositoryName, RoomGuard, Seconds, Secret, Stream, StreamDisplay, StreamHeld, Usage,
 };
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
@@ -288,8 +288,12 @@ impl Host for RealHost {
     /// The configuration's settings as this command read it: the engine
     /// is built for each command, so each start reads the host's
     /// configuration as it stands (32, C.7; record 0017).
-    fn settings(&self, repository: &str, kind: &str, stream: &str) -> HostSettings {
+    /// Every repository-keyed table read under the one key
+    /// [`HostConfig::table_for`] gives, the address's or the folder's,
+    /// never the two merged (32, 143, C.7).
+    fn settings(&self, repository: &RepositoryName, kind: &str, stream: &str) -> HostSettings {
         let config = &self.config;
+        let repository = config.table_for(repository);
         HostSettings {
             repository: config
                 .repos
@@ -323,11 +327,11 @@ impl Host for RealHost {
         self.config.streams.clone()
     }
 
-    fn stream_for(&self, repository: &str, kind: &str) -> Option<StreamHeld> {
+    fn stream_for(&self, repository: &RepositoryName, kind: &str) -> Option<StreamHeld> {
         self.config.stream_for(repository, kind)
     }
 
-    fn label_for(&self, repository: &str, kind: &str) -> Option<LabelHeld> {
+    fn label_for(&self, repository: &RepositoryName, kind: &str) -> Option<LabelHeld> {
         self.config.label_for(repository, kind)
     }
 

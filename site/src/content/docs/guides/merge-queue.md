@@ -150,8 +150,11 @@ reads that place's outcome.
 
 Each fix round counts toward the kind's bound, three goings-back unless
 the last stage sets `max_send_backs`, together with found work from
-the last stage. Past the bound the place waits on you with the last
-words, and a retry starts it again.
+the last stage where its `on_fail` names a stage before it. Found work
+from a last stage that is its own fix round, as fix's and chore's
+`code` is, sends nothing back and counts nothing: the place waits on an
+answer. Past the bound the place waits on you with the last words, and
+a retry starts it again.
 
 ## Branches that land on branches
 

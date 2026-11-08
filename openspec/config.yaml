@@ -72,11 +72,11 @@ rules:
     - "Where the design reaches a tool, name the seam it goes through and the profile that implements it; the core names no tool and holds no profile's branch (core.1, core.2), and a profile is chosen from the [profiles] table alone (core.3)."
     - "The design holds no proof list of any name, no *Proof in dev*, no *Proof on real work*: a change is proved by flume's checks, named task by task (kit:testing.5)."
   tasks:
-    - "Each task says what must be true and names the moon task that proves it, run as `devenv shell -- moon run <project>:<task>` (kit:specs.3). No task is a step done by hand, a deploy or work after the landing."
+    - "Each task says what must be true and names the narrowest check that shows that task done: one test by name, run as `devenv shell -- cargo test -p <crate> <test>` with the features and target its crate's moon task gives, where a test shows it; else one project's task, its tests or the lint of what the task touched, run as `sluice exec <base> -- moon run <project>:<task>` (kit:specs.3; record 0054), `<base>` written as is for the branch the place running it was cut from and lands on, as CLAUDE.md's Checks has it (sluice S66), never `main` or another branch's name. No task is a step done by hand, a deploy or work after the landing."
     - "A task that adds a crate adds it to the cargo workspace's `members`, and a task that adds a crate or a directory under plugins/ adds it as a moon project of its own in .moon/workspace.yml, with its language declared and check-fast tasks that validate, lint and test it, one task per check, each tagged with its layer and declaring its inputs, /devenv.nix, /devenv.lock and /.prototools among them (core.21, kit:testing.1, kit:testing.3)."
     - "A task that adds a tool pins its version in devenv.nix or .prototools, never a range, and runs it from there in every task (core.22)."
     - "A task that adds a file type has treefmt.nix claim it with a formatter or name it in an exclude, with its reason, in the same task (core.21)."
-    - "The last task runs the checks of the moon projects the change touches, never the whole workspace, which sluice runs at the merge."
+    - "No task runs the repository's whole checks, `sluice exec <base>` or a layer of them, and no task checks a task group or the projects the change touches: a group is a heading, for reading, and the change's verify runs the repository's whole checks once, before sluice runs its gate at the merge (record 0054)."
 
 operations:
   apply:

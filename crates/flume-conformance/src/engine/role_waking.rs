@@ -142,6 +142,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_run_an_earlier_flume_named,
         },
         Scenario {
+            name: "role waking: an end for east/planner whose run's agent waits in its session before its start took its prompt stays pending, and is delivered into its pane once by the settle after its start is begun",
+            cites: &["37", "38", "43", "132"],
+            run: a_run_not_yet_given_its_prompt,
+        },
+        Scenario {
             name: "role waking: an end pending for north/planner, which acme declares carried and whose stream the host does not declare, launches nothing and stays pending, status naming it carried and its wake refused so",
             cites: &["132", "193", "56"],
             run: a_carried_address,
@@ -1311,6 +1316,64 @@ fn a_run_an_earlier_flume_named(_: &()) -> Outcome {
     let (woke, place) = woken(&world.engine.wake(PLANNER))?;
     ensure!(woke != Woke::Launched, "a wake launched a second run");
     ensure_eq!(place.place, earlier, "the run the wake names");
+    Ok(())
+}
+
+/// The role-waking spec's "A run not yet given its prompt": the
+/// planner's run, woken for a fix's end, its agent waiting in the
+/// address's session before it says it started, takes no notice, which it
+/// would take as its prompt, and the end stays pending; once it says it
+/// started and its prompt is received, the next settle of the fix
+/// delivers the end into its pane once (37, 38, 43, 132).
+fn a_run_not_yet_given_its_prompt(_: &()) -> Outcome {
+    let world = World::new();
+    world.keep_watch();
+    configure(
+        &world,
+        "Read what is pending for you.",
+        planner_run(None, None),
+    );
+    let agent = World::identity("turn", "east-planner", "plan", 1);
+    world.agent.set_started(&agent, Reading::No);
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    let one = delivered_for_planner(&world, "one")?;
+    ensure_eq!(runs(&world), vec![planner_id()], "the run woken");
+    world.settle(&planner_id());
+    world.settle(&one);
+    ensure_eq!(
+        world.stage_state(&planner_id(), "plan"),
+        Some(StageState::Starting),
+        "the run's stage before its agent said it started"
+    );
+    ensure_eq!(
+        world.terminal.notices(PLANNER),
+        Vec::<String>::new(),
+        "the notices into the run's pane before its prompt"
+    );
+    ensure_eq!(
+        world.held(&one).map(|held| held.pending_for()),
+        Some(vec![PLANNER.to_string()]),
+        "the ends pending before the run's prompt"
+    );
+    world.agent.set_started(&agent, Reading::Yes);
+    world.settle(&planner_id());
+    ensure_eq!(
+        world.stage_state(&planner_id(), "plan"),
+        Some(StageState::Begun),
+        "the run's stage once its prompt was received"
+    );
+    world.settle(&one);
+    world.settle(&one);
+    ensure_eq!(
+        world.terminal.notices(PLANNER),
+        vec![code_delivered("one")],
+        "the notices into the run's pane"
+    );
+    ensure_eq!(
+        world.held(&one).map(|held| held.pending_for()),
+        Some(vec![]),
+        "the ends pending once the run is begun"
+    );
     Ok(())
 }
 

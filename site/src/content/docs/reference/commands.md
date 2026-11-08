@@ -445,7 +445,8 @@ Removes what is over, for each place whose work landed, was dropped
 or is done and whose agent stopped:
 
 - its worktree, through the repository's teardown and
-  `git worktree remove`;
+  `git worktree remove`, then whatever a tool left in its folder, and
+  its repository's folder under `places/` once that holds no place;
 - its branch, where the base holds every commit of it;
 - in each multiplexer its agents opened in, under herdr its tab, and
   its base's workspace once that holds nothing else of flume's or
@@ -732,7 +733,7 @@ case do nothing but `session-start`, which collects for the session
 
 | Command | |
 |---|---|
-| `flume needs [--found] [--to <role or address>] <words>` | The stage ends short with the words: it needs an answer. `--found` says it found work it cannot deliver past instead. `--to` names the role the words are for, one the stage's prompt lists: a role alone, `<role>`, is the place's own stream's, and an address, `<stream>/<role>`, any stream's. The end goes to that role alone, in place of the place's recipients; a name the prompt did not list is refused, naming those it did, and the stage goes on ([asking a role](/flume/guides/callers-and-holds/#asking-a-role)). Where its multiplexer can type into a running agent, the agent is kept open for the answer, but for found work from the kind's last stage ([the agent kept open](/flume/guides/callers-and-holds/#the-agent-kept-open)). |
+| `flume needs [--found] [--to <role or address>] <words>` | The stage ends short with the words: it needs an answer. `--found` says it found work a stage before its own must do again instead. `--to` names the role the words are for, one the stage's prompt lists: a role alone, `<role>`, is the place's own stream's, and an address, `<stream>/<role>`, any stream's. The end goes to that role alone, in place of the place's recipients; a name the prompt did not list is refused, naming those it did, and the stage goes on ([asking a role](/flume/guides/callers-and-holds/#asking-a-role)). Where its multiplexer can type into a running agent, the agent is kept open for the answer, but for found work that starts the kind's fix round ([the agent kept open](/flume/guides/callers-and-holds/#the-agent-kept-open)). |
 | `flume ack started --session <id> --transcript <path> --plugin-version <v> [--source <how>]` | The agent started under its identity and secret, in a session with a transcript. `--source` says how the session began, `startup` where none is given. flume takes it only where the agent runs the program its start recorded and every variable of the record matches. Otherwise it refuses, naming each variable that differed and whether the program did, and starts a settle of the place. |
 | `flume ack received --digest <hex> [--mode <mode>]` | The agent received a prompt, by the SHA-256 digest of its text with paste tags taken off and whitespace collapsed. At the start's first prompt, where its start passed a mode, flume takes it only where `--mode` names that mode as the program names it. Otherwise it refuses, naming the mode asked and the one given, records the start begun without its settings and starts a settle of the place. A later prompt compares no mode. |
 | `flume hook <event>` | What the hook for the event does with the input on standard input: `session-start`, `user-prompt-submit`, `pre-tool-use`, `permission-request`, `post-tool-use`, `stop`, `stop-failure` or `session-end`. Any other event does nothing. It always exits `0`. |
