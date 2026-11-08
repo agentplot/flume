@@ -383,9 +383,6 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
             place.recipients.join(", ")
         ));
     }
-    if let Some(caller) = &place.caller {
-        lines.push(format!("  caller: {caller}"));
-    }
     for end in &place.ends {
         let mut line = format!(
             "  ended {}: {}",
@@ -2906,14 +2903,12 @@ mod tests {
     }
 
     #[test]
-    fn a_places_caller() {
-        // 7, 43, 56; core.14: the caller its launch named, after the
-        // recipients' line, none where it named none; and its drop's end
-        // as any end's line, pending for it.
+    fn a_drops_end_line() {
+        // 43, 52, 56; core.14: a drop's end as any end's line, pending for
+        // the recipient that is no role's address, and no caller's line.
         let place = PlaceStatus {
-            recipients: vec!["ops".into()],
+            recipients: vec!["east/planner".into(), "boomdrive".into()],
             recipients_from: Some(RecipientsFrom::Launch),
-            caller: Some("boomdrive".into()),
             ends: vec![EndStatus::of(
                 &EndHeld {
                     of: EndOf::Over {
@@ -2924,33 +2919,20 @@ mod tests {
                     answer: None,
                     claim: None,
                 },
-                &["ops".to_string()],
-                Some("boomdrive"),
+                &["east/planner".to_string(), "boomdrive".to_string()],
             )],
             ..a_place()
         };
         let lines = place_lines(&place);
-        let at = lines
-            .iter()
-            .position(|line| line.starts_with("  recipients: "))
-            .expect("the recipients' line");
-        assert_eq!(
-            lines.get(at + 1).map(String::as_str),
-            Some("  caller: boomdrive")
-        );
         assert!(
             lines
                 .iter()
                 .any(|line| line == "  ended over/dropped: dropped; pending for boomdrive"),
             "{lines:#?}"
         );
-        let none = place_lines(&PlaceStatus {
-            caller: None,
-            ..place
-        });
         assert!(
-            !none.iter().any(|line| line.starts_with("  caller: ")),
-            "{none:#?}"
+            !lines.iter().any(|line| line.starts_with("  caller: ")),
+            "{lines:#?}"
         );
     }
 
@@ -3589,7 +3571,6 @@ mod tests {
             failures: vec![],
             recipients: vec![],
             recipients_from: None,
-            caller: None,
             hold_words: BTreeMap::new(),
             waiting_on: None,
             stalled: false,
@@ -3984,7 +3965,7 @@ mod tests {
                 place: PlaceId::new("/d/places/1/fix--one"),
                 kind: "fix".into(),
                 name: "one".into(),
-                end: EndStatus::of(&end, &["ops".to_string()], None),
+                end: EndStatus::of(&end, &["ops".to_string()]),
             }],
             waiting: vec![],
         };

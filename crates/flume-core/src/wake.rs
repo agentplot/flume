@@ -130,9 +130,6 @@ impl Engine {
             intent: run.intent.clone(),
             every_stage: run.agents.every_stage.clone(),
             settings: run.agents.stages.clone(),
-            // A role's run is launched by no caller of its own, so the end
-            // of its work waits for none (132).
-            caller: None,
             ..Launch::default()
         };
         match self.make_place(&launch, Some(address)) {
@@ -190,16 +187,13 @@ impl Engine {
         if matches!(held.phase, Phase::Making { .. }) {
             return;
         }
-        // The recipients' pending alone: the end of the place's work owed
-        // its caller wakes no role, whatever the caller's name (43, 132).
-        let mut addresses: Vec<String> = vec![];
-        for end in &held.ends {
-            for name in end.pending(&held.place.recipients) {
-                if is_address(&name) && !addresses.contains(&name) {
-                    addresses.push(name);
-                }
-            }
-        }
+        // A drop's or a done's end stands pending for no role's address, so
+        // it wakes no role (43, 52, 114, 132).
+        let addresses: Vec<String> = held
+            .pending_for()
+            .into_iter()
+            .filter(|name| is_address(name))
+            .collect();
         let roles = if addresses.is_empty() {
             HostRoles::default()
         } else {

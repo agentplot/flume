@@ -15,9 +15,9 @@
 //! tidied place's kept document among them, or, naming a place, of the
 //! documents status reads under that name alone, and records each
 //! delivered to it in the same write that reads it, so two inboxes at
-//! once deliver each end once (75). An end is pending for a recipient as
-//! a recipient of its place or as the caller the end of the place's work
-//! waits for (43, 62). A recipient's default is the caller's
+//! once deliver each end once (75). A recipient no pane holds collects its
+//! ends so, a drop's or a done's among them (43, 62). A recipient's
+//! default is the caller's
 //! environment's, else the role a role's run serves, else the calling
 //! session as the terminal names it, as a launch's (7, 132).
 
@@ -119,24 +119,20 @@ impl Engine {
             return Ok(None);
         };
         let id = held.place.id.clone();
-        let caller = held.place.caller.as_deref();
-        let pending = held.ends.iter().any(|end| {
-            end.of.key() == key && end.pending_to(&held.place.recipients, caller, recipient)
-        });
+        let pending = held
+            .ends
+            .iter()
+            .any(|end| end.of.key() == key && end.pending_to(&held.place.recipients, recipient));
         let mut delivered = false;
         let mut answered = held;
         if pending {
             let now = self.host.now();
             let Some(written) = self.update(&id, |held| {
                 let recipients = held.place.recipients.clone();
-                let caller = held.place.caller.clone();
                 let Some(end) = held.ends.iter_mut().find(|end| end.of.key() == key) else {
                     return Step::Keep(None);
                 };
-                // Owed to the recipient as a recipient or as the caller: a
-                // notice to the caller's name leaves the end of the work
-                // owed it, and the wait collects it (43).
-                if !end.pending_to(&recipients, caller.as_deref(), recipient) {
+                if !end.pending_to(&recipients, recipient) {
                     return Step::Keep(Some((held.clone(), false)));
                 }
                 end.deliveries.push(Delivery {
@@ -160,11 +156,7 @@ impl Engine {
         Ok(Some(Answer::Waited {
             place: place.clone(),
             recipient: recipient.into(),
-            end: Some(EndStatus::of(
-                end,
-                &answered.place.recipients,
-                answered.place.caller.as_deref(),
-            )),
+            end: Some(EndStatus::of(end, &answered.place.recipients)),
             delivered,
         }))
     }
@@ -225,11 +217,10 @@ impl Engine {
         let mut waiting = vec![];
         for held in documents {
             waiting.extend(waits_on(&held, recipient));
-            let caller = held.place.caller.as_deref();
             if !held
                 .ends
                 .iter()
-                .any(|end| end.pending_to(&held.place.recipients, caller, recipient))
+                .any(|end| end.pending_to(&held.place.recipients, recipient))
             {
                 continue;
             }
@@ -238,9 +229,8 @@ impl Engine {
                 .update(&held.place.id, |held| {
                     let mut collected = vec![];
                     let recipients = held.place.recipients.clone();
-                    let caller = held.place.caller.clone();
                     for end in &mut held.ends {
-                        if !end.pending_to(&recipients, caller.as_deref(), recipient) {
+                        if !end.pending_to(&recipients, recipient) {
                             continue;
                         }
                         end.deliveries.push(Delivery {
@@ -248,7 +238,7 @@ impl Engine {
                             at: now,
                             by: DeliveredBy::Inbox,
                         });
-                        collected.push(EndStatus::of(end, &recipients, caller.as_deref()));
+                        collected.push(EndStatus::of(end, &recipients));
                     }
                     if collected.is_empty() {
                         Step::Keep(collected)

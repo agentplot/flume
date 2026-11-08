@@ -346,7 +346,6 @@ fn place_status() -> PlaceStatus {
         recipients_from: Some(RecipientsFrom::Answerer {
             source: "acme".into(),
         }),
-        caller: Some("boomdrive".into()),
         hold_words: BTreeMap::from([("code".into(), "until the design lands".into())]),
         waiting_on: Some(WaitingOn {
             act: Act::Retry,
@@ -526,7 +525,7 @@ fn place_status() -> PlaceStatus {
                     claim: None,
                 },
                 key: "over/dropped".parse().unwrap(),
-                pending_for: vec!["boomdrive".into()],
+                pending_for: vec![],
                 open_until: None,
             },
             EndStatus {
@@ -1462,7 +1461,6 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].base",
             "status.places[].base_from",
             "status.places[].branch",
-            "status.places[].caller",
             "status.places[].cannot_read",
             "status.places[].clues",
             "status.places[].clues.display_agent",
@@ -1759,7 +1757,6 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.base",
             "launched.place.base_from",
             "launched.place.branch",
-            "launched.place.caller",
             "launched.place.cannot_read",
             "launched.place.clues",
             "launched.place.clues.display_agent",
@@ -2011,7 +2008,6 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.base",
             "acted.status.base_from",
             "acted.status.branch",
-            "acted.status.caller",
             "acted.status.cannot_read",
             "acted.status.clues",
             "acted.status.clues.display_agent",
@@ -2411,7 +2407,6 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.base",
             "woken.place.base_from",
             "woken.place.branch",
-            "woken.place.caller",
             "woken.place.cannot_read",
             "woken.place.clues",
             "woken.place.clues.display_agent",

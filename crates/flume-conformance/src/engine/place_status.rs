@@ -1369,6 +1369,10 @@ fn a_place_gone(_: &()) -> Outcome {
     let world = World::new();
     let id = world.begun("build", Some(Deliverable::Commits), "one")?;
     world.engine.drop_place(&id, true);
+    // Its drop's end is pending for its recipient until it collects it,
+    // and the settle after that removes the document (43, 62).
+    world.engine.inbox(CALLER, None);
+    world.engine.settle(None);
     let reason = refused(&world.engine.status(Some(&id)))?;
     ensure!(
         reason.contains(&id.0),

@@ -4,9 +4,9 @@
 //! (58); a stage's end keeps only what was reported at that moment (43).
 
 use crate::{
-    Binding, Declared, Given, Holds, Identity, Kind, KindFrom, KindSettings, LabelHeld, PassedOver,
-    PlaceId, PlaceRef, ProfileHeld, Prompt, Readiness, RepositoryName, Revision, Seconds, Secret,
-    SessionHeld, Settings, StopKind, StreamHeld, Unsettled, Verdict,
+    is_address, Binding, Declared, Given, Holds, Identity, Kind, KindFrom, KindSettings, LabelHeld,
+    PassedOver, PlaceId, PlaceRef, ProfileHeld, Prompt, Readiness, RepositoryName, Revision,
+    Seconds, Secret, SessionHeld, Settings, StopKind, StreamHeld, Unsettled, Verdict,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -118,13 +118,12 @@ fn stall_after() -> Seconds {
 }
 
 impl HeldState {
-    /// Those each end stands pending for, in order, each named once: its
-    /// recipients, and the place's caller for the end of its work (43,
-    /// 62).
+    /// The recipients each end stands pending for, in order, each named
+    /// once (43).
     pub fn pending_for(&self) -> Vec<String> {
         let mut pending: Vec<String> = vec![];
         for end in &self.ends {
-            for recipient in end.owed(&self.place.recipients, self.place.caller.as_deref()) {
+            for recipient in end.pending(&self.place.recipients) {
                 if !pending.contains(&recipient) {
                     pending.push(recipient);
                 }
@@ -410,8 +409,10 @@ impl EndHeld {
     /// `recipients`: for a stop-short that named a role, that role's
     /// address alone; otherwise those, then, for a stall, the role the
     /// stop-short it waits on named and the answerer behind the place's
-    /// stream, each once; and for a drop's or a done's end none, since it
-    /// is the caller's alone (41, 43, 52, 130, 193).
+    /// stream, each once; and for a drop's or a done's end, those that are
+    /// no role's address, each once, so no role's run is woken and no
+    /// tidied document kept for a role alone (41, 43, 52, 114, 130, 132,
+    /// 193).
     pub fn recipients(&self, recipients: &[String]) -> Vec<String> {
         match &self.of {
             EndOf::Stage { end, .. } => {
@@ -419,7 +420,15 @@ impl EndHeld {
                     return vec![addressee.clone()];
                 }
             }
-            EndOf::Over { .. } => return vec![],
+            EndOf::Over { .. } => {
+                let mut every: Vec<String> = vec![];
+                for recipient in recipients {
+                    if !is_address(recipient) && !every.contains(recipient) {
+                        every.push(recipient.clone());
+                    }
+                }
+                return every;
+            }
             EndOf::Submission { .. } | EndOf::Stall { .. } => {}
         }
         let mut every = recipients.to_vec();
@@ -442,8 +451,7 @@ impl EndHeld {
     }
 
     /// The recipients of the end it stands pending for, of a place whose
-    /// recipients are `recipients`: those a notice and a wake are owed,
-    /// never the place's caller as its caller (43, 130).
+    /// recipients are `recipients` (43, 130).
     pub fn pending(&self, recipients: &[String]) -> Vec<String> {
         self.recipients(recipients)
             .into_iter()
@@ -451,50 +459,20 @@ impl EndHeld {
             .collect()
     }
 
-    /// Whether it is the end of the place's work, which its caller is
-    /// owed: its submission's landing, or a drop's or a done's end (43).
-    pub fn for_caller(&self) -> bool {
-        matches!(
-            &self.of,
-            EndOf::Submission {
-                verdict: Verdict::Landed { .. },
-                ..
-            } | EndOf::Over { .. }
-        )
-    }
-
-    /// Whether it stands pending for the place's caller `caller`: it is
-    /// the end of the place's work, and no delivery to that name by the
-    /// inbox or a wait is recorded on it, a notice's counting for none
-    /// (43, 62).
-    pub fn pending_for_caller(&self, caller: &str) -> bool {
-        self.for_caller()
-            && !self.deliveries.iter().any(|delivery| {
-                delivery.recipient == caller
-                    && matches!(delivery.by, DeliveredBy::Inbox | DeliveredBy::Wait)
-            })
-    }
-
-    /// Whom it stands pending for, of a place whose recipients are
-    /// `recipients` and whose caller is `caller`: its recipients pending,
-    /// then the caller where it is owed, each once (43, 62).
-    pub fn owed(&self, recipients: &[String], caller: Option<&str>) -> Vec<String> {
-        let mut owed = self.pending(recipients);
-        if let Some(caller) = caller.filter(|caller| self.pending_for_caller(caller)) {
-            if !owed.iter().any(|owed| owed == caller) {
-                owed.push(caller.to_string());
-            }
-        }
-        owed
-    }
-
     /// Whether the end stands pending for `recipient`, of a place whose
-    /// recipients are `recipients` and whose caller is `caller`, owed it
-    /// either way (43).
-    pub fn pending_to(&self, recipients: &[String], caller: Option<&str>, recipient: &str) -> bool {
-        self.owed(recipients, caller)
+    /// recipients are `recipients` (43).
+    pub fn pending_to(&self, recipients: &[String], recipient: &str) -> bool {
+        self.pending(recipients)
             .iter()
             .any(|pending| pending == recipient)
+    }
+
+    /// Whether a notice carries it to a recipient a pane holds, and a wake
+    /// is owed for it: every end but a drop's or a done's, which stands
+    /// pending until its recipient collects it by the inbox or a wait (43,
+    /// 52, 114, 132).
+    pub fn noticed(&self) -> bool {
+        !matches!(self.of, EndOf::Over { .. })
     }
 }
 
@@ -567,8 +545,8 @@ pub enum EndOf {
     },
     /// The end of the place's work by a drop or a done, recorded for those
     /// alone, in the write that makes the work over: a landing is its
-    /// submission's end. It has no recipient, and stands pending for the
-    /// place's caller alone (43, 52, 114).
+    /// submission's end. No notice carries it, and it stands pending for
+    /// the place's recipients that are no role's address (43, 52, 114).
     Over { over: Over },
 }
 
@@ -923,11 +901,6 @@ pub struct PlaceRecord {
     /// place launched before flume kept it (7, 56, 193).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recipients_from: Option<RecipientsFrom>,
-    /// The caller the launch named, fixed by it, for which the end of the
-    /// place's work waits besides its recipients; none where the launch
-    /// named none, and in held state written before (7, 8, 43).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub caller: Option<String>,
     /// The stream the place runs in, fixed at its launch, and where it
     /// came from (8, 143).
     pub stream: StreamHeld,

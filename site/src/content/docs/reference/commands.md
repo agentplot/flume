@@ -83,14 +83,13 @@ flume launch --kind <kind> --name <name> [--brief <text> | --brief-file <file>] 
 | `--kinds <file>` | A declaration of kinds the launch carries, read from disk with its prompts beside it. |
 | `--hold <stage>=<words>` | Hold that stage before it starts, with words saying what it waits for. Repeatable. |
 | `--hold-submission` | Hold the submission once the last stage delivers. |
-| `--recipient <name>` | A recipient of the place's ends: a terminal's session by its name, or a role's address, `<stream>/<role>`, of any stream, whose run is woken for them. Repeatable. With none, `$FLUME_RECIPIENT`, else the terminal session the launch runs in, else the answerer behind the place's stream ([who answers a place](/flume/guides/callers-and-holds/#who-answers-a-place)). Every stall reaches that answerer too. |
+| `--recipient <name>` | A recipient of the place's ends: a terminal's session by its name, or a role's address, `<stream>/<role>`, of any stream, whose run is woken for them. A name no pane holds is sent no notice: its ends wait for it, the place's record kept once it is tidied, until it collects them by `flume inbox` or `flume wait` as that name ([the end of a place's work](/flume/guides/callers-and-holds/#the-end-of-a-places-work)). Repeatable. With none, `$FLUME_RECIPIENT`, else the terminal session the launch runs in, else the answerer behind the place's stream ([who answers a place](/flume/guides/callers-and-holds/#who-answers-a-place)). Every stall reaches that answerer too. |
 | `--mark <mark>` | A mark the caller finds its places by, given back in status. |
 | `--priority <n>` | The place's priority in the host's queue, a whole number, negative allowed; `0` where none is given. |
 | `--stall-after <time>` | How long the place may wait on its caller under no hold's words before it is said stalled; five minutes where none is given. |
 | `--agent [<stage>.]<field>=<value>` | One setting of every stage's agent, or of one stage's. The field is `program`, `model`, `effort`, `instructions`, `beside`, `session`, `mode`, `keep_open` or `programs`. `effort=<word>` gives the agent's effort in its program's own word, as Claude Code's `low`, `medium`, `high`, `xhigh` or `max`, and a word its program does not take refuses the launch ([the effort](/flume/guides/agent-settings/#the-effort)). `session=<name>` opens the agent in that herdr session whatever its stream's, and `beside` opens it beside a pane before any session. `mode=<mode>` gives one of `plan`, `ask`, `edits` and `full`, and `mode.<program>=<value>` one entry of a table of programs, several building one table. A mode word and a table for the same stage refuse the launch. `keep_open=<time>` gives how long the agent is kept open for an answer once it stops short needing one, as a time, `0` keeping none; a `keep_open.<program>` refuses the launch ([how long an agent is kept open](/flume/guides/agent-settings/#how-long-an-agent-is-kept-open)). `programs.<program>.settings.<key>=<value>` gives one top-level key of a program's own settings, several building one entry. Its value is read as JSON where it parses and as the text written otherwise. A nested key, or one key given twice for one stage, refuses the launch. `programs.<program>.file=<path>` names a program's settings file, relative to the working directory, read once at the launch ([a program's own settings](/flume/guides/agent-settings/#a-programs-own-settings)). Repeatable. |
 | `--stream <stream>` | The stream the place runs in, one the host's configuration declares. Where none is named: the intent's stream, else the one the host's configuration names for the repository and kind, the repository or the kind, else `default`. Fixed at the launch. |
 | `--intent <name>` | The intent the place serves, by name. Places of one intent keep to one account while it is usable. Where none is named, the repository and base name the intent. |
-| `--caller <name>` | The caller launching the place, by a name of its own, fixed at the launch and given by status. The end of the place's work, its landing, drop or done, waits for it, the place's record kept once it is tidied, until it collects it by `flume inbox` or `flume wait` as that name. No notice is sent to it, it is no recipient and it wakes no role. A launch naming an empty caller is refused; one naming none has none ([the end of a place's work](/flume/guides/callers-and-holds/#the-end-of-a-places-work)). |
 
 The answer is the place's status. A launch is refused whole, leaving
 nothing it made, when:
@@ -532,10 +531,9 @@ flume inbox [<place>] [--recipient <name>]
 
 Every end pending for the recipient, on every place of the host, a
 tidied place's kept record among them, each recorded delivered in the
-same write, each with its key. An end is pending for the recipient as
-a recipient of its place, or, for the end of the place's work, as the
-caller its launch named. Prints `nothing pending for <recipient>` when
-there is none. The recipient defaults as for `flume wait`.
+same write, each with its key, a drop's or a done's among them. Prints
+`nothing pending for <recipient>` when there is none. The recipient
+defaults as for `flume wait`.
 
 Naming a place, as `flume status` names one, the inbox collects that
 place's ends alone: those of its record, or, once it was tidied, of the

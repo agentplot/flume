@@ -11,13 +11,14 @@
 //! reached in that agent alone, found by its name in its stream's
 //! terminal and session at each delivery, none or more than one of the
 //! name leaving the end pending with nothing claimed (132, 190, C.7;
-//! core.28). No notice is sent to a place's caller as its caller: the
-//! end of the place's work, its landing, drop or done, waits for it until
-//! it collects it by the inbox or a wait (43; core.25). A place whose
-//! work is over and whose worktree is gone keeps its document alone,
-//! apart from a live place's, while an end of it stands pending for a
-//! recipient or for its caller, and it goes once every end is delivered
-//! or its caller drops it (3, 62).
+//! core.28). A recipient no pane holds is sent no notice, its ends
+//! pending until it collects them by the inbox or a wait; and no notice
+//! carries a drop's or a done's end, which stands pending for the
+//! place's recipients that are no role's address until each collects it
+//! (43, 52, 114; core.25). A place whose work is over and whose worktree
+//! is gone keeps its document alone, apart from a live place's, while an
+//! end of it stands pending, and it goes once every end is delivered or
+//! its caller drops it (3, 62).
 
 use crate::prompt::group_name;
 use crate::standing::Reached;
@@ -131,8 +132,9 @@ pub fn what_ended(of: &EndOf) -> String {
 }
 
 impl Engine {
-    /// Sends each end of the place pending for a recipient whose session
-    /// asks no question, once, through the first terminal the host binds
+    /// Sends each end of the place a notice carries, pending for a
+    /// recipient whose session asks no question, once, through the first
+    /// terminal the host binds
     /// that holds the session, or, for a recipient the host's standing
     /// entries name, read once, into the one agent of the entry's name in
     /// its stream's terminal and session; claimed before the send and
@@ -146,7 +148,7 @@ impl Engine {
         let held = read.state;
         let mut standing = None;
         let mut states: BTreeMap<String, Option<Reached>> = BTreeMap::new();
-        for end in &held.ends {
+        for end in held.ends.iter().filter(|end| end.noticed()) {
             for recipient in end.pending(&held.place.recipients) {
                 let Some(Reached {
                     terminal,
@@ -208,8 +210,7 @@ impl Engine {
 
     /// The document of a place whose worktree and branch are gone, kept
     /// apart from a live place's under its id and the tidy's time while an
-    /// end of it stands pending, naming those it waits on, its caller
-    /// among them, and
+    /// end of it stands pending, naming the recipients it waits on, and
     /// holding no line of what its stages made; none kept where nothing
     /// is pending (43, 62, 129).
     pub(crate) fn keep_for_ends(&self, held: &HeldState, over: &Over) -> Option<PlaceId> {
@@ -246,8 +247,8 @@ impl Engine {
     }
 
     /// A tidied place's document: removed once no end of it stands
-    /// pending, and otherwise kept naming those it waits on, its caller
-    /// among them; true when it changed something (43, 62).
+    /// pending, and otherwise kept naming the recipients it waits on; true
+    /// when it changed something (43, 62).
     pub(crate) fn settle_tidied(&self, id: &PlaceId) -> bool {
         let Some(read) = self.store.read(id) else {
             return false;
