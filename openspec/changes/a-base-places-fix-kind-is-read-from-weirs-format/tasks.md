@@ -35,8 +35,8 @@ change touches none of them. Every scenario added cites its clauses.
 
 ## 4. A base place's launch through the profile
 
-- [ ] 4.1 Add the kinds-profile spec's "The landing fix held through the profile" to `kinds_weir.rs` as `a_base_places_launch_holds_the_landing_fix_the_profile_reads`, the engine built by `common::engine::engine` with the profile in place of the fake kinds and the scratch declaration binding the fakes' merge queue as design 5 has it (21, 56, 203). True when `devenv shell -- cargo test -p flume --test profiles kinds_weir::a_base_places_launch_holds_the_landing_fix_the_profile_reads` passes.
-- [ ] 4.2 Add the kinds-profile spec's "A landing fix at a version the repository does not declare" to `kinds_weir.rs` as `a_landing_fix_at_a_version_not_declared_refuses_the_launch` (4, 154; core.8, core.34). True when `devenv shell -- cargo test -p flume --test profiles kinds_weir::a_landing_fix_at_a_version_not_declared_refuses_the_launch` passes.
+- [x] 4.1 Add the kinds-profile spec's "The landing fix held through the profile" to `kinds_weir.rs` as `a_base_places_launch_holds_the_landing_fix_the_profile_reads`, the engine built by `common::engine::engine` with the profile in place of the fake kinds and the scratch declaration binding the fakes' merge queue as design 5 has it (21, 56, 203). True when `devenv shell -- cargo test -p flume --test profiles kinds_weir::a_base_places_launch_holds_the_landing_fix_the_profile_reads` passes.
+- [x] 4.2 Add the kinds-profile spec's "A landing fix at a version the repository does not declare" to `kinds_weir.rs` as `a_landing_fix_at_a_version_not_declared_refuses_the_launch` (4, 154; core.8, core.34). True when `devenv shell -- cargo test -p flume --test profiles kinds_weir::a_landing_fix_at_a_version_not_declared_refuses_the_launch` passes.
 
 ## 5. The guides and the reference
 
