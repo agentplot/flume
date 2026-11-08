@@ -188,17 +188,32 @@ impl Engine {
     /// its caller and on `recipient`, marking nothing for it; refused,
     /// marking nothing, where no document stands under the name. An act
     /// on places, so while no caller keeps watch it settles every place
-    /// first (43, 62, 119, 130, 193, 208; design 9).
+    /// first; a name's documents are read before that settle, so it
+    /// collects what the name read and nothing a settle tidied since, a
+    /// document it removed giving nothing (43, 62, 119, 130, 193, 208;
+    /// design 9).
     pub fn inbox(&self, recipient: &str, place: Option<&PlaceId>) -> Answer {
-        self.settle_attended();
-        let documents = match place {
+        let named: Option<Vec<PlaceId>> = match place {
             Some(id) => {
-                let named = self.documents_of(id);
+                let named: Vec<PlaceId> = self
+                    .documents_of(id)
+                    .into_iter()
+                    .map(|held| held.place.id)
+                    .collect();
                 if named.is_empty() {
                     return Answer::refused(format!("no place {id} stands on this host"));
                 }
-                named
+                Some(named)
             }
+            None => None,
+        };
+        self.settle_attended();
+        let documents: Vec<HeldState> = match named {
+            Some(ids) => ids
+                .iter()
+                .filter_map(|id| self.store.read(id))
+                .map(|read| read.state)
+                .collect(),
             None => self
                 .store
                 .read_every()
