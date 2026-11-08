@@ -660,7 +660,9 @@ known fields fail, naming every field that does.
 | `starts_unready` | `true`, `false` | its first stage starts in a place whose readiness failed | `false` |
 | `lands` | `true`, `false` | its work is submitted to the merge queue after the last stage | `false` |
 | `agents` | a table | settings for every stage's agents, and `agents.stages.<stage>` for one stage's: `program`, `model`, `effort`, `instructions`, `beside`, `mode`, `programs`; an `env` or a `keep_open` refuses the launch | none |
-| `stages` | an array of tables | its stages, at least one | refused |
+| `stages` | an array of tables | its stages, at least one, or `[]` on a kind that lands, a kind with no stages | refused |
+| `landing_fix` | a kind's identity with its version, as `"flume/fix@1"` | on a kind that lands with no stages, the kind its fixes run as when the merge queue sends its branch back, resolved when its place launches. A bare name, an identity with no version, or either field on a kind with stages refuses the launch | no fix |
+| `max_landing_fixes` | a whole number from 0 | on such a kind, how many fixes it runs before its place waits for you | 3 |
 
 ### A stage
 

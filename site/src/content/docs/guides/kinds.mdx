@@ -169,6 +169,8 @@ complete and flume tidies it.
 | `lands` | flume submits the place once the last stage delivers | `false` |
 | `agents` | settings for every stage's agent, and for the stages named under `agents.stages.<stage>` | none |
 | `stages` | the stages, in order: at least one, or `stages = []` for a kind that lands with no stages ([a kind with no stages](#a-kind-with-no-stages)) | refused |
+| `landing_fix` | on a kind that lands with no stages, the kind its fixes run as when the merge queue sends its branch back, by that kind's identity with its version, as `flume/fix@1` | no fix |
+| `max_landing_fixes` | on such a kind, how many fixes it runs before its place waits on you | 3 |
 
 ### A kind with no stages
 
@@ -182,7 +184,25 @@ submission once every place on its branch is over:
 branch = "train"
 lands = true
 stages = []
+landing_fix = "flume/fix@1"
+max_landing_fixes = 2
 ```
+
+`landing_fix` names the kind a fix of the branch runs as, launched when
+the merge queue forecasts the branch in conflict with its base or its
+submission fails. It's that kind's whole identity, its source and its
+version: `flume/fix@1` for flume's own fix, or `repo/mend@1` for a kind
+the repository declares. A bare name, or an identity with no version,
+refuses the launch, naming the field. flume resolves it when the base
+place launches. Where it names no kind, or a kind that does not land or
+has no stages, the launch is refused. It's no part of a package that
+names it, or of the package's hash. `max_landing_fixes` is how many
+fixes it runs before its place waits on you; left out, three. A kind
+with stages that gives either field refuses the launch, naming it: such
+a kind sends a failed submission back to a stage, by `on_fail`. A base
+place whose kind names no landing fix waits on you after a failed or
+conflicting submission. [Its
+fixes](/flume/guides/merge-queue/#its-fixes) follows one through.
 
 A kind that does not land and declares `stages = []` refuses the
 launch, naming its stages. A table that leaves `stages` out is no
