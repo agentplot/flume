@@ -1,83 +1,64 @@
 # Verify: a-base-places-fix-kind-is-read-from-weirs-format
 
 Checked on 2026-11-08 at
-`change/a-base-places-fix-kind-is-read-from-weirs-format` 0aafa142, cut
+`change/a-base-places-fix-kind-is-read-from-weirs-format` 1afee23e, cut
 from `bolt/flume-launches-a-conflicting-bolts-fix` at bb2d47b2, the
 bolt's head still. The branch holds main at 81d57226, taken in by task
 6.1. The check covers the change's proposal, design, its one spec,
 `kinds-profile`, and its tasks.
 
-**The whole checks fail, so the change is not archived.** `sluice exec
-bolt/flume-launches-a-conflicting-bolts-fix` at 0aafa142 failed one of
-its 40 tasks, `nix:test`: the flake that came in with main still fetches
-weir's crates at the old revision, `5562af52`, while `Cargo.lock` names
-`daacda39`. The work itself holds. Every task is ticked, every
-requirement is built, and each of the spec's seven scenarios has a test
-that passes in the same run.
+**The whole checks pass and the work holds, so the change is archived.**
+`sluice exec bolt/flume-launches-a-conflicting-bolts-fix` at 1afee23e
+completed all 40 of its tasks with none failed. Every task is ticked,
+every requirement is built, and each of the spec's seven scenarios has a
+test that passes in the same run.
 
 ## Checks
 
 `sluice exec bolt/flume-launches-a-conflicting-bolts-fix` ran once, with
 the worktree clean, as the repository's instructions name the gate for a
 place on a bolt: the bolt's `check-fast` layer, `check-tools` left to the
-bolt's merge onto main. It ran the checks 0aafa14 affects against the
-bolt at bb2d47b and recorded 39 results under their keys for 0aafa14.
-Tasks: 39 completed, 1 failed.
+bolt's merge onto main. It ran against the bolt at bb2d47b and recorded
+39 results under their keys for 1afee23, exiting 0. Tasks: 40 completed,
+39 checks passed, none failed.
 
 Passed:
 
 - `seams`, `core`, `fakes`, `conformance` and `flume`: format, lint and
-  test. `flume:test` ran 554 tests with none failed, among them the seven
-  this change adds to `kinds_weir.rs`;
-- `conformance:coverage`;
+  test. The crates ran 794 tests with none failed: `seams` 103, `core`
+  47, `fakes` 65, `conformance` 25 and `flume` 554, the last among them
+  the seven this change adds to `kinds_weir.rs`;
+- `conformance:coverage`: every clause of Parts A and B, I1 to I8 and S1
+  to S120 at 31f9f1c cited by the suite's 896 scenarios, or left to the
+  change it names;
 - `plugin-claude`: format, typecheck, engine-types, validate and test;
 - `plugin-herdr`: manifest, lint and test;
-- `site`: install, build, and prose with 0 errors and 0 warnings;
-- `nix`: format, lint and typecheck;
+- `site`: install, build (19 pages), and prose with 0 errors and 0
+  warnings;
+- `nix`: format, lint, typecheck and test, the last's "every case holds"
+  taking in "Every git crate is fetched by a hash taken at Cargo.lock's
+  revision", which `nix/packages/git-crates.nix` at daacda39 now meets;
 - `root`: format, changes, specs (48 of 48), adrs, marketplace, layers,
   versions, toolchain and hooks.
 
-Failed:
-
-- **`nix:test`**, in its check "Every git crate is fetched by a hash
-  taken at Cargo.lock's revision":
-
-  ```text
-  weir-capture-0.0.0: Cargo.lock names daacda39e59469029b2841f889c6cbd8cd7839d9,
-  and nix/packages/git-crates.nix's hash is of 5562af52cb7e065e7de7109135dfd7eecb1d61c5:
-  the hash moves with the revision, in one commit
-  weir-kinds-0.0.0: Cargo.lock names daacda39e59469029b2841f889c6cbd8cd7839d9,
-  and nix/packages/git-crates.nix's hash is of 5562af52cb7e065e7de7109135dfd7eecb1d61c5:
-  the hash moves with the revision, in one commit
-  ```
-
-  `nix/packages/git-crates.nix` isn't on the bolt. It came in with main
-  at 81d57226 (3e81c484, record 0055), pinning both weir crates at
-  `5562af52` with that revision's hash. Task 2.1 moved `Cargo.toml` and
-  `Cargo.lock` to `daacda39` before the merge, and the merge in 6.1 kept
-  both sides, so the flake's revision and hash were never moved with the
-  lock. 2.1's check, `git grep -n 5562af5 -- Cargo.toml Cargo.lock`,
-  doesn't look at `nix/`. `git grep -n 5562af5` still finds the file's
-  two `rev` lines. Both entries need `rev` set to
-  `daacda39e59469029b2841f889c6cbd8cd7839d9` and `hash` set to that
-  revision's, in one commit, as the flake's design has it
-  (`openspec/changes/archive/2026-11-07-flume-publishes-its-own-flake-and-module/design.md`;
-  core.22).
-
-As the stage asks, the checks were run once and not again, and nothing
-was fixed here.
+moon warned that it could not write its shared cache's blobs or archive
+task outputs, and that it skipped the Rust dependency install with no
+internet connection. None of these is a check, and none failed one.
 
 ## Tasks
 
-All 13 tasks of the six groups are ticked, `[x]`, and none is open.
+All 14 tasks of the six groups are ticked, `[x]`, and none is open.
 The narrow check each names is covered by the gate run above:
 `root:adrs` and `root:format` for 1.1; `flume:test` for 2.1, 3.1 to 3.5,
 4.1 and 4.2; `site:prose` for 5.1 to 5.3; `site:build` for 6.1, whose
-`flume:tools` half is `check-tools` and isn't run on a bolt. 2.1's
-`git grep -n 5562af5 -- Cargo.toml Cargo.lock` finds nothing, but its
-intent, weir's crates at `daacda3`, isn't met in the tree, as above.
-`openspec validate a-base-places-fix-kind-is-read-from-weirs-format
---strict` passes.
+`flume:tools` half is `check-tools` and isn't run on a bolt; `nix:test`
+for 6.2. weir's crates are at `daacda39e59469029b2841f889c6cbd8cd7839d9`
+in `Cargo.toml`, both of `Cargo.lock`'s weir entries and both of
+`nix/packages/git-crates.nix`'s, each with that revision's hash, and
+`git grep -l 5562af5` finds the old revision only in this change's
+design, tasks and report and two archived changes' designs, each telling
+where the pin stood. `openspec validate
+a-base-places-fix-kind-is-read-from-weirs-format --strict` passes.
 
 ## Requirements and scenarios
 
@@ -106,10 +87,8 @@ weir's spelling, naming `flume/fix@1`, to any host's operator
 (core.35). core.34's rule and the details of core.4 and core.34, the
 rules page's mirror and record 0056's amendment cite weir's record 0005.
 
-## What goes back
+## Decisions
 
-The code stage moves `nix/packages/git-crates.nix`'s two weir entries
-to `daacda39e59469029b2841f889c6cbd8cd7839d9` with that revision's
-hash, in one commit, and runs `sluice exec
-bolt/flume-launches-a-conflicting-bolts-fix -- moon run nix:test`.
-Nothing else in the change needs to be done again.
+This stage made none. It ran the checks, read the work against the
+change and archived it, which the change's tasks and the stage's
+instructions decide.
