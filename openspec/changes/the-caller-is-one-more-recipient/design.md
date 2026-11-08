@@ -12,7 +12,7 @@ and gave the inbox a place.
 
 Record 0060, rewritten on the user's answer of 2026-11-08, folds the
 caller into the recipients. The statement says it at agentplot/blueprints
-`design/flume-a-tidied-places-end-waits-for-its-caller`, over b08a773:
+`design/flume-a-tidied-places-end-waits-for-its-caller` at 479a6ab, over b08a773:
 43 (a recipient no pane holds, a drop's or a done's end, an inbox naming
 a place), the runner's row of the callers table, and S121. Clauses 7, 8,
 56 and 62 read there as on main. Rule core.25 is amended for it.

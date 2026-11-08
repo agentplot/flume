@@ -11,7 +11,7 @@ own. The user answered agentplot-design's card on 2026-11-08: "Runner
 as one more recipient now; one shared inbox in weir next." Record 0060
 is rewritten to that answer, and the statement's amendment with it, at
 agentplot/blueprints `design/flume-a-tidied-places-end-waits-for-its-caller`
-(43, the runner's row, S121).
+at 479a6ab (43, the runner's row, S121).
 
 ## What Changes
 

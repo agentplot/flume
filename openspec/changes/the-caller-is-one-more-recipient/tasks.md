@@ -3,7 +3,7 @@
 The work is on `fix/a-tidied-places-end-stays-readable--the-caller-is-one-more-recipient`,
 cut from `bolt/a-tidied-places-end-stays-readable`. The statement is
 read at agentplot/blueprints `design/flume-a-tidied-places-end-waits-for-its-caller`,
-over b08a773 (43, the runner's row, S121). Record 0060, rule core.25 and
+at 479a6ab, over b08a773 (43, the runner's row, S121). Record 0060, rule core.25 and
 its mirror on the site's rules page are in the first commit. The
 suite's list of clauses stays at 9c060ab, so no scenario cites S121.
 
