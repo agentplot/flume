@@ -114,6 +114,8 @@ fn kind() -> Kind {
         agents: kind_settings(),
         stages: vec![stage()],
         label: Some("operation".into()),
+        fix: None,
+        fix_limit: None,
     }
 }
 
@@ -259,6 +261,8 @@ fn held() -> HeldState {
                 name: "the-surfaces".into(),
                 digest: "d1".into(),
             },
+            fix_of: None,
+            fixes_as: None,
         },
         phase: Phase::Over {
             over: Over::Landed {
@@ -508,6 +512,8 @@ fn held() -> HeldState {
             stalled: true,
         }),
         stall_after: 30 * 60,
+        fixes: vec![],
+        forecast: None,
     }
 }
 
@@ -4710,4 +4716,209 @@ fn the_historys_answers() {
         commit: Revision::new("c3"),
         since: true,
     });
+}
+
+#[test]
+fn a_forecast_clear_in_conflict_or_unread() {
+    // A forecast is the merge queue's, a branch's head against its base
+    // behind every entry submitted (210).
+    round_trips(Forecast::Clear {
+        head: Revision::new("aaa111"),
+        onto: Revision::new("c0ffee"),
+    });
+    round_trips(Forecast::Conflict {
+        head: Revision::new("aaa111"),
+        onto: Revision::new("c0ffee"),
+        files: vec!["README.md".into()],
+        with: vec![],
+        words: "would conflict: README.md with main".into(),
+    });
+    round_trips(Forecast::Conflict {
+        head: Revision::new("aaa111"),
+        onto: Revision::new("c0ffee"),
+        files: vec!["README.md".into()],
+        with: vec!["#7".into()],
+        words: "would conflict: README.md with #7".into(),
+    });
+    round_trips(Forecast::CouldNotRead {
+        reason: "the reader's document is torn".into(),
+    });
+}
+
+#[test]
+fn a_kind_that_names_its_fix() {
+    // A kind that lands with no stages names the kind its fixes run as
+    // and its bound (23, 203).
+    round_trips(Kind {
+        stages: vec![],
+        lands: true,
+        fix: Some("mend".into()),
+        fix_limit: Some(2),
+        ..kind()
+    });
+    round_trips(Kind {
+        stages: vec![],
+        lands: true,
+        fix: Some("repo/mend@1".into()),
+        fix_limit: None,
+        ..kind()
+    });
+}
+
+/// A base place whose kind names `repo/mend@1` its fix kind, its newest
+/// forecast in conflict, and its four fixes: one landed, one dropped, one
+/// refused and one live (203).
+fn base_with_fixes() -> HeldState {
+    let mut held = held();
+    let mend = KindIdentity {
+        source: "repo".into(),
+        name: "mend".into(),
+        version: 1,
+        spelled: "repo/mend@1".into(),
+    };
+    held.place.kind.stages = vec![];
+    held.place.kind.lands = true;
+    held.place.kind.fix = Some("mend".into());
+    held.place.kind.fix_limit = Some(4);
+    held.stages = vec![];
+    held.current = None;
+    held.place.fixes_as = Some(FixKind {
+        identity: mend.clone(),
+        from: KindFrom {
+            identity: mend,
+            source: "repo".into(),
+            source_file: None,
+            kind_dir: None,
+            declaration_file: Some(".config/flume.toml".into()),
+            revision: Some(Revision::new("c1")),
+            hash: None,
+            lock_file: None,
+        },
+    });
+    held.forecast = Some(ForecastHeld {
+        at: 1_700_000_900,
+        forecast: Forecast::Conflict {
+            head: Revision::new("aaa111"),
+            onto: Revision::new("c0ffee"),
+            files: vec!["README.md".into()],
+            with: vec![],
+            words: "would conflict: README.md with main".into(),
+        },
+    });
+    let fix = |number: u32, cause: FixCause, ended: FixEnded| BaseFix {
+        number,
+        name: format!("spring-{number}"),
+        place: PlaceId::new(format!("/data/flume/places/mend--spring-{number}")),
+        cause,
+        launched: 1_700_000_000 + u64::from(number),
+        ended,
+    };
+    held.fixes = vec![
+        fix(
+            1,
+            FixCause::Forecast {
+                head: Revision::new("aaa000"),
+                onto: Revision::new("beef00"),
+            },
+            FixEnded::Landed {
+                commit: Revision::new("abc123"),
+            },
+        ),
+        fix(
+            2,
+            FixCause::Failed {
+                submission: "41".into(),
+            },
+            FixEnded::Dropped,
+        ),
+        fix(
+            3,
+            FixCause::Conflicted {
+                submission: "42".into(),
+            },
+            FixEnded::Refused {
+                reason: "the branch mend/spring-3 already exists".into(),
+            },
+        ),
+        fix(
+            4,
+            FixCause::Forecast {
+                head: Revision::new("aaa111"),
+                onto: Revision::new("c0ffee"),
+            },
+            FixEnded::Live,
+        ),
+    ];
+    held
+}
+
+#[test]
+fn a_base_place_with_its_fix_kind_forecast_and_fixes() {
+    let held = base_with_fixes();
+    round_trips(held.clone());
+    let json = serde_json::to_value(&held).expect("held state as JSON");
+    assert_eq!(json["fixes"][0]["ended"], "landed", "{json}");
+    assert_eq!(json["fixes"][0]["commit"], "abc123", "{json}");
+    assert_eq!(json["fixes"][3]["ended"], "live", "{json}");
+}
+
+#[test]
+fn a_fix_of_its_base_place_with_its_recipients() {
+    // A fix holds its base place, its number and its cause, and its
+    // recipients are its base place's (43, 203).
+    let mut held = held();
+    held.place.fix_of = Some(FixOf {
+        place: PlaceId::new("/data/flume/places/train--spring"),
+        number: 1,
+        cause: FixCause::Forecast {
+            head: Revision::new("aaa111"),
+            onto: Revision::new("c0ffee"),
+        },
+    });
+    held.place.recipients = vec!["ops".into()];
+    held.place.recipients_from = Some(RecipientsFrom::BasePlace);
+    round_trips(held.clone());
+    let json = serde_json::to_value(&held.place.recipients_from).expect("as JSON");
+    assert_eq!(json, serde_json::json!({"from": "base-place"}));
+    for cause in [
+        FixCause::Failed {
+            submission: "41".into(),
+        },
+        FixCause::Conflicted {
+            submission: "42".into(),
+        },
+    ] {
+        round_trips(FixOf {
+            cause,
+            ..held.place.fix_of.clone().expect("a fix's base place")
+        });
+    }
+}
+
+#[test]
+fn a_held_state_written_before_base_places_fixes() {
+    // A held state written before this change reads with no fix kind, no
+    // forecast, no fixes and no base place, and writes none back (21, 61).
+    let before = serde_json::to_value(held()).expect("held state as JSON");
+    for field in ["forecast", "fixes"] {
+        assert!(before.get(field).is_none(), "{field} written: {before}");
+    }
+    for field in ["fixes_as", "fix_of"] {
+        assert!(before["place"].get(field).is_none(), "{field} written");
+    }
+    for field in ["fix", "fix_limit"] {
+        assert!(before["place"]["kind"].get(field).is_none(), "{field}");
+    }
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
+    assert_eq!(read.forecast, None);
+    assert!(read.fixes.is_empty());
+    assert_eq!(read.place.fixes_as, None);
+    assert_eq!(read.place.fix_of, None);
+    assert_eq!(read.place.kind.fix, None);
+    assert_eq!(read.place.kind.fix_limit, None);
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "nothing of a base place's fixes written where none is held"
+    );
 }

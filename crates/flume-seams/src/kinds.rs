@@ -29,6 +29,19 @@ pub struct Kind {
     /// a kind read before (180, C.2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    /// For a kind that lands with no stages, its landing fix, the kind its
+    /// fixes run as, as the kind's reader gives it, which weir's format
+    /// gives as that kind's identity with its version; its place's launch
+    /// resolves it as a launch's name resolves; none where it names none,
+    /// and in a kind read before (23, 157, 203; weir record 0005).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix: Option<String>,
+    /// How many landing fixes such a kind runs before its place waits on
+    /// its caller, as the kind's reader gives it, which weir's format
+    /// gives as `max_landing_fixes`; none where it gives none, flume's
+    /// default for a stage's bound then (23, 58, 203; weir record 0005).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_limit: Option<u32>,
 }
 
 /// One step of a kind (23), as declared: every agent and every

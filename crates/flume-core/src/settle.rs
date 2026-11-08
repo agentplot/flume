@@ -144,8 +144,9 @@ impl Engine {
         Tidied::default()
     }
 
-    /// Settles one place, then starts what waits for room on the host
-    /// (46, 70), and gives what its tidy did.
+    /// Settles one place, a base place forecast once its steps are taken,
+    /// then starts what waits for room on the host (46, 70, 203), and
+    /// gives what its tidy did.
     pub(crate) fn settle_place(&self, id: &PlaceId) -> Tidied {
         let mut tidied = Tidied::default();
         self.deliver_ends(id);
@@ -154,6 +155,7 @@ impl Engine {
                 break;
             }
         }
+        self.forecast_base(id);
         self.stall(id);
         self.deliver_ends(id);
         self.wake_roles(id);

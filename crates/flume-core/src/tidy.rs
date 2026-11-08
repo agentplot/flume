@@ -79,6 +79,11 @@ impl Engine {
                 return false;
             }
         };
+        // A base place's fix writes how it ended onto its base place before
+        // anything of it is removed, so its end is never lost (203).
+        if !self.fix_ended(&held, &over) {
+            return false;
+        }
         let Ok(bound) = self.bound(place) else {
             return false;
         };

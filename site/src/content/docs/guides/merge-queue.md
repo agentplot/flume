@@ -259,16 +259,67 @@ the settles after the submission, and acts on it once. The outcome
 reaches the place's recipients as any end does. A caller keeping watch
 moves it as it moves every submitted place.
 
-### A failed submission
+### Its fixes
 
-A failed or conflicting submission starts nothing, since the kind
-names no stage to send it back to. The base place waits on you with
-sluice's words: the failed check, or the contested files and the
-revision of `main` sluice tested against. To fix it, launch a fix with
-`--base train/spring` and those words as its brief. A conflict's fix
-merges that revision of `main` into its branch first, as any conflict's
-fix does. Once the fix lands on `train/spring`, retry the base place's
-submission. flume launches no fix of its own.
+A kind with no stages may name its landing fix, the kind its fixes run
+as, by `landing_fix`, and how many fixes it runs before its place waits
+on you, by `max_landing_fixes`:
+
+```toml
+# .config/flume.toml
+[kinds.train]
+branch = "train"
+lands = true
+stages = []
+landing_fix = "flume/fix@1"
+max_landing_fixes = 2
+```
+
+`landing_fix` is the fix kind's whole identity, its source and its
+version, here flume's own `fix@1`; a kind the repository declares is
+named as `repo/<name>@<version>`. flume resolves it when the base place
+launches, and refuses the launch where it names no kind it can run as a
+fix. Left out, `max_landing_fixes` is three ([a kind with no
+stages](/flume/guides/kinds/#a-kind-with-no-stages)). For a base place
+whose kind names a landing fix, flume watches its branch against its
+base while it waits on you. At each settle, while no place on its branch
+is live and its submission isn't open, flume asks sluice for a
+forecast, run in the repository:
+
+```sh
+sluice submit main --check --head train/spring --json
+```
+
+sluice forms the merge it would test, behind everything queued on
+`main`, and submits nothing. Status gives the newest forecast.
+
+A forecast in conflict with `main` itself, or a failed or conflicting
+submission, launches the fix on the branch at that settle, with no word
+of yours. The fix is a place of the kind named, cut from `train/spring`
+and landing on it. It's named for the base place and the fix's number,
+`spring-1`, and runs in the base place's stream, at its priority,
+delivering to its recipients. Its brief is one line saying what it's for
+over sluice's words. For a conflict, that line asks it to merge the
+revision of `main` sluice names into the branch first, resolving the
+files contested; for a failure, to make the branch pass the checks that
+failed. A forecast that conflicts only with work queued ahead launches
+nothing, and the next settle forecasts again.
+
+flume runs one fix at a time and acts on each forecast and each
+submission once. Every fix counts toward the kind's bound, a launch
+flume could not make among them. Past the bound, or once you drop a
+fix, the base place waits on you with sluice's words: launch a fix of
+your own with `--base train/spring`, or drop the base place. Once a fix
+lands, the next forecast decides. Where it's clear, the base place
+waits on you to retry its submission, which stays yours.
+
+A base place whose kind names no fix waits on you after a failed or
+conflicting submission, with sluice's words: the failed check, or the
+contested files and the revision of `main` sluice tested against. To
+fix it, launch a fix with `--base train/spring` and those words as its
+brief. A conflict's fix merges that revision of `main` into its branch
+first, as any conflict's fix does. Once the fix lands on
+`train/spring`, retry the base place's submission.
 
 ### Dropping it, and its tidy
 

@@ -19,7 +19,7 @@ change this list in the commit that adopts it.
 #### Scenario: The clauses listed
 
 - **WHEN** the suite's list is read
-- **THEN** it names the revision of agentplot/blueprints main that holds record 0039's amendment and record 0054's acceptance, 193, S93, S94, S98, S99 and S119 among it, 9c060ab or the later one of main the build read; Parts A and B hold every clause that revision states, 193 in Part A; the scenarios run as that revision holds them, S93, S94, S98, S99 and S119 among them; and it names as unbuilt each clause and scenario of that revision another change has not yet built, by that change, and nothing of 193, S93, S94, S98 and S99, 202 to 206 and 208, S109 to S112 and S118, 198, S104 and S105, 197 and S103, 207 and S113 to S117, or S119, whose changes have landed
+- **THEN** it names the revision of agentplot/blueprints main that holds this change's amendment, 210 and S120 among it, or the later one of main the build read; Parts A and B hold every clause that revision states, 210 in Part B and no clause it took out, 209 among them; the scenarios run as that revision holds them, S112 as amended, S119 and S120 among them; and it names as unbuilt what it named before this change but 209, which that revision no longer holds, and each clause and scenario of that revision another change has not yet built, by that change, and nothing of 210 and S120, 193, S93, S94, S98 and S99, 202 to 206 and 208, S109 to S112 and S118, 198, S104 and S105, 197 and S103, 207 and S113 to S117, or S119, whose changes have landed
 
 ### Requirement: Every scenario cites its clauses
 
@@ -48,7 +48,7 @@ and SHALL fail naming any of those a scenario cites.
 #### Scenario: The suite as this change leaves it
 
 - **WHEN** the coverage check runs over the suite as this change lands it
-- **THEN** it passes: every clause of Parts A and B, I1 to I8 and every scenario the list holds but those named as unbuilt is cited, 193, S93, S94, S98 and S99 by record 0039's change's engine scenarios and S119 by record 0054's change's scenario
+- **THEN** it passes: every clause of Parts A and B, I1 to I8 and every scenario the list holds but those named as unbuilt is cited, 210 and S120 by this change's scenarios and S119 by record 0054's change's scenario
 
 ### Requirement: Seam scenarios run against any profile
 
