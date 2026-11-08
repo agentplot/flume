@@ -1,7 +1,7 @@
 ---
 number: 57
 title: A tidied place leaves nothing at its location, and its group folder goes once empty
-status: proposed
+status: accepted
 date: 2026-11-07
 decision-makers:
 - chore/a-tidied-place-leaves-no-folder
@@ -9,7 +9,7 @@ decision-makers:
 
 # A tidied place leaves nothing at its location, and its group folder goes once empty
 
-Status: proposed on 2026-11-07 by the code stage of the chore `a-tidied-place-leaves-no-folder`. The direction is the brief's and clause 62's. Removing what stands once git holds no worktree there, rather than forcing git, and the bound of three removals are the stage's own choices, cheap to change.
+Status: accepted on 2026-11-08 by agentplot-design. Written by the code stage of the chore `a-tidied-place-leaves-no-folder`: its direction is the brief's and the statement's, and its choices are the stage's own, cheap to change and none of them the user's alone, so the design agent settles them.
 
 Deciders: the code stage, on the brief: "Flume's tidy of a finished place removes the place's folder, its .devenv and .moon state with it, and the place's group folder once it holds no place".
 

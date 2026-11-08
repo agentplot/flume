@@ -1,7 +1,7 @@
 ---
 number: 58
 title: A notice for a role's run waits until the run's start took its prompt
-status: proposed
+status: accepted
 date: 2026-11-07
 decision-makers:
 - the code stage of the fix flume-sessions-start-their-mcp-servers--s93-holds-steady
@@ -9,7 +9,7 @@ decision-makers:
 
 # A notice for a role's run waits until the run's start took its prompt
 
-Status: proposed on 2026-11-07 by the code stage of the fix `flume-sessions-start-their-mcp-servers--s93-holds-steady`, as a choice clauses 37, 38 and 43 and rule core.11 decide; accepted on the operator's yes.
+Status: accepted on 2026-11-08 by agentplot-design. Written by the code stage of the fix `flume-sessions-start-their-mcp-servers--s93-holds-steady`: its direction is the brief's and the statement's, and its choices are the stage's own, cheap to change and none of them the user's alone, so the design agent settles them.
 
 Deciders: the code stage, on clauses 37, 38, 43 and 132 and rule core.11.
 Sources: `agentplot/blueprints:design/flume/requirements.md` on main at 00d90e9, clauses 33, 37, 38, 43 and 132; sluice's refusal of #159 at 2a2101a and its logs `flume:tools.log` of runs c139 and c140 on deneb, 2026-11-07; the role-waking spec's requirements "An end pending for an address with no run wakes the role" and, from this record's change, "A role's run takes no notice before its prompt"; `crates/flume-core/src/settle.rs`, `ends.rs`, `standing.rs`, `deliver.rs` and `start.rs`; S93's walkthrough, `crates/flume/tests/profiles/tools/walkthroughs.rs`.
