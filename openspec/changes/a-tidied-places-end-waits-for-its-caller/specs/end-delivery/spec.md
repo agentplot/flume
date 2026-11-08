@@ -60,25 +60,15 @@ to the place's recipients and no role SHALL be woken for it (43, 52,
 - **WHEN** a fix launched with the recipient `ops` and no caller is dropped while its construct runs
 - **THEN** the end `over/dropped` is recorded pending for no one, `ops` gets no notice, and the tidy keeps no document of the place (43, 52, 62)
 
-## MODIFIED Requirements
+### Requirement: An inbox naming a place
 
-### Requirement: The inbox collects what is pending
-
-`flume inbox` SHALL give every end pending for a recipient, of every
-place on the host, with what 43 names and its key, and SHALL record each
-delivered to that recipient. An inbox that names a place SHALL give and
-record only the ends of the documents `flume status` reads under that
-name, the place's own, else those kept for it once it was tidied, or
-the one document `<place>@<at>` names; it SHALL give only that place's
-entry of the places that wait on the recipient, and SHALL be refused,
-naming the place, where no document stands under that name. Status, a
-wait's read and an inbox for another recipient SHALL mark nothing
-delivered (43, core.25).
-
-#### Scenario: Collected after a restart
-
-- **WHEN** two ends of two places are pending for `ops` while its session is gone, and its restarted session runs `flume inbox` as `ops`
-- **THEN** the answer holds both ends whole, each with its key, both read delivered to `ops`, and a second `flume inbox` gives nothing
+An inbox that names a place SHALL give and record only the ends of the
+documents `flume status` reads under that name, the place's own, else
+those kept for it once it was tidied, or the one document
+`<place>@<at>` names, and SHALL give only that place's entry of the
+places that wait on the recipient. It SHALL be refused, naming the
+place and marking nothing delivered, where no document stands under
+that name (43, 62, core.25).
 
 #### Scenario: An inbox naming a place
 
@@ -89,6 +79,8 @@ delivered (43, core.25).
 
 - **WHEN** an inbox names a place under which no document stands on the host
 - **THEN** it is refused naming the place, and nothing is marked delivered (43)
+
+## MODIFIED Requirements
 
 ### Requirement: A tidied place's document stays while an end is pending
 
