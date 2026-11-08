@@ -2510,6 +2510,13 @@ fn every_ends_key_round_trips() {
             },
             "stall/3700",
         ),
+        (
+            EndOf::Over {
+                over: Over::Dropped,
+            },
+            "over/dropped",
+        ),
+        (EndOf::Over { over: Over::Done }, "over/done"),
     ];
     for (end, token) in ends {
         let key = end.end_key();
@@ -2542,6 +2549,30 @@ fn every_ends_key_round_trips() {
     ] {
         round_trips(stage(state, None, 3).end_key());
     }
+    // The seam-contracts spec's "A caller and a drop round-trip", for its
+    // drop: the end of a drop is written as its over, keys `over/dropped`
+    // as held state records it, and has no recipient (43, 52, 61, 75).
+    let dropped = EndOf::Over {
+        over: Over::Dropped,
+    };
+    assert_eq!(
+        serde_json::to_value(&dropped).expect("written"),
+        serde_json::json!({"of": "over", "over": "dropped"})
+    );
+    round_trips(dropped.clone());
+    assert_eq!(dropped.key(), "over dropped");
+    assert_eq!(EndOf::Over { over: Over::Done }.key(), "over done");
+    let mut state = held();
+    state.ends.push(EndHeld {
+        of: dropped,
+        read_at: 500,
+        deliveries: vec![],
+        answer: None,
+        claim: None,
+    });
+    round_trips(state.clone());
+    let end = state.ends.last().expect("the drop's end");
+    assert!(end.recipients(&state.place.recipients).is_empty());
 }
 
 #[test]
@@ -2561,6 +2592,11 @@ fn a_key_in_another_form_is_refused() {
         "submission/2",
         "stall/soon",
         "stall/",
+        "over/landed",
+        "over/",
+        "over/Dropped",
+        "over/dropped/1",
+        "over dropped",
         "stage construct 1 EndedShort ",
         "",
     ] {

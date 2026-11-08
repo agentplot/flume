@@ -123,6 +123,7 @@ pub fn what_ended(of: &EndOf) -> String {
             Verdict::Refused { .. } => "submission refused".into(),
         },
         EndOf::Stall { waiting, .. } => format!("stalled: {waiting}"),
+        EndOf::Over { over } => over.word().into(),
     }
 }
 
