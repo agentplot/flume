@@ -571,6 +571,14 @@ impl Engine {
         launch: &Launch,
         role: Option<&str>,
     ) -> Result<HeldState, String> {
+        // A caller written empty names no one: the launch is refused whole
+        // before anything is made (7; core.8).
+        if launch.caller.as_deref().is_some_and(str::is_empty) {
+            return Err(
+                "the launch's caller is empty: name the caller the end of the place's work waits for, or none (7)"
+                    .into(),
+            );
+        }
         let repository = &launch.repository;
         let kinds = self.resolver.kinds();
         let binding = match kinds.read_binding(repository) {
@@ -725,7 +733,7 @@ impl Engine {
                 hold_words: launch.hold_words.clone(),
                 recipients,
                 recipients_from,
-                caller: None,
+                caller: launch.caller.clone(),
                 stream,
                 intent,
             },

@@ -206,6 +206,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["32"],
             run: a_place_held_with_no_address,
         },
+        Scenario {
+            name: "launch: a caller named is kept on the place apart from its recipients, given by status, and left as it was by a hold and a retry after the launch",
+            cites: &["7", "8", "56"],
+            run: a_caller_named,
+        },
+        Scenario {
+            name: "launch: a caller written empty refuses the launch whole, naming the caller, nothing made",
+            cites: &["4", "7"],
+            run: an_empty_caller,
+        },
+        Scenario {
+            name: "launch: a launch naming no caller has none, whatever FLUME_RECIPIENT gives its recipients",
+            cites: &["7"],
+            run: no_caller_named,
+        },
+        Scenario {
+            name: "launch: a role's run an end pending for its address wakes has no caller, whatever the caller of the place whose end woke it",
+            cites: &["132"],
+            run: a_woken_run_has_no_caller,
+        },
     ]
 }
 
@@ -1395,5 +1415,119 @@ fn a_carried_address(_: &()) -> Outcome {
         vec!["north/planner".to_string()],
         "the place's recipients"
     );
+    Ok(())
+}
+
+/// The launching spec's "A caller named": the recipient
+/// `madswan/planner` and the caller `boomdrive`, each given by status
+/// apart, and the caller as it was after a hold and a retry (7, 8, 56).
+fn a_caller_named(_: &()) -> Outcome {
+    let world = World::new();
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    declares(&world, "acme", "madswan/planner", false);
+    let mut named = fix_in("madswan", "one", &["madswan/planner"]);
+    named.caller = Some("boomdrive".into());
+    let place = launched(&world.engine.launch(&named))?;
+    ensure_eq!(
+        place.caller.as_deref(),
+        Some("boomdrive"),
+        "the caller the launch gives"
+    );
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    let held = world
+        .engine
+        .hold(&id, HoldOn::Submission, "until the review", None);
+    ensure!(held.refusal().is_none(), "the hold: {held:?}");
+    super::settling::deliver_fix(&world, &id);
+    world.settle(&id);
+    let retried = world.engine.retry(&id, Retry::Submission, None, false);
+    ensure!(retried.refusal().is_none(), "the retry: {retried:?}");
+    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
+    ensure_eq!(
+        recipients_of(&world, "one")?,
+        (
+            vec!["madswan/planner".to_string()],
+            Some(RecipientsFrom::Launch)
+        ),
+        "the place's recipients and where they came from"
+    );
+    ensure_eq!(
+        world.status(&id)?.caller,
+        Some("boomdrive".to_string()),
+        "the caller after a hold and a retry"
+    );
+    ensure_eq!(
+        world.held(&id).and_then(|held| held.place.caller),
+        Some("boomdrive".to_string()),
+        "the caller held"
+    );
+    Ok(())
+}
+
+/// The launching spec's "An empty caller" (4, 7; core.8).
+fn an_empty_caller(_: &()) -> Outcome {
+    let world = World::new();
+    let mut empty = launch("fix", "one", Some("x"));
+    empty.caller = Some(String::new());
+    let reason = refused(&world.engine.launch(&empty))?;
+    ensure!(
+        reason.contains("caller"),
+        "the refusal names no caller: {reason}"
+    );
+    nothing_made(&world)
+}
+
+/// The launching spec's "No caller named": `FLUME_RECIPIENT` gives the
+/// place its recipient `ops`, and no caller (7).
+fn no_caller_named(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.set_session(None);
+    world.host.set_recipient(Some("ops"));
+    let place = launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    ensure_eq!(place.caller, None, "the caller the launch gives");
+    ensure_eq!(
+        recipients_of(&world, "one")?,
+        (vec!["ops".to_string()], Some(RecipientsFrom::Environment)),
+        "the place's recipients and where they came from"
+    );
+    ensure_eq!(
+        world.status(&World::id("fix", "one"))?.caller,
+        None,
+        "the place's caller"
+    );
+    Ok(())
+}
+
+/// The launching spec's "A woken run has no caller": a fix whose
+/// recipient is `east/ops` and whose caller is `boomdrive` delivers its
+/// code, and the end pending for `east/ops` wakes acme's run of it,
+/// which has no caller (132).
+fn a_woken_run_has_no_caller(_: &()) -> Outcome {
+    let world = World::new();
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    from_no_session(&world);
+    super::role_waking::configure_at(
+        &world,
+        "east/ops",
+        "Read what is pending for you.",
+        super::role_waking::planner_run(None, None),
+    );
+    let mut fix = launch("fix", "one", Some("mend it"));
+    fix.recipients = vec!["east/ops".into()];
+    fix.caller = Some("boomdrive".into());
+    launched(&world.engine.launch(&fix))?;
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    super::settling::deliver_fix(&world, &id);
+    world.settle(&id);
+    let run = World::id("turn", "east-ops");
+    let status = world.status(&run)?;
+    ensure_eq!(
+        status.role.as_deref(),
+        Some("east/ops"),
+        "the run the end woke"
+    );
+    ensure_eq!(status.caller, None, "the run's caller");
     Ok(())
 }

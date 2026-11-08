@@ -130,6 +130,9 @@ impl Engine {
             intent: run.intent.clone(),
             every_stage: run.agents.every_stage.clone(),
             settings: run.agents.stages.clone(),
+            // A role's run is launched by no caller of its own, so the end
+            // of its work waits for none (132).
+            caller: None,
             ..Launch::default()
         };
         match self.make_place(&launch, Some(address)) {

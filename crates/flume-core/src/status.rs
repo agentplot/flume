@@ -405,6 +405,7 @@ impl Engine {
             failures: held.failures.clone(),
             recipients: place.recipients.clone(),
             recipients_from: place.recipients_from.clone(),
+            caller: place.caller.clone(),
             hold_words: place.hold_words.clone(),
             waiting_on: waiting.as_ref().map(|waiting| waiting.on.clone()),
             stalled: waiting.as_ref().is_some_and(|waiting| waiting.stalled),

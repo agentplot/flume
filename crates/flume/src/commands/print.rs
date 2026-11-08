@@ -3537,6 +3537,7 @@ mod tests {
             failures: vec![],
             recipients: vec![],
             recipients_from: None,
+            caller: None,
             hold_words: BTreeMap::new(),
             waiting_on: None,
             stalled: false,

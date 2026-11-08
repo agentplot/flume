@@ -365,6 +365,10 @@ pub struct PlaceStatus {
     /// and a place launched before flume kept it (7, 56, 193).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recipients_from: Option<RecipientsFrom>,
+    /// The caller its launch named, for which the end of the place's work
+    /// waits; none where it named none (7, 8, 43, 56).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caller: Option<String>,
     /// The words of each hold the launch put, by stage name (7, 130).
     pub hold_words: BTreeMap<String, String>,
     /// The move the place waits on its caller for, and since when; none
