@@ -3169,8 +3169,119 @@ fn an_ends_key_and_its_pending_recipients() {
     let recipients = vec!["operator".to_string(), "ops".to_string()];
     assert_eq!(ends[0].pending(&recipients), vec!["ops".to_string()]);
     assert_eq!(ends[1].pending(&recipients), recipients);
-    assert!(ends[1].pending_to(&recipients, "ops"));
-    assert!(!ends[0].pending_to(&recipients, "operator"));
+    assert!(ends[1].pending_to(&recipients, None, "ops"));
+    assert!(!ends[0].pending_to(&recipients, None, "operator"));
+}
+
+#[test]
+fn the_end_of_the_work_is_owed_its_caller() {
+    // The seam-contracts spec's "The end of the work owed its caller": a
+    // stage's end and a failure stand pending for the place's recipients
+    // alone, a landing for them and the caller, and a drop for the caller
+    // alone (43).
+    let end = |of| EndHeld {
+        of,
+        read_at: 100,
+        deliveries: vec![],
+        answer: None,
+        claim: None,
+    };
+    let mut state = held();
+    state.place.recipients = vec!["ops".into()];
+    state.place.caller = Some("boomdrive".into());
+    state.ends = vec![
+        end(EndOf::Stage {
+            stage: "construct".into(),
+            start: 1,
+            state: StageState::Delivered,
+            quiet_from: None,
+            answered: 0,
+            end: Box::default(),
+        }),
+        end(EndOf::Submission {
+            submit: 1,
+            verdict: Verdict::Failed {
+                words: "check failed".into(),
+            },
+        }),
+        end(EndOf::Submission {
+            submit: 2,
+            verdict: Verdict::Landed {
+                commit: Revision::new("c9"),
+                place_removed: false,
+                branch_removed: false,
+            },
+        }),
+        end(EndOf::Over {
+            over: Over::Dropped,
+        }),
+    ];
+    let recipients = state.place.recipients.clone();
+    let caller = state.place.caller.as_deref();
+    let owed: Vec<Vec<String>> = state
+        .ends
+        .iter()
+        .map(|end| end.owed(&recipients, caller))
+        .collect();
+    assert_eq!(
+        owed,
+        vec![
+            vec!["ops".to_string()],
+            vec!["ops".to_string()],
+            vec!["ops".to_string(), "boomdrive".to_string()],
+            vec!["boomdrive".to_string()],
+        ]
+    );
+    assert_eq!(
+        state
+            .ends
+            .iter()
+            .map(EndHeld::for_caller)
+            .collect::<Vec<_>>(),
+        vec![false, false, true, true]
+    );
+    assert!(state.ends[3].pending_to(&recipients, caller, "boomdrive"));
+    assert!(!state.ends[3].pending_to(&recipients, None, "boomdrive"));
+    assert!(!state.ends[0].pending_to(&recipients, caller, "boomdrive"));
+    assert!(
+        state.ends[3].pending(&recipients).is_empty(),
+        "no notice of a drop"
+    );
+    assert_eq!(
+        state.pending_for(),
+        vec!["ops".to_string(), "boomdrive".to_string()]
+    );
+    let mut none = state.clone();
+    none.place.caller = None;
+    assert_eq!(none.pending_for(), vec!["ops".to_string()]);
+
+    // "A caller that is also a recipient": a notice to its name leaves the
+    // landing pending for it as the caller, and the inbox's delivery
+    // collects both at once (43, 62).
+    let mut landing = state.ends[2].clone();
+    let both = vec!["ops".to_string()];
+    landing.deliveries.push(Delivery {
+        recipient: "ops".into(),
+        at: 101,
+        by: DeliveredBy::Notice,
+    });
+    assert!(landing.pending(&both).is_empty(), "its notice is delivered");
+    assert!(landing.pending_for_caller("ops"));
+    assert_eq!(landing.owed(&both, Some("ops")), vec!["ops".to_string()]);
+    landing.deliveries.push(Delivery {
+        recipient: "ops".into(),
+        at: 102,
+        by: DeliveredBy::Inbox,
+    });
+    assert!(landing.owed(&both, Some("ops")).is_empty());
+    // A wait's delivery to the caller collects it as the inbox's does.
+    let mut waited = state.ends[2].clone();
+    waited.deliveries.push(Delivery {
+        recipient: "boomdrive".into(),
+        at: 103,
+        by: DeliveredBy::Wait,
+    });
+    assert_eq!(waited.owed(&recipients, caller), vec!["ops".to_string()]);
 }
 
 #[test]
@@ -3184,8 +3295,8 @@ fn a_stop_shorts_end_goes_to_the_role_it_named_alone() {
     end.deliveries.clear();
     let recipients = vec!["operator".to_string(), "ops".to_string()];
     assert_eq!(end.recipients(&recipients), vec!["west/ops".to_string()]);
-    assert!(end.pending_to(&recipients, "west/ops"));
-    assert!(!end.pending_to(&recipients, "operator"));
+    assert!(end.pending_to(&recipients, None, "west/ops"));
+    assert!(!end.pending_to(&recipients, None, "operator"));
 }
 
 #[test]

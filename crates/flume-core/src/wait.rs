@@ -117,10 +117,9 @@ impl Engine {
             return Ok(None);
         };
         let id = held.place.id.clone();
-        let pending = held
-            .ends
-            .iter()
-            .any(|end| end.of.key() == key && end.pending_to(&held.place.recipients, recipient));
+        let pending = held.ends.iter().any(|end| {
+            end.of.key() == key && end.pending_to(&held.place.recipients, None, recipient)
+        });
         let mut delivered = false;
         let mut answered = held;
         if pending {
@@ -189,7 +188,7 @@ impl Engine {
             if !held
                 .ends
                 .iter()
-                .any(|end| end.pending_to(&held.place.recipients, recipient))
+                .any(|end| end.pending_to(&held.place.recipients, None, recipient))
             {
                 continue;
             }
@@ -199,7 +198,7 @@ impl Engine {
                     let mut collected = vec![];
                     let recipients = held.place.recipients.clone();
                     for end in &mut held.ends {
-                        if !end.pending_to(&recipients, recipient) {
+                        if !end.pending_to(&recipients, None, recipient) {
                             continue;
                         }
                         end.deliveries.push(Delivery {

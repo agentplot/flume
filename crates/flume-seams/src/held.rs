@@ -118,12 +118,13 @@ fn stall_after() -> Seconds {
 }
 
 impl HeldState {
-    /// The recipients each end stands pending for, in order, each named
-    /// once (43).
+    /// Those each end stands pending for, in order, each named once: its
+    /// recipients, and the place's caller for the end of its work (43,
+    /// 62).
     pub fn pending_for(&self) -> Vec<String> {
         let mut pending: Vec<String> = vec![];
         for end in &self.ends {
-            for recipient in end.pending(&self.place.recipients) {
+            for recipient in end.owed(&self.place.recipients, self.place.caller.as_deref()) {
                 if !pending.contains(&recipient) {
                     pending.push(recipient);
                 }
@@ -441,7 +442,8 @@ impl EndHeld {
     }
 
     /// The recipients of the end it stands pending for, of a place whose
-    /// recipients are `recipients` (43, 130).
+    /// recipients are `recipients`: those a notice and a wake are owed,
+    /// never the place's caller as its caller (43, 130).
     pub fn pending(&self, recipients: &[String]) -> Vec<String> {
         self.recipients(recipients)
             .into_iter()
@@ -449,10 +451,48 @@ impl EndHeld {
             .collect()
     }
 
+    /// Whether it is the end of the place's work, which its caller is
+    /// owed: its submission's landing, or a drop's or a done's end (43).
+    pub fn for_caller(&self) -> bool {
+        matches!(
+            &self.of,
+            EndOf::Submission {
+                verdict: Verdict::Landed { .. },
+                ..
+            } | EndOf::Over { .. }
+        )
+    }
+
+    /// Whether it stands pending for the place's caller `caller`: it is
+    /// the end of the place's work, and no delivery to that name by the
+    /// inbox or a wait is recorded on it, a notice's counting for none
+    /// (43, 62).
+    pub fn pending_for_caller(&self, caller: &str) -> bool {
+        self.for_caller()
+            && !self.deliveries.iter().any(|delivery| {
+                delivery.recipient == caller
+                    && matches!(delivery.by, DeliveredBy::Inbox | DeliveredBy::Wait)
+            })
+    }
+
+    /// Whom it stands pending for, of a place whose recipients are
+    /// `recipients` and whose caller is `caller`: its recipients pending,
+    /// then the caller where it is owed, each once (43, 62).
+    pub fn owed(&self, recipients: &[String], caller: Option<&str>) -> Vec<String> {
+        let mut owed = self.pending(recipients);
+        if let Some(caller) = caller.filter(|caller| self.pending_for_caller(caller)) {
+            if !owed.iter().any(|owed| owed == caller) {
+                owed.push(caller.to_string());
+            }
+        }
+        owed
+    }
+
     /// Whether the end stands pending for `recipient`, of a place whose
-    /// recipients are `recipients` (43).
-    pub fn pending_to(&self, recipients: &[String], recipient: &str) -> bool {
-        self.pending(recipients)
+    /// recipients are `recipients` and whose caller is `caller`, owed it
+    /// either way (43).
+    pub fn pending_to(&self, recipients: &[String], caller: Option<&str>, recipient: &str) -> bool {
+        self.owed(recipients, caller)
             .iter()
             .any(|pending| pending == recipient)
     }
