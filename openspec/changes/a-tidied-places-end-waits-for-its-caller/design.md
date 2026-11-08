@@ -148,8 +148,17 @@ else the documents `tidied_of` gives, `<location>@<at>` naming one
 document. The lookup is one function that status and the inbox share
 (core.14). It collects only their ends and gives only their entries of
 `waiting`. Where no document stands under the name it is refused, as
-status refuses it, and marks nothing. With none, it reads every place,
-as now. The session's own inbox at its start names none (C.4).
+status refuses it, and marks nothing. It reads the name's documents
+before the settle every acting command runs first (208), and after it
+collects from those that still stand, read again: a document that
+settle tidied away gives nothing, and one it kept under a new name is
+not among them. So a second like inbox, after the caller collected and
+before anything else settled, gives nothing, as the command-line spec's
+scenario reads. Not taken: reading the name after the settle, under
+which that second inbox is refused once the settle removes the
+document, and which collects a document the settle made under the name.
+With none, it reads every place, as now. The session's own inbox at its
+start names none (C.4).
 
 So the runner collects a place it has carried, never one a settle tidied
 after its listing was read. The whole inbox would collect that place's
