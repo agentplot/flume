@@ -300,7 +300,6 @@ mod tests {
             hold_words: BTreeMap::new(),
             recipients: vec![],
             recipients_from: None,
-            caller: None,
             stream: flume_seams::StreamHeld {
                 name: flume_seams::DEFAULT_STREAM.into(),
                 from: flume_seams::StreamFrom::Default,

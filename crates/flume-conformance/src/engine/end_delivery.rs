@@ -93,49 +93,34 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: collected_after_the_tidy,
         },
         Scenario {
-            name: "end delivery: a place launched for ops with the caller boomdrive lands, ops has its notice, and status gives the tidied place pending for boomdrive",
+            name: "end delivery: a place launched for ops and boomdrive, which no pane holds, lands, ops has its notice, and status gives the tidied place pending for boomdrive",
             cites: &["62"],
-            run: kept_for_its_caller,
+            run: kept_for_a_reader,
         },
         Scenario {
-            name: "end delivery: a landing of a fix whose caller is boomdrive is one notice to ops and none to boomdrive, its document kept with the landing pending for boomdrive alone until boomdrive's inbox collects it",
+            name: "end delivery: a landing of a fix launched for ops and boomdrive, which no pane holds, is one notice to ops and none to boomdrive, its document kept with code's end and the landing pending for boomdrive alone until boomdrive's inbox naming the place collects them",
             cites: &["43", "62"],
-            run: a_landing_collected_by_its_caller,
+            run: a_landing_for_a_reader,
         },
         Scenario {
-            name: "end delivery: a caller that is also the recipient ops has one notice of the landing, the landing still pending for it until its inbox collects it, and the document goes at the next settle",
-            cites: &["43", "62"],
-            run: a_caller_that_is_also_a_recipient,
-        },
-        Scenario {
-            name: "end delivery: the caller boomdrive waiting on its fix's submission once it lands and is tidied is answered with the landing, delivered to it by the wait, and the next settle removes the document",
-            cites: &["43"],
-            run: a_wait_as_the_caller_collects,
-        },
-        Scenario {
-            name: "end delivery: a fix whose caller is the address east/ops, which acme declares with a run, lands and wakes no run, sends no notice, and its landing stays pending for east/ops until its inbox collects it",
-            cites: &["43", "132"],
-            run: a_caller_written_as_an_address,
-        },
-        Scenario {
-            name: "end delivery: a fix launched for ops naming no caller lands with one notice of the landing to ops, and its tidy keeps no document",
-            cites: &["43", "62"],
-            run: a_landing_with_no_caller,
-        },
-        Scenario {
-            name: "end delivery: a drop of a fix whose recipient is east/planner and whose caller is boomdrive records over/dropped pending for boomdrive alone, no notice sent and no run woken, its document kept until boomdrive's inbox collects it",
+            name: "end delivery: a drop of a fix launched for east/planner, which acme declares with a run, and boomdrive records over/dropped pending for boomdrive alone, no notice sent and no run woken, its document kept until boomdrive's inbox collects it",
             cites: &["43", "52", "62"],
-            run: a_drop,
+            run: a_drop_for_a_role_and_a_reader,
         },
         Scenario {
-            name: "end delivery: a done of a place whose kind does not land, with the caller boomdrive, records over/done pending for boomdrive alone, its document kept until collected",
+            name: "end delivery: a drop of a fix launched for east/planner alone records over/dropped pending for no one, sends no notice, wakes no run, and its tidy keeps no document",
+            cites: &["43", "52", "62", "132"],
+            run: a_drop_for_a_role_alone,
+        },
+        Scenario {
+            name: "end delivery: a drop of a fix launched for ops, waiting in its pane, sends ops no notice, its over/dropped pending for ops and its document kept until ops's inbox collects it",
+            cites: &["43", "52", "62"],
+            run: a_drop_for_a_session_in_a_pane,
+        },
+        Scenario {
+            name: "end delivery: a done of a place whose kind does not land, launched for boomdrive, records over/done pending for boomdrive, its document kept until collected",
             cites: &["43", "114"],
             run: a_done,
-        },
-        Scenario {
-            name: "end delivery: a drop of a fix launched for ops naming no caller records over/dropped pending for no one, ops has no notice, and the tidy keeps no document",
-            cites: &["43", "52", "62"],
-            run: a_drop_with_no_caller,
         },
         Scenario {
             name: "end delivery: a recipient restarted while waiting on a submission waits again and is answered at once with the landing, delivered by the wait",
@@ -173,7 +158,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: collected_after_a_restart,
         },
         Scenario {
-            name: "end delivery: of two fixes whose caller is boomdrive, landed and tidied, boomdrive's inbox naming the first collects its landing alone, the second's landing and document staying until an inbox names it by its document",
+            name: "end delivery: of two fixes launched for ops and boomdrive, which no pane holds, landed and tidied, boomdrive's inbox naming the first collects its ends alone, the second's ends and document staying until an inbox names it by its document",
             cites: &["43", "62"],
             run: an_inbox_naming_a_place,
         },
@@ -1786,17 +1771,10 @@ fn a_restarted_sessions_words(_: &()) -> Outcome {
     Ok(())
 }
 
-/// A fix named `name` launched for `recipients` with `caller`, and begun
-/// (7, 43).
-fn fix_with(
-    world: &World,
-    name: &str,
-    recipients: &[&str],
-    caller: Option<&str>,
-) -> Result<PlaceId, String> {
+/// A fix named `name` launched for `recipients`, and begun (7, 43).
+fn fix_with(world: &World, name: &str, recipients: &[&str]) -> Result<PlaceId, String> {
     let mut launch = launch("fix", name, Some("mend it"));
     launch.recipients = recipients.iter().map(|name| name.to_string()).collect();
-    launch.caller = caller.map(str::to_string);
     launched(&world.engine.launch(&launch))?;
     let id = World::id("fix", name);
     world.settle(&id);
@@ -1809,13 +1787,8 @@ fn fix_with(
 }
 
 /// A fix as `fix_with` launches it, landed and tidied in one settle.
-fn landed_with(
-    world: &World,
-    name: &str,
-    recipients: &[&str],
-    caller: Option<&str>,
-) -> Result<PlaceId, String> {
-    let id = fix_with(world, name, recipients, caller)?;
+fn landed_with(world: &World, name: &str, recipients: &[&str]) -> Result<PlaceId, String> {
+    let id = fix_with(world, name, recipients)?;
     deliver_fix(world, &id);
     world.settle(&id);
     ensure!(world.held(&id).is_none(), "the landed place's own document");
@@ -1850,11 +1823,20 @@ fn kept_pending_for(world: &World) -> Result<Vec<String>, String> {
     }
 }
 
-/// The end-delivery spec's "Kept for its caller" (62).
-fn kept_for_its_caller(_: &()) -> Outcome {
+/// Whether any role's run stands on the host.
+fn any_run(world: &World) -> bool {
+    world
+        .store
+        .places()
+        .iter()
+        .any(|place| world.held(place).is_some_and(|held| held.role.is_some()))
+}
+
+/// The end-delivery spec's "Kept for a recipient no pane holds" (62).
+fn kept_for_a_reader(_: &()) -> Outcome {
     let world = World::new();
     world.terminal.add_session("ops", AgentState::Waiting);
-    let id = landed_with(&world, "one", &["ops"], Some("boomdrive"))?;
+    let id = landed_with(&world, "one", &["ops", "boomdrive"])?;
     ensure_eq!(landing_notices(&world, "ops"), 1, "ops's notice");
     let status = world.status(&id)?;
     ensure!(
@@ -1862,19 +1844,15 @@ fn kept_for_its_caller(_: &()) -> Outcome {
         "the tidied place's phase: {:?}",
         status.phase
     );
-    ensure_eq!(
-        status.caller.as_deref(),
-        Some("boomdrive"),
-        "the tidied place's caller"
-    );
     Ok(())
 }
 
-/// The end-delivery spec's "A landing collected by its caller" (43, 62).
-fn a_landing_collected_by_its_caller(_: &()) -> Outcome {
+/// The end-delivery spec's "A landing for a recipient no pane holds"
+/// (43, 62).
+fn a_landing_for_a_reader(_: &()) -> Outcome {
     let world = World::new();
     world.terminal.add_session("ops", AgentState::Waiting);
-    let id = landed_with(&world, "one", &["ops"], Some("boomdrive"))?;
+    let id = landed_with(&world, "one", &["ops", "boomdrive"])?;
     ensure_eq!(
         landing_notices(&world, "ops"),
         1,
@@ -1886,8 +1864,8 @@ fn a_landing_collected_by_its_caller(_: &()) -> Outcome {
                 .terminal
                 .every_notice()
                 .iter()
-                .all(|(to, notice)| to == "ops" && !notice.contains("boomdrive")),
-        "a notice named boomdrive: {:?}",
+                .all(|(to, _)| to == "ops"),
+        "a notice went elsewhere than ops: {:?}",
         world.terminal.every_notice()
     );
     ensure_eq!(
@@ -1895,172 +1873,33 @@ fn a_landing_collected_by_its_caller(_: &()) -> Outcome {
         vec!["boomdrive".to_string()],
         "whom the document waits on"
     );
-    ensure_eq!(
-        end_keyed(&world, &id, "submission/1/landed")?.pending_for,
-        vec!["boomdrive".to_string()],
-        "whom the landing waits on"
-    );
-    ensure_eq!(
-        end_keyed(&world, &id, "stage/code/1/delivered")?.pending_for,
-        Vec::<String>::new(),
-        "whom code's end waits on"
-    );
+    for key in ["stage/code/1/delivered", "submission/1/landed"] {
+        ensure_eq!(
+            end_keyed(&world, &id, key)?.pending_for,
+            vec!["boomdrive".to_string()],
+            format!("whom {key} waits on")
+        );
+    }
     let landed = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
     ensure_eq!(
-        collected(&world.engine().inbox("boomdrive", None))?,
-        vec![format!("fix--one submission landed {landed}")],
+        collected(&world.engine().inbox("boomdrive", Some(&id)))?,
+        vec![
+            "fix--one code delivered".to_string(),
+            format!("fix--one submission landed {landed}"),
+        ],
         "what boomdrive collected"
     );
     world.engine().settle(None);
     ensure!(
         tidied(&world).is_empty(),
-        "the document kept once its caller collected"
+        "the document kept once boomdrive collected"
     );
     Ok(())
 }
 
-/// The end-delivery spec's "A caller that is also a recipient" (43, 62).
-fn a_caller_that_is_also_a_recipient(_: &()) -> Outcome {
-    let world = World::new();
-    world.terminal.add_session("ops", AgentState::Waiting);
-    let id = landed_with(&world, "one", &["ops"], Some("ops"))?;
-    ensure_eq!(
-        landing_notices(&world, "ops"),
-        1,
-        "ops's notices of the landing"
-    );
-    ensure_eq!(
-        kept_pending_for(&world)?,
-        vec!["ops".to_string()],
-        "whom the document waits on"
-    );
-    let landing = end_keyed(&world, &id, "submission/1/landed")?;
-    ensure_eq!(
-        (deliveries(&landing.end), landing.pending_for),
-        (
-            vec![("ops".to_string(), DeliveredBy::Notice)],
-            vec!["ops".to_string()]
-        ),
-        "the landing's deliveries and whom it waits on"
-    );
-    world.engine().settle(None);
-    ensure_eq!(tidied(&world).len(), 1, "the document before ops collects");
-    let landed = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
-    ensure_eq!(
-        collected(&world.engine().inbox("ops", None))?,
-        vec![format!("fix--one submission landed {landed}")],
-        "what ops collected"
-    );
-    ensure_eq!(landing_notices(&world, "ops"), 1, "ops's notices after");
-    world.engine().settle(None);
-    ensure!(
-        tidied(&world).is_empty(),
-        "the document kept once ops collected"
-    );
-    Ok(())
-}
-
-/// The end-delivery spec's "A wait as the caller collects" (43).
-fn a_wait_as_the_caller_collects(_: &()) -> Outcome {
-    let world = World::new();
-    world.terminal.add_session("ops", AgentState::Waiting);
-    let id = landed_with(&world, "one", &["ops"], Some("boomdrive"))?;
-    let answer = world
-        .engine()
-        .wait(&id, &WaitFor::Submission, "boomdrive", Some(10));
-    let (end, delivered) = waited(&answer)?.ok_or("still waiting")?;
-    ensure!(
-        matches!(
-            &end.end.of,
-            EndOf::Submission {
-                verdict: Verdict::Landed { .. },
-                ..
-            }
-        ),
-        "the end answered: {:?}",
-        end.end.of
-    );
-    ensure!(delivered, "the wait did not deliver it");
-    ensure_eq!(
-        deliveries(&end.end),
-        vec![
-            ("ops".to_string(), DeliveredBy::Notice),
-            ("boomdrive".to_string(), DeliveredBy::Wait)
-        ],
-        "the landing's deliveries"
-    );
-    ensure!(
-        end.pending_for.is_empty(),
-        "pending for {:?}",
-        end.pending_for
-    );
-    world.engine().settle(None);
-    ensure!(
-        tidied(&world).is_empty(),
-        "the document kept once its caller's wait collected"
-    );
-    Ok(())
-}
-
-/// The end-delivery spec's "A caller written as an address wakes
-/// nothing" (43, 132).
-fn a_caller_written_as_an_address(_: &()) -> Outcome {
-    let world = World::new();
-    super::role_waking::configure_at(
-        &world,
-        "east/ops",
-        "Read what is pending for you.",
-        super::role_waking::planner_run(None, None),
-    );
-    let id = landed_with(&world, "one", &["ops"], Some("east/ops"))?;
-    world.engine().settle(None);
-    let runs: Vec<PlaceId> = world
-        .store
-        .places()
-        .into_iter()
-        .filter(|place| world.held(place).is_some_and(|held| held.role.is_some()))
-        .collect();
-    ensure!(runs.is_empty(), "runs launched: {runs:?}");
-    ensure!(
-        world.terminal.every_notice().is_empty(),
-        "notices sent: {:?}",
-        world.terminal.every_notice()
-    );
-    ensure_eq!(
-        end_keyed(&world, &id, "submission/1/landed")?.pending_for,
-        vec!["ops".to_string(), "east/ops".to_string()],
-        "whom the landing waits on"
-    );
-    let landed = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
-    ensure_eq!(
-        collected(&world.engine().inbox("east/ops", None))?,
-        vec![format!("fix--one submission landed {landed}")],
-        "what east/ops collected"
-    );
-    ensure_eq!(
-        end_keyed(&world, &id, "submission/1/landed")?.pending_for,
-        vec!["ops".to_string()],
-        "whom the landing waits on once collected"
-    );
-    Ok(())
-}
-
-/// The end-delivery spec's "No caller named" (43, 62).
-fn a_landing_with_no_caller(_: &()) -> Outcome {
-    let world = World::new();
-    world.terminal.add_session("ops", AgentState::Waiting);
-    landed_with(&world, "one", &["ops"], None)?;
-    ensure_eq!(
-        landing_notices(&world, "ops"),
-        1,
-        "ops's notices of the landing"
-    );
-    ensure!(tidied(&world).is_empty(), "a document kept");
-    Ok(())
-}
-
-/// The end-delivery spec's "A drop" (43, 52, 62).
-fn a_drop(_: &()) -> Outcome {
+/// The end-delivery spec's "A drop for a role and a reader" (43, 52,
+/// 62).
+fn a_drop_for_a_role_and_a_reader(_: &()) -> Outcome {
     let world = World::new();
     super::role_waking::configure_at(
         &world,
@@ -2068,7 +1907,7 @@ fn a_drop(_: &()) -> Outcome {
         "Read what is pending for you.",
         super::role_waking::planner_run(None, None),
     );
-    let id = fix_with(&world, "one", &["east/planner"], Some("boomdrive"))?;
+    let id = fix_with(&world, "one", &["east/planner", "boomdrive"])?;
     let dropped = world.engine().drop_place(&id, true);
     ensure!(dropped.refusal().is_none(), "the drop: {dropped:?}");
     world.engine().settle(None);
@@ -2077,9 +1916,8 @@ fn a_drop(_: &()) -> Outcome {
         vec!["boomdrive".to_string()],
         "whom the document waits on"
     );
-    let end = end_keyed(&world, &id, "over/dropped")?;
     ensure_eq!(
-        end.pending_for,
+        end_keyed(&world, &id, "over/dropped")?.pending_for,
         vec!["boomdrive".to_string()],
         "whom the drop waits on"
     );
@@ -2088,14 +1926,7 @@ fn a_drop(_: &()) -> Outcome {
         "notices sent: {:?}",
         world.terminal.every_notice()
     );
-    ensure!(
-        !world
-            .store
-            .places()
-            .iter()
-            .any(|place| world.held(place).is_some_and(|held| held.role.is_some())),
-        "a run of east/planner was launched"
-    );
+    ensure!(!any_run(&world), "a run of east/planner was launched");
     ensure_eq!(
         collected(&world.engine().inbox("boomdrive", None))?,
         vec!["fix--one dropped".to_string()],
@@ -2104,7 +1935,89 @@ fn a_drop(_: &()) -> Outcome {
     world.engine().settle(None);
     ensure!(
         tidied(&world).is_empty(),
-        "the document kept once its caller collected"
+        "the document kept once boomdrive collected"
+    );
+    ensure!(!any_run(&world), "a run of east/planner was launched");
+    Ok(())
+}
+
+/// The end-delivery spec's "A drop for a role alone": the drop's end is
+/// read while an untracked file keeps the place, then the tidy keeps no
+/// document (43, 52, 62, 132).
+fn a_drop_for_a_role_alone(_: &()) -> Outcome {
+    let world = World::new();
+    super::role_waking::configure_at(
+        &world,
+        "east/planner",
+        "Read what is pending for you.",
+        super::role_waking::planner_run(None, None),
+    );
+    let id = fix_with(&world, "one", &["east/planner"])?;
+    world.place.set_holds(
+        &id.0,
+        Holds {
+            untracked: vec!["scratch.txt".into()],
+            ..Holds::default()
+        },
+    );
+    let dropped = world.engine().drop_place(&id, true);
+    ensure!(dropped.refusal().is_none(), "the drop: {dropped:?}");
+    ensure_eq!(
+        end_keyed(&world, &id, "over/dropped")?.pending_for,
+        Vec::<String>::new(),
+        "whom the drop waits on"
+    );
+    world.place.set_holds(&id.0, Holds::default());
+    world.engine().settle(None);
+    ensure!(world.held(&id).is_none(), "the dropped place's document");
+    ensure!(tidied(&world).is_empty(), "a document kept");
+    ensure!(
+        world.terminal.every_notice().is_empty(),
+        "notices sent: {:?}",
+        world.terminal.every_notice()
+    );
+    ensure!(!any_run(&world), "a run of east/planner was launched");
+    Ok(())
+}
+
+/// The end-delivery spec's "A drop for a session in a pane" (43, 52,
+/// 62).
+fn a_drop_for_a_session_in_a_pane(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    let id = fix_for_ops(&world, "one")?;
+    let dropped = world.engine().drop_place(&id, true);
+    ensure!(dropped.refusal().is_none(), "the drop: {dropped:?}");
+    world.engine().settle(None);
+    ensure!(
+        world.terminal.notices("ops").is_empty(),
+        "ops's notices: {:?}",
+        world.terminal.notices("ops")
+    );
+    ensure_eq!(
+        kept_pending_for(&world)?,
+        vec!["ops".to_string()],
+        "whom the document waits on"
+    );
+    ensure_eq!(
+        end_keyed(&world, &id, "over/dropped")?.pending_for,
+        vec!["ops".to_string()],
+        "whom the drop waits on"
+    );
+    ensure_eq!(
+        collected(&world.engine().inbox("ops", None))?,
+        vec!["fix--one dropped".to_string()],
+        "what ops collected"
+    );
+    world.engine().settle(None);
+    ensure!(
+        tidied(&world).is_empty(),
+        "the document kept once ops collected"
+    );
+    ensure!(
+        world.terminal.notices("ops").is_empty(),
+        "ops's notices after: {:?}",
+        world.terminal.notices("ops")
     );
     Ok(())
 }
@@ -2121,7 +2034,7 @@ fn a_done(_: &()) -> Outcome {
         )],
     );
     let mut notes = launch("notes", "one", Some("do the work"));
-    notes.caller = Some("boomdrive".into());
+    notes.recipients = vec!["boomdrive".into()];
     launched(&world.engine.launch(&notes))?;
     let id = World::id("notes", "one");
     world.settle(&id);
@@ -2146,41 +2059,7 @@ fn a_done(_: &()) -> Outcome {
     world.engine().settle(None);
     ensure!(
         tidied(&world).is_empty(),
-        "the document kept once its caller collected"
-    );
-    Ok(())
-}
-
-/// The end-delivery spec's "A drop with no caller": the drop's end is
-/// read while an untracked file keeps the place, then the tidy keeps no
-/// document (43, 52, 62).
-fn a_drop_with_no_caller(_: &()) -> Outcome {
-    let world = World::new();
-    world.terminal.add_session("ops", AgentState::Waiting);
-    let id = fix_for_ops(&world, "one")?;
-    world.place.set_holds(
-        &id.0,
-        Holds {
-            untracked: vec!["scratch.txt".into()],
-            ..Holds::default()
-        },
-    );
-    let dropped = world.engine().drop_place(&id, true);
-    ensure!(dropped.refusal().is_none(), "the drop: {dropped:?}");
-    let end = end_keyed(&world, &id, "over/dropped")?;
-    ensure_eq!(
-        end.pending_for,
-        Vec::<String>::new(),
-        "whom the drop waits on"
-    );
-    world.place.set_holds(&id.0, Holds::default());
-    world.engine().settle(None);
-    ensure!(world.held(&id).is_none(), "the dropped place's document");
-    ensure!(tidied(&world).is_empty(), "a document kept");
-    ensure!(
-        world.terminal.notices("ops").is_empty(),
-        "ops's notices: {:?}",
-        world.terminal.notices("ops")
+        "the document kept once boomdrive collected"
     );
     Ok(())
 }
@@ -2189,14 +2068,17 @@ fn a_drop_with_no_caller(_: &()) -> Outcome {
 fn an_inbox_naming_a_place(_: &()) -> Outcome {
     let world = World::new();
     world.terminal.add_session("ops", AgentState::Waiting);
-    let one = landed_with(&world, "one", &["ops"], Some("boomdrive"))?;
+    let one = landed_with(&world, "one", &["ops", "boomdrive"])?;
     let first = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
-    let two = landed_with(&world, "two", &["ops"], Some("boomdrive"))?;
+    let two = landed_with(&world, "two", &["ops", "boomdrive"])?;
     let second = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
     let answer = world.engine().inbox("boomdrive", Some(&one));
     ensure_eq!(
         collected(&answer)?,
-        vec![format!("fix--one submission landed {first}")],
+        vec![
+            "fix--one code delivered".to_string(),
+            format!("fix--one submission landed {first}"),
+        ],
         "what boomdrive's inbox naming fix--one collected"
     );
     let Answer::Inbox { ends, .. } = &answer else {
@@ -2232,7 +2114,10 @@ fn an_inbox_naming_a_place(_: &()) -> Outcome {
     );
     ensure_eq!(
         collected(&world.engine().inbox("boomdrive", Some(&document)))?,
-        vec![format!("fix--two submission landed {second}")],
+        vec![
+            "fix--two code delivered".to_string(),
+            format!("fix--two submission landed {second}"),
+        ],
         "what boomdrive's inbox naming fix--two's document collected"
     );
     world.engine().settle(None);
@@ -2243,7 +2128,7 @@ fn an_inbox_naming_a_place(_: &()) -> Outcome {
 /// The end-delivery spec's "A name under which nothing stands" (43).
 fn a_name_under_which_nothing_stands(_: &()) -> Outcome {
     let world = World::new();
-    let one = landed_with(&world, "one", &["ops"], Some("boomdrive"))?;
+    let one = landed_with(&world, "one", &["ops", "boomdrive"])?;
     let before = tidied(&world);
     let nothing = World::id("fix", "nothing");
     let reason = refused(&world.engine().inbox("boomdrive", Some(&nothing)))?;

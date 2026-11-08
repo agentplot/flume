@@ -397,7 +397,6 @@ impl Engine {
             failures: held.failures.clone(),
             recipients: place.recipients.clone(),
             recipients_from: place.recipients_from.clone(),
-            caller: place.caller.clone(),
             hold_words: place.hold_words.clone(),
             waiting_on: waiting.as_ref().map(|waiting| waiting.on.clone()),
             stalled: waiting.as_ref().is_some_and(|waiting| waiting.stalled),
@@ -413,7 +412,7 @@ impl Engine {
             ends: held
                 .ends
                 .iter()
-                .map(|end| EndStatus::of(end, &place.recipients, place.caller.as_deref()))
+                .map(|end| EndStatus::of(end, &place.recipients))
                 .collect(),
             role: held.role.clone(),
             clues: self.place_clues(held, agent_state, group.as_ref()),

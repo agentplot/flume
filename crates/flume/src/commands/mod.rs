@@ -379,11 +379,14 @@ struct LaunchArgs {
     hold_submission: bool,
     /// A recipient of the place's ends: a terminal's session by its name,
     /// or a role's address, `<stream>/<role>`, of any stream, whose run is
-    /// woken for them. Where none is named, `$FLUME_RECIPIENT`, else the
-    /// terminal's session, else the answerer behind the place's stream,
-    /// the role a source of the host declares to stand behind it; a launch
-    /// none of them gives is refused. Every stall reaches the answerer
-    /// behind the place's stream too (7, 130, 132, 193).
+    /// woken for them. A name no pane holds is sent no notice: its ends,
+    /// a drop's or a done's among them, wait for it, the place's record
+    /// kept once it is tidied, until it collects them by `flume inbox` or
+    /// `flume wait` as that name. Where none is named, `$FLUME_RECIPIENT`,
+    /// else the terminal's session, else the answerer behind the place's
+    /// stream, the role a source of the host declares to stand behind it;
+    /// a launch none of them gives is refused. Every stall reaches the
+    /// answerer behind the place's stream too (7, 43, 62, 130, 132, 193).
     #[arg(long, value_name = "SESSION OR ADDRESS")]
     recipient: Vec<String>,
     #[arg(long)]
@@ -415,14 +418,6 @@ struct LaunchArgs {
     /// where none is named (147).
     #[arg(long)]
     intent: Option<String>,
-    /// The caller launching the place, by a name of the caller's own. The
-    /// end of the place's work, its landing, drop or done, waits for it,
-    /// its tidied document kept, until it collects it by `flume inbox` or
-    /// `flume wait` as that name; no notice is sent to it, it is no
-    /// recipient, and it wakes no role. None where none is named (7, 43,
-    /// 62).
-    #[arg(long, value_name = "NAME")]
-    caller: Option<String>,
 }
 
 /// What a command prints, where, and its exit status.
@@ -833,7 +828,6 @@ fn launch_of(args: &LaunchArgs, given: Option<&Path>) -> Result<Launch, String> 
         stall_after: args.stall_after.as_deref().map(read_span).transpose()?,
         stream: args.stream.clone(),
         intent: args.intent.clone(),
-        caller: args.caller.clone(),
     })
 }
 
