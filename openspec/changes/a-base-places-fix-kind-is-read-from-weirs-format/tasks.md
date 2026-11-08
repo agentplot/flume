@@ -23,7 +23,7 @@ change touches none of them. Every scenario added cites its clauses.
 
 ## 2. weir's crate
 
-- [ ] 2.1 Move weir-kinds' pin in `Cargo.toml` to weir's main at `daacda39e59469029b2841f889c6cbd8cd7839d9`, and `Cargo.lock` with it, weir-kinds and weir-capture both, as design 1 has it, leaving the comment above the pin as written (core.4, core.22). True when `devenv shell -- cargo test -p flume --test profiles kinds_weir` passes and `git grep -n 5562af5 -- Cargo.toml Cargo.lock` finds nothing.
+- [x] 2.1 Move weir-kinds' pin in `Cargo.toml` to weir's main at `daacda39e59469029b2841f889c6cbd8cd7839d9`, and `Cargo.lock` with it, weir-kinds and weir-capture both, as design 1 has it, leaving the comment above the pin as written (core.4, core.22). True when `devenv shell -- cargo test -p flume --test profiles kinds_weir` passes and `git grep -n 5562af5 -- Cargo.toml Cargo.lock` finds nothing.
 
 ## 3. The kinds profile
 
