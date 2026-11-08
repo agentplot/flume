@@ -31,6 +31,7 @@
 //! with the merge queue's words (47, 111, 112, 117, 133, 203; core.6).
 
 use crate::base::base_place;
+use crate::fixes::{decide, Found};
 use crate::start::Starts;
 use crate::{Engine, Step};
 use flume_seams::*;
@@ -81,7 +82,7 @@ impl Engine {
                 {
                     match recorded(queue.as_ref(), place, &submission.state) {
                         Some(outcome) => {
-                            self.verdict(id, verdict_of(outcome));
+                            self.outcome(id, outcome);
                             true
                         }
                         None => false,
@@ -95,7 +96,7 @@ impl Engine {
                     self.taken_in(id, &submission);
                     match recorded(queue.as_ref(), place, &submission.state) {
                         Some(outcome) => {
-                            self.verdict(id, verdict_of(outcome));
+                            self.outcome(id, outcome);
                             true
                         }
                         None => false,
@@ -148,7 +149,7 @@ impl Engine {
                         ours.request.is_some() && ours.verdict.is_some()
                     });
                     if !acted {
-                        self.verdict(id, verdict_of(outcome));
+                        self.outcome(id, outcome);
                     }
                     changed = true;
                 }
@@ -274,7 +275,7 @@ impl Engine {
                 outcome,
             } => {
                 self.submitted(id, Some(&submission), None, before);
-                self.verdict(id, verdict_of(outcome));
+                self.outcome(id, outcome);
             }
             Submitted::Refused { reason } => {
                 self.submitted(id, None, None, before);
@@ -318,7 +319,31 @@ impl Engine {
     /// held and change nothing, so it is counted once toward the kind's
     /// bound and never sends back over the fix round's agent (74, 75).
     pub(crate) fn verdict(&self, id: &PlaceId, verdict: Verdict) {
+        self.verdict_at(id, verdict, None);
+    }
+
+    /// Acts on an outcome of the place's submission as [`Engine::verdict`]
+    /// acts on its verdict, a conflict's at the base's revision the merge
+    /// queue tested against (112).
+    pub(crate) fn outcome(&self, id: &PlaceId, outcome: SubmissionOutcome) {
+        let onto = match &outcome {
+            SubmissionOutcome::Conflict { base, .. } => Some(base.clone()),
+            _ => None,
+        };
+        self.verdict_at(id, verdict_of(outcome), onto);
+    }
+
+    /// Acts on a verdict, a conflict's at `onto` where it is known; a base
+    /// place's failure or conflict, where its kind names a fix, launches
+    /// that fix as a conflict with its base does, decided in the write that
+    /// holds the verdict, so it is acted on once (112, 203).
+    fn verdict_at(&self, id: &PlaceId, verdict: Verdict, onto: Option<Revision>) {
         let limit = self.defaults.send_backs;
+        let now = self.host.now();
+        let Some(read) = self.store.read(id) else {
+            return;
+        };
+        let place_of = self.fix_place_of(&read.state);
         let back = self.update(id, |held| {
             if matches!(verdict, Verdict::Failed { .. } | Verdict::Conflict { .. })
                 && held.submission.verdict.is_some()
@@ -358,13 +383,27 @@ impl Engine {
                 return Step::Write(None);
             }
             if base_place(&held.place.kind) {
+                let submission = held.submission.id.clone().unwrap_or_default();
+                let found = Found::submission(&held.place, &submission, &verdict, onto.as_ref());
+                if let (Some(_), Some(found)) = (&held.place.fixes_as, found) {
+                    held.submission.waiting = Some(found.said.clone());
+                    let fix = decide(held, &found, limit, now, &place_of);
+                    return Step::Write(fix.map(|number| After::Fix(number, found)));
+                }
                 held.submission.waiting = Some(format!("{cause}: {words}"));
                 return Step::Write(None);
             }
-            Step::Write(fix_round(held, limit, cause, words))
+            Step::Write(
+                fix_round(held, limit, cause, words)
+                    .map(|(target, words)| After::Back(target, words)),
+            )
         });
-        if let Some(Some((target, words))) = back {
-            self.start_stage(id, target, Some(words));
+        match back.flatten() {
+            Some(After::Back(target, words)) => {
+                self.start_stage(id, target, Some(words));
+            }
+            Some(After::Fix(number, found)) => self.launch_fix(id, number, Some(&found)),
+            None => {}
         }
     }
 
@@ -618,4 +657,12 @@ fn verdict_of(outcome: SubmissionOutcome) -> Verdict {
             Verdict::Conflict { files, words }
         }
     }
+}
+
+/// What follows a verdict's write: the place's fix round started at a
+/// stage with the words, or a base place's fix launched by its number for
+/// what found it (112, 203).
+enum After {
+    Back(usize, String),
+    Fix(u32, Found),
 }

@@ -428,6 +428,14 @@ impl Engine {
             waits_on,
             worktree: base.then_some(false),
             on_branch,
+            fix_kind: place.fixes_as.clone(),
+            fix_limit: place
+                .fixes_as
+                .as_ref()
+                .map(|_| place.kind.fix_limit.unwrap_or(self.defaults.send_backs)),
+            forecast: held.forecast.clone(),
+            fixes: held.fixes.clone(),
+            fix_of: place.fix_of.clone(),
         }
     }
 }

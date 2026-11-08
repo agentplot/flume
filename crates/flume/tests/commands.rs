@@ -215,6 +215,11 @@ impl MergeQueue for StandInQueue {
     fn close(&self, _repository: &str, _branch: &str, _into: &str) -> BranchClosed {
         BranchClosed::Gone
     }
+    fn forecast(&self, _repository: &str, _branch: &str, _base: &str) -> Forecast {
+        Forecast::CouldNotRead {
+            reason: "the stand-in queue forecasts nothing".into(),
+        }
+    }
 }
 
 /// The holding stand-in merge queue: each submission held open through
@@ -292,6 +297,11 @@ impl MergeQueue for HoldingQueue {
     }
     fn close(&self, repository: &str, branch: &str, into: &str) -> BranchClosed {
         StandInQueue.close(repository, branch, into)
+    }
+    fn forecast(&self, _repository: &str, _branch: &str, _base: &str) -> Forecast {
+        Forecast::CouldNotRead {
+            reason: "the holding stand-in queue forecasts nothing".into(),
+        }
     }
 }
 

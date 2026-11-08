@@ -235,6 +235,44 @@ pub enum BranchClosed {
     Gone,
 }
 
+/// forecast: the conflicts a branch's head would meet were it submitted
+/// to its base now, placed after every entry already submitted. A
+/// forecast creates no entry, moves no branch, and is never read as a
+/// verdict (203, 210).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Forecast {
+    /// The head merges onto the base's revision `onto` and every entry
+    /// ahead of it.
+    Clear { head: Revision, onto: Revision },
+    /// It does not: the files contested, the base's revision, each entry
+    /// ahead it meets, none where it meets the base itself, and the merge
+    /// queue's words.
+    Conflict {
+        head: Revision,
+        onto: Revision,
+        files: Vec<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        with: Vec<String>,
+        words: String,
+    },
+    /// The merge queue could not form it, and why.
+    CouldNotRead { reason: String },
+}
+
+impl Forecast {
+    /// The head and the base's revision it was formed on, none where it
+    /// could not be read.
+    pub fn formed(&self) -> Option<(&Revision, &Revision)> {
+        match self {
+            Forecast::Clear { head, onto } | Forecast::Conflict { head, onto, .. } => {
+                Some((head, onto))
+            }
+            Forecast::CouldNotRead { .. } => None,
+        }
+    }
+}
+
 /// The merge queue seam (B.6), bound once for each repository. The
 /// guarantee: landed is said only of a submission of that branch that
 /// the merge queue itself landed, never inferred from what the base
@@ -285,4 +323,10 @@ pub trait MergeQueue: Send + Sync {
     /// `branch`, one the merge queue lands on, removed into `into`, the
     /// branch its work landed in; or kept in its words, or gone (206).
     fn close(&self, repository: &str, branch: &str, into: &str) -> BranchClosed;
+
+    /// The conflicts `branch`'s head would meet were it submitted to
+    /// `base` now, placed after every entry already submitted; it creates
+    /// no entry and moves nothing, and is never read as a verdict (203,
+    /// 210).
+    fn forecast(&self, repository: &str, branch: &str, base: &str) -> Forecast;
 }

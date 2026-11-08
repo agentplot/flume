@@ -12,6 +12,7 @@ use super::account_pools::{
 use super::agent_effort::effort;
 use super::agent_modes::{in_mode, in_programs, the_fakes_map};
 use super::agent_settings::{for_every_stage, kept_open};
+use super::base_places::{forecast_conflict, mend_fix, spring, spring_mended};
 use super::carried_conversations::{by_hand, lost_with_host, retry_talk, talk, talking};
 use super::open_sessions::{asking, code, stops_short, taken, QUESTION};
 use super::world::*;
@@ -299,6 +300,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "status: a place whose agent's settings give no effort, on an account whose env names the variable the fake reads over one, gives no effort, its JSON form holding no effort for the agent",
             cites: &["56", "197"],
             run: no_effort_in_status,
+        },
+        Scenario {
+            name: "status: a base place whose first fix is live gives the kind of its fixes with where it came from, its bound, the forecast held in conflict with when it was read, and the fix live, waiting on its places with the fix on its branch, and no forecast is asked for the status",
+            cites: &["56", "58", "203"],
+            run: a_base_place_whose_first_fix_is_live,
+        },
+        Scenario {
+            name: "status: a fix flume launched gives the base place it was launched for, its number and its cause, and its recipients from its base place",
+            cites: &["43", "56", "203"],
+            run: the_fix_names_its_base_place,
+        },
+        Scenario {
+            name: "status: a change no base place launched, and a base place whose kind names no fix, give no field of a base place's fixes in the JSON form",
+            cites: &["61"],
+            run: fix_fields_left_out_of_other_places,
+        },
+        Scenario {
+            name: "status: a base place whose forecast could not be read gives it unread with the merge queue's words",
+            cites: &["56", "203", "210"],
+            run: a_forecast_unread_in_status,
         },
     ]
 }
@@ -2595,5 +2616,155 @@ fn no_effort_in_status(_: &()) -> Outcome {
         !json.to_string().contains(EFFORT_VALUE),
         "the variable's value in status: {json}"
     );
+    Ok(())
+}
+
+fn a_base_place_whose_first_fix_is_live(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, Some(2))?;
+    world.commit("main", &["README.md"]);
+    let (_, onto) = forecast_conflict(&world, &[])?;
+    let read = world.host.now();
+    world.engine().settle(None);
+    let fix = mend_fix(1);
+    world.settle(&fix);
+    world.queue.log.clear();
+    let status = world.status(&spring)?;
+    ensure_eq!(world.queue.log.count("forecast"), 0, "the forecasts asked");
+    let fix_kind = status.fix_kind.clone().ok_or("no fix_kind")?;
+    ensure_eq!(
+        (
+            fix_kind.identity.spelled.as_str(),
+            fix_kind.from.source.as_str()
+        ),
+        ("repo/mend@1", "repo"),
+        "the kind its fixes run as and where it came from"
+    );
+    ensure_eq!(status.fix_limit, Some(2), "its bound");
+    let forecast = status.forecast.clone().ok_or("no forecast")?;
+    ensure_eq!(forecast.at, read, "when the forecast was read");
+    ensure!(
+        matches!(
+            &forecast.forecast,
+            Forecast::Conflict { files, onto: on, with, .. }
+                if files == &vec!["README.md".to_string()] && *on == onto && with.is_empty()
+        ),
+        "the forecast: {:?}",
+        forecast.forecast
+    );
+    ensure!(
+        matches!(
+            status.fixes.as_slice(),
+            [BaseFix { number: 1, name, place, cause: FixCause::Forecast { .. }, ended: FixEnded::Live, .. }]
+                if name == "spring-1" && *place == fix
+        ),
+        "its fixes: {:?}",
+        status.fixes
+    );
+    ensure_eq!(
+        status.waits_on,
+        Some(flume_core::WaitsOn::Places),
+        "whom it waits on"
+    );
+    ensure_eq!(status.on_branch, Some(vec![fix.clone()]), "on_branch");
+    let json = status_json(&world, &spring)?;
+    ensure_eq!(
+        json["fix_kind"]["identity"]["spelled"],
+        "repo/mend@1",
+        "fix_kind in JSON"
+    );
+    ensure_eq!(json["fix_limit"], 2, "fix_limit in JSON");
+    ensure_eq!(json["fixes"][0]["ended"], "live", "the fix's end in JSON");
+    ensure!(
+        json["forecast"]["forecast"]["conflict"]["files"][0] == "README.md",
+        "the forecast in JSON: {}",
+        json["forecast"]
+    );
+    ensure_eq!(world.queue.log.count("forecast"), 0, "the forecasts asked");
+    Ok(())
+}
+
+fn the_fix_names_its_base_place(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    world.commit("main", &["README.md"]);
+    forecast_conflict(&world, &[])?;
+    world.engine().settle(None);
+    let fix = mend_fix(1);
+    let status = world.status(&fix)?;
+    let of = status.fix_of.clone().ok_or("no fix_of")?;
+    ensure_eq!(
+        (of.place.clone(), of.number),
+        (spring.clone(), 1),
+        "the base place and number"
+    );
+    ensure!(
+        matches!(of.cause, FixCause::Forecast { .. }),
+        "its cause: {:?}",
+        of.cause
+    );
+    ensure_eq!(
+        (status.recipients.clone(), status.recipients_from.clone()),
+        (vec!["ops".to_string()], Some(RecipientsFrom::BasePlace)),
+        "its recipients"
+    );
+    let json = status_json(&world, &fix)?;
+    ensure_eq!(
+        json["fix_of"]["place"],
+        spring.to_string(),
+        "fix_of in JSON"
+    );
+    ensure_eq!(json["fix_of"]["number"], 1, "the number in JSON");
+    ensure_eq!(
+        json["recipients_from"]["from"],
+        "base-place",
+        "the recipients' source"
+    );
+    for field in ["fix_kind", "fix_limit", "forecast", "fixes"] {
+        ensure!(json.get(field).is_none(), "the fix gives {field}");
+    }
+    Ok(())
+}
+
+fn fix_fields_left_out_of_other_places(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring(&world)?;
+    world.engine().settle(None);
+    let change = World::id("change", "plain");
+    launched(
+        &world
+            .engine
+            .launch(&launch("change", "plain", Some("plan it"))),
+    )?;
+    for place in [&spring, &change] {
+        let json = status_json(&world, place)?;
+        for field in ["fix_of", "fix_kind", "fix_limit", "forecast", "fixes"] {
+            ensure!(json.get(field).is_none(), "{place} gives {field}: {json}");
+        }
+    }
+    Ok(())
+}
+
+fn a_forecast_unread_in_status(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    world.queue.answer_forecast(
+        REPOSITORY,
+        "train/spring",
+        Forecast::CouldNotRead {
+            reason: "the reader's document is torn".into(),
+        },
+    );
+    world.engine().settle(None);
+    world.engine().settle(None);
+    let status = world.status(&spring)?;
+    ensure_eq!(
+        status.forecast.map(|held| held.forecast),
+        Some(Forecast::CouldNotRead {
+            reason: "the reader's document is torn".into()
+        }),
+        "the forecast status gives"
+    );
+    ensure!(status.fixes.is_empty(), "fixes: {:?}", status.fixes);
     Ok(())
 }
