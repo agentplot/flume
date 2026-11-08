@@ -258,12 +258,28 @@ moves it as it moves every submitted place.
 
 ### Its fixes
 
-A kind with no stages may name the kind its fixes run as, and how many
-fixes it runs before its place waits on you. A kind's declaration has
-no field for either yet. Until it does, no kind names a fix, and every
-base place waits on you after a failed or conflicting submission, with
-sluice's words. For a base place whose kind names one, flume watches its
-branch against its base while it waits on you. At each settle, while no place on its branch
+A kind with no stages may name its landing fix, the kind its fixes run
+as, by `landing_fix`, and how many fixes it runs before its place waits
+on you, by `max_landing_fixes`:
+
+```toml
+# .config/flume.toml
+[kinds.train]
+branch = "train"
+lands = true
+stages = []
+landing_fix = "flume/fix@1"
+max_landing_fixes = 2
+```
+
+`landing_fix` is the fix kind's whole identity, its source and its
+version, here flume's own `fix@1`; a kind the repository declares is
+named as `repo/<name>@<version>`. flume resolves it when the base place
+launches, and refuses the launch where it names no kind it can run as a
+fix. Left out, `max_landing_fixes` is three ([a kind with no
+stages](/flume/guides/kinds/#a-kind-with-no-stages)). For a base place
+whose kind names a landing fix, flume watches its branch against its
+base while it waits on you. At each settle, while no place on its branch
 is live and its submission isn't open, flume asks sluice for a
 forecast, run in the repository:
 
