@@ -11,7 +11,9 @@
 //! packages refused at another identity, naming a part outside them, an
 //! environment or a program by a location (155 to 160, 192; S63); and a
 //! kind that lands with no stages beside one that does not and a table of
-//! settings (18, 202; weir 51, 57).
+//! settings (18, 202; weir 51, 57); and such a kind naming its landing
+//! fix, by an identity with its version, and its bound, and what weir and
+//! flume refuse of them (23; weir 52, 57; weir record 0005).
 
 use crate::common::engine::{base_at, engine, PLACE_PROFILE};
 use crate::common::*;
@@ -519,6 +521,71 @@ fn a_kind_that_lands_with_no_stages_beside_one_that_does_not_and_settings() {
         }
         other => panic!("a kind that does not land with no stages read as {other:?}"),
     }
+}
+
+/// A declaration of `train`, landing with no stages and `more` in its
+/// table, and `mend` at version 1, landing with one code stage delivering
+/// commits, its prompt at `prompts/code.md` (23, 202).
+fn trained(more: &str) -> String {
+    format!(
+        "[kinds.train]\nbranch = \"train\"\nlands = true\nstages = []\n{more}\n\n\
+         [kinds.mend]\nversion = 1\nbranch = \"mend\"\nlands = true\n\n\
+         [[kinds.mend.stages]]\nname = \"code\"\nprompt = \"prompts/code.md\"\n\
+         deliverables = [\"commits\"]\nagents = [{{}}]\n"
+    )
+}
+
+/// `repository` declaring `declaration`, mend's prompt beside it,
+/// committed as `message`; the revision.
+fn declaring_trained(repository: &Repository, declaration: &str, message: &str) -> Revision {
+    repository.write(DECLARATION, declaration);
+    repository.write(".config/prompts/code.md", "{{brief}}");
+    Revision::new(repository.commit(message))
+}
+
+/// Each kind `repository` declares at `revision`, by name, with the kind
+/// of its fixes and its bound; panics naming why where it could not be
+/// read.
+fn landing_fixes(
+    repository: &Repository,
+    revision: &Revision,
+) -> BTreeMap<String, (Option<String>, Option<u32>)> {
+    match Weir.read_kinds(&repository.name(), revision) {
+        KindsRead::Read { kinds, .. } => kinds
+            .into_iter()
+            .map(|kind| (kind.name, (kind.fix, kind.fix_limit)))
+            .collect(),
+        other => panic!("the declaration read as {other:?}"),
+    }
+}
+
+#[test]
+fn a_kind_with_no_stages_names_its_landing_fix_and_its_bound() {
+    // The kinds-profile spec's "A landing fix and its bound over a scratch
+    // repository": weir's crate reads a kind's `landing_fix` and
+    // `max_landing_fixes`, and the profile maps them onto the kind of its
+    // fixes, spelled as weir spells the identity, and its bound; a kind
+    // that gives neither names neither (23; weir 52; weir record 0005;
+    // core.4).
+    let repository = Repository::new("landing-fix");
+    let declared = format!(
+        "{}\n[kinds.yard]\nbranch = \"yard\"\nlands = true\nstages = []\n",
+        trained("landing_fix = \"repo/mend@1\"\nmax_landing_fixes = 2")
+    );
+    let revision = declaring_trained(&repository, &declared, "train names its landing fix");
+    let none = (None, None);
+    assert_eq!(
+        landing_fixes(&repository, &revision),
+        BTreeMap::from([
+            ("mend".to_string(), none.clone()),
+            (
+                "train".to_string(),
+                (Some("repo/mend@1".to_string()), Some(2))
+            ),
+            ("yard".to_string(), none),
+        ]),
+        "each kind's landing fix and its bound"
+    );
 }
 
 /// A one-stage kind `bump` of the repository's at `version`, not landing.
