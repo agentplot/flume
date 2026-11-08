@@ -29,7 +29,7 @@ pre-commit hook's clippy.
 
 ## 4. The site
 
-- [ ] 4.1 In `site/src/content/docs/reference/commands.md`, take out `--caller`; in `reference/state.md`, take out `caller` and give a drop's or a done's end pending for the recipients that are no role's address; in `guides/callers-and-holds.md`, say how a reader names itself a recipient no pane holds, reads a tidied place's status and collects it by naming the place, and that a drop or a done is an end no notice carries, all to any host's operator (7, 43, 56, 62; core.35). Check: `sluice exec bolt/a-tidied-places-end-stays-readable -- moon run site:prose`.
+- [x] 4.1 In `site/src/content/docs/reference/commands.md`, take out `--caller`; in `reference/state.md`, take out `caller` and give a drop's or a done's end pending for the recipients that are no role's address; in `guides/callers-and-holds.md`, say how a reader names itself a recipient no pane holds, reads a tidied place's status and collects it by naming the place, and that a drop or a done is an end no notice carries, all to any host's operator (7, 43, 56, 62; core.35). Check: `sluice exec bolt/a-tidied-places-end-stays-readable -- moon run site:prose`.
 
 ## 5. The gate and the archive
 
