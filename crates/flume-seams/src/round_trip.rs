@@ -251,6 +251,7 @@ fn held() -> HeldState {
             hold_words: BTreeMap::from([("review".into(), "until the design is ruled".into())]),
             recipients: vec!["operator".into(), "role:planner".into()],
             recipients_from: Some(RecipientsFrom::Launch),
+            caller: None,
             stream: StreamHeld {
                 name: "work".into(),
                 from: StreamFrom::HostRepository,
@@ -680,6 +681,7 @@ fn a_launch() {
         stall_after: Some(30 * 60),
         stream: Some("work".into()),
         intent: Some("the-surfaces".into()),
+        caller: Some("boomdrive".into()),
     });
 }
 
@@ -935,6 +937,30 @@ fn a_held_state_with_where_its_recipients_came_from() {
     assert_eq!(read.place.recipients_from, None);
     let written = serde_json::to_value(&read).expect("held state as JSON");
     assert!(written["place"].get("recipients_from").is_none());
+}
+
+#[test]
+fn a_held_state_with_a_caller() {
+    // The seam-contracts spec's "A caller and a drop round-trip", for its
+    // caller, and "State written before": a place naming its caller reads
+    // back equal; a state written before reads with none, and writes none
+    // (7, 61, 75).
+    let mut state = held();
+    state.place.caller = Some("boomdrive".into());
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(json["place"]["caller"], "boomdrive");
+    let mut before = json;
+    before["place"]
+        .as_object_mut()
+        .expect("the place")
+        .remove("caller");
+    let read: HeldState = serde_json::from_value(before).expect("a state written before");
+    assert_eq!(read.place.caller, None);
+    let written = serde_json::to_value(&read).expect("held state as JSON");
+    assert!(written["place"].get("caller").is_none());
+    let launch = serde_json::to_value(Launch::default()).expect("a launch as JSON");
+    assert!(launch.get("caller").is_none(), "no caller written");
 }
 
 /// `value` with every `mode` key taken out, at any depth.
@@ -2484,6 +2510,13 @@ fn every_ends_key_round_trips() {
             },
             "stall/3700",
         ),
+        (
+            EndOf::Over {
+                over: Over::Dropped,
+            },
+            "over/dropped",
+        ),
+        (EndOf::Over { over: Over::Done }, "over/done"),
     ];
     for (end, token) in ends {
         let key = end.end_key();
@@ -2516,6 +2549,30 @@ fn every_ends_key_round_trips() {
     ] {
         round_trips(stage(state, None, 3).end_key());
     }
+    // The seam-contracts spec's "A caller and a drop round-trip", for its
+    // drop: the end of a drop is written as its over, keys `over/dropped`
+    // as held state records it, and has no recipient (43, 52, 61, 75).
+    let dropped = EndOf::Over {
+        over: Over::Dropped,
+    };
+    assert_eq!(
+        serde_json::to_value(&dropped).expect("written"),
+        serde_json::json!({"of": "over", "over": "dropped"})
+    );
+    round_trips(dropped.clone());
+    assert_eq!(dropped.key(), "over dropped");
+    assert_eq!(EndOf::Over { over: Over::Done }.key(), "over done");
+    let mut state = held();
+    state.ends.push(EndHeld {
+        of: dropped,
+        read_at: 500,
+        deliveries: vec![],
+        answer: None,
+        claim: None,
+    });
+    round_trips(state.clone());
+    let end = state.ends.last().expect("the drop's end");
+    assert!(end.recipients(&state.place.recipients).is_empty());
 }
 
 #[test]
@@ -2535,6 +2592,11 @@ fn a_key_in_another_form_is_refused() {
         "submission/2",
         "stall/soon",
         "stall/",
+        "over/landed",
+        "over/",
+        "over/Dropped",
+        "over/dropped/1",
+        "over dropped",
         "stage construct 1 EndedShort ",
         "",
     ] {
@@ -3107,8 +3169,119 @@ fn an_ends_key_and_its_pending_recipients() {
     let recipients = vec!["operator".to_string(), "ops".to_string()];
     assert_eq!(ends[0].pending(&recipients), vec!["ops".to_string()]);
     assert_eq!(ends[1].pending(&recipients), recipients);
-    assert!(ends[1].pending_to(&recipients, "ops"));
-    assert!(!ends[0].pending_to(&recipients, "operator"));
+    assert!(ends[1].pending_to(&recipients, None, "ops"));
+    assert!(!ends[0].pending_to(&recipients, None, "operator"));
+}
+
+#[test]
+fn the_end_of_the_work_is_owed_its_caller() {
+    // The seam-contracts spec's "The end of the work owed its caller": a
+    // stage's end and a failure stand pending for the place's recipients
+    // alone, a landing for them and the caller, and a drop for the caller
+    // alone (43).
+    let end = |of| EndHeld {
+        of,
+        read_at: 100,
+        deliveries: vec![],
+        answer: None,
+        claim: None,
+    };
+    let mut state = held();
+    state.place.recipients = vec!["ops".into()];
+    state.place.caller = Some("boomdrive".into());
+    state.ends = vec![
+        end(EndOf::Stage {
+            stage: "construct".into(),
+            start: 1,
+            state: StageState::Delivered,
+            quiet_from: None,
+            answered: 0,
+            end: Box::default(),
+        }),
+        end(EndOf::Submission {
+            submit: 1,
+            verdict: Verdict::Failed {
+                words: "check failed".into(),
+            },
+        }),
+        end(EndOf::Submission {
+            submit: 2,
+            verdict: Verdict::Landed {
+                commit: Revision::new("c9"),
+                place_removed: false,
+                branch_removed: false,
+            },
+        }),
+        end(EndOf::Over {
+            over: Over::Dropped,
+        }),
+    ];
+    let recipients = state.place.recipients.clone();
+    let caller = state.place.caller.as_deref();
+    let owed: Vec<Vec<String>> = state
+        .ends
+        .iter()
+        .map(|end| end.owed(&recipients, caller))
+        .collect();
+    assert_eq!(
+        owed,
+        vec![
+            vec!["ops".to_string()],
+            vec!["ops".to_string()],
+            vec!["ops".to_string(), "boomdrive".to_string()],
+            vec!["boomdrive".to_string()],
+        ]
+    );
+    assert_eq!(
+        state
+            .ends
+            .iter()
+            .map(EndHeld::for_caller)
+            .collect::<Vec<_>>(),
+        vec![false, false, true, true]
+    );
+    assert!(state.ends[3].pending_to(&recipients, caller, "boomdrive"));
+    assert!(!state.ends[3].pending_to(&recipients, None, "boomdrive"));
+    assert!(!state.ends[0].pending_to(&recipients, caller, "boomdrive"));
+    assert!(
+        state.ends[3].pending(&recipients).is_empty(),
+        "no notice of a drop"
+    );
+    assert_eq!(
+        state.pending_for(),
+        vec!["ops".to_string(), "boomdrive".to_string()]
+    );
+    let mut none = state.clone();
+    none.place.caller = None;
+    assert_eq!(none.pending_for(), vec!["ops".to_string()]);
+
+    // "A caller that is also a recipient": a notice to its name leaves the
+    // landing pending for it as the caller, and the inbox's delivery
+    // collects both at once (43, 62).
+    let mut landing = state.ends[2].clone();
+    let both = vec!["ops".to_string()];
+    landing.deliveries.push(Delivery {
+        recipient: "ops".into(),
+        at: 101,
+        by: DeliveredBy::Notice,
+    });
+    assert!(landing.pending(&both).is_empty(), "its notice is delivered");
+    assert!(landing.pending_for_caller("ops"));
+    assert_eq!(landing.owed(&both, Some("ops")), vec!["ops".to_string()]);
+    landing.deliveries.push(Delivery {
+        recipient: "ops".into(),
+        at: 102,
+        by: DeliveredBy::Inbox,
+    });
+    assert!(landing.owed(&both, Some("ops")).is_empty());
+    // A wait's delivery to the caller collects it as the inbox's does.
+    let mut waited = state.ends[2].clone();
+    waited.deliveries.push(Delivery {
+        recipient: "boomdrive".into(),
+        at: 103,
+        by: DeliveredBy::Wait,
+    });
+    assert_eq!(waited.owed(&recipients, caller), vec!["ops".to_string()]);
 }
 
 #[test]
@@ -3122,8 +3295,8 @@ fn a_stop_shorts_end_goes_to_the_role_it_named_alone() {
     end.deliveries.clear();
     let recipients = vec!["operator".to_string(), "ops".to_string()];
     assert_eq!(end.recipients(&recipients), vec!["west/ops".to_string()]);
-    assert!(end.pending_to(&recipients, "west/ops"));
-    assert!(!end.pending_to(&recipients, "operator"));
+    assert!(end.pending_to(&recipients, None, "west/ops"));
+    assert!(!end.pending_to(&recipients, None, "operator"));
 }
 
 #[test]

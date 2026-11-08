@@ -237,8 +237,15 @@ enum Command {
         timeout: Option<String>,
     },
     /// Collect every end pending for a recipient, of every place on the
-    /// host, each then delivered to it (43).
+    /// host, each then delivered to it; an inbox naming a place collects
+    /// that place's ends alone (43, 62).
     Inbox {
+        /// The place whose ends alone are collected, named as `flume
+        /// status` names one: a location, or `<kind>--<name>` in the
+        /// repository, its own document or, once it was tidied, those kept
+        /// for it, a tidied document's `<place>@<at>` naming that one
+        /// alone; every place on the host where none is named.
+        place: Option<String>,
         /// The recipient collected for; `$FLUME_RECIPIENT`, a role's
         /// run's address, or the terminal's session, where none is named.
         #[arg(long)]
@@ -408,6 +415,14 @@ struct LaunchArgs {
     /// where none is named (147).
     #[arg(long)]
     intent: Option<String>,
+    /// The caller launching the place, by a name of the caller's own. The
+    /// end of the place's work, its landing, drop or done, waits for it,
+    /// its tidied document kept, until it collects it by `flume inbox` or
+    /// `flume wait` as that name; no notice is sent to it, it is no
+    /// recipient, and it wakes no role. None where none is named (7, 43,
+    /// 62).
+    #[arg(long, value_name = "NAME")]
+    caller: Option<String>,
 }
 
 /// What a command prints, where, and its exit status.
@@ -665,10 +680,11 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             let recipient = recipient_of(&core, recipient)?;
             core.wait(&place, &of, &recipient, timeout)
         }
-        Command::Inbox { recipient } => {
+        Command::Inbox { place, recipient } => {
+            let place = maybe(place)?;
             let core = build()?;
             let recipient = recipient_of(&core, recipient)?;
-            core.inbox(&recipient)
+            core.inbox(&recipient, place.as_ref())
         }
         Command::Wake { address } => build()?.wake(address),
         Command::Kinds {
@@ -817,6 +833,7 @@ fn launch_of(args: &LaunchArgs, given: Option<&Path>) -> Result<Launch, String> 
         stall_after: args.stall_after.as_deref().map(read_span).transpose()?,
         stream: args.stream.clone(),
         intent: args.intent.clone(),
+        caller: args.caller.clone(),
     })
 }
 

@@ -22,7 +22,7 @@ sidebar:
 | `flume tidy [<place>]` | Remove what is over, for one place or every place. |
 | `flume settle [<place>]` | Move a place, or every place, on; with `--every <time>`, every place as a watch over the host. |
 | `flume wait <place>` | Wait on a stage's end or the submission's outcome, as a recipient. |
-| `flume inbox` | Collect every end pending for a recipient, on every place of the host. |
+| `flume inbox [<place>]` | Collect every end pending for a recipient, on every place of the host, or on the place named alone. |
 | `flume wake <address>` | Wake a role's address, `<stream>/<role>`: launch its run where none stands, and nothing where an agent already holds it. |
 | `flume kinds lock <identity>…` | Record each kind at its content's hash in a lock of kinds, or take it out. |
 | `flume open [<session>]` | Show a session of a stream's, by the session's name, in its stream's view: a window its terminal app opens, its multiplexer's own app, or the line to run. |
@@ -90,6 +90,7 @@ flume launch --kind <kind> --name <name> [--brief <text> | --brief-file <file>] 
 | `--agent [<stage>.]<field>=<value>` | One setting of every stage's agent, or of one stage's. The field is `program`, `model`, `effort`, `instructions`, `beside`, `session`, `mode`, `keep_open` or `programs`. `effort=<word>` gives the agent's effort in its program's own word, as Claude Code's `low`, `medium`, `high`, `xhigh` or `max`, and a word its program does not take refuses the launch ([the effort](/flume/guides/agent-settings/#the-effort)). `session=<name>` opens the agent in that herdr session whatever its stream's, and `beside` opens it beside a pane before any session. `mode=<mode>` gives one of `plan`, `ask`, `edits` and `full`, and `mode.<program>=<value>` one entry of a table of programs, several building one table. A mode word and a table for the same stage refuse the launch. `keep_open=<time>` gives how long the agent is kept open for an answer once it stops short needing one, as a time, `0` keeping none; a `keep_open.<program>` refuses the launch ([how long an agent is kept open](/flume/guides/agent-settings/#how-long-an-agent-is-kept-open)). `programs.<program>.settings.<key>=<value>` gives one top-level key of a program's own settings, several building one entry. Its value is read as JSON where it parses and as the text written otherwise. A nested key, or one key given twice for one stage, refuses the launch. `programs.<program>.file=<path>` names a program's settings file, relative to the working directory, read once at the launch ([a program's own settings](/flume/guides/agent-settings/#a-programs-own-settings)). Repeatable. |
 | `--stream <stream>` | The stream the place runs in, one the host's configuration declares. Where none is named: the intent's stream, else the one the host's configuration names for the repository and kind, the repository or the kind, else `default`. Fixed at the launch. |
 | `--intent <name>` | The intent the place serves, by name. Places of one intent keep to one account while it is usable. Where none is named, the repository and base name the intent. |
+| `--caller <name>` | The caller launching the place, by a name of its own, fixed at the launch and given by status. The end of the place's work, its landing, drop or done, waits for it, the place's record kept once it is tidied, until it collects it by `flume inbox` or `flume wait` as that name. No notice is sent to it, it is no recipient and it wakes no role. A launch naming an empty caller is refused; one naming none has none ([the end of a place's work](/flume/guides/callers-and-holds/#the-end-of-a-places-work)). |
 
 The answer is the place's status. A launch is refused whole, leaving
 nothing it made, when:
@@ -526,16 +527,25 @@ a role's run serves, else the terminal session the command runs in.
 ## `flume inbox`
 
 ```sh
-flume inbox [--recipient <name>]
+flume inbox [<place>] [--recipient <name>]
 ```
 
 Every end pending for the recipient, on every place of the host, a
 tidied place's kept record among them, each recorded delivered in the
-same write, each with its key. Prints `nothing pending for <recipient>`
-when there is none. The recipient defaults as for `flume wait`.
+same write, each with its key. An end is pending for the recipient as
+a recipient of its place, or, for the end of the place's work, as the
+caller its launch named. Prints `nothing pending for <recipient>` when
+there is none. The recipient defaults as for `flume wait`.
 
-Beneath them, `waiting` gives every place that waits on its caller and
-on the recipient: one it is a recipient of, one whose stop-short named
+Naming a place, as `flume status` names one, the inbox collects that
+place's ends alone: those of its record, or, once it was tidied, of the
+records kept for it, `<place>@<at>` naming one record. It reads them
+before it moves anything on, so it collects nothing tidied since. A
+name under which no record stands is refused, and nothing is marked
+delivered.
+
+Beneath them, `waiting` gives every place, or the place named, that
+waits on its caller and on the recipient: one it is a recipient of, one whose stop-short named
 it, or one whose stall of the move it waits on now reached it as the
 answerer. Each comes with its kind, name, stream and brief's first
 line, the move and since when, the stop-short's words, key and the

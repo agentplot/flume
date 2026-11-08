@@ -11,10 +11,13 @@
 //! reached in that agent alone, found by its name in its stream's
 //! terminal and session at each delivery, none or more than one of the
 //! name leaving the end pending with nothing claimed (132, 190, C.7;
-//! core.28). A place whose work is over and whose worktree is gone keeps
-//! its document alone, apart from a live place's, while an end of it
-//! stands pending, and it goes once every end is delivered or its caller
-//! drops it (3, 62).
+//! core.28). No notice is sent to a place's caller as its caller: the
+//! end of the place's work, its landing, drop or done, waits for it until
+//! it collects it by the inbox or a wait (43; core.25). A place whose
+//! work is over and whose worktree is gone keeps its document alone,
+//! apart from a live place's, while an end of it stands pending for a
+//! recipient or for its caller, and it goes once every end is delivered
+//! or its caller drops it (3, 62).
 
 use crate::prompt::group_name;
 use crate::standing::Reached;
@@ -123,6 +126,7 @@ pub fn what_ended(of: &EndOf) -> String {
             Verdict::Refused { .. } => "submission refused".into(),
         },
         EndOf::Stall { waiting, .. } => format!("stalled: {waiting}"),
+        EndOf::Over { over } => over.word().into(),
     }
 }
 
@@ -204,7 +208,8 @@ impl Engine {
 
     /// The document of a place whose worktree and branch are gone, kept
     /// apart from a live place's under its id and the tidy's time while an
-    /// end of it stands pending, naming the recipients it waits on, and
+    /// end of it stands pending, naming those it waits on, its caller
+    /// among them, and
     /// holding no line of what its stages made; none kept where nothing
     /// is pending (43, 62, 129).
     pub(crate) fn keep_for_ends(&self, held: &HeldState, over: &Over) -> Option<PlaceId> {
@@ -241,8 +246,8 @@ impl Engine {
     }
 
     /// A tidied place's document: removed once no end of it stands
-    /// pending, and otherwise kept naming the recipients it waits on;
-    /// true when it changed something (43, 62).
+    /// pending, and otherwise kept naming those it waits on, its caller
+    /// among them; true when it changed something (43, 62).
     pub(crate) fn settle_tidied(&self, id: &PlaceId) -> bool {
         let Some(read) = self.store.read(id) else {
             return false;
@@ -259,6 +264,21 @@ impl Engine {
             _ => Step::Keep(false),
         })
         .unwrap_or(false)
+    }
+
+    /// The documents a place's name reads, as status and the inbox read
+    /// them: its live document, else those kept for it once it was
+    /// tidied, `<location>@<at>` naming one; none where no document
+    /// stands under the name (43, 62; core.14).
+    pub(crate) fn documents_of(&self, id: &PlaceId) -> Vec<HeldState> {
+        if let Some(read) = self.store.read(id) {
+            return vec![read.state];
+        }
+        self.tidied_of(id)
+            .iter()
+            .filter_map(|id| self.store.read(id))
+            .map(|read| read.state)
+            .collect()
     }
 
     /// The tidied documents of the place `id` names: the one under that

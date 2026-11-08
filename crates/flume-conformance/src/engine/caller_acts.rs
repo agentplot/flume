@@ -1287,7 +1287,7 @@ fn s93_a_question_for_ops_answered_once(_: &()) -> Outcome {
     // The run collects before its notice lands, as a run whose start
     // collects does (43; core.25).
     world.keep_watch();
-    let Answer::Inbox { ends, .. } = world.engine.inbox("east/ops") else {
+    let Answer::Inbox { ends, .. } = world.engine.inbox("east/ops", None) else {
         return Err("the inbox did not answer".into());
     };
     ensure_eq!(
