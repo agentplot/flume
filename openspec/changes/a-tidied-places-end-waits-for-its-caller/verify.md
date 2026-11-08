@@ -173,7 +173,39 @@ ran in the gate and passed:
   built. No scenario of the change states it on its own, and this report
   counts that as no shortfall.
 
+## What falls short
+
+The archived specs fail the gate's `root:specs`.
+`openspec archive a-tidied-places-end-waits-for-its-caller --yes`
+applied the deltas, `+ 7, ~ 3`. Afterwards,
+`openspec validate --specs --strict` gave 47 specs passed and 1 failed,
+`end-delivery`:
+
+```text
+⚠ [WARNING] requirements[5]: Requirement text is very long (>500 characters). Move examples and edge cases into scenarios, or split it into separate requirements that each state one behavior.
+```
+
+`requirements[5]` is "The inbox collects what is pending". The
+change's MODIFIED text runs to about 656 characters, where the base's
+ran to 273. `root:specs` in `moon.yml` runs
+`openspec validate --specs --strict --no-interactive`, which fails a
+warning as an error. The gate's run above did not reach it: before the
+archive the change touched nothing under `openspec/specs/`, which is
+that task's input. The change itself validates strict, since the change
+validator does not apply the length rule to a delta's requirement.
+
+The delta requirement needs splitting, or its detail moving into
+scenarios, so that each requirement of the merged `end-delivery` spec
+stays under 500 characters. One way is to keep "The inbox collects what
+is pending" as it stood at the base and add a requirement of its own,
+"An inbox naming a place", that holds the naming, the waiting entries
+and the refusal, with *An inbox naming a place* and *A name under which
+nothing stands* under it. The archive was undone, leaving the tree as
+committed.
+
 ## Outcome
 
-The whole checks pass and the work holds every requirement and
-scenario of the change. The change is archived.
+The whole checks pass, and the code holds every requirement and
+scenario of the change. The change's `end-delivery` delta, once
+archived, fails the gate's `root:specs`, so nothing is archived and the
+change goes back to its code stage.
