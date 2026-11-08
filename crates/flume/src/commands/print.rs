@@ -383,6 +383,9 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
             place.recipients.join(", ")
         ));
     }
+    if let Some(caller) = &place.caller {
+        lines.push(format!("  caller: {caller}"));
+    }
     for end in &place.ends {
         let mut line = format!(
             "  ended {}: {}",
@@ -2900,6 +2903,55 @@ mod tests {
         );
         assert_eq!(line(&["ops"], None).as_deref(), Some("  recipients: ops"));
         assert_eq!(line(&[], None), None);
+    }
+
+    #[test]
+    fn a_places_caller() {
+        // 7, 43, 56; core.14: the caller its launch named, after the
+        // recipients' line, none where it named none; and its drop's end
+        // as any end's line, pending for it.
+        let place = PlaceStatus {
+            recipients: vec!["ops".into()],
+            recipients_from: Some(RecipientsFrom::Launch),
+            caller: Some("boomdrive".into()),
+            ends: vec![EndStatus::of(
+                &EndHeld {
+                    of: EndOf::Over {
+                        over: flume_seams::Over::Dropped,
+                    },
+                    read_at: 500,
+                    deliveries: vec![],
+                    answer: None,
+                    claim: None,
+                },
+                &["ops".to_string()],
+                Some("boomdrive"),
+            )],
+            ..a_place()
+        };
+        let lines = place_lines(&place);
+        let at = lines
+            .iter()
+            .position(|line| line.starts_with("  recipients: "))
+            .expect("the recipients' line");
+        assert_eq!(
+            lines.get(at + 1).map(String::as_str),
+            Some("  caller: boomdrive")
+        );
+        assert!(
+            lines
+                .iter()
+                .any(|line| line == "  ended over/dropped: dropped; pending for boomdrive"),
+            "{lines:#?}"
+        );
+        let none = place_lines(&PlaceStatus {
+            caller: None,
+            ..place
+        });
+        assert!(
+            !none.iter().any(|line| line.starts_with("  caller: ")),
+            "{none:#?}"
+        );
     }
 
     #[test]
