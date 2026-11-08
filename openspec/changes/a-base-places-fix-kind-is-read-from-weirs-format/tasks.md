@@ -19,7 +19,7 @@ change touches none of them. Every scenario added cites its clauses.
 
 ## 1. The decision recorded
 
-- [ ] 1.1 Hold record 0056's amendment line, core.34's rule and details, core.4's details and the mirror of core.34 in `site/src/content/docs/architecture/rules.md` as this change's construct wrote them at 15d15448, as design 7 words them, citing weir's record 0005 and the statement at agentplot/blueprints 8eec6dd; amend them where the statement the build reads differs (core.19, core.35). True when `devenv shell -- sh check-adrs.sh`, `devenv shell -- treefmt --ci docs/adr/0056-a-base-place-forecast-or-found-to-conflict-with-its-base-or-whose-submission-failed-has-its-fix-launched-by-flume.md docs/architecture/core.md site/src/content/docs/architecture/rules.md` and `devenv shell -- sh -c 'cd site && vale src/content/docs/architecture/rules.md'` pass.
+- [x] 1.1 Hold record 0056's amendment line, core.34's rule and details, core.4's details and the mirror of core.34 in `site/src/content/docs/architecture/rules.md` as this change's construct wrote them at 15d15448, as design 7 words them, citing weir's record 0005 and the statement at agentplot/blueprints 8eec6dd; amend them where the statement the build reads differs (core.19, core.35). True when `devenv shell -- sh check-adrs.sh`, `devenv shell -- treefmt --ci docs/adr/0056-a-base-place-forecast-or-found-to-conflict-with-its-base-or-whose-submission-failed-has-its-fix-launched-by-flume.md docs/architecture/core.md site/src/content/docs/architecture/rules.md` and `devenv shell -- sh -c 'cd site && vale src/content/docs/architecture/rules.md'` pass.
 
 ## 2. weir's crate
 
