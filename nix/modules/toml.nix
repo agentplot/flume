@@ -1,8 +1,8 @@
-# flume's managed file, rendered from services.flume.settings at
-# evaluation (the change flume-publishes-its-own-flake-and-module, design
-# 7, as Boomdrive's nix/modules/toml.nix): so the gate compares the text a
-# module writes without building it, and one `settings` gives one text on
-# either platform. Top-level keys come before tables, each sorted by name,
+# flume's managed files, config.toml rendered from services.flume.settings
+# and each source's from services.flume.sources, at evaluation (the change
+# flume-publishes-its-own-flake-and-module, design 7, as Boomdrive's
+# nix/modules/toml.nix): so the gate compares the text a module writes
+# without building it, and one option gives one text on either platform. Top-level keys come before tables, each sorted by name,
 # and a key is bare where TOML allows. A key whose value is null is unset,
 # and left out, so flume's own default holds (design 6). An empty table is
 # written as its header, since `[repos."<repository>"]` alone names a
@@ -13,8 +13,12 @@
 # (195). Any other value, a path or a derivation among them, fails, naming
 # its path.
 #
-# `text settings` is the file's text, failing with the first of
-# `refusals settings`, each naming a value the file cannot hold.
+# `render option value` is the text of the file rendered from the option
+# whose path is `option`, `services.flume.sources.acme` say: its first line
+# names the option, and it fails with the first of the value's refusals,
+# each naming the path under the option of a value the file cannot hold
+# (the change flumes-module-writes-the-hosts-sources, design 3). `text` and
+# `refusals` are `services.flume.settings`'s, config.toml's.
 { lib }:
 let
   inherit (builtins)
@@ -39,7 +43,7 @@ let
     optionals
     ;
 
-  header = "# Written by flume's module from services.flume.settings; a change goes there.";
+  header = option: "# Written by flume's module from ${option}; a change goes there.";
 
   # TOML's basic string: `"`, `\` and every control character escaped.
   hex = n: lib.fixedWidthString 4 "0" (lib.toHexString n);
@@ -103,25 +107,25 @@ let
       "a ${typeOf value}";
 
   refusal =
-    named: value:
-    "services.flume.settings.${named} is ${what value}: flume's file takes strings, booleans, integers, floats, lists and tables";
+    option: named: value:
+    "${option}.${named} is ${what value}: flume's file takes strings, booleans, integers, floats, lists and tables";
 
-  # Every value of `value` at `named` the file cannot hold, by its path: a
-  # null is left out of a table, and refused in a list.
+  # Every value of `value` at `named` under `option` the file cannot hold,
+  # by its path: a null is left out of a table, and refused in a list.
   refusalsOf =
-    named: value:
+    option: named: value:
     if isScalar value then
       [ ]
     else if isTable value then
       concatLists (
-        mapAttrsToList (name: inner: refusalsOf (at named name) inner) (
+        mapAttrsToList (name: inner: refusalsOf option (at named name) inner) (
           filterAttrs (_: inner: inner != null) value
         )
       )
     else if isList value then
-      concatLists (imap0 (i: refusalsOf "${named}[${toString i}]") value)
+      concatLists (imap0 (i: refusalsOf option "${named}[${toString i}]") value)
     else
-      [ (refusal named value) ];
+      [ (refusal option named value) ];
 
   # A value written on its key's line, or in an inline list or table.
   inline =
@@ -198,19 +202,22 @@ let
     ++ inner.keys
     ++ inner.sections;
 
-  refusals = refusalsOf "";
-in
-{
-  inherit refusals;
+  settings = "services.flume.settings";
 
-  text =
-    settings:
+  render =
+    option: value:
     let
-      refused = refusals settings;
-      top = table [ ] settings;
+      refused = refusalsOf option "" value;
+      top = table [ ] value;
     in
     if refused != [ ] then
       throw (builtins.head refused)
     else
-      concatStringsSep "\n" ([ header ] ++ top.keys ++ top.sections) + "\n";
+      concatStringsSep "\n" ([ (header option) ] ++ top.keys ++ top.sections) + "\n";
+in
+{
+  inherit render;
+
+  refusals = refusalsOf settings "";
+  text = render settings;
 }

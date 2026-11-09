@@ -9,9 +9,16 @@
 # written. Each declared key and table is null unless set and left out of
 # the file, so flume's own default holds; a key the module does not
 # declare passes to the file, and flume judges it. Each table of named
-# entries merges across modules. A string shaped as a credential by
-# flume's own shapes fails evaluation, since the file is in the store,
-# which every user reads (core.50).
+# entries merges across modules. `sources` is the host's sources of kinds,
+# each the file `sources/<source>.toml` beside config.toml under the names
+# that file gives each key (191, C.7; the change
+# flumes-module-writes-the-hosts-sources, design 1): `kinds_dir`, required,
+# and `roles`, each an absolute path or one under `~`, and any other key
+# free-form, for flume to judge. A string shaped as a credential by
+# flume's own shapes, in `settings` or in a source, fails evaluation,
+# since the files are in the store, which every user reads (core.50;
+# design 4). A source's name flume would refuse or pass over fails
+# evaluation too, since it is the file's name (design 2).
 { packages }:
 {
   config,
@@ -48,6 +55,9 @@ let
   tables = options: types.attrsOf (table options);
 
   unsigned = types.ints.unsigned;
+  # A path on the host as a source's file names one: absolute, or under
+  # `~` (C.7).
+  located = types.strMatching "/.*|~|~/.*";
   view = types.enum [
     "terminal"
     "app"
@@ -113,7 +123,29 @@ let
       lib.concatLists (lib.imap0 (i: credentials "${named}[${toString i}]" name) value)
     else
       [ ];
-  found = credentials "services.flume.settings" "" cfg.settings;
+  found =
+    credentials "services.flume.settings" "" cfg.settings
+    ++ lib.concatLists (
+      lib.mapAttrsToList (name: credentials "services.flume.sources.${key name}" "") cfg.sources
+    );
+
+  # Why flume takes no source of the name `name`, or null where it takes
+  # it: weir's name (weir C.4, `weir_kinds::check_name`), and none of the
+  # sources of flume's own kinds, the repository's and a launch's
+  # (`source_fault`; 154, 191).
+  reserved = {
+    flume = "flume's own kinds";
+    repo = "the repository's kinds";
+    launch = "a launch's kinds";
+  };
+  nameFault =
+    name:
+    if builtins.match "[A-Za-z0-9_-]+" name == null then
+      "is no source's name: a source's name is one or more ASCII letters, digits, `_` and `-` (weir C.4), since it is the name of its file in ~/.config/flume/sources/, which flume reads and the activation links"
+    else if reserved ? ${name} then
+      "is the source of ${reserved.${name}}, which no host declares (154, 191): name the source otherwise"
+    else
+      null;
 in
 {
   options.services.flume = {
@@ -152,6 +184,19 @@ in
       default = { };
       description = "flume's managed file, `~/.config/flume/config.toml`, each key named as the file names it (C.7), rendered at evaluation. It holds no credential: name a variable of the host user's login environment by `$NAME` in its place.";
     };
+
+    sources = mkOption {
+      type = types.attrsOf (table {
+        kinds_dir = mkOption {
+          type = located;
+          description = "Where the source's packages lie, an absolute path or one under `~` (191).";
+        };
+        roles = unset located "The source's roles file, an absolute path or one under `~`, which the source's own tool writes (193).";
+      });
+      default = { };
+      example = lib.literalExpression ''{ acme.kinds_dir = "~/.local/share/flume/kinds/acme"; }'';
+      description = "The host's sources of kinds, each the file `~/.config/flume/sources/<source>.toml`, each key named as the file names it (191, C.7), rendered at evaluation and linked by the activation. A source's name is ASCII letters, digits, `_` and `-`, and not `flume`, `repo` or `launch`. It holds no credential. The roles file and the packages it names are the source's own tool's, which the module never writes.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -160,6 +205,10 @@ in
         assertion = found == [ ];
         message = "${builtins.head found} is shaped as a credential: flume's file is in the store, which every user reads, so it holds none. Name a variable of the host user's login environment in its place, as `$NAME`, which flume reads at each start (29).";
       }
-    ];
+    ]
+    ++ lib.mapAttrsToList (name: _: {
+      assertion = nameFault name == null;
+      message = "services.flume.sources.${key name} ${toString (nameFault name)}.";
+    }) cfg.sources;
   };
 }

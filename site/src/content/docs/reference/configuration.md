@@ -452,7 +452,9 @@ a `kinds_dir`.
 
 The sources belong to the host's configuration as its accounts do: a
 person, or a program that manages the host, writes each file whole,
-renames a new one over it, and deletes it. `config.local.toml` declares
+renames a new one over it, and deletes it. flume's Nix module writes
+each source it declares, and no other
+([install with Nix](/flume/install/#install-with-nix)). `config.local.toml` declares
 no source. No sources directory is a host with no sources. A `sources`
 that cannot be listed, a file of that name among them, makes every
 command refuse, as a `config.toml` that cannot be read does.

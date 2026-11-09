@@ -1,0 +1,3 @@
+# Written by flume's module from services.flume.sources.acme; a change goes there.
+kinds_dir = "~/.local/share/flume/kinds/acme"
+roles = "~/.local/state/acme/flume/roles.toml"

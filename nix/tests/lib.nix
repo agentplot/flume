@@ -80,6 +80,17 @@ in
       ];
     };
 
+  # The sources step's arguments for the sources of nix/tests/sources.nix
+  # named in `names`: each name and its file under `pkgs`, rendered as
+  # nix/tests/files/sources/<name>.toml (the change
+  # flumes-module-writes-the-hosts-sources, design 3 and 7).
+  sourcesGiven =
+    pkgs:
+    inputs.nixpkgs.lib.concatMapStrings (
+      name:
+      " ${name} ${(pkgs.writeText "flume-source-${name}.toml" (builtins.readFile ./files/sources/${name}.toml)).outPath}"
+    );
+
   # The messages of the assertions a system fails.
   failures =
     evaluated: map (a: a.message) (builtins.filter (a: !a.assertion) evaluated.config.assertions);
