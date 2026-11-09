@@ -210,10 +210,13 @@ enum Command {
         ack: Ack,
     },
     /// Wait on a place's stage or submission as a recipient: an end
-    /// pending for it is answered and delivered, one already delivered is
+    /// pending for it is answered and handed to it, one it confirmed is
     /// read, and otherwise the host's state is followed until one comes
-    /// (43). Exits 0 for a stage delivered or finished or a submission
-    /// landed, 2 for any other end, 3 for still waiting at the timeout.
+    /// (43). A hand-over delivers nothing until its recipient confirms it:
+    /// with `--confirm` the end is confirmed as it is answered, and
+    /// otherwise it stays pending until `flume confirm` names its key.
+    /// Exits 0 for a stage delivered or finished or a submission landed, 2
+    /// for any other end, 3 for still waiting at the timeout.
     Wait {
         /// A location, or `<kind>--<name>` in the repository.
         place: String,
@@ -235,10 +238,17 @@ enum Command {
         /// or `<n>h`; with none, until an end comes.
         #[arg(long)]
         timeout: Option<String>,
+        /// Confirm the end answered as its recipient, on receipt, so it is
+        /// delivered and pending no more.
+        #[arg(long)]
+        confirm: bool,
     },
     /// Collect every end pending for a recipient, of every place on the
-    /// host, each then delivered to it; an inbox naming a place collects
-    /// that place's ends alone (43, 62).
+    /// host, each handed to it; an inbox naming a place collects that
+    /// place's ends alone (43, 62). A hand-over delivers nothing until its
+    /// recipient confirms it: an end the inbox gives stays pending, and is
+    /// given again by the next inbox, until `--confirm` confirms it on
+    /// receipt or `flume confirm` names its delivery's key.
     Inbox {
         /// The place whose ends alone are collected, named as `flume
         /// status` names one: a location, or `<kind>--<name>` in the
@@ -248,6 +258,27 @@ enum Command {
         place: Option<String>,
         /// The recipient collected for; `$FLUME_RECIPIENT`, a role's
         /// run's address, or the terminal's session, where none is named.
+        #[arg(long)]
+        recipient: Option<String>,
+        /// Confirm each end given as its recipient, on receipt, so it is
+        /// delivered and given no more.
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Confirm, as a recipient, each delivery key given: a notice, a wait,
+    /// the inbox and a session's start hand an end over, and a hand-over
+    /// delivers nothing until its recipient confirms it by its key, which
+    /// `flume inbox`, `flume wait`, `flume status` and the notice give as
+    /// the end's delivery (43). A key confirmed before says when it first
+    /// was; a key no end is under, or one whose end is another
+    /// recipient's, is refused naming it, and the keys after it are not
+    /// confirmed. Exits 1 on a refusal.
+    Confirm {
+        /// The delivery keys, `<kind>--<name>/<token>/<end key>`.
+        #[arg(required = true, value_name = "KEY")]
+        keys: Vec<String>,
+        /// The recipient confirmed as; `$FLUME_RECIPIENT`, a role's run's
+        /// address, or the terminal's session, where none is named.
         #[arg(long)]
         recipient: Option<String>,
     },
@@ -664,6 +695,7 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             submission: _,
             recipient,
             timeout,
+            confirm,
         } => {
             let place = named(place)?;
             let of = match stage {
@@ -673,13 +705,22 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             let timeout = timeout.as_deref().map(read_span).transpose()?;
             let core = build()?;
             let recipient = recipient_of(&core, recipient)?;
-            core.wait(&place, &of, &recipient, timeout, false)
+            core.wait(&place, &of, &recipient, timeout, *confirm)
         }
-        Command::Inbox { place, recipient } => {
+        Command::Inbox {
+            place,
+            recipient,
+            confirm,
+        } => {
             let place = maybe(place)?;
             let core = build()?;
             let recipient = recipient_of(&core, recipient)?;
-            core.inbox(&recipient, place.as_ref(), false)
+            core.inbox(&recipient, place.as_ref(), *confirm)
+        }
+        Command::Confirm { keys, recipient } => {
+            let core = build()?;
+            let recipient = recipient_of(&core, recipient)?;
+            core.confirm(&recipient, keys)
         }
         Command::Wake { address } => build()?.wake(address),
         Command::Kinds {
