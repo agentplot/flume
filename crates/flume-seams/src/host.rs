@@ -915,4 +915,16 @@ pub trait Host: Send + Sync {
     fn kinds_lock(&self) -> Option<String> {
         None
     }
+
+    /// The span after which an end pending for a recipient is expired,
+    /// `[host] ends_expire` as the host's configuration stands now, read
+    /// at each delivery's record and fixed there; `ENDS_EXPIRE` by default
+    /// (43, C.7; weir 104).
+    fn ends_expire(&self) -> Seconds {
+        ENDS_EXPIRE
+    }
 }
+
+/// flume's own span after which an end pending for a recipient is
+/// expired, where the host's configuration gives none: a week (43, C.7).
+pub const ENDS_EXPIRE: Seconds = 7 * 24 * 60 * 60;
