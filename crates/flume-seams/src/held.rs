@@ -369,8 +369,9 @@ pub enum Waits {
 }
 
 /// An end of a place, recorded once by its key when a settle or an act
-/// reads it, with what 43 names of it, and delivered once to each
-/// recipient (43, 74).
+/// reads it, with what 43 names of it, its delivery to each recipient
+/// recorded in the host's deliveries and owed until that recipient
+/// confirms it (43, 74; weir 100, 102).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EndHeld {
     /// What ended, which is the end's key with what was read of it.
@@ -378,9 +379,18 @@ pub struct EndHeld {
     pub of: EndOf,
     /// When flume read it.
     pub read_at: Seconds,
-    /// Each delivery of it, to whom, when and by what.
+    /// The old form's deliveries, to whom, when and by what, as an end
+    /// written before its delivery was weir's held them: read and never
+    /// added to, emptied once the host's deliveries hold them, and still
+    /// written as `deliveries` so the form keeps the field (43, 61).
     #[serde(default)]
     pub deliveries: Vec<Delivery>,
+    /// Each notice of it claimed before its send, to whom and when, so
+    /// two settles at once send one notice; kept once its hand-over is
+    /// recorded, taken back where it was not sent, and none in an end
+    /// written before (43, 75).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub noticing: Vec<NoticeClaim>,
     /// For a stop-short needing an answer, the answer that answered it,
     /// once one did; none for any other end, and in an end written before
     /// (42).
@@ -393,6 +403,14 @@ pub struct EndHeld {
     /// not taken, and none in an end written before (42, 53, 75).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claim: Option<AnswerClaim>,
+}
+
+/// A notice of an end claimed for a recipient before its send, and when
+/// (43, 75).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NoticeClaim {
+    pub recipient: String,
+    pub at: Seconds,
 }
 
 /// An answer being taken for a stop-short: who gives it and the key it
@@ -876,14 +894,15 @@ pub struct Delivery {
     pub by: DeliveredBy,
 }
 
-/// What delivered an end: a notice through the terminal, a wait by
-/// place, or the inbox (43).
+/// What handed an end over: a notice through the terminal, a wait by
+/// place, the inbox, or a session's start collecting it (43, C.4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeliveredBy {
     Notice,
     Wait,
     Inbox,
+    SessionStart,
 }
 
 /// Where a launch took a place's recipients from, the first of these
@@ -999,6 +1018,12 @@ pub struct PlaceRecord {
     /// the fix's number and why; none for any other place (203).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fix_of: Option<FixOf>,
+    /// The token the place's launch took, by which its ends' deliveries
+    /// are keyed, so two launches of one place never share a key; none in
+    /// a document written before, which its first settle's write gives
+    /// one (43, C.7; weir 101).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
 }
 
 /// An intent's key: the name a launch gave it, else the repository and

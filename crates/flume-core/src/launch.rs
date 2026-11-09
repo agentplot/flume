@@ -803,6 +803,7 @@ impl Engine {
                 intent,
                 fix_of: fix_of.cloned(),
                 fixes_as,
+                token: None,
             },
             phase: Phase::Making {
                 by: self.host.command(),

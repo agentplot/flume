@@ -314,6 +314,7 @@ mod tests {
             },
             fix_of: None,
             fixes_as: None,
+            token: None,
         }
     }
 
