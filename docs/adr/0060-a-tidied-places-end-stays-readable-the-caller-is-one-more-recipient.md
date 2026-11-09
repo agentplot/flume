@@ -1,7 +1,7 @@
 ---
 number: 60
 title: A tidied place's end stays readable, the caller one more recipient
-status: proposed
+status: accepted
 date: 2026-11-08
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # A tidied place's end stays readable, the caller one more recipient
 
-Status: proposed on 2026-11-08 by the code stage of the fix `a-tidied-places-end-stays-readable--the-caller-is-one-more-recipient`, on the user's answer of the same day on agentplot-design's card. It is proposed until the user has seen it as a record, and accepted on their yes.
+Status: accepted by the user on 2026-11-08, on their card. Written by the code stage of the fix `a-tidied-places-end-stays-readable--the-caller-is-one-more-recipient`, on the user's answer of the same day on agentplot-design's card.
 
 Deciders: the user, whose answer on the card was "Runner as one more recipient now; one shared inbox in weir next." agentplot-design's brief carries it: "Fold the caller into the recipients. A launch names no caller and flume launch takes no --caller. The runner names itself a recipient beside the role it names today, so no default recipient is dropped (7). A recipient no pane holds is sent no notice, and its ends stand pending until it collects them by flume inbox or a wait. A drop or a done is recorded as an end, as built, but is never sent as a notice, wakes no role, and stands pending for no role address, so no role's run is woken and no tidied document is kept for a role alone. flume inbox <place> stays, so a reader collects only what it has carried. The tidied document stays while an end stands pending (62)." The code stage's own: how a drop's end names its recipients in held state, and that `caller` leaves the form unreleased.
 
