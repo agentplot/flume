@@ -81,7 +81,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_stop_and_a_retry_at_once,
         },
         Scenario {
-            name: "held state: a drop repeated answers as the first and ends and removes nothing more",
+            name: "held state: a drop repeated while the drop's end stands pending for its recipient is refused naming it and flume confirm, and ends and removes nothing more",
             cites: &["74", "52"],
             run: a_drop_repeated,
         },
@@ -621,12 +621,19 @@ fn a_drop_repeated(_: &()) -> Outcome {
         "the first drop's closes and removes"
     );
     let second = world.engine.drop_place(&id, false);
-    for answer in [&first, &second] {
-        ensure!(
-            matches!(answer, Answer::Acted { act: Act::Drop, place, .. } if place == &id),
-            "a drop answered {answer:?}"
-        );
-    }
+    ensure!(
+        matches!(&first, Answer::Acted { act: Act::Drop, place, .. } if place == &id),
+        "the first drop answered {first:?}"
+    );
+    // The document kept for the drop's end stands pending for the caller,
+    // so the repeat is refused naming it, as any drop of it is (62; weir
+    // I9).
+    ensure!(
+        second
+            .refusal()
+            .is_some_and(|reason| reason.contains(CALLER) && reason.contains("flume confirm")),
+        "the repeat answered {second:?}"
+    );
     ensure_eq!(
         (
             world.terminal.log.count("close"),

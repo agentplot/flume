@@ -124,12 +124,14 @@ impl Engine {
             .is_some_and(|watched| watched.kept(self.host.now()))
     }
 
-    /// Settles every place on the host.
+    /// Settles every place on the host, then lets go of every done
+    /// delivery whose place has no document (62; weir 107).
     pub(crate) fn settle_all(&self) -> Tidied {
         let mut tidy = Tidied::default();
         for read in self.store.read_every() {
             tidy.add(self.settle_place(&read.state.place.id));
         }
+        self.let_go_of_the_gone();
         tidy
     }
 

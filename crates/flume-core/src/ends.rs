@@ -326,15 +326,20 @@ impl Engine {
     }
 
     /// A tidied place's document: removed once no end of it stands
-    /// pending, and otherwise kept naming the recipients it waits on; true
-    /// when it changed something (43, 62).
+    /// pending, every record of its ends' deliveries let go of then, and
+    /// otherwise kept naming the recipients it waits on; true when it
+    /// changed something (43, 62; weir 107).
     pub(crate) fn settle_tidied(&self, id: &PlaceId) -> bool {
         let Some(read) = self.store.read(id) else {
             return false;
         };
         let pending = read.state.pending_for(&self.owing());
         if pending.is_empty() {
-            return self.remove_held(id);
+            let removed = self.remove_held(id);
+            if removed {
+                self.let_go_of(&read.state);
+            }
+            return removed;
         }
         self.update(id, |held| match &mut held.phase {
             Phase::Tidied { pending_for, .. } if *pending_for != pending => {

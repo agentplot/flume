@@ -548,9 +548,40 @@ impl Engine {
             .is_some_and(|read| !matches!(read.state.phase, Phase::Tidied { .. }));
         let tidied = if live { vec![] } else { self.tidied_of(place) };
         if !tidied.is_empty() {
-            let removed = tidied
-                .into_iter()
-                .filter(|id| self.remove_held(id))
+            let documents: Vec<HeldState> = self.recorded(
+                tidied
+                    .iter()
+                    .filter_map(|id| self.store.read(id))
+                    .map(|read| read.state)
+                    .collect(),
+            );
+            let owing = self.owing();
+            let mut pending: Vec<String> = vec![];
+            for held in &documents {
+                for recipient in held.pending_for(&owing) {
+                    if !pending.contains(&recipient) {
+                        pending.push(recipient);
+                    }
+                }
+            }
+            if !pending.is_empty() {
+                return Answer::refused(format!(
+                    "the tidied place {place} stays while its ends stand pending for {}: each \
+                     confirms them by flume confirm <key>…, or by flume inbox --confirm naming \
+                     the place, and the next settle removes it (62; weir I9)",
+                    and_list(pending)
+                ));
+            }
+            let removed = documents
+                .iter()
+                .filter(|held| {
+                    let removed = self.remove_held(&held.place.id);
+                    if removed {
+                        self.let_go_of(held);
+                    }
+                    removed
+                })
+                .map(|held| held.place.id.clone())
                 .collect();
             return Answer::Acted {
                 act: Act::Drop,

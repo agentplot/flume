@@ -73,12 +73,12 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: under_the_printed_command,
         },
         Scenario {
-            name: "end delivery: a place landing with its recipient away is tidied, its document kept pending until delivered, then removed",
+            name: "end delivery: a place landing with its recipient away is tidied, its document kept pending until its recipient confirms its ends, then removed and their deliveries let go of, its name kept known (weir 106, 107)",
             cites: &["43", "62", "66", "67"],
             run: a_landing_with_its_recipient_away,
         },
         Scenario {
-            name: "end delivery: a tidied place dropped while an end is pending is gone with its ends",
+            name: "end delivery: a tidied place dropped while an end is pending for boomdrive is refused naming boomdrive and flume confirm, its document and pending ends staying (weir I9)",
             cites: &["43", "62", "52"],
             run: dropped_while_pending,
         },
@@ -643,26 +643,51 @@ fn a_landing_with_its_recipient_away(_: &()) -> Outcome {
         world.held(&kept_id).is_none(),
         "the document kept once every end was delivered"
     );
+    let left: Vec<String> = world
+        .deliveries()
+        .iter()
+        .map(weir_delivery::json::write)
+        .collect();
+    ensure!(
+        left.len() == 1 && left[0].contains("weir-known/1") && left[0].contains("\"ops\""),
+        "the deliveries once let go of: {left:?}"
+    );
     Ok(())
 }
 
+/// The end-delivery spec's "Dropped while pending" (62; weir I9).
 fn dropped_while_pending(_: &()) -> Outcome {
     let world = World::new();
-    let id = landed_away(&world, "one")?;
-    ensure_eq!(tidied(&world).len(), 1, "tidied documents");
+    let id = landed_with(&world, "one", &["boomdrive"])?;
+    let before = tidied(&world);
+    ensure_eq!(before.len(), 1, "tidied documents");
     let answer = world.engine().drop_place(&id, false);
-    ensure!(answer.refusal().is_none(), "the drop refused: {answer:?}");
+    let reason = refused(&answer)?;
+    ensure!(
+        reason.contains("boomdrive") && reason.contains("flume confirm"),
+        "the drop's refusal: {reason}"
+    );
+    ensure_eq!(
+        tidied(&world),
+        before,
+        "the document after the refused drop"
+    );
+    ensure!(
+        world
+            .status(&id)?
+            .ends
+            .iter()
+            .all(|end| end.pending_for == vec!["boomdrive".to_string()]),
+        "the ends after the refused drop"
+    );
+    // Once boomdrive confirms them, the drop takes the document away.
+    world.confirm_every("boomdrive");
+    let answer = world.engine().drop_place(&id, false);
+    ensure!(
+        answer.refusal().is_none(),
+        "the drop once confirmed: {answer:?}"
+    );
     ensure!(tidied(&world).is_empty(), "the document after its drop");
-    ensure!(
-        collected(&world.engine().inbox("ops", None, true))?.is_empty(),
-        "the inbox gave an end of a dropped place"
-    );
-    world.terminal.add_session("ops", AgentState::Waiting);
-    world.engine().settle(None);
-    ensure!(
-        world.terminal.notices("ops").is_empty(),
-        "an end of a dropped place delivered"
-    );
     Ok(())
 }
 

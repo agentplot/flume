@@ -344,6 +344,70 @@ impl Engine {
         }
     }
 
+    /// Lets go of every record of each delivery that is done and whose key
+    /// `of` names: the delivery with its hand-overs and its confirmations,
+    /// every reader having confirmed it, its `weir-known/1` records staying;
+    /// a delivery not done is never let go of (62; weir 106, 107, I9).
+    pub(crate) fn let_go_where(&self, of: impl Fn(&str) -> bool) {
+        let now = time(self.host.now());
+        let written = rewrite(&*self.store, |records| {
+            let done: Vec<String> = weir_delivery::owed(records, &now)
+                .ok()?
+                .done
+                .iter()
+                .map(ToString::to_string)
+                .filter(|key| of(key))
+                .collect();
+            if done.is_empty() {
+                return None;
+            }
+            let kept = |key: &weir_delivery::Key| !done.iter().any(|done| done == key.as_str());
+            Some(
+                records
+                    .iter()
+                    .filter(|record| match record {
+                        Record::Delivery(delivery) => kept(delivery.key()),
+                        Record::Handover(handover) => kept(&handover.key),
+                        Record::Confirmation(confirmation) => kept(&confirmation.key),
+                        Record::Known(_) => true,
+                    })
+                    .cloned()
+                    .collect(),
+            )
+        });
+        if let Err(why) = written {
+            self.host.log(&why);
+        }
+    }
+
+    /// Lets go of the deliveries of every end of `held`, a document that
+    /// was removed, each that is done (62; weir 107).
+    pub(crate) fn let_go_of(&self, held: &HeldState) {
+        let keys: Vec<String> = held
+            .ends
+            .iter()
+            .filter_map(|end| held.place.delivery_key(&end.of))
+            .collect();
+        if !keys.is_empty() {
+            self.let_go_where(|key| keys.iter().any(|held| held == key));
+        }
+    }
+
+    /// Lets go of every done delivery whose place has no document on the
+    /// host, as after a removal whose let-go did not land (62; weir 107).
+    pub(crate) fn let_go_of_the_gone(&self) {
+        let prefixes: Vec<String> = self
+            .store
+            .read_every()
+            .into_iter()
+            .filter_map(|read| {
+                let place = read.state.place;
+                Some(format!("{}/{}/", place.short(), place.token?))
+            })
+            .collect();
+        self.let_go_where(|key| !prefixes.iter().any(|prefix| key.starts_with(prefix)));
+    }
+
     /// Confirms each of `keys` as `recipient`, through weir's `confirm`, in
     /// one write: each key with when it was confirmed and whether it had
     /// been before, its first time then; or, at the first key weir refuses,

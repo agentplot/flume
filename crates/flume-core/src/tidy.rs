@@ -215,10 +215,16 @@ impl Engine {
         }
         self.intent_left(&place.intent, id);
         self.deliver_ends(id);
-        if let Some(read) = self.store.read(id) {
-            self.keep_for_ends(&read.state, &over);
-        }
+        let read = self.store.read(id);
+        let kept = read
+            .as_ref()
+            .and_then(|read| self.keep_for_ends(&read.state, &over));
         if self.remove_held(id) {
+            // The tidy that keeps no document lets go of its ends'
+            // deliveries, every one delivered (62; weir 107).
+            if let (None, Some(read)) = (kept, &read) {
+                self.let_go_of(&read.state);
+            }
             tidied.removed.push(id.clone());
             for (profile, terminal) in answers {
                 if !terminal.closed.is_empty() || !terminal.kept.is_empty() {
