@@ -15,6 +15,7 @@ mod answer;
 mod base;
 mod clues;
 mod deliver;
+pub mod deliveries;
 mod end;
 mod ends;
 mod fixes;
