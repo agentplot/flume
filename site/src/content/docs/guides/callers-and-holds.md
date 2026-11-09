@@ -83,28 +83,58 @@ happens:
 | `stalled: <move>` | the place waited on its caller under no hold's words past its bound |
 | `dropped`, `done` | the place was dropped, or declared done; sent as no notice, it waits for each recipient that is no role's address ([the end of a place's work](#the-end-of-a-places-work)) |
 
-Each end is delivered **once** to each recipient, inside the settle
-that reads it, as a one-line notice through the terminal into the
-recipient's own pane, such as
-`flume: fix--the-parser-reads-tabs (The parser drops a tab after a quote.) code delivered [stage/code/1/delivered]; read: flume status fix--the-parser-reads-tabs`.
-The notice names the place, the first line of its brief cut at 60
-characters, what ended, the end's key, and the command that reads it
-whole: `flume inbox` where the place now waits on a move of its
-caller's, which gives the question and how to answer it, and
-`flume status <place>` otherwise. flume records on the place that it was
-delivered, to whom and when. A recipient asking a question, or one the
-terminal cannot read or find, gets nothing typed into its pane; the end stays
-**pending** for a later settle, a wait or the inbox. Under the printed
-command nothing is ever typed, so every end stays pending until
-collected. Status shows each end and whom it is pending for:
+Each end is a **delivery** to each of its recipients, recorded once
+inside the settle that reads it, and **pending** for each recipient
+until that recipient confirms it by its key. flume hands it over: once,
+as a one-line notice through the terminal into the recipient's own
+pane, and again by a wait or the inbox whenever asked. A hand-over
+delivers nothing. A recipient that was handed an end and stopped before
+it acted on it is handed it again by its next inbox, and the end stays
+pending until it confirms it. The notice reads, for example,
+`flume: fix--the-parser-reads-tabs (The parser drops a tab after a quote.) code delivered [stage/code/1/delivered]; read: flume status fix--the-parser-reads-tabs; confirm: flume confirm fix--the-parser-reads-tabs/0a1b2c3d/stage/code/1/delivered`.
+It names the place, the first line of its brief cut at 60 characters,
+what ended, the end's key, the command that reads it whole, and how to
+confirm it by its delivery's key. The command that reads it is
+`flume inbox` where the place now waits on a move of its caller's,
+which gives the question and how to answer it, and
+`flume status <place>` otherwise. flume records each hand-over, to whom,
+when and by what. A recipient asking a question, or one the terminal
+cannot read or find, gets nothing typed into its pane, and a later
+settle sends the notice once it can. A notice goes to a recipient once,
+while nothing else has handed it the end. Under the printed command
+nothing is ever typed. Status shows each end, whom it was handed to,
+and whom it is pending for, each recipient under it:
 
 ```text
-  ended stage/code/1/delivered: code delivered; pending for me
-  ended submission/1/landed: submission landed d185a879b51dba33555c036392b50443f4dfc5e8; pending for me
+  ended stage/code/1/delivered: code delivered; handed to me; pending for me
+    me: pending
 ```
 
-A place whose work is over keeps only its record while an end of it
-stays pending, and the record goes once each end is delivered.
+A recipient confirms an end by its delivery's key, which the notice,
+the inbox, a wait and status each give:
+
+```console
+$ flume confirm fix--the-parser-reads-tabs/0a1b2c3d/stage/code/1/delivered --recipient me
+fix--the-parser-reads-tabs/0a1b2c3d/stage/code/1/delivered confirmed by me at 1794150120
+```
+
+`flume inbox --confirm` and `flume wait --confirm` confirm what they
+give as they give it, so a caller that acts on what it collects does it
+in one call. A place whose work is over keeps only its record while an
+end of it stays pending, and the record goes once each end is
+confirmed by each recipient.
+
+An end nobody confirms is never dropped. Once the host's span,
+`[host] ends_expire`, a week where unset, passes since the end was
+read, status shows it **expired** with its recipient, and the host's
+status lists every expired end. A name nothing was ever confirmed under
+shows as never confirmed, so a misspelt recipient stands out, and the
+operator confirms its ends as that name:
+
+```text
+  ended submission/1/landed: submission landed d185a879b51dba33555c036392b50443f4dfc5e8; pending for bomdrive
+    bomdrive: pending, expired since 1794754920, never confirmed
+```
 
 ## flume wait
 
@@ -112,13 +142,15 @@ stays pending, and the record goes once each end is delivered.
 `--stage <stage>`, or on the submission's outcome, `--submission`:
 
 ```console
-$ flume wait fix--the-parser-reads-tabs --submission --recipient me
-~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs submission landed d185a879b51dba33555c036392b50443f4dfc5e8 for me: delivered by this wait
+$ flume wait fix--the-parser-reads-tabs --submission --recipient me --confirm
+~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs submission landed d185a879b51dba33555c036392b50443f4dfc5e8 for me: handed over and confirmed by this wait
 ```
 
 - An end pending for the recipient is answered at once and recorded
-  delivered by the wait.
-- One already delivered is answered as read, delivering nothing again.
+  handed to it by the wait. It stays pending until the recipient
+  confirms it, as `--confirm` does with the hand-over.
+- One the recipient confirmed is answered as read, handing nothing
+  over.
 - Otherwise the wait follows the host's state until an end comes, or
   until `--timeout` passes, as `<n>`, `<n>s`, `<n>m` or `<n>h`.
 
@@ -132,13 +164,14 @@ reading after its first.
 
 ## flume inbox
 
-`flume inbox` collects every end pending for a recipient, on every
-place of the host, prints each and marks each delivered in the same
-write, so two inboxes at once deliver each end once:
+`flume inbox` gives every end pending for a recipient, on every place
+of the host, and records each handed to it. It confirms nothing: the
+next inbox gives them again, until the recipient confirms each, by
+`flume confirm` or by `--confirm`, which confirms each as it gives it:
 
 ```console
-$ flume inbox --recipient me
-fix--the-parser-reads-tabs code delivered [stage/code/1/delivered]; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
+$ flume inbox --recipient me --confirm
+fix--the-parser-reads-tabs code delivered [stage/code/1/delivered]; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs; confirmed
 $ flume inbox --recipient me
 nothing pending for me
 ```
@@ -161,9 +194,10 @@ change--plan (one of two designs), in east, waits on east/ops; read: flume statu
 
 A session that starts runs it to catch up on what it missed. Under
 herdr, flume's Claude Code plugin does that at a session's start, as the
-pane the session runs in, and hands the agent what the inbox gives
+pane the session runs in, confirming on receipt, and hands the agent
+what the inbox gives
 ([a session of your own](/flume/guides/claude-code/#a-session-of-your-own)).
-Reading `flume status` delivers nothing.
+Reading `flume status` hands nothing over and confirms nothing.
 
 ### The end of a place's work
 
@@ -173,7 +207,7 @@ name no pane holds, as `--recipient ci`. Naming any recipient drops the
 defaults, so it names the others the place's ends are for beside it:
 
 - flume sends a name no pane holds no notice. Each end of the place
-  waits for it until it collects it, as for a recipient whose session is
+  waits for it until it confirms it, as for a recipient whose session is
   gone.
 - A drop or a done is an end too, keyed `over/dropped` or `over/done`.
   flume sends no notice of it to any recipient, and wakes no role for
@@ -184,16 +218,20 @@ defaults, so it names the others the place's ends are for beside it:
 
 ```text
   recipients: me, ci, from the launch
-  ended stage/code/1/delivered: code delivered; delivered to me; pending for ci
-  ended submission/1/landed: submission landed d185a879b51dba33555c036392b50443f4dfc5e8; delivered to me; pending for ci
+  ended stage/code/1/delivered: code delivered; handed to me; pending for ci
+    ci: pending
+    me: confirmed at 1794150120
+  ended submission/1/landed: submission landed d185a879b51dba33555c036392b50443f4dfc5e8; handed to me; pending for ci
+    ci: pending
+    me: confirmed at 1794150130
 ```
 
-The caller then collects them by naming the place:
+The caller then collects and confirms them by naming the place:
 
 ```console
-$ flume inbox fix--the-parser-reads-tabs --recipient ci
-fix--the-parser-reads-tabs code delivered [stage/code/1/delivered]; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
-fix--the-parser-reads-tabs submission landed d185a879b51dba33555c036392b50443f4dfc5e8 [submission/1/landed]; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
+$ flume inbox fix--the-parser-reads-tabs --recipient ci --confirm
+fix--the-parser-reads-tabs code delivered [stage/code/1/delivered]; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs; confirmed
+fix--the-parser-reads-tabs submission landed d185a879b51dba33555c036392b50443f4dfc5e8 [submission/1/landed]; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs; confirmed
 ```
 
 An inbox naming a place collects that place's ends alone, from the
@@ -201,10 +239,13 @@ records `flume status` reads under the name: the place's own, else
 those kept once it was tidied, `<place>@<at>` naming one. It reads
 them before it moves anything on, so it collects what the caller read
 and nothing tidied since. A name under which no record stands is
-refused, and nothing is marked delivered. A `flume wait` as that name
-collects the end it waits on too. The next settle removes the record once
-nothing of it is pending. A caller that never collects keeps the
-record on the host, where `flume drop` removes it.
+refused, and nothing is handed over. A `flume wait` as that name
+collects the end it waits on too. The next settle removes the record
+once every end of it is confirmed by each recipient, and lets go of
+their deliveries. A caller that never confirms keeps the record on the
+host, its ends shown expired once the host's span passes; `flume drop`
+of it is refused while an end is pending, naming each recipient and
+`flume confirm`.
 
 ## Holds
 

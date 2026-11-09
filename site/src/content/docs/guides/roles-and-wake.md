@@ -139,9 +139,12 @@ collects what came since.
 
 A role wakes in two ways:
 
-- **An end pending for its address.** A settle that finds an end
-  pending for an address with no run live or waiting launches the run,
-  inside that settle.
+- **An end pending for its address that nothing has handed to it.** A
+  settle that finds one with no run live or waiting launches the run,
+  inside that settle. An end a run was handed, by a notice, a wait or
+  its inbox, and did not confirm wakes no run again, so a run that
+  never confirms what it reads wakes no run after it; the next run
+  another end wakes is handed it by its own inbox.
 - **`flume wake <address>`**, for another tool that carries word of
   something flume cannot see, such as a person's answer or a message,
   and wants the role to look.
@@ -163,10 +166,11 @@ that.
 
 ## How a role reads its ends
 
-An end for an address is delivered as a notice into the pane of the
+An end for an address is handed over as a notice into the pane of the
 address's live run, found again by its agent's herdr name when the
 pane moved. When no run is live the end stays pending, and the wake
-launches one.
+launches one. A hand-over delivers nothing: the end stays pending for
+the address until the run confirms it by its key.
 
 Inside the run, `flume wait` and `flume inbox` act for the role by
 default: an agent flume started carries `FLUME_PLACE`, and a command
@@ -178,9 +182,14 @@ flume inbox --json
 ```
 
 which collects every end pending for its address, on every place of
-the host, and marks each delivered. Its `waiting` gives every place
-that waits on the address, delivered or not, with the question, its key
-and any hold on it ([flume inbox](/flume/guides/callers-and-holds/#flume-inbox)).
+the host, each handed to the address, with its delivery's key. Once
+the run has acted on one, it confirms it,
+`flume confirm <key> --json`, or it collects with `--confirm` where
+taking an end is acting on it. An end the run leaves unconfirmed stays
+pending for the address, shown expired in status once the host's span
+passes. Its `waiting` gives every place that waits on the address,
+delivered or not, with the question, its key and any hold on it
+([flume inbox](/flume/guides/callers-and-holds/#flume-inbox)).
 A run woken after another sees every question still waiting on its
 role, whichever stream asked it.
 
@@ -244,7 +253,8 @@ that says the role is on it, and takes the answer once. What the role
 does is its kind's. A kind that answers can follow this way:
 
 1. **Collect.** Run `flume inbox --json` for its address and read
-   `ends` and `waiting`.
+   `ends` and `waiting`. Confirm each end once acted on, by
+   `flume confirm` with its `delivery` key.
 2. **Hold what it takes**, before anything else, so a long turn does
    not stall the place:
    `flume hold <place> "east-ops has it" --waiting --for 1h`.
@@ -312,7 +322,8 @@ Each settle that reads an end pending for the address asks the
 stream's multiplexer for the agents in the session and looks among them
 for the entry's name. Where it finds exactly one, working or waiting,
 the end goes into its pane as a notice, as into any recipient's, and
-counts delivered on the multiplexer's answer. flume keeps nothing of
+counts handed over on the multiplexer's answer, pending until the agent
+confirms it. flume keeps nothing of
 where the agent was. It finds the agent again at each delivery, so an
 agent started again under the same name in the session takes the next
 end.
@@ -325,10 +336,11 @@ An end stays pending while:
   carries no profile for, or the multiplexer cannot be read. The
   printed command holds no agent a name finds.
 
-Each end left pending goes in at the first settle that finds the agent,
-one notice each, so an agent back after a day away reads a notice for
-each end of that day. Meanwhile `flume inbox --recipient east/planner`
-collects them. herdr forgets the name of an agent that starts again
+Each end that no notice has gone in for goes in at the first settle
+that finds the agent, one notice each, so an agent back after a day
+away reads a notice for each end of that day. Meanwhile
+`flume inbox --recipient east/planner` collects them, and an end it
+handed over is sent no notice after. herdr forgets the name of an agent that starts again
 inside its pane, as after a `/clear`, and the address's ends wait until
 its keeper names it again. A question left pending reaches the
 answerer behind the asking place's stream at its stall.
