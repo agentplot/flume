@@ -308,6 +308,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: confirmed_once_expired,
         },
         Scenario {
+            name: "end delivery: a live place whose document the old form wrote, code's end delivered to ops by notice and pending for boomdrive, reads at its settle delivered to ops at its old time and pending for boomdrive, sends ops no notice, and its next settle writes nothing more",
+            cites: &["43", "61", "74"],
+            run: a_live_place_upgraded,
+        },
+        Scenario {
             name: "end delivery: a fix launched, landed and tidied with nothing pending, then launched again, keys its two code ends' deliveries by two tokens, the second's recorded owed to its recipient (C.7; weir 101)",
             cites: &["43", "3"],
             run: a_place_launched_twice,
@@ -2793,6 +2798,87 @@ fn confirmed_once_expired(_: &()) -> Outcome {
     ensure!(
         world.owing().known.contains("bomdrive"),
         "bomdrive's name let go of with its deliveries"
+    );
+    Ok(())
+}
+
+/// The end-delivery spec's "A live place upgraded" (43, 61; core.17).
+fn a_live_place_upgraded(_: &()) -> Outcome {
+    let world = World::new();
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = fix_with(&world, "old", &["ops", "boomdrive"])?;
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    // The document as the old form wrote it: no token, no claim, code's
+    // end delivered to ops by notice; and no deliveries on the host.
+    let delivered_at = world.host.now() - 30;
+    let read = world.store.read(&id).ok_or("no place")?;
+    let mut old = read.state.clone();
+    old.place.token = None;
+    for end in &mut old.ends {
+        end.noticing.clear();
+        if matches!(end.of, EndOf::Stage { .. }) {
+            end.deliveries = vec![Delivery {
+                recipient: "ops".into(),
+                at: delivered_at,
+                by: DeliveredBy::Notice,
+            }];
+        }
+    }
+    ensure!(
+        matches!(
+            world.store.write(&id, Some(read.version), Some(&old)),
+            Written::Written { .. }
+        ),
+        "the old form's document was not written"
+    );
+    if let Some(deliveries) = world.store.read_host(&HostKey::Deliveries) {
+        world
+            .store
+            .write_host(&HostKey::Deliveries, Some(deliveries.version), None);
+    }
+    world.terminal.add_session("ops", AgentState::Waiting);
+    world.host.advance(60);
+    world.settle(&id);
+    ensure!(
+        world.terminal.notices("ops").is_empty(),
+        "a notice to ops of an end the old form delivered to it: {:?}",
+        world.terminal.notices("ops")
+    );
+    let code = end_keyed(&world, &id, "stage/code/1/delivered")?;
+    ensure_eq!(
+        (code.confirmed.clone(), code.pending_for.clone()),
+        (
+            vec![ConfirmedBy {
+                recipient: "ops".into(),
+                at: delivered_at,
+            }],
+            vec!["boomdrive".to_string()]
+        ),
+        "code's end once upgraded"
+    );
+    ensure_eq!(
+        deliveries(&code.end),
+        vec![("ops".to_string(), DeliveredBy::Notice)],
+        "code's hand-overs"
+    );
+    let held = world.held(&id).ok_or("no place")?;
+    ensure!(
+        held.ends.iter().all(|end| end.deliveries.is_empty()),
+        "the old form's list left in the document"
+    );
+    let (version, records) = (deliveries_version(&world), world.deliveries());
+    world.host.advance(60);
+    world.settle(&id);
+    ensure_eq!(
+        (deliveries_version(&world), world.deliveries()),
+        (version, records),
+        "the deliveries after settling again"
+    );
+    ensure_eq!(
+        world.held(&id).ok_or("no place")?.ends,
+        held.ends,
+        "the ends after settling again"
     );
     Ok(())
 }

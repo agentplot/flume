@@ -13,8 +13,9 @@ use crate::ends::notice;
 use crate::{Answer, Engine, KeyConfirmed, Step};
 use chrono::{DateTime, SecondsFormat, Utc};
 use flume_seams::{
-    ConfirmedBy, DeliveredBy, Deliveries, Delivery, DeliveryRecord, EndDelivery, EndOf, HeldState,
-    HostDocument, HostKey, HostVersioned, OwedTo, Owing, PlaceId, Seconds, Secret, Store, Written,
+    ConfirmedBy, DeliveredBy, Deliveries, Delivery, DeliveryRecord, EndDelivery, EndHeld, EndOf,
+    HeldState, HostDocument, HostKey, HostVersioned, OwedTo, Owing, PlaceId, Seconds, Secret,
+    Store, Written,
 };
 use std::collections::BTreeMap;
 use weir_delivery::{Confirmed, Handed, Record, Recorded};
@@ -267,9 +268,21 @@ impl Engine {
     /// document stands, at the time the end was read, expiring the host's
     /// span after it. An end with no recipient records none, and an end
     /// whose key is held records nothing again, so recording again is the
-    /// same act (43; weir 100, 101, 104; core.17; design 3, 4).
-    pub(crate) fn record_deliveries(&self, documents: &[HeldState]) {
-        let wanted: Vec<(String, String, Vec<String>, String)> = documents
+    /// same act (43; weir 100, 101, 104; core.17; design 3, 4). An end the
+    /// old form delivered has, after its delivery, a hand-over by each old
+    /// delivery's way at its time, confirmed on receipt, since the old form
+    /// counted it delivered; once those records stand, its document's next
+    /// write empties its old list. True where it emptied one (43, 61;
+    /// core.17; design 11).
+    pub(crate) fn record_deliveries(&self, documents: &[HeldState]) -> bool {
+        struct Wanted {
+            key: String,
+            message: String,
+            readers: Vec<String>,
+            at: String,
+            old: Vec<Delivery>,
+        }
+        let wanted: Vec<Wanted> = documents
             .iter()
             .flat_map(|held| {
                 held.ends.iter().filter_map(move |end| {
@@ -288,25 +301,59 @@ impl Engine {
                     if readers.is_empty() {
                         return None;
                     }
-                    let key = held.place.delivery_key(&end.of)?;
-                    Some((key, notice(held, &end.of), readers, time(end.read_at)))
+                    Some(Wanted {
+                        key: held.place.delivery_key(&end.of)?,
+                        message: notice(held, &end.of),
+                        readers,
+                        at: time(end.read_at),
+                        old: end.deliveries.clone(),
+                    })
                 })
             })
             .collect();
         if wanted.is_empty() {
-            return;
+            return false;
         }
         let span = self.host.ends_expire();
         let mut refused: Vec<String> = vec![];
         let written = update(&*self.store, |records| {
             refused.clear();
+            let mut all = records.to_vec();
             let mut added = vec![];
-            for (key, message, readers, at) in &wanted {
-                let readers: Vec<&str> = readers.iter().map(String::as_str).collect();
-                match weir_delivery::record(records, key, message, &readers, at, span) {
-                    Ok(Recorded::Add(records)) => added.extend(records),
+            let mut add = |records: Vec<Record>, all: &mut Vec<Record>| {
+                all.extend(records.iter().cloned());
+                added.extend(records);
+            };
+            for wanted in &wanted {
+                let readers: Vec<&str> = wanted.readers.iter().map(String::as_str).collect();
+                match weir_delivery::record(
+                    &all,
+                    &wanted.key,
+                    &wanted.message,
+                    &readers,
+                    &wanted.at,
+                    span,
+                ) {
+                    Ok(Recorded::Add(records)) => add(records, &mut all),
                     Ok(Recorded::Held(_)) => {}
-                    Err(refusal) => refused.push(format!("{key}: {refusal}")),
+                    Err(refusal) => {
+                        refused.push(format!("{}: {refusal}", wanted.key));
+                        continue;
+                    }
+                }
+                for old in &wanted.old {
+                    // A recipient the delivery does not name, or one that
+                    // confirmed it, adds nothing (weir 103).
+                    if let Ok(Handed::Add(records)) = weir_delivery::hand(
+                        &all,
+                        &wanted.key,
+                        &old.recipient,
+                        old.by.way(),
+                        &time(old.at),
+                        true,
+                    ) {
+                        add(records, &mut all);
+                    }
                 }
             }
             added
@@ -315,9 +362,54 @@ impl Engine {
             self.host
                 .log(&format!("an end's delivery was not recorded: {why}"));
         }
-        if let Err(why) = written {
-            self.host.log(&why);
+        let records = match written {
+            Ok(records) => records,
+            Err(why) => {
+                self.host.log(&why);
+                return false;
+            }
+        };
+        let recorded: Vec<&str> = records
+            .iter()
+            .filter_map(|record| match record {
+                Record::Delivery(delivery) => Some(delivery.key().as_str()),
+                _ => None,
+            })
+            .collect();
+        let mut emptied = false;
+        for held in documents {
+            let upgraded = |end: &EndHeld| {
+                !end.deliveries.is_empty()
+                    && held
+                        .place
+                        .delivery_key(&end.of)
+                        .is_some_and(|key| recorded.contains(&key.as_str()))
+            };
+            if !held.ends.iter().any(upgraded) {
+                continue;
+            }
+            self.update(&held.place.id, |next| {
+                let place = next.place.clone();
+                let mut changed = false;
+                for end in &mut next.ends {
+                    if !end.deliveries.is_empty()
+                        && place
+                            .delivery_key(&end.of)
+                            .is_some_and(|key| recorded.contains(&key.as_str()))
+                    {
+                        end.deliveries.clear();
+                        changed = true;
+                    }
+                }
+                if changed {
+                    Step::Write(())
+                } else {
+                    Step::Keep(())
+                }
+            });
+            emptied = true;
         }
+        emptied
     }
 
     /// The documents, each holding a token, and every end of them with a
@@ -331,8 +423,13 @@ impl Engine {
                 None => self.with_token(&held.place.id),
             })
             .collect();
-        self.record_deliveries(&documents);
+        if !self.record_deliveries(&documents) {
+            return documents;
+        }
         documents
+            .into_iter()
+            .filter_map(|held| self.store.read(&held.place.id).map(|read| read.state))
+            .collect()
     }
 
     /// What the host's deliveries hold of each end's delivery now, read
