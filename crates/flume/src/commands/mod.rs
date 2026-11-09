@@ -237,8 +237,15 @@ enum Command {
         timeout: Option<String>,
     },
     /// Collect every end pending for a recipient, of every place on the
-    /// host, each then delivered to it (43).
+    /// host, each then delivered to it; an inbox naming a place collects
+    /// that place's ends alone (43, 62).
     Inbox {
+        /// The place whose ends alone are collected, named as `flume
+        /// status` names one: a location, or `<kind>--<name>` in the
+        /// repository, its own document or, once it was tidied, those kept
+        /// for it, a tidied document's `<place>@<at>` naming that one
+        /// alone; every place on the host where none is named.
+        place: Option<String>,
         /// The recipient collected for; `$FLUME_RECIPIENT`, a role's
         /// run's address, or the terminal's session, where none is named.
         #[arg(long)]
@@ -372,11 +379,14 @@ struct LaunchArgs {
     hold_submission: bool,
     /// A recipient of the place's ends: a terminal's session by its name,
     /// or a role's address, `<stream>/<role>`, of any stream, whose run is
-    /// woken for them. Where none is named, `$FLUME_RECIPIENT`, else the
-    /// terminal's session, else the answerer behind the place's stream,
-    /// the role a source of the host declares to stand behind it; a launch
-    /// none of them gives is refused. Every stall reaches the answerer
-    /// behind the place's stream too (7, 130, 132, 193).
+    /// woken for them. A name no pane holds is sent no notice: its ends,
+    /// a drop's or a done's among them, wait for it, the place's record
+    /// kept once it is tidied, until it collects them by `flume inbox` or
+    /// `flume wait` as that name. Where none is named, `$FLUME_RECIPIENT`,
+    /// else the terminal's session, else the answerer behind the place's
+    /// stream, the role a source of the host declares to stand behind it;
+    /// a launch none of them gives is refused. Every stall reaches the
+    /// answerer behind the place's stream too (7, 43, 62, 130, 132, 193).
     #[arg(long, value_name = "SESSION OR ADDRESS")]
     recipient: Vec<String>,
     #[arg(long)]
@@ -665,10 +675,11 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             let recipient = recipient_of(&core, recipient)?;
             core.wait(&place, &of, &recipient, timeout)
         }
-        Command::Inbox { recipient } => {
+        Command::Inbox { place, recipient } => {
+            let place = maybe(place)?;
             let core = build()?;
             let recipient = recipient_of(&core, recipient)?;
-            core.inbox(&recipient)
+            core.inbox(&recipient, place.as_ref())
         }
         Command::Wake { address } => build()?.wake(address),
         Command::Kinds {

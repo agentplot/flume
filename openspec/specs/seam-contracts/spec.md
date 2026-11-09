@@ -930,6 +930,37 @@ claimed by none (42, 75).
 - **WHEN** held state whose stop-short's end is claimed by an answer of `east/ops` naming its key is written and read back, and an end written before with no claim is read
 - **THEN** it reads back equal, the claim's `by`, `key`, `at` and `until` as written, and the end written before reads claimed by none (42, 75)
 
+### Requirement: The type of a drop's or a done's end
+
+The held state SHALL hold an end of `of` `over` for a drop or a done,
+holding the over it records, keyed `over/dropped` or `over/done`; it
+SHALL serialize to JSON and back unchanged, and its key SHALL be read
+back from its token alone. A place's record SHALL hold no caller, and
+held state that holds one SHALL read with it ignored (43, 52, 61, 75,
+114).
+
+#### Scenario: A drop round-trips
+
+- **WHEN** held state holding the end of a drop is written and read back
+- **THEN** it reads back equal, and the drop's end keys `over/dropped`, which reads back to the same key, while `over/landed` is refused naming the key's forms (43, 61, 75)
+
+#### Scenario: State written with a caller
+
+- **WHEN** held state whose place holds a `caller` field is read
+- **THEN** it reads with the field ignored, and is written back without it (75)
+
+### Requirement: Whom a drop's or a done's end is pending for
+
+A drop's or a done's end SHALL stand pending for each recipient of the
+place that is no role's address and has no delivery of it recorded, no
+notice SHALL carry it, and no wake SHALL be owed for it. Every other end
+SHALL stand pending for its recipients as before (43, 132).
+
+#### Scenario: Whom each end is pending for
+
+- **WHEN** a place's recipients are `east/planner` and `boomdrive`, and it holds a code delivered, a landing and a drop, none delivered
+- **THEN** code's end and the landing stand pending for `east/planner` and `boomdrive`, the drop for `boomdrive` alone, and the drop is the one end no notice carries (43)
+
 ### Requirement: The merge queue's forecast
 
 The merge-queue seam SHALL give forecast: given a repository, a branch

@@ -915,7 +915,7 @@ fn the_stall_reaches_the_answerer(_: &()) -> Outcome {
         world.held(&World::id("turn", "east-operator")).is_some(),
         "no run of east/operator woken"
     );
-    let ends = match world.engine.inbox("east/operator") {
+    let ends = match world.engine.inbox("east/operator", None) {
         Answer::Inbox { ends, .. } => ends,
         other => return Err(format!("the inbox answered {other:?}")),
     };

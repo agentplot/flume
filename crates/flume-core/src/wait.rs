@@ -12,9 +12,12 @@
 //! the first reading answering at once an end that stands pending
 //! before a settle could deliver it by notice and tidy its place away. The inbox gives
 //! every end pending for a recipient, of every place on the host, a
-//! tidied place's kept document among them, and records each delivered
-//! to it in the same write that reads it, so two inboxes at once deliver
-//! each end once (75). A recipient's default is the caller's
+//! tidied place's kept document among them, or, naming a place, of the
+//! documents status reads under that name alone, and records each
+//! delivered to it in the same write that reads it, so two inboxes at
+//! once deliver each end once (75). A recipient no pane holds collects its
+//! ends so, a drop's or a done's among them (43, 62). A recipient's
+//! default is the caller's
 //! environment's, else the role a role's run serves, else the calling
 //! session as the terminal names it, as a launch's (7, 132).
 
@@ -102,10 +105,9 @@ impl Engine {
         of: &WaitFor,
         recipient: &str,
     ) -> Result<Option<Answer>, String> {
-        let Some(read) = self.document(place) else {
+        let Some(held) = self.document(place) else {
             return Err(format!("no place {place} stands on this host"));
         };
-        let held = read.state;
         let Some(key) = newest(&held, of)? else {
             let over = !matches!(held.phase, Phase::Live | Phase::Making { .. });
             if over {
@@ -126,10 +128,11 @@ impl Engine {
         if pending {
             let now = self.host.now();
             let Some(written) = self.update(&id, |held| {
+                let recipients = held.place.recipients.clone();
                 let Some(end) = held.ends.iter_mut().find(|end| end.of.key() == key) else {
                     return Step::Keep(None);
                 };
-                if end.delivered_to(recipient) {
+                if !end.pending_to(&recipients, recipient) {
                     return Step::Keep(Some((held.clone(), false)));
                 }
                 end.deliveries.push(Delivery {
@@ -158,33 +161,61 @@ impl Engine {
         }))
     }
 
-    /// The document a wait reads for the place: its live one, else the
-    /// newest kept for its pending ends once it was tidied (43, 62).
-    fn document(&self, place: &PlaceId) -> Option<Versioned> {
-        if let Some(read) = self.store.read(place) {
-            return Some(read);
-        }
-        self.tidied_of(place)
-            .iter()
-            .filter_map(|id| self.store.read(id))
-            .max_by_key(|read| match read.state.phase {
+    /// The document a wait reads for the place: of those its name reads,
+    /// its live one, else the newest kept for its pending ends once it was
+    /// tidied (43, 62).
+    fn document(&self, place: &PlaceId) -> Option<HeldState> {
+        self.documents_of(place)
+            .into_iter()
+            .max_by_key(|held| match held.phase {
                 Phase::Tidied { at, .. } => at,
-                _ => 0,
+                _ => Seconds::MAX,
             })
     }
 
     /// Collects every end pending for `recipient` of every place on the
-    /// host, each recorded delivered by the inbox in the write that reads
-    /// it, and gives every place that waits on its caller and on
-    /// `recipient`, marking nothing for it; an act on places, so while no
-    /// caller keeps watch it settles every place first (43, 119, 130, 193,
-    /// 208; design 9).
-    pub fn inbox(&self, recipient: &str) -> Answer {
+    /// host, or, where `place` names one, of the documents status reads
+    /// under its name alone, each recorded delivered by the inbox in the
+    /// write that reads it, and gives every place of those that waits on
+    /// its caller and on `recipient`, marking nothing for it; refused,
+    /// marking nothing, where no document stands under the name. An act
+    /// on places, so while no caller keeps watch it settles every place
+    /// first; a name's documents are read before that settle, so it
+    /// collects what the name read and nothing a settle tidied since, a
+    /// document it removed giving nothing (43, 62, 119, 130, 193, 208;
+    /// design 9).
+    pub fn inbox(&self, recipient: &str, place: Option<&PlaceId>) -> Answer {
+        let named: Option<Vec<PlaceId>> = match place {
+            Some(id) => {
+                let named: Vec<PlaceId> = self
+                    .documents_of(id)
+                    .into_iter()
+                    .map(|held| held.place.id)
+                    .collect();
+                if named.is_empty() {
+                    return Answer::refused(format!("no place {id} stands on this host"));
+                }
+                Some(named)
+            }
+            None => None,
+        };
         self.settle_attended();
+        let documents: Vec<HeldState> = match named {
+            Some(ids) => ids
+                .iter()
+                .filter_map(|id| self.store.read(id))
+                .map(|read| read.state)
+                .collect(),
+            None => self
+                .store
+                .read_every()
+                .into_iter()
+                .map(|read| read.state)
+                .collect(),
+        };
         let mut ends = vec![];
         let mut waiting = vec![];
-        for read in self.store.read_every() {
-            let held = read.state;
+        for held in documents {
             waiting.extend(waits_on(&held, recipient));
             if !held
                 .ends
@@ -207,7 +238,7 @@ impl Engine {
                             at: now,
                             by: DeliveredBy::Inbox,
                         });
-                        collected.push(EndStatus::of(end, &held.place.recipients));
+                        collected.push(EndStatus::of(end, &recipients));
                     }
                     if collected.is_empty() {
                         Step::Keep(collected)
@@ -240,7 +271,7 @@ impl Engine {
     /// C.4; design 9).
     pub fn session_inbox(&self) -> Option<Answer> {
         let session = self.caller_session()?;
-        Some(self.inbox(&session))
+        Some(self.inbox(&session, None))
     }
 }
 

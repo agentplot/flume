@@ -2958,11 +2958,13 @@ fn needs_to_a_role_and_to_another_streams() {
 
 #[test]
 fn the_helps_of_needs_hold_retry_tell_and_launch() {
-    // 7, 41, 42, 49, 53, 130, 132, 193; core.35: needs --to's help says a
-    // role alone is the place's own stream's, hold's names the waiting
-    // move and its bound, retry's and tell's the key an answer names, and
-    // launch --recipient's a role's address of any stream and the answerer
-    // behind the place's stream.
+    // 7, 41, 42, 43, 49, 53, 130, 132, 193; core.35: needs --to's help
+    // says a role alone is the place's own stream's, hold's names the
+    // waiting move and its bound, retry's and tell's the key an answer
+    // names, launch --recipient's a role's address of any stream, a name
+    // no pane holds collecting its ends and the answerer behind the
+    // place's stream, launch's that it takes no --caller, and inbox's the
+    // place it may be given: the command-line spec's "The helps".
     let host = Host::new("helps");
     let help = |command: &str| {
         let ran = host.flume(&outside(&host, "elsewhere"), &[command, "--help"], &[]);
@@ -2983,6 +2985,11 @@ fn the_helps_of_needs_hold_retry_tell_and_launch() {
         ("tell", "its agent kept open for its answer"),
         ("launch", "a role's address, `<stream>/<role>`, of any stream"),
         ("launch", "the answerer behind the place's stream"),
+        ("launch", "A name no pane holds is sent no notice"),
+        ("launch", "until it collects them by `flume inbox` or `flume wait` as that name"),
+        ("inbox", "[PLACE]"),
+        ("inbox", "an inbox naming a place collects that place's ends alone"),
+        ("inbox", "a tidied document's `<place>@<at>` naming that one alone"),
     ] {
         let words = help(command);
         assert!(
@@ -2990,13 +2997,15 @@ fn the_helps_of_needs_hold_retry_tell_and_launch() {
             "{command}'s help says not {said:?}: {words}"
         );
     }
-    for command in ["needs", "hold", "retry", "tell", "launch"] {
+    for command in ["needs", "hold", "retry", "tell", "launch", "inbox"] {
         let words = help(command);
         assert!(
             !words.contains("partition"),
             "{command}'s help says partition: {words}"
         );
     }
+    let launch = help("launch");
+    assert!(!launch.contains("--caller"), "launch's help: {launch}");
 }
 
 /// The host's source acme carrying each of `addresses` with the words of
@@ -4020,4 +4029,79 @@ fn a_streams_multiplexer_flume_does_not_carry() {
     let launched = launch("two", "personal");
     assert_eq!(launched.code, 0, "{}", launched.text);
     assert!(Path::new(&host.place_of(&repository, "change--two")).exists());
+}
+
+#[test]
+fn a_readers_place_collected_by_its_inbox() {
+    // 7, 43, 52: the command-line spec's "A reader's place collected" and
+    // "The helps": status gives both recipients before the drop, the
+    // inbox naming the place as `boomdrive`, which no pane holds, gives
+    // its drop among its ends, each delivered by the inbox, and a second
+    // gives nothing; a launch naming `--caller` is refused, nothing made.
+    let host = Host::new("reader-inbox");
+    let repository = repository("reader-inbox", None);
+    let dir = &repository.dir;
+    let kinds = kinds_file(&host, false);
+    let launch = |name: &str, more: &[&str]| {
+        let mut args = vec!["launch", "--kind", "fix", "--name", name, "--kinds", &kinds];
+        args.extend_from_slice(more);
+        args.push("--json");
+        host.stand_in(dir, &args, &[])
+    };
+    let refused = launch("two", &["--caller", "boomdrive"]);
+    assert_eq!(refused.code, 2, "{}", refused.text);
+    assert!(refused.text.contains("--caller"), "{}", refused.text);
+    assert!(!Path::new(&host.place_of(&repository, "fix--two")).exists());
+    let launched = launch("one", &["--recipient", "boomdrive", "--recipient", "ops"]);
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "fix--one");
+    let status = host.flume(dir, &["status", "fix--one", "--json"], &[]);
+    assert_eq!(status.code, 0, "{}", status.text);
+    let answer = status.answer();
+    let one = the_place(&answer);
+    assert_eq!(
+        one.recipients,
+        vec!["boomdrive".to_string(), "ops".to_string()],
+        "{}",
+        status.text
+    );
+    host.end_agent(&place, "code", 1);
+    let dropped = host.stand_in(dir, &["drop", "fix--one", "--json"], &[]);
+    assert_eq!(dropped.code, 0, "{}", dropped.text);
+    let inbox = || {
+        answered(
+            &host.stand_in(
+                dir,
+                &["inbox", "fix--one", "--recipient", "boomdrive", "--json"],
+                &[],
+            ),
+            0,
+        )
+    };
+    let collected = inbox();
+    assert_eq!(collected["inbox"]["recipient"], "boomdrive", "{collected}");
+    let ends = collected["inbox"]["ends"].as_array().expect("ends");
+    assert!(
+        ends.iter()
+            .all(|end| end["kind"] == "fix" && end["name"] == "one"),
+        "{collected}"
+    );
+    let over = ends
+        .iter()
+        .map(|end| &end["end"])
+        .find(|end| end["key"] == "over/dropped")
+        .unwrap_or_else(|| panic!("no drop's end: {collected}"));
+    assert_eq!(over["of"], "over", "{collected}");
+    assert_eq!(over["over"], "dropped", "{collected}");
+    for end in ends {
+        let deliveries = end["end"]["deliveries"].as_array().expect("deliveries");
+        assert!(
+            deliveries
+                .iter()
+                .any(|delivery| delivery["recipient"] == "boomdrive" && delivery["by"] == "inbox"),
+            "{collected}"
+        );
+    }
+    let again = inbox();
+    assert_eq!(again["inbox"]["ends"], json!([]), "{again}");
 }

@@ -653,7 +653,7 @@ fn three_ends_one_run(_: &()) -> Outcome {
         .recipient(Some(&planner_id()))
         .ok_or("the run names no recipient")?;
     ensure_eq!(recipient, PLANNER, "the run's recipient");
-    let collected = match run.inbox(&recipient) {
+    let collected = match run.inbox(&recipient, None) {
         Answer::Inbox { ends, .. } => ends
             .iter()
             .map(|collected| {
@@ -733,7 +733,7 @@ fn the_run_starts(_: &()) -> Outcome {
     let recipient = run
         .recipient(Some(&planner_id()))
         .ok_or("the run names no recipient")?;
-    let ends = match run.inbox(&recipient) {
+    let ends = match run.inbox(&recipient, None) {
         Answer::Inbox { ends, .. } => ends,
         other => return Err(format!("the inbox answered {other:?}")),
     };
@@ -1258,7 +1258,7 @@ fn s99_one_declaration_two_streams(_: &()) -> Outcome {
             .recipient(Some(run))
             .ok_or_else(|| format!("{run} names no recipient"))?;
         ensure_eq!(recipient, address, format!("{run}'s recipient"));
-        let places = match engine.inbox(&recipient) {
+        let places = match engine.inbox(&recipient, None) {
             Answer::Inbox { ends, .. } => ends
                 .into_iter()
                 .map(|collected| collected.place)

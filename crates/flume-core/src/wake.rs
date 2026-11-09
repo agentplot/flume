@@ -187,6 +187,8 @@ impl Engine {
         if matches!(held.phase, Phase::Making { .. }) {
             return;
         }
+        // A drop's or a done's end stands pending for no role's address, so
+        // it wakes no role (43, 52, 114, 132).
         let addresses: Vec<String> = held
             .pending_for()
             .into_iter()

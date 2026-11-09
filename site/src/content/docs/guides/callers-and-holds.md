@@ -81,6 +81,7 @@ happens:
 | `submission withdrawn` | the submission left the merge queue without landing |
 | `submission refused` | the merge queue refused the submission |
 | `stalled: <move>` | the place waited on its caller under no hold's words past its bound |
+| `dropped`, `done` | the place was dropped, or declared done; sent as no notice, it waits for each recipient that is no role's address ([the end of a place's work](#the-end-of-a-places-work)) |
 
 Each end is delivered **once** to each recipient, inside the settle
 that reads it, as a one-line notice through the terminal into the
@@ -163,6 +164,47 @@ herdr, flume's Claude Code plugin does that at a session's start, as the
 pane the session runs in, and hands the agent what the inbox gives
 ([a session of your own](/flume/guides/claude-code/#a-session-of-your-own)).
 Reading `flume status` delivers nothing.
+
+### The end of a place's work
+
+A caller that reads a place's last state from flume, rather than from a
+notice in a pane, names itself one more recipient at the launch, by a
+name no pane holds, as `--recipient ci`. Naming any recipient drops the
+defaults, so it names the others the place's ends are for beside it:
+
+- flume sends a name no pane holds no notice. Each end of the place
+  waits for it until it collects it, as for a recipient whose session is
+  gone.
+- A drop or a done is an end too, keyed `over/dropped` or `over/done`.
+  flume sends no notice of it to any recipient, and wakes no role for
+  it. It waits for each recipient that is no role's address, and for no
+  one where every recipient is one.
+- Once the place is tidied, its record stays while an end is pending,
+  so `flume status <place>` still reads it:
+
+```text
+  recipients: me, ci, from the launch
+  ended stage/code/1/delivered: code delivered; delivered to me; pending for ci
+  ended submission/1/landed: submission landed d185a879b51dba33555c036392b50443f4dfc5e8; delivered to me; pending for ci
+```
+
+The caller then collects them by naming the place:
+
+```console
+$ flume inbox fix--the-parser-reads-tabs --recipient ci
+fix--the-parser-reads-tabs code delivered [stage/code/1/delivered]; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
+fix--the-parser-reads-tabs submission landed d185a879b51dba33555c036392b50443f4dfc5e8 [submission/1/landed]; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
+```
+
+An inbox naming a place collects that place's ends alone, from the
+records `flume status` reads under the name: the place's own, else
+those kept once it was tidied, `<place>@<at>` naming one. It reads
+them before it moves anything on, so it collects what the caller read
+and nothing tidied since. A name under which no record stands is
+refused, and nothing is marked delivered. A `flume wait` as that name
+collects the end it waits on too. The next settle removes the record once
+nothing of it is pending. A caller that never collects keeps the
+record on the host, where `flume drop` removes it.
 
 ## Holds
 

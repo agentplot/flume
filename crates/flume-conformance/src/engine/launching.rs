@@ -206,6 +206,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["32"],
             run: a_place_held_with_no_address,
         },
+        Scenario {
+            name: "launch: a launch naming a role's address and a name no pane holds keeps both as its recipients, from the launch, as they were after a hold and a retry",
+            cites: &["7", "8"],
+            run: a_role_and_a_reader_beside_it,
+        },
     ]
 }
 
@@ -1394,6 +1399,43 @@ fn a_carried_address(_: &()) -> Outcome {
         recipients_of(&world, "one")?.0,
         vec!["north/planner".to_string()],
         "the place's recipients"
+    );
+    Ok(())
+}
+
+/// The launching spec's "A role's address and a reader beside it": the
+/// recipients `madswan/planner` and `boomdrive`, a name no pane holds,
+/// each from the launch and as they were after a hold and a retry (7, 8).
+fn a_role_and_a_reader_beside_it(_: &()) -> Outcome {
+    let world = World::new();
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    declares(&world, "acme", "madswan/planner", false);
+    let named = fix_in("madswan", "one", &["madswan/planner", "boomdrive"]);
+    launched(&world.engine.launch(&named))?;
+    let id = World::id("fix", "one");
+    let both = (
+        vec!["madswan/planner".to_string(), "boomdrive".to_string()],
+        Some(RecipientsFrom::Launch),
+    );
+    ensure_eq!(
+        recipients_of(&world, "one")?,
+        both.clone(),
+        "the place's recipients and where they came from"
+    );
+    world.settle(&id);
+    let held = world
+        .engine
+        .hold(&id, HoldOn::Submission, "until the review", None);
+    ensure!(held.refusal().is_none(), "the hold: {held:?}");
+    super::settling::deliver_fix(&world, &id);
+    world.settle(&id);
+    let retried = world.engine.retry(&id, Retry::Submission, None, false);
+    ensure!(retried.refusal().is_none(), "the retry: {retried:?}");
+    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
+    ensure_eq!(
+        recipients_of(&world, "one")?,
+        both,
+        "the place's recipients after a hold and a retry"
     );
     Ok(())
 }

@@ -943,6 +943,26 @@ fn a_held_state_with_where_its_recipients_came_from() {
     assert!(written["place"].get("recipients_from").is_none());
 }
 
+#[test]
+fn a_held_state_with_a_caller_reads_without_it() {
+    // The seam-contracts spec's "State written with a caller": held state
+    // whose place holds a `caller`, as an earlier build of the bolt wrote
+    // it, reads with the field ignored and is written back without it, and
+    // a launch writes none (61, 75; record 0060).
+    let state = held();
+    let mut written = serde_json::to_value(&state).expect("held state as JSON");
+    written["place"]
+        .as_object_mut()
+        .expect("the place")
+        .insert("caller".into(), serde_json::json!("boomdrive"));
+    let read: HeldState = serde_json::from_value(written).expect("a state with a caller");
+    assert_eq!(read, state);
+    let again = serde_json::to_value(&read).expect("held state as JSON");
+    assert!(again["place"].get("caller").is_none());
+    let launch = serde_json::to_value(Launch::default()).expect("a launch as JSON");
+    assert!(launch.get("caller").is_none(), "no caller written");
+}
+
 /// `value` with every `mode` key taken out, at any depth.
 fn without_modes(value: &mut serde_json::Value) {
     match value {
@@ -2490,6 +2510,13 @@ fn every_ends_key_round_trips() {
             },
             "stall/3700",
         ),
+        (
+            EndOf::Over {
+                over: Over::Dropped,
+            },
+            "over/dropped",
+        ),
+        (EndOf::Over { over: Over::Done }, "over/done"),
     ];
     for (end, token) in ends {
         let key = end.end_key();
@@ -2522,6 +2549,35 @@ fn every_ends_key_round_trips() {
     ] {
         round_trips(stage(state, None, 3).end_key());
     }
+    // The seam-contracts spec's "A drop round-trips": the end of a drop is
+    // written as its over, keys `over/dropped` as held state records it,
+    // and is owed to the place's recipients that are no role's address,
+    // carried by no notice (43, 52, 61, 75).
+    let dropped = EndOf::Over {
+        over: Over::Dropped,
+    };
+    assert_eq!(
+        serde_json::to_value(&dropped).expect("written"),
+        serde_json::json!({"of": "over", "over": "dropped"})
+    );
+    round_trips(dropped.clone());
+    assert_eq!(dropped.key(), "over dropped");
+    assert_eq!(EndOf::Over { over: Over::Done }.key(), "over done");
+    let mut state = held();
+    state.ends.push(EndHeld {
+        of: dropped,
+        read_at: 500,
+        deliveries: vec![],
+        answer: None,
+        claim: None,
+    });
+    round_trips(state.clone());
+    let end = state.ends.last().expect("the drop's end");
+    assert_eq!(
+        end.recipients(&state.place.recipients),
+        state.place.recipients
+    );
+    assert!(!end.noticed(), "a notice carries the drop");
 }
 
 #[test]
@@ -2541,6 +2597,11 @@ fn a_key_in_another_form_is_refused() {
         "submission/2",
         "stall/soon",
         "stall/",
+        "over/landed",
+        "over/",
+        "over/Dropped",
+        "over/dropped/1",
+        "over dropped",
         "stage construct 1 EndedShort ",
         "",
     ] {
@@ -3115,6 +3176,73 @@ fn an_ends_key_and_its_pending_recipients() {
     assert_eq!(ends[1].pending(&recipients), recipients);
     assert!(ends[1].pending_to(&recipients, "ops"));
     assert!(!ends[0].pending_to(&recipients, "operator"));
+}
+
+#[test]
+fn whom_each_end_is_pending_for() {
+    // The seam-contracts spec's "Whom each end is pending for": code's end
+    // and the landing stand pending for every recipient, the drop for the
+    // recipients that are no role's address alone, and the drop is the one
+    // end no notice carries; once the inbox delivers it to `boomdrive` it
+    // stands pending for no one (43, 132; record 0060).
+    let end = |of| EndHeld {
+        of,
+        read_at: 100,
+        deliveries: vec![],
+        answer: None,
+        claim: None,
+    };
+    let mut state = held();
+    state.place.recipients = vec!["east/planner".into(), "boomdrive".into()];
+    state.ends = vec![
+        end(EndOf::Stage {
+            stage: "code".into(),
+            start: 1,
+            state: StageState::Delivered,
+            quiet_from: None,
+            answered: 0,
+            end: Box::default(),
+        }),
+        end(EndOf::Submission {
+            submit: 1,
+            verdict: Verdict::Landed {
+                commit: Revision::new("c9"),
+                place_removed: false,
+                branch_removed: false,
+            },
+        }),
+        end(EndOf::Over {
+            over: Over::Dropped,
+        }),
+    ];
+    let recipients = state.place.recipients.clone();
+    let both = vec!["east/planner".to_string(), "boomdrive".to_string()];
+    assert_eq!(
+        state
+            .ends
+            .iter()
+            .map(|end| end.pending(&recipients))
+            .collect::<Vec<_>>(),
+        vec![both.clone(), both.clone(), vec!["boomdrive".to_string()]]
+    );
+    assert_eq!(
+        state.ends.iter().map(EndHeld::noticed).collect::<Vec<_>>(),
+        vec![true, true, false]
+    );
+    assert!(!state.ends[2].pending_to(&recipients, "east/planner"));
+    assert_eq!(state.pending_for(), both);
+    let mut dropped = state.ends[2].clone();
+    dropped.deliveries.push(Delivery {
+        recipient: "boomdrive".into(),
+        at: 101,
+        by: DeliveredBy::Inbox,
+    });
+    assert!(dropped.pending(&recipients).is_empty());
+    // A drop of a place whose recipients are all roles' addresses stands
+    // pending for no one (43, 62).
+    assert!(state.ends[2]
+        .pending(&["east/planner".to_string()])
+        .is_empty());
 }
 
 #[test]

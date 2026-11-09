@@ -22,7 +22,7 @@ sidebar:
 | `flume tidy [<place>]` | Remove what is over, for one place or every place. |
 | `flume settle [<place>]` | Move a place, or every place, on; with `--every <time>`, every place as a watch over the host. |
 | `flume wait <place>` | Wait on a stage's end or the submission's outcome, as a recipient. |
-| `flume inbox` | Collect every end pending for a recipient, on every place of the host. |
+| `flume inbox [<place>]` | Collect every end pending for a recipient, on every place of the host, or on the place named alone. |
 | `flume wake <address>` | Wake a role's address, `<stream>/<role>`: launch its run where none stands, and nothing where an agent already holds it. |
 | `flume kinds lock <identity>…` | Record each kind at its content's hash in a lock of kinds, or take it out. |
 | `flume open [<session>]` | Show a session of a stream's, by the session's name, in its stream's view: a window its terminal app opens, its multiplexer's own app, or the line to run. |
@@ -83,7 +83,7 @@ flume launch --kind <kind> --name <name> [--brief <text> | --brief-file <file>] 
 | `--kinds <file>` | A declaration of kinds the launch carries, read from disk with its prompts beside it. |
 | `--hold <stage>=<words>` | Hold that stage before it starts, with words saying what it waits for. Repeatable. |
 | `--hold-submission` | Hold the submission once the last stage delivers. |
-| `--recipient <name>` | A recipient of the place's ends: a terminal's session by its name, or a role's address, `<stream>/<role>`, of any stream, whose run is woken for them. Repeatable. With none, `$FLUME_RECIPIENT`, else the terminal session the launch runs in, else the answerer behind the place's stream ([who answers a place](/flume/guides/callers-and-holds/#who-answers-a-place)). Every stall reaches that answerer too. |
+| `--recipient <name>` | A recipient of the place's ends: a terminal's session by its name, or a role's address, `<stream>/<role>`, of any stream, whose run is woken for them. A name no pane holds is sent no notice: its ends wait for it, the place's record kept once it is tidied, until it collects them by `flume inbox` or `flume wait` as that name ([the end of a place's work](/flume/guides/callers-and-holds/#the-end-of-a-places-work)). Repeatable. With none, `$FLUME_RECIPIENT`, else the terminal session the launch runs in, else the answerer behind the place's stream ([who answers a place](/flume/guides/callers-and-holds/#who-answers-a-place)). Every stall reaches that answerer too. |
 | `--mark <mark>` | A mark the caller finds its places by, given back in status. |
 | `--priority <n>` | The place's priority in the host's queue, a whole number, negative allowed; `0` where none is given. |
 | `--stall-after <time>` | How long the place may wait on its caller under no hold's words before it is said stalled; five minutes where none is given. |
@@ -526,16 +526,24 @@ a role's run serves, else the terminal session the command runs in.
 ## `flume inbox`
 
 ```sh
-flume inbox [--recipient <name>]
+flume inbox [<place>] [--recipient <name>]
 ```
 
 Every end pending for the recipient, on every place of the host, a
 tidied place's kept record among them, each recorded delivered in the
-same write, each with its key. Prints `nothing pending for <recipient>`
-when there is none. The recipient defaults as for `flume wait`.
+same write, each with its key, a drop's or a done's among them. Prints
+`nothing pending for <recipient>` when there is none. The recipient
+defaults as for `flume wait`.
 
-Beneath them, `waiting` gives every place that waits on its caller and
-on the recipient: one it is a recipient of, one whose stop-short named
+Naming a place, as `flume status` names one, the inbox collects that
+place's ends alone: those of its record, or, once it was tidied, of the
+records kept for it, `<place>@<at>` naming one record. It reads them
+before it moves anything on, so it collects nothing tidied since. A
+name under which no record stands is refused, and nothing is marked
+delivered.
+
+Beneath them, `waiting` gives every place, or the place named, that
+waits on its caller and on the recipient: one it is a recipient of, one whose stop-short named
 it, or one whose stall of the move it waits on now reached it as the
 answerer. Each comes with its kind, name, stream and brief's first
 line, the move and since when, the stop-short's words, key and the

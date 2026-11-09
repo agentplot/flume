@@ -2982,6 +2982,40 @@ mod tests {
     }
 
     #[test]
+    fn a_drops_end_line() {
+        // 43, 52, 56; core.14: a drop's end as any end's line, pending for
+        // the recipient that is no role's address, and no caller's line.
+        let place = PlaceStatus {
+            recipients: vec!["east/planner".into(), "boomdrive".into()],
+            recipients_from: Some(RecipientsFrom::Launch),
+            ends: vec![EndStatus::of(
+                &EndHeld {
+                    of: EndOf::Over {
+                        over: flume_seams::Over::Dropped,
+                    },
+                    read_at: 500,
+                    deliveries: vec![],
+                    answer: None,
+                    claim: None,
+                },
+                &["east/planner".to_string(), "boomdrive".to_string()],
+            )],
+            ..a_place()
+        };
+        let lines = place_lines(&place);
+        assert!(
+            lines
+                .iter()
+                .any(|line| line == "  ended over/dropped: dropped; pending for boomdrive"),
+            "{lines:#?}"
+        );
+        assert!(
+            !lines.iter().any(|line| line.starts_with("  caller: ")),
+            "{lines:#?}"
+        );
+    }
+
+    #[test]
     fn a_streams_answerer() {
         // 143, 193: the one role standing behind a stream with its
         // source, or the roles that each declare to.

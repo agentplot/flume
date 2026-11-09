@@ -4,7 +4,7 @@
 //! (58); a stage's end keeps only what was reported at that moment (43).
 
 use crate::{
-    Binding, Declared, Forecast, Given, Holds, Identity, Kind, KindFrom, KindIdentity,
+    is_address, Binding, Declared, Forecast, Given, Holds, Identity, Kind, KindFrom, KindIdentity,
     KindSettings, LabelHeld, PassedOver, PlaceId, PlaceRef, ProfileHeld, Prompt, Readiness,
     RepositoryName, Revision, Seconds, Secret, SessionHeld, Settings, StopKind, StreamHeld,
     Unsettled, Verdict,
@@ -487,12 +487,27 @@ impl EndHeld {
     /// `recipients`: for a stop-short that named a role, that role's
     /// address alone; otherwise those, then, for a stall, the role the
     /// stop-short it waits on named and the answerer behind the place's
-    /// stream, each once (41, 43, 130, 193).
+    /// stream, each once; and for a drop's or a done's end, those that are
+    /// no role's address, each once, so no role's run is woken and no
+    /// tidied document kept for a role alone (41, 43, 52, 114, 130, 132,
+    /// 193).
     pub fn recipients(&self, recipients: &[String]) -> Vec<String> {
-        if let EndOf::Stage { end, .. } = &self.of {
-            if let Some(addressee) = &end.addressee {
-                return vec![addressee.clone()];
+        match &self.of {
+            EndOf::Stage { end, .. } => {
+                if let Some(addressee) = &end.addressee {
+                    return vec![addressee.clone()];
+                }
             }
+            EndOf::Over { .. } => {
+                let mut every: Vec<String> = vec![];
+                for recipient in recipients {
+                    if !is_address(recipient) && !every.contains(recipient) {
+                        every.push(recipient.clone());
+                    }
+                }
+                return every;
+            }
+            EndOf::Submission { .. } | EndOf::Stall { .. } => {}
         }
         let mut every = recipients.to_vec();
         if let EndOf::Stall {
@@ -529,11 +544,20 @@ impl EndHeld {
             .iter()
             .any(|pending| pending == recipient)
     }
+
+    /// Whether a notice carries it to a recipient a pane holds, and a wake
+    /// is owed for it: every end but a drop's or a done's, which stands
+    /// pending until its recipient collects it by the inbox or a wait (43,
+    /// 52, 114, 132).
+    pub fn noticed(&self) -> bool {
+        !matches!(self.of, EndOf::Over { .. })
+    }
 }
 
 /// What ended: a stage's start, ended, lost, never begun or stuck; a
-/// submission's outcome from the merge queue; or a stall, each with what
-/// flume read of it (43, 45, 130, 133).
+/// submission's outcome from the merge queue; a stall, each with what
+/// flume read of it; or the place's work, by a drop or a done (43, 45,
+/// 52, 114, 130, 133).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "of", rename_all = "snake_case")]
 pub enum EndOf {
@@ -597,6 +621,11 @@ pub enum EndOf {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         lapsed: Option<String>,
     },
+    /// The end of the place's work by a drop or a done, recorded for those
+    /// alone, in the write that makes the work over: a landing is its
+    /// submission's end. No notice carries it, and it stands pending for
+    /// the place's recipients that are no role's address (43, 52, 114).
+    Over { over: Over },
 }
 
 /// The stop-short a stalled place waits on, as the stall read it: its
@@ -644,6 +673,7 @@ impl EndOf {
                 format!("submission {submit} {}", KeyOutcome::of(verdict).word())
             }
             EndOf::Stall { since, .. } => format!("stall {since}"),
+            EndOf::Over { over } => format!("over {}", over.word()),
         }
     }
 
@@ -668,6 +698,7 @@ impl EndOf {
                 outcome: KeyOutcome::of(verdict),
             },
             EndOf::Stall { since, .. } => EndKey::Stall { since: *since },
+            EndOf::Over { over } => EndKey::Over { over: over.clone() },
         }
     }
 }
@@ -676,7 +707,8 @@ impl EndOf {
 /// `stage/<stage>/<start>/<state>`, with `/<answered>` after it where the
 /// start had taken that many answers in its session when the end was read,
 /// so a second stop-short of one start kept open is a key of its own;
-/// `submission/<n>/<outcome>`; or `stall/<since>`. Each notice, collected
+/// `submission/<n>/<outcome>`; `stall/<since>`; or `over/<dropped|done>`,
+/// a landing keyed by its submission alone. Each notice, collected
 /// end, waiting place and status gives it, and an answer names the
 /// stop-short it answers by it. It is read back from that token alone,
 /// refused in any other form, naming the forms (42, 43, 198).
@@ -696,10 +728,13 @@ pub enum EndKey {
     Stall {
         since: Seconds,
     },
+    Over {
+        over: Over,
+    },
 }
 
 /// The forms an end's key takes, as a refusal names them (42, 43).
-pub const END_KEY_FORMS: &str = "stage/<stage>/<start>/<state>, with /<answered> after it where its start had taken answers in its session, submission/<n>/<outcome>, or stall/<since>";
+pub const END_KEY_FORMS: &str = "stage/<stage>/<start>/<state>, with /<answered> after it where its start had taken answers in its session, submission/<n>/<outcome>, stall/<since>, or over/<dropped|done>";
 
 impl std::fmt::Display for EndKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -720,6 +755,7 @@ impl std::fmt::Display for EndKey {
                 write!(f, "submission/{submit}/{}", outcome.word())
             }
             EndKey::Stall { since } => write!(f, "stall/{since}"),
+            EndKey::Over { over } => write!(f, "over/{}", over.word()),
         }
     }
 }
@@ -756,6 +792,10 @@ impl std::str::FromStr for EndKey {
             ["stall", since] => EndKey::Stall {
                 since: number(since)?,
             },
+            ["over", "dropped"] => EndKey::Over {
+                over: Over::Dropped,
+            },
+            ["over", "done"] => EndKey::Over { over: Over::Done },
             _ => return Err(refused()),
         };
         if key.to_string() != given {
@@ -1059,6 +1099,17 @@ pub enum Over {
     Landed { commit: Revision },
     Dropped,
     Done,
+}
+
+impl Over {
+    /// Its word: `landed`, `dropped` or `done` (43, 63).
+    pub fn word(&self) -> &'static str {
+        match self {
+            Over::Landed { .. } => "landed",
+            Over::Dropped => "dropped",
+            Over::Done => "done",
+        }
+    }
 }
 
 /// Why a place whose work is over still stands (64 to 66, 68).
