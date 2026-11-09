@@ -17,8 +17,8 @@ use crate::settings::program_name;
 use crate::start::Starts;
 use crate::{
     side_by_side, Act, AgentSettings, AgentStatus, Answer, Bound, EffortStatus, EndStatus, Engine,
-    GroupStatus, ModeStatus, MoveStatus, OwnFileStatus, OwnStatus, PlaceStatus, SessionAnswer,
-    SessionWait, SourceStatus, StageStatus, SubmissionStatus, WaitingOn, Waits,
+    ExpiredEnd, GroupStatus, ModeStatus, MoveStatus, OwnFileStatus, OwnStatus, PlaceStatus,
+    SessionAnswer, SessionWait, SourceStatus, StageStatus, SubmissionStatus, WaitingOn, Waits,
 };
 use flume_seams::*;
 use std::collections::BTreeMap;
@@ -103,6 +103,32 @@ impl Engine {
             places,
             host: self.host_status(&agents, &owing),
         }
+    }
+
+    /// Each end expired for a recipient on the host, of every place and
+    /// every tidied document, as `owing`, one read of the host's
+    /// deliveries, gives them (43, 56; weir 104, 106; core.15).
+    pub(crate) fn expired(&self, owing: &Owing) -> Vec<ExpiredEnd> {
+        let mut expired = vec![];
+        for read in self.store.read_every() {
+            let place = &read.state.place;
+            for end in &read.state.ends {
+                let Some(delivery) = end.delivery(place, owing) else {
+                    continue;
+                };
+                for owed in delivery.owed.iter().filter(|owed| owed.expired) {
+                    expired.push(ExpiredEnd {
+                        place: PlaceId::new(place.location.clone()),
+                        key: end.of.end_key(),
+                        delivery: delivery.key.clone(),
+                        recipient: owed.recipient.clone(),
+                        known: owed.known,
+                        expires_at: delivery.expires_at,
+                    });
+                }
+            }
+        }
+        expired
     }
 
     /// The submission of each of `held` that status reads, by its index:

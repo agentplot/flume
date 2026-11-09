@@ -1184,6 +1184,7 @@ impl Engine {
             terminal_setup: self.terminal.setup(),
             configuration,
             sources: self.host_sources(&roles),
+            expired: self.expired(owing),
         }
     }
 

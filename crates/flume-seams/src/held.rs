@@ -411,6 +411,8 @@ pub struct EndHeld {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Owing {
     pub deliveries: BTreeMap<String, EndDelivery>,
+    /// Each name a recipient has confirmed under (weir 106).
+    pub known: std::collections::BTreeSet<String>,
 }
 
 /// One end's delivery as the host's deliveries hold it at the time it was

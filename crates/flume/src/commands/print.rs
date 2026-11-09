@@ -3005,6 +3005,10 @@ mod tests {
                 EndOf::Stage { end, .. } => end.open_until,
                 _ => None,
             },
+            confirmed: vec![],
+            delivery: None,
+            expires_at: None,
+            owed: vec![],
         }
     }
 
@@ -3835,6 +3839,10 @@ mod tests {
             key: "stage/talk/1/lost".parse().unwrap(),
             pending_for: vec!["ops".into()],
             open_until: None,
+            confirmed: vec![],
+            delivery: None,
+            expires_at: None,
+            owed: vec![],
         };
         let place = PlaceStatus {
             agent: Some(AgentStatus {
@@ -3867,6 +3875,8 @@ mod tests {
                 kind: "research".into(),
                 name: "one".into(),
                 end,
+                confirmed: false,
+                expired: false,
             }],
             waiting: vec![],
         };
@@ -4080,6 +4090,8 @@ mod tests {
                 kind: "fix".into(),
                 name: "one".into(),
                 end: end_status(&end, &["ops"]),
+                confirmed: false,
+                expired: false,
             }],
             waiting: vec![],
         };
@@ -4448,6 +4460,10 @@ mod tests {
             key: "stall/3700".parse().unwrap(),
             pending_for: vec!["east/planner".into()],
             open_until: None,
+            confirmed: vec![],
+            delivery: None,
+            expires_at: None,
+            owed: vec![],
         };
         let place = PlaceStatus {
             ends: vec![stall.clone()],
@@ -4507,6 +4523,10 @@ mod tests {
             key: "stage/construct/1/ended-short".parse().unwrap(),
             pending_for: vec![],
             open_until: None,
+            confirmed: vec![],
+            delivery: None,
+            expires_at: None,
+            owed: vec![],
         };
         let place = PlaceStatus {
             ends: vec![answered.clone()],

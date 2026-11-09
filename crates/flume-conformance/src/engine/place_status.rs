@@ -97,6 +97,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_stalled_place_with_a_pending_end,
         },
         Scenario {
+            name: "status: two tidied fixes' landings pending for bomdrive past the host's span are each given in the host's expired, naming bomdrive, never confirmed under, its place and its delivery's key (weir 104, 106)",
+            cites: &["56", "43", "62"],
+            run: two_expired_ends,
+        },
+        Scenario {
+            name: "status: the field list holds each end's delivery, expiry, owed and confirmed recipients and the host's expired ends, and an answer lacking one fails naming it",
+            cites: &["61", "56"],
+            run: the_fields_kept,
+        },
+        Scenario {
             name: "status: a live place's clues and its base's count are the ones show was given, with where the terminal shows them",
             cites: &["139", "56", "60"],
             run: clues_in_status,
@@ -2772,4 +2782,107 @@ fn a_forecast_unread_in_status(_: &()) -> Outcome {
     );
     ensure!(status.fixes.is_empty(), "fixes: {:?}", status.fixes);
     Ok(())
+}
+
+/// The place-status spec's "Two expired ends" (43, 56; weir 104, 106).
+fn two_expired_ends(_: &()) -> Outcome {
+    let world = World::new();
+    let mut ids = vec![];
+    for name in ["one", "two"] {
+        let mut launch = launch("fix", name, Some("mend it"));
+        launch.recipients = vec!["bomdrive".into()];
+        launched(&world.engine.launch(&launch))?;
+        let id = World::id("fix", name);
+        world.settle(&id);
+        world.commit(&format!("fix/{name}"), &["fix.rs"]);
+        world.settle(&id);
+        ensure!(world.held(&id).is_none(), "fix--{name} did not land");
+        ids.push(id);
+    }
+    world.host.advance(ENDS_EXPIRE);
+    let Answer::Status { host, .. } = world.engine().status(None) else {
+        return Err("the host's status was refused".into());
+    };
+    let json = serde_json::to_value(&host).map_err(|error| error.to_string())?;
+    for id in &ids {
+        let short = id.0.rsplit('/').next().unwrap_or_default();
+        let landing = json["expired"]
+            .as_array()
+            .ok_or("no expired in the JSON form")?
+            .iter()
+            .find(|end| end["place"] == id.0.as_str() && end["key"] == "submission/1/landed")
+            .ok_or(format!("{short}'s landing is not expired: {json}"))?;
+        ensure_eq!(
+            (landing["recipient"].clone(), landing["known"].clone()),
+            (serde_json::json!("bomdrive"), serde_json::json!(false)),
+            format!("{short}'s expired landing")
+        );
+        let delivery = landing["delivery"].as_str().unwrap_or_default();
+        ensure!(
+            delivery.starts_with(&format!("{short}/"))
+                && delivery.ends_with("/submission/1/landed"),
+            "{short}'s delivery key: {delivery}"
+        );
+    }
+    Ok(())
+}
+
+/// The place-status spec's "The fields kept" (61).
+fn the_fields_kept(_: &()) -> Outcome {
+    use super::answers::{full, missing};
+    let (name, answer) = full().remove(0);
+    for path in [
+        "status.places[].ends[].delivery",
+        "status.places[].ends[].expires_at",
+        "status.places[].ends[].owed",
+        "status.places[].ends[].owed[].known",
+        "status.places[].ends[].owed[].expired",
+        "status.places[].ends[].confirmed",
+        "status.places[].ends[].confirmed[].at",
+        "status.places[].ends[].deliveries",
+        "status.places[].ends[].pending_for",
+        "status.host.expired",
+        "status.host.expired[].known",
+    ] {
+        let mut json: serde_json::Value =
+            serde_json::from_str(&answer.to_json()).map_err(|error| error.to_string())?;
+        let parts: Vec<&str> = path.split('.').collect();
+        ensure!(drop_field(&mut json, &parts), "no field {path} to take out");
+        let missed = missing(name, &json);
+        ensure!(
+            missed.contains(&format!("the answer status lacks its field {path}")),
+            "the fields missed without {path}: {missed:?}"
+        );
+    }
+    Ok(())
+}
+
+/// Takes the field `path` names out of `value` wherever it stands, an
+/// array's every item under `[]`; true where it took any out.
+fn drop_field(value: &mut serde_json::Value, path: &[&str]) -> bool {
+    let Some((first, rest)) = path.split_first() else {
+        return false;
+    };
+    let (name, each) = match first.strip_suffix("[]") {
+        Some(name) => (name, true),
+        None => (*first, false),
+    };
+    let Some(object) = value.as_object_mut() else {
+        return false;
+    };
+    if rest.is_empty() {
+        return object.remove(name).is_some();
+    }
+    let Some(inner) = object.get_mut(name) else {
+        return false;
+    };
+    if each {
+        let mut took = false;
+        for item in inner.as_array_mut().into_iter().flatten() {
+            took |= drop_field(item, rest);
+        }
+        took
+    } else {
+        drop_field(inner, rest)
+    }
 }

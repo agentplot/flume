@@ -298,6 +298,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_key_of_another_recipients,
         },
         Scenario {
+            name: "end delivery: a fix for the misspelt bomdrive lands and nothing collects its ends; a week on, status gives each expired for bomdrive, a name never confirmed under, the host lists them, the tidied document stays and its drop is refused naming bomdrive (S123; weir 104, 106)",
+            cites: &["43", "56", "62"],
+            run: a_misspelt_recipient,
+        },
+        Scenario {
+            name: "end delivery: the operator confirming as bomdrive the expired ends' delivery keys delivers them, bomdrive reads known, and the next settle removes the document (weir 104, 106, 107)",
+            cites: &["43", "56", "62"],
+            run: confirmed_once_expired,
+        },
+        Scenario {
             name: "end delivery: a fix launched, landed and tidied with nothing pending, then launched again, keys its two code ends' deliveries by two tokens, the second's recorded owed to its recipient (C.7; weir 101)",
             cites: &["43", "3"],
             run: a_place_launched_twice,
@@ -2680,6 +2690,109 @@ fn a_key_of_another_recipients(_: &()) -> Outcome {
         end_keyed(&world, &id, "stage/code/1/delivered")?.pending_for,
         vec!["boomdrive".to_string()],
         "code's pending"
+    );
+    Ok(())
+}
+
+/// A fix for the misspelt `bomdrive`, landed and tidied with nothing
+/// collected, the fake host's clock a week on and the host settled (43,
+/// S123).
+fn misspelt_and_expired(world: &World) -> Result<PlaceId, String> {
+    let id = landed_with(world, "one", &["bomdrive"])?;
+    world.host.advance(ENDS_EXPIRE);
+    world.engine().settle(None);
+    Ok(id)
+}
+
+/// The end-delivery spec's "A misspelt recipient" (43, 56, S123; weir
+/// 104, 106).
+fn a_misspelt_recipient(_: &()) -> Outcome {
+    let world = World::new();
+    let id = misspelt_and_expired(&world)?;
+    let status = world.status(&id)?;
+    ensure_eq!(status.ends.len(), 2, "the ends");
+    for end in &status.ends {
+        ensure_eq!(
+            end.owed,
+            vec![OwedTo {
+                recipient: "bomdrive".into(),
+                expired: true,
+                known: false,
+            }],
+            format!("whom {} is owed to", end.key)
+        );
+        ensure!(
+            end.expires_at.is_some_and(|at| at <= world.host.now()),
+            "{}'s expiry: {:?}",
+            end.key,
+            end.expires_at
+        );
+    }
+    let Answer::Status { host, .. } = world.engine().status(None) else {
+        return Err("the host's status was refused".into());
+    };
+    let mut listed: Vec<(String, String, bool)> = host
+        .expired
+        .iter()
+        .map(|end| (end.key.to_string(), end.recipient.clone(), end.known))
+        .collect();
+    listed.sort();
+    ensure_eq!(
+        listed,
+        vec![
+            (
+                "stage/code/1/delivered".to_string(),
+                "bomdrive".to_string(),
+                false
+            ),
+            (
+                "submission/1/landed".to_string(),
+                "bomdrive".to_string(),
+                false
+            ),
+        ],
+        "the host's expired ends"
+    );
+    ensure_eq!(tidied(&world).len(), 1, "the tidied documents");
+    let reason = refused(&world.engine().drop_place(&id, false))?;
+    ensure!(reason.contains("bomdrive"), "the drop's refusal: {reason}");
+    Ok(())
+}
+
+/// The end-delivery spec's "Confirmed once expired" (43; weir 104, 106,
+/// 107).
+fn confirmed_once_expired(_: &()) -> Outcome {
+    let world = World::new();
+    let id = misspelt_and_expired(&world)?;
+    let keys: Vec<String> = world
+        .status(&id)?
+        .ends
+        .iter()
+        .filter_map(|end| end.delivery.clone())
+        .collect();
+    ensure_eq!(keys.len(), 2, "the delivery keys");
+    let answer = world.engine().confirm("bomdrive", &keys);
+    ensure!(
+        matches!(&answer, Answer::Confirmed { confirmed, .. } if confirmed.len() == 2),
+        "the confirmation: {answer:?}"
+    );
+    ensure!(
+        world
+            .status(&id)?
+            .ends
+            .iter()
+            .all(|end| end.pending_for.is_empty() && end.confirmed.len() == 1),
+        "the ends once confirmed"
+    );
+    ensure!(
+        world.owing().known.contains("bomdrive"),
+        "bomdrive not known once it confirmed"
+    );
+    world.engine().settle(None);
+    ensure!(tidied(&world).is_empty(), "the document once delivered");
+    ensure!(
+        world.owing().known.contains("bomdrive"),
+        "bomdrive's name let go of with its deliveries"
     );
     Ok(())
 }

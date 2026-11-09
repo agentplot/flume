@@ -235,9 +235,24 @@ impl Engine {
         } else {
             self.hand_over(&keys, recipient, by, self.host.now(), confirms)
         };
+        let owing_before = owing.clone();
         let owing = if keys.is_empty() { owing } else { self.owing() };
+        let expired_before: Vec<bool> = pending
+            .iter()
+            .map(|(held, end, _)| {
+                end.delivery(&held.place, &owing_before)
+                    .is_some_and(|delivery| {
+                        delivery
+                            .owed
+                            .iter()
+                            .any(|owed| owed.recipient == recipient && owed.expired)
+                    })
+            })
+            .collect();
         let mut ends = vec![];
-        for ((held, end, _), handed) in pending.into_iter().zip(handed) {
+        for (((held, end, _), handed), expired) in
+            pending.into_iter().zip(handed).zip(expired_before)
+        {
             match handed {
                 Ok(true) => {}
                 Ok(false) => continue,
@@ -255,6 +270,8 @@ impl Engine {
                 kind: place.kind.name.clone(),
                 name: place.name.clone(),
                 end: EndStatus::of(end, place, &owing),
+                confirmed: confirms,
+                expired,
             });
         }
         Answer::Inbox {

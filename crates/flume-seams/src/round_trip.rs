@@ -3264,6 +3264,7 @@ fn whom_each_end_is_pending_for() {
                 ..EndDelivery::default()
             },
         )]),
+        ..Owing::default()
     };
     assert!(state.ends[2].pending(&place, &confirmed).is_empty());
     assert_eq!(state.ends[0].pending(&place, &confirmed), both);
