@@ -4922,3 +4922,102 @@ fn a_held_state_written_before_base_places_fixes() {
         "nothing of a base place's fixes written where none is held"
     );
 }
+
+/// One record of each of weir's four formats, as weir's calls give them:
+/// a delivery to `operator` and `planner`, and `operator`'s hand-over
+/// confirmed on receipt, with its name made known (weir 100, 103, 106).
+fn delivery_records() -> Vec<DeliveryRecord> {
+    let key = "fix--a-thing/0a1b2c3d/stage/code/1/delivered";
+    let weir_delivery::Recorded::Add(mut records) = weir_delivery::record(
+        &[],
+        key,
+        "fix--a-thing: code delivered",
+        &["operator", "planner"],
+        "2026-11-08T15:02:00Z",
+        604_800,
+    )
+    .expect("recorded") else {
+        panic!("a first record adds the delivery")
+    };
+    let weir_delivery::Handed::Add(handed) = weir_delivery::hand(
+        &records,
+        key,
+        "operator",
+        "wait",
+        "2026-11-08T15:03:00Z",
+        true,
+    )
+    .expect("handed") else {
+        panic!("a first hand-over adds its records")
+    };
+    records.extend(handed);
+    records.into_iter().map(DeliveryRecord).collect()
+}
+
+#[test]
+fn a_deliveries_document_round_trips() {
+    // The seam-contracts spec's round trips for the host's deliveries: its
+    // key, and a document holding one record of each of weir's four
+    // formats, read back as written, in order, each spelled as weir's
+    // `json::write` spells it (43, C.7; weir C.8; core.4).
+    round_trips(HostKey::Deliveries);
+    assert_eq!(
+        serde_json::to_value(HostKey::Deliveries).unwrap(),
+        serde_json::json!({"of": "deliveries"})
+    );
+    assert_eq!(HostKey::Deliveries.to_string(), "the host's deliveries");
+    let records = delivery_records();
+    let formats: Vec<&str> = records.iter().map(|record| record.0.format()).collect();
+    assert_eq!(
+        formats,
+        [
+            weir_delivery::DELIVERY,
+            weir_delivery::HANDOVER,
+            weir_delivery::CONFIRMATION,
+            weir_delivery::KNOWN
+        ]
+    );
+    let versioned = HostVersioned {
+        version: 7,
+        document: HostDocument::Deliveries(Deliveries {
+            records: records.clone(),
+        }),
+    };
+    round_trips(versioned.clone());
+    let json = serde_json::to_string(&versioned).expect("written");
+    for record in &records {
+        let spelled = weir_delivery::json::write(&record.0);
+        assert!(json.contains(&spelled), "{spelled} not in {json}");
+    }
+    let back: HostVersioned = serde_json::from_str(&json).expect("read back");
+    let HostDocument::Deliveries(read) = back.document else {
+        panic!("the host's deliveries read back as another document")
+    };
+    assert_eq!(read.records, records, "in order, as written");
+}
+
+#[test]
+fn a_delivery_record_weir_refuses_is_refused() {
+    // The seam-contracts spec's "A record weir refuses": a delivery naming
+    // no reader is refused naming weir's field, `readers`, in weir's words
+    // (weir 100).
+    let read = serde_json::from_value::<HostVersioned>(serde_json::json!({
+        "version": 1,
+        "document": {
+            "of": "deliveries",
+            "records": [{
+                "format": "weir-delivery/1",
+                "key": "fix--a-thing/0a1b2c3d/stage/code/1/delivered",
+                "readers": [],
+                "message": "fix--a-thing: code delivered",
+                "recorded_at": "2026-11-08T15:02:00Z",
+                "expires_at": "2026-11-15T15:02:00Z",
+            }],
+        },
+    }));
+    let refused = read.expect_err("a delivery with no reader is refused");
+    assert!(
+        refused.to_string().contains("`readers`: names no reader"),
+        "{refused}"
+    );
+}
