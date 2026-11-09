@@ -37,11 +37,15 @@ let
   # entry beside weir's.
   movedLock = lockOf [
     (package "weir-capture" (weirAt weir))
+    (package "weir-delivery" (weirAt weir))
     (package "weir-kinds" (weirAt moved))
+    (package "weir-pack" (weirAt weir))
   ];
   extraLock = lockOf [
     (package "weir-capture" (weirAt weir))
+    (package "weir-delivery" (weirAt weir))
     (package "weir-kinds" (weirAt weir))
+    (package "weir-pack" (weirAt weir))
     (package "another" (source "https://example.com/another" moved))
   ];
   movedFound = gitCrates file movedLock crates;

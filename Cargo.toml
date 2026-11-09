@@ -24,9 +24,12 @@ license = "MIT"
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# The kind format, read by weir's crate at a revision of weir's main, moved
-# by a chore when weir changes (core.4, core.22).
-weir-kinds = { git = "https://github.com/agentplot/weir", rev = "daacda39e59469029b2841f889c6cbd8cd7839d9" }
+# weir's crates, the kind format, the delivery form and the pack that holds
+# a store of deliveries to it, taken at one revision of weir's main, the
+# three moved together by a chore when weir changes (core.4, core.22).
+weir-kinds = { git = "https://github.com/agentplot/weir", rev = "52b95528a495100e34fca39109d563d8bf75673a" }
+weir-delivery = { git = "https://github.com/agentplot/weir", rev = "52b95528a495100e34fca39109d563d8bf75673a" }
+weir-pack = { git = "https://github.com/agentplot/weir", rev = "52b95528a495100e34fca39109d563d8bf75673a" }
 toml = "1"
 clap = { version = "4", features = ["derive"] }
 # The digest of a prompt an agent acks received, and of the plugin a
