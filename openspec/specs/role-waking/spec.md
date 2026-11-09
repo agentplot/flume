@@ -68,10 +68,12 @@ earlier flume named by the role alone SHALL be found by its role (3,
 
 ### Requirement: An end pending for an address with no run wakes the role
 
-A settle that finds an end pending for an address with no run live or
-waiting for room SHALL launch the address's run, inside that settle; an
-end for an address whose run is live SHALL be delivered into the pane of
-that run's agent as to any recipient (43, 132, core.13).
+A settle that finds an end pending for an address, handed to it by
+nothing, with no run live or waiting for room SHALL launch the address's
+run, inside that settle; an end for an address whose run is live SHALL
+be sent into the pane of that run's agent as a notice, as to any
+recipient; an end a run was handed and did not confirm SHALL wake no run
+again (43, 132, core.13, core.28).
 
 #### Scenario: Three ends, one run
 
@@ -82,6 +84,16 @@ that run's agent as to any recipient (43, 132, core.13).
 
 - **WHEN** two settles each find an end pending for `madswan/planner` with no run and launch at once
 - **THEN** one run is made, the other launch is refused naming it, and neither settle fails (3, 75)
+
+#### Scenario: A run that did not confirm
+
+- **WHEN** the planner run's `flume inbox` is handed a stop-short, the run is dropped before it confirms it, and the place is settled again
+- **THEN** no planner run is launched for it, and status gives the stop-short handed to `madswan/planner` by the inbox and pending for it (S122)
+
+#### Scenario: The next run is handed it
+
+- **WHEN** the unit's next end comes for `madswan/planner` with no run live, and the run it wakes runs `flume inbox`
+- **THEN** one run is launched, its inbox gives both ends, and once it runs `flume confirm` with both delivery keys both are delivered to the address (S122)
 
 ### Requirement: A carrier may wake an address
 
@@ -102,8 +114,8 @@ run does (43, 69, 72, 132).
 
 #### Scenario: The run starts
 
-- **WHEN** the planner run's agent runs `flume inbox` with no recipient
-- **THEN** it collects every end pending for `madswan/planner`, each then delivered to that address
+- **WHEN** the planner run's agent runs `flume inbox --confirm` with no recipient
+- **THEN** it collects every end pending for `madswan/planner`, each handed to that address by the inbox and confirmed by it
 
 ### Requirement: A role's run runs in its address's stream
 
