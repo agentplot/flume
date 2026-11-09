@@ -108,6 +108,9 @@ impl Engine {
         let Some(held) = self.document(place) else {
             return Err(format!("no place {place} stands on this host"));
         };
+        let Some(held) = self.recorded(vec![held]).pop() else {
+            return Ok(None);
+        };
         let Some(key) = newest(&held, of)? else {
             let over = !matches!(held.phase, Phase::Live | Phase::Making { .. });
             if over {
@@ -213,6 +216,7 @@ impl Engine {
                 .map(|read| read.state)
                 .collect(),
         };
+        let documents = self.recorded(documents);
         let mut ends = vec![];
         let mut waiting = vec![];
         for held in documents {

@@ -267,6 +267,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["43", "45"],
             run: a_lost_talk_with_no_agent,
         },
+        Scenario {
+            name: "end delivery: a fix launched, landed and tidied with nothing pending, then launched again, keys its two code ends' deliveries by two tokens, the second's recorded owed to its recipient (C.7; weir 101)",
+            cites: &["43", "3"],
+            run: a_place_launched_twice,
+        },
+        Scenario {
+            name: "end delivery: a live place's document written with no token is given one by its settle's write, and its ends' deliveries are keyed by it (C.7; weir 101)",
+            cites: &["43", "75"],
+            run: a_place_written_before_the_token,
+        },
     ]
 }
 
@@ -328,7 +338,7 @@ fn a_delivery_and_its_record(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![delivered("one")],
+        vec![world.confirming(&delivered("one"))],
         "the notices to ops"
     );
     let ends = ends(&world, &id)?;
@@ -381,12 +391,12 @@ fn an_agent_killed(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![notice(
+        vec![world.confirming(&notice(
             "one",
             "code lost",
             "stage/code/1/lost",
             "flume inbox"
-        )],
+        ))],
         "the notices to ops"
     );
     let ends = ends(&world, &id)?;
@@ -477,7 +487,7 @@ fn a_recipient_asking(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![delivered("one")],
+        vec![world.confirming(&delivered("one"))],
         "the notices once ops asks nothing"
     );
     Ok(())
@@ -520,7 +530,7 @@ fn a_recipient_away_and_back(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![delivered("one")],
+        vec![world.confirming(&delivered("one"))],
         "the notices once ops is back"
     );
     Ok(())
@@ -1127,7 +1137,7 @@ fn a_standing_agent_waiting(_: &()) -> Outcome {
     let id = delivered_for_planner(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![delivered("one")],
+        vec![world.confirming(&delivered("one"))],
         "the notices to the standing agent"
     );
     ensure_eq!(
@@ -1173,7 +1183,7 @@ fn a_standing_agent_asking(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![delivered("one")],
+        vec![world.confirming(&delivered("one"))],
         "the notices once it waits"
     );
     Ok(())
@@ -1240,7 +1250,7 @@ fn an_agent_revived_under_its_name(_: &()) -> Outcome {
     let one = delivered_for_planner(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&first),
-        vec![delivered("one")],
+        vec![world.confirming(&delivered("one"))],
         "the first agent's notices"
     );
     world.terminal.remove_agent(&first);
@@ -1252,7 +1262,7 @@ fn an_agent_revived_under_its_name(_: &()) -> Outcome {
     world.settle(&one);
     ensure_eq!(
         world.terminal.notices(&revived),
-        vec![delivered("two")],
+        vec![world.confirming(&delivered("two"))],
         "the revived agent's notices"
     );
     ensure_eq!(
@@ -1285,7 +1295,7 @@ fn the_session_from_the_addresss_stream(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         other.notices(&at),
-        vec![delivered("one")],
+        vec![world.confirming(&delivered("one"))],
         "the notices in w's terminal"
     );
     ensure!(
@@ -1320,7 +1330,7 @@ fn the_default_streams_own_session(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![delivered("one")],
+        vec![world.confirming(&delivered("one"))],
         "the notices in the terminal's own part"
     );
     ensure!(
@@ -1425,10 +1435,9 @@ fn a_lost_talk_with_a_bare_agent(_: &()) -> Outcome {
     );
     ensure_eq!(
         notices,
-        vec![
+        vec![world.confirming(
             "flume: research--one (weigh the options) talk lost, and flume left the agent the terminal brought back in its pane [stage/talk/1/lost]; read: flume inbox"
-                .to_string()
-        ],
+        )],
         "the notices to ops"
     );
     Ok(())
@@ -1443,10 +1452,9 @@ fn a_lost_talk_with_no_agent(_: &()) -> Outcome {
     ensure!(!end.left_in_pane, "talk's lost end says an agent was left");
     ensure_eq!(
         notices,
-        vec![
+        vec![world.confirming(
             "flume: research--one (weigh the options) talk lost [stage/talk/1/lost]; read: flume inbox"
-                .to_string()
-        ],
+        )],
         "the notices to ops"
     );
     Ok(())
@@ -1677,10 +1685,14 @@ fn a_stop_shorts_notice(_: &()) -> Outcome {
         "the brief given is longer than 60 characters"
     );
     let notices = world.terminal.notices("ops");
+    let token = world
+        .held(&id)
+        .and_then(|held| held.place.token)
+        .ok_or("the place holds no token")?;
     ensure_eq!(
         notices,
         vec![format!(
-            "flume: change--every-question ({CUT_BRIEF}) construct needs an answer, its agent kept open for the answer until {} [stage/construct/1/ended-short]; read: flume inbox",
+            "flume: change--every-question ({CUT_BRIEF}) construct needs an answer, its agent kept open for the answer until {} [stage/construct/1/ended-short]; read: flume inbox; confirm: flume confirm change--every-question/{token}/stage/construct/1/ended-short",
             asked + flume_core::KEEP_OPEN
         )],
         "the notices to ops"
@@ -1698,10 +1710,14 @@ fn a_deliverys_notice(_: &()) -> Outcome {
     let id = every_question(&world)?;
     write_change(&world, "every-question");
     world.settle(&id);
+    let token = world
+        .held(&id)
+        .and_then(|held| held.place.token)
+        .ok_or("the place holds no token")?;
     ensure_eq!(
         world.terminal.notices("ops"),
         vec![format!(
-            "flume: change--every-question ({CUT_BRIEF}) construct delivered [stage/construct/1/delivered]; read: flume status change--every-question"
+            "flume: change--every-question ({CUT_BRIEF}) construct delivered [stage/construct/1/delivered]; read: flume status change--every-question; confirm: flume confirm change--every-question/{token}/stage/construct/1/delivered"
         )],
         "the notices to ops"
     );
@@ -2141,6 +2157,133 @@ fn a_name_under_which_nothing_stands(_: &()) -> Outcome {
         end_keyed(&world, &one, "submission/1/landed")?.pending_for,
         vec!["ops".to_string(), "boomdrive".to_string()],
         "whom the landing waits on"
+    );
+    Ok(())
+}
+
+/// Whether `token` is eight hex characters, as a launch takes one (C.7).
+fn a_token(token: &str) -> bool {
+    token.len() == 8 && token.chars().all(|char| char.is_ascii_hexdigit())
+}
+
+/// The delivery the host's deliveries hold under `key`, as recorded.
+fn delivery_under(world: &World, key: &str) -> Option<weir_delivery::Delivery> {
+    world
+        .deliveries()
+        .into_iter()
+        .find_map(|record| match record {
+            weir_delivery::Record::Delivery(delivery) if delivery.key().as_str() == key => {
+                Some(delivery)
+            }
+            _ => None,
+        })
+}
+
+/// The readers weir's `owed` gives the delivery under `key` owed to, now
+/// by the fake host's clock (weir 105, 111).
+fn owed_to(world: &World, key: &str) -> Result<Vec<String>, String> {
+    let now = flume_core::deliveries::time(world.host.now());
+    let owed = weir_delivery::owed(&world.deliveries(), &now).map_err(|why| why.to_string())?;
+    Ok(owed
+        .readers
+        .iter()
+        .filter(|reader| {
+            reader
+                .deliveries
+                .iter()
+                .any(|owed| owed.delivery.key().as_str() == key)
+        })
+        .map(|reader| reader.reader.to_string())
+        .collect())
+}
+
+/// The deliveries spec's "A place launched twice": two launches of one
+/// place never share a delivery's key (43; weir 101).
+fn a_place_launched_twice(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    let id = fix_for_ops(&world, "twice")?;
+    let first = world
+        .held(&id)
+        .and_then(|held| held.place.token)
+        .ok_or("the first launch took no token")?;
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    world.engine().settle(None);
+    ensure!(
+        world.held(&id).is_none() && tidied(&world).is_empty(),
+        "the first place, landed with nothing pending, stands"
+    );
+    let first_key = format!("fix--twice/{first}/stage/code/1/delivered");
+    ensure!(
+        world
+            .terminal
+            .notices("ops")
+            .iter()
+            .any(|notice| notice.ends_with(&format!("; confirm: flume confirm {first_key}"))),
+        "no notice of the first code end names {first_key}: {:?}",
+        world.terminal.notices("ops")
+    );
+    world.terminal.remove_session("ops");
+    let id = fix_for_ops(&world, "twice")?;
+    let second = world
+        .held(&id)
+        .and_then(|held| held.place.token)
+        .ok_or("the second launch took no token")?;
+    ensure!(
+        a_token(&first) && a_token(&second) && first != second,
+        "the two launches' tokens: {first} and {second}"
+    );
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    let second_key = format!("fix--twice/{second}/stage/code/1/delivered");
+    let delivery = delivery_under(&world, &second_key)
+        .ok_or(format!("no delivery recorded under {second_key}"))?;
+    ensure_eq!(
+        delivery
+            .readers()
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
+        vec!["ops".to_string()],
+        "the second delivery's readers"
+    );
+    ensure_eq!(
+        owed_to(&world, &second_key)?,
+        vec!["ops".to_string()],
+        "whom the second delivery is owed to"
+    );
+    Ok(())
+}
+
+/// The deliveries spec's "A place written before the token": its settle's
+/// write gives it one, and its ends' deliveries are keyed by it (43, 75).
+fn a_place_written_before_the_token(_: &()) -> Outcome {
+    let world = World::new();
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = fix_for_ops(&world, "before")?;
+    world.engine.update(&id, |held| {
+        held.place.token = None;
+        flume_core::Step::Write(())
+    });
+    ensure!(
+        world.held(&id).ok_or("no place")?.place.token.is_none(),
+        "the document holds a token"
+    );
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    let token = world
+        .held(&id)
+        .ok_or("no place")?
+        .place
+        .token
+        .ok_or("the settle gave the document no token")?;
+    ensure!(a_token(&token), "the token given: {token}");
+    let key = format!("fix--before/{token}/stage/code/1/delivered");
+    ensure!(
+        delivery_under(&world, &key).is_some(),
+        "no delivery under {key}: {:?}",
+        world.deliveries()
     );
     Ok(())
 }

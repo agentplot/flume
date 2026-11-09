@@ -33,10 +33,13 @@ pub const NOTICE_BRIEF: usize = 60;
 /// [`NOTICE_BRIEF`] characters, what ended, until when a stop-short's
 /// agent is kept open for its answer, the end's key, and the command that
 /// reads it whole: `flume inbox` where the place, as `held` gives it when
-/// the notice is sent, waits on a move of its caller's, which gives the
-/// question and how to answer it, and `flume status <place>` otherwise.
-/// It names no fact to act on blindly, and no question's words, which
-/// are many lines (43, 198; core.11, core.25; design 9).
+/// the end's delivery is recorded, waits on a move of its caller's, which
+/// gives the question and how to answer it, and `flume status <place>`
+/// otherwise; and `flume confirm` with the delivery's key. It is the
+/// delivery's message, fixed when the delivery is recorded and sent as
+/// recorded. It names no fact to act on blindly, and no question's words,
+/// which are many lines (43, 198; weir 100; core.11, core.25; design 4,
+/// 9).
 pub fn notice(held: &HeldState, of: &EndOf) -> String {
     let place = &held.place;
     let short = place.short();
@@ -49,8 +52,12 @@ pub fn notice(held: &HeldState, of: &EndOf) -> String {
     } else {
         format!("flume status {short}")
     };
+    let confirm = place
+        .delivery_key(of)
+        .map(|key| format!("; confirm: flume confirm {key}"))
+        .unwrap_or_default();
     format!(
-        "flume: {short}{brief} {} [{}]; read: {read}",
+        "flume: {short}{brief} {} [{}]; read: {read}{confirm}",
         end_words(of),
         of.end_key()
     )
@@ -142,10 +149,11 @@ impl Engine {
     /// no one agent asking no question is found (43, 75, 132, 190, C.7;
     /// core.11, core.28).
     pub(crate) fn deliver_ends(&self, id: &PlaceId) {
-        let Some(read) = self.store.read(id) else {
+        let Some(held) = self.with_token(id) else {
             return;
         };
-        let held = read.state;
+        self.record_deliveries(std::slice::from_ref(&held));
+        let messages = self.messages();
         let mut standing = None;
         let mut states: BTreeMap<String, Option<Reached>> = BTreeMap::new();
         for end in held.ends.iter().filter(|end| end.noticed()) {
@@ -185,7 +193,12 @@ impl Engine {
                 if !claimed {
                     continue;
                 }
-                let why = match terminal.send_to(&at, &notice(&held, &end.of)) {
+                let message = held
+                    .place
+                    .delivery_key(&end.of)
+                    .and_then(|key| messages.get(&key).cloned())
+                    .unwrap_or_else(|| notice(&held, &end.of));
+                let why = match terminal.send_to(&at, &message) {
                     ToSession::Sent => continue,
                     ToSession::NotFound => format!("no session is named {at}"),
                     ToSession::Refused { reason } => reason,

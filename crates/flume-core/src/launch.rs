@@ -803,7 +803,7 @@ impl Engine {
                 intent,
                 fix_of: fix_of.cloned(),
                 fixes_as,
-                token: None,
+                token: Some(crate::deliveries::token(&self.host.secret())),
             },
             phase: Phase::Making {
                 by: self.host.command(),

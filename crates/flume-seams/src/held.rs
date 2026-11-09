@@ -1076,6 +1076,14 @@ impl PlaceRecord {
         format!("{}--{}", self.kind.name, self.name)
     }
 
+    /// The key of the delivery of its end `of`, `<kind>--<name>/<token>/<end
+    /// key>`, so two launches of one place never share one; none while it
+    /// holds no token, as a document written before (43, C.7; weir 101).
+    pub fn delivery_key(&self, of: &EndOf) -> Option<String> {
+        let token = self.token.as_ref()?;
+        Some(format!("{}/{token}/{}", self.short(), of.end_key()))
+    }
+
     /// The first line of its brief that holds anything, trimmed; none
     /// where it has no brief or a blank one (43; design 9).
     pub fn brief_line(&self) -> Option<&str> {

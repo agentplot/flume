@@ -657,9 +657,9 @@ fn a_lost_stage_waits_on_its_caller(_: &()) -> Outcome {
     ensure!(world.status(&id)?.stalled, "not stalled at five minutes");
     ensure_eq!(
         stall_notices(&world, "ops"),
-        vec![format!(
+        vec![world.confirming(&format!(
             "flume: build--one (do the work) stalled: a retry of work [stall/{lost_at}]; read: flume inbox"
-        )],
+        ))],
         "the stall delivered"
     );
     Ok(())
@@ -689,9 +689,9 @@ fn stalled_after_five_minutes(_: &()) -> Outcome {
         (Some("construct"), Waits::Answer, Some(asked)),
         "the move stalled on"
     );
-    let notice = format!(
+    let notice = world.confirming(&format!(
         "flume: change--plan (plan it) stalled: a retry of construct [stall/{asked}]; read: flume inbox"
-    );
+    ));
     for _ in 0..3 {
         world.host.advance(30);
         world.settle(&id);
@@ -1025,10 +1025,12 @@ fn the_answerer_is_the_recipient(_: &()) -> Outcome {
     ensure_eq!(
         world.terminal.notices("east/operator"),
         vec![
-            "flume: change--plan (one of two designs) construct needs an answer, its agent kept open for the answer until 1003600 [stage/construct/1/ended-short]; read: flume inbox"
-                .to_string(),
-            "flume: change--plan (one of two designs) stalled: a retry of construct [stall/1000000]; read: flume inbox"
-                .to_string()
+            world.confirming(
+                "flume: change--plan (one of two designs) construct needs an answer, its agent kept open for the answer until 1003600 [stage/construct/1/ended-short]; read: flume inbox"
+            ),
+            world.confirming(
+                "flume: change--plan (one of two designs) stalled: a retry of construct [stall/1000000]; read: flume inbox"
+            ),
         ],
         "the notices into the answerer's run's pane"
     );

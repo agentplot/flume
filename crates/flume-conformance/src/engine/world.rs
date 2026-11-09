@@ -140,6 +140,59 @@ impl World {
     pub fn held(&self, place: &PlaceId) -> Option<HeldState> {
         self.store.held(place)
     }
+
+    /// The host's deliveries as the store holds them, in the order added
+    /// (C.7; weir 112).
+    pub fn deliveries(&self) -> Vec<weir_delivery::Record> {
+        match self.store.host_document(&HostKey::Deliveries) {
+            Some(HostDocument::Deliveries(deliveries)) => deliveries
+                .records
+                .into_iter()
+                .map(|record| record.0)
+                .collect(),
+            _ => vec![],
+        }
+    }
+
+    /// The key of the newest delivery recorded of the end `end_key` of the
+    /// place `short`, `<kind>--<name>`, as its launch's token keys it (43;
+    /// weir 101).
+    pub fn delivery_key(&self, short: &str, end_key: &str) -> Option<String> {
+        let prefix = format!("{short}/");
+        let suffix = format!("/{end_key}");
+        self.deliveries()
+            .into_iter()
+            .rev()
+            .find_map(|record| match record {
+                weir_delivery::Record::Delivery(delivery)
+                    if delivery.key().as_str().starts_with(&prefix)
+                        && delivery.key().as_str().ends_with(&suffix)
+                        && delivery.key().as_str().len() == prefix.len() + 8 + suffix.len() =>
+                {
+                    Some(delivery.key().to_string())
+                }
+                _ => None,
+            })
+    }
+
+    /// A notice as it was sent, `flume: <kind>--<name> … [<end key>];
+    /// read: …`, with the way to confirm its end's delivery after it, by
+    /// the key recorded for it (43; core.11).
+    pub fn confirming(&self, notice: &str) -> String {
+        let short = notice
+            .strip_prefix("flume: ")
+            .and_then(|rest| rest.split(' ').next())
+            .unwrap_or_default();
+        let end_key = notice
+            .rsplit_once('[')
+            .and_then(|(_, rest)| rest.split_once(']'))
+            .map(|(key, _)| key)
+            .unwrap_or_default();
+        match self.delivery_key(short, end_key) {
+            Some(key) => format!("{notice}; confirm: flume confirm {key}"),
+            None => format!("{notice}; confirm: no delivery recorded of {short} [{end_key}]"),
+        }
+    }
 }
 
 /// A stage of a repository's or a launch's kind.

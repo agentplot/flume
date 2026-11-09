@@ -1623,9 +1623,9 @@ fn the_notice_of_a_question(_: &()) -> Outcome {
     );
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![format!(
+        vec![world.confirming(&format!(
             "flume: fix--one (x) code needs an answer, its agent kept open for the answer until {until} [stage/code/1/ended-short]; read: flume inbox"
-        )],
+        ))],
         "the notices to ops"
     );
     Ok(())

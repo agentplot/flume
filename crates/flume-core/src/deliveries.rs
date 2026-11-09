@@ -9,11 +9,14 @@
 //! `2026-11-08T15:02:00Z`, and read back to seconds by its instant, so
 //! status gives every time in seconds as it gives every other (56).
 
+use crate::ends::notice;
+use crate::{Engine, Step};
 use chrono::{DateTime, SecondsFormat, Utc};
 use flume_seams::{
-    Deliveries, DeliveryRecord, HostDocument, HostKey, HostVersioned, Seconds, Store, Written,
+    Deliveries, DeliveryRecord, HeldState, HostDocument, HostKey, HostVersioned, PlaceId, Seconds,
+    Secret, Store, Written,
 };
-use weir_delivery::Record;
+use weir_delivery::{Record, Recorded};
 
 /// How many times a write of the host's deliveries reads again on a
 /// moved version before it says so (75).
@@ -139,6 +142,118 @@ pub fn seconds(time: &str) -> Option<Seconds> {
     DateTime::parse_from_rfc3339(time)
         .ok()
         .and_then(|at| Seconds::try_from(at.timestamp()).ok())
+}
+
+/// A place's token, eight hex characters of `secret`, by which its ends'
+/// deliveries are keyed, so two launches of one place never share a key
+/// (43, C.7; weir 101).
+pub(crate) fn token(secret: &Secret) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(secret.0.as_bytes())
+        .iter()
+        .take(4)
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+impl Engine {
+    /// The place's document holding a token, given one by this write
+    /// where it held none, as a document written before; none where the
+    /// place has no document (43, C.7; weir 101).
+    pub(crate) fn with_token(&self, id: &PlaceId) -> Option<HeldState> {
+        let read = self.store.read(id)?;
+        if read.state.place.token.is_some() {
+            return Some(read.state);
+        }
+        let token = token(&self.host.secret());
+        self.update(id, |held| {
+            if held.place.token.is_some() {
+                return Step::Keep(());
+            }
+            held.place.token = Some(token.clone());
+            Step::Write(())
+        });
+        self.store.read(id).map(|read| read.state)
+    }
+
+    /// Records, through weir's `record`, the delivery of each end of
+    /// `documents` that has a recipient and no record: under its key, its
+    /// readers the end's recipients, its message the end's notice as the
+    /// document stands, at the time the end was read, expiring the host's
+    /// span after it. An end with no recipient records none, and an end
+    /// whose key is held records nothing again, so recording again is the
+    /// same act (43; weir 100, 101, 104; core.17; design 3, 4).
+    pub(crate) fn record_deliveries(&self, documents: &[HeldState]) {
+        let wanted: Vec<(String, String, Vec<String>, String)> = documents
+            .iter()
+            .flat_map(|held| {
+                held.ends.iter().filter_map(move |end| {
+                    let readers = end.recipients(&held.place.recipients);
+                    if readers.is_empty() {
+                        return None;
+                    }
+                    let key = held.place.delivery_key(&end.of)?;
+                    Some((key, notice(held, &end.of), readers, time(end.read_at)))
+                })
+            })
+            .collect();
+        if wanted.is_empty() {
+            return;
+        }
+        let span = self.host.ends_expire();
+        let mut refused: Vec<String> = vec![];
+        let written = update(&*self.store, |records| {
+            refused.clear();
+            let mut added = vec![];
+            for (key, message, readers, at) in &wanted {
+                let readers: Vec<&str> = readers.iter().map(String::as_str).collect();
+                match weir_delivery::record(records, key, message, &readers, at, span) {
+                    Ok(Recorded::Add(records)) => added.extend(records),
+                    Ok(Recorded::Held(_)) => {}
+                    Err(refusal) => refused.push(format!("{key}: {refusal}")),
+                }
+            }
+            added
+        });
+        for why in refused {
+            self.host
+                .log(&format!("an end's delivery was not recorded: {why}"));
+        }
+        if let Err(why) = written {
+            self.host.log(&why);
+        }
+    }
+
+    /// The documents, each holding a token, and every end of them with a
+    /// recipient recorded as a delivery, as a settle, a wait or an inbox
+    /// reads them before it reads what is owed (43; design 3).
+    pub(crate) fn recorded(&self, documents: Vec<HeldState>) -> Vec<HeldState> {
+        let documents: Vec<HeldState> = documents
+            .into_iter()
+            .filter_map(|held| match held.place.token {
+                Some(_) => Some(held),
+                None => self.with_token(&held.place.id),
+            })
+            .collect();
+        self.record_deliveries(&documents);
+        documents
+    }
+
+    /// The message each delivery of the host's deliveries was recorded
+    /// with, by its key (100; core.11).
+    pub(crate) fn messages(&self) -> std::collections::BTreeMap<String, String> {
+        read(&*self.store)
+            .map(|(_, records)| records)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|record| match record {
+                Record::Delivery(delivery) => {
+                    Some((delivery.key().to_string(), delivery.message().to_string()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]

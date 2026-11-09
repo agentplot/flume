@@ -1780,7 +1780,12 @@ fn a_stage_under_no_account(_: &()) -> Outcome {
         "the agent under no account was ended"
     );
     ensure!(
-        world.store.log.of("write_host").is_empty(),
+        !world
+            .store
+            .log
+            .of("write_host")
+            .iter()
+            .any(|write| write.contains("account")),
         "an account recorded spent: {:?}",
         world.store.log.of("write_host")
     );
