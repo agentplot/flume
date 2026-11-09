@@ -281,6 +281,10 @@ impl Host for RealHost {
         self.config.agents
     }
 
+    fn ends_expire(&self) -> Seconds {
+        self.config.ends_expire
+    }
+
     fn recipient(&self) -> Option<String> {
         self.recipient.clone()
     }

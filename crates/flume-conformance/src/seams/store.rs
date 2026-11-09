@@ -2,9 +2,11 @@
 
 use crate::scenario::sample_held;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
+use flume_core::deliveries::{self, HostDeliveries};
 use flume_seams::*;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use weir_delivery::Store as _;
 
 pub trait StoreHarness {
     type Seam: Store + ?Sized;
@@ -79,6 +81,21 @@ pub fn scenarios<H: StoreHarness>() -> Vec<Scenario<H>> {
             name: "store: two settles with a bound writing the host's watch from the same version, one write takes, the other is refused, and the one that read again writes over it",
             cites: &["73", "103", "153", "208"],
             run: two_watches_at_once::<H>,
+        },
+        Scenario {
+            name: "store: a delivery, a hand-over, a confirmation and a known name written to the host's deliveries read back as written, in order, each spelled as weir's JSON spells it (C.8; weir 100, 112)",
+            cites: &["43", "102", "103", "104"],
+            run: deliveries_round_trip::<H>,
+        },
+        Scenario {
+            name: "store: two engines confirming one end at the version both read, one write lands and the other reads again, so the host's deliveries hold one confirmation and one known name (weir 101, 102)",
+            cites: &["43", "75", "103"],
+            run: two_confirmations_at_once::<H>,
+        },
+        Scenario {
+            name: "store: flume's store of deliveries passes every delivery case of weir's pack, its deliveries document removed before each case (weir 87, 112, 113)",
+            cites: &["43", "102", "103", "104"],
+            run: the_pack_over_the_store::<H>,
         },
     ]
 }
@@ -329,4 +346,162 @@ fn two_watches_at_once<H: StoreHarness>(harness: &H) -> Outcome {
         "the watch once the second read again and wrote"
     );
     Ok(())
+}
+
+/// The host's deliveries document removed, so a scenario starts from
+/// none (C.7).
+fn no_deliveries(store: &dyn Store) -> Outcome {
+    if let Some(read) = store.read_host(&HostKey::Deliveries) {
+        written(store.write_host(&HostKey::Deliveries, Some(read.version), None))?;
+    }
+    Ok(())
+}
+
+const DELIVERED: &str = "fix--deliveries/0a1b2c3d/stage/code/1/delivered";
+
+/// The delivery of a fix's code end to `ops` and `boomdrive`, as weir's
+/// `record` gives it (weir 100, 108).
+fn a_delivery() -> Result<Vec<weir_delivery::Record>, String> {
+    match weir_delivery::record(
+        &[],
+        DELIVERED,
+        "fix--deliveries: code delivered",
+        &["ops", "boomdrive"],
+        "2026-11-08T15:02:00Z",
+        604_800,
+    )
+    .map_err(|refused| refused.to_string())?
+    {
+        weir_delivery::Recorded::Add(records) => Ok(records),
+        weir_delivery::Recorded::Held(_) => Err("a first record held its key".into()),
+    }
+}
+
+fn deliveries_round_trip<H: StoreHarness>(harness: &H) -> Outcome {
+    let store = harness.another();
+    no_deliveries(&*store)?;
+    let mut records = a_delivery()?;
+    match weir_delivery::hand(
+        &records,
+        DELIVERED,
+        "ops",
+        "inbox",
+        "2026-11-08T15:03:00Z",
+        true,
+    )
+    .map_err(|refused| refused.to_string())?
+    {
+        weir_delivery::Handed::Add(added) => records.extend(added),
+        weir_delivery::Handed::Confirmed(_) => {
+            return Err("handed to a reader that confirmed".into())
+        }
+    }
+    let formats: Vec<&str> = records.iter().map(weir_delivery::Record::format).collect();
+    ensure_eq!(
+        formats,
+        vec![
+            weir_delivery::DELIVERY,
+            weir_delivery::HANDOVER,
+            weir_delivery::CONFIRMATION,
+            weir_delivery::KNOWN,
+        ],
+        "a record of each of weir's four formats"
+    );
+    HostDeliveries::new(&*store).add(&records)?;
+    ensure_eq!(
+        HostDeliveries::new(&*harness.another()).read()?,
+        records,
+        "the records another process reads back, in order"
+    );
+    let read = store
+        .read_host(&HostKey::Deliveries)
+        .ok_or("no deliveries document read")?;
+    let json = serde_json::to_string(&read).map_err(|error| error.to_string())?;
+    for record in &records {
+        let spelled = weir_delivery::json::write(record);
+        ensure!(
+            json.contains(&spelled),
+            "the document's JSON lacks {spelled}: {json}"
+        );
+    }
+    Ok(())
+}
+
+fn two_confirmations_at_once<H: StoreHarness>(harness: &H) -> Outcome {
+    let (one, other) = (harness.another(), harness.another());
+    no_deliveries(&*one)?;
+    HostDeliveries::new(&*one).add(&a_delivery()?)?;
+    let confirm = |records: &[weir_delivery::Record], at: &str| match weir_delivery::confirm(
+        records, DELIVERED, "ops", at,
+    ) {
+        Ok(weir_delivery::Confirmed::Add(added)) => added,
+        Ok(weir_delivery::Confirmed::Already(_)) | Err(_) => Vec::new(),
+    };
+    let mut asked = 0;
+    let mut inner: Option<Result<Vec<weir_delivery::Record>, String>> = None;
+    let held = deliveries::update(&*one, |records| {
+        asked += 1;
+        if inner.is_none() {
+            // The other engine confirms at the version this one read, and
+            // its write lands first.
+            inner = Some(deliveries::update(&*other, |records| {
+                confirm(records, "2026-11-08T15:04:00Z")
+            }));
+        }
+        confirm(records, "2026-11-08T15:05:00Z")
+    })?;
+    inner.ok_or("the other engine never wrote")??;
+    ensure_eq!(asked, 2, "the times the first engine read the records");
+    let confirmations: Vec<_> = held
+        .iter()
+        .filter(|record| matches!(record, weir_delivery::Record::Confirmation(_)))
+        .collect();
+    let known = held
+        .iter()
+        .filter(|record| matches!(record, weir_delivery::Record::Known(_)))
+        .count();
+    ensure_eq!(
+        confirmations.len(),
+        1,
+        format!("the confirmations held: {held:?}")
+    );
+    ensure_eq!(known, 1, format!("the known names held: {held:?}"));
+    ensure!(
+        matches!(confirmations[0], weir_delivery::Record::Confirmation(confirmation)
+            if confirmation.at.as_str() == "2026-11-08T15:04:00Z"),
+        "the confirmation held is the other engine's: {held:?}"
+    );
+    ensure_eq!(
+        HostDeliveries::new(&*harness.another()).read()?,
+        held,
+        "the records as the store holds them"
+    );
+    Ok(())
+}
+
+fn the_pack_over_the_store<H: StoreHarness>(harness: &H) -> Outcome {
+    let store = harness.another();
+    let mut removed: Outcome = Ok(());
+    let verdicts = weir_pack::conform_deliveries(&weir_pack::Pack::embedded(), || {
+        if let Err(why) = no_deliveries(&*store) {
+            removed = Err(why);
+        }
+        HostDeliveries::new(&*store)
+    });
+    removed?;
+    ensure!(!verdicts.is_empty(), "weir's pack ran no delivery case");
+    let failed: Vec<String> = verdicts
+        .into_iter()
+        .filter_map(|(case, verdict)| {
+            verdict
+                .err()
+                .map(|why| format!("{case}: {}", why.join("; ")))
+        })
+        .collect();
+    ensure!(
+        failed.is_empty(),
+        "cases of weir's pack failed: {}",
+        failed.join(" | ")
+    );
+    no_deliveries(&*store)
 }

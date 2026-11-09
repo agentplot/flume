@@ -22,7 +22,7 @@
 //! session as the terminal names it, as a launch's (7, 132).
 
 use crate::held::stop_short_waited;
-use crate::{end_words, Answer, Collected, EndStatus, Engine, Step, WaitingPlace};
+use crate::{end_words, Answer, Collected, EndStatus, Engine, WaitingPlace};
 use flume_seams::*;
 
 /// How often a wait reads the host's state again (design 9).
@@ -62,18 +62,19 @@ impl Engine {
         of: &WaitFor,
         recipient: &str,
         timeout: Option<Seconds>,
+        confirms: bool,
     ) -> Answer {
         let watched = !self.attended();
         let deadline = timeout.map(|timeout| self.host.now() + timeout);
         loop {
-            match self.waited(place, of, recipient) {
+            match self.waited(place, of, recipient, confirms) {
                 Err(reason) => return Answer::refused(reason),
                 Ok(Some(answer)) => return answer,
                 Ok(None) => {}
             }
             if !watched {
                 self.settle_all();
-                match self.waited(place, of, recipient) {
+                match self.waited(place, of, recipient, confirms) {
                     Err(reason) => return Answer::refused(reason),
                     Ok(Some(answer)) => return answer,
                     Ok(None) => {}
@@ -104,9 +105,13 @@ impl Engine {
         place: &PlaceId,
         of: &WaitFor,
         recipient: &str,
+        confirms: bool,
     ) -> Result<Option<Answer>, String> {
         let Some(held) = self.document(place) else {
             return Err(format!("no place {place} stands on this host"));
+        };
+        let Some(held) = self.recorded(vec![held]).pop() else {
+            return Ok(None);
         };
         let Some(key) = newest(&held, of)? else {
             let over = !matches!(held.phase, Phase::Live | Phase::Making { .. });
@@ -118,45 +123,29 @@ impl Engine {
             }
             return Ok(None);
         };
-        let id = held.place.id.clone();
-        let pending = held
-            .ends
-            .iter()
-            .any(|end| end.of.key() == key && end.pending_to(&held.place.recipients, recipient));
-        let mut delivered = false;
-        let mut answered = held;
-        if pending {
-            let now = self.host.now();
-            let Some(written) = self.update(&id, |held| {
-                let recipients = held.place.recipients.clone();
-                let Some(end) = held.ends.iter_mut().find(|end| end.of.key() == key) else {
-                    return Step::Keep(None);
-                };
-                if !end.pending_to(&recipients, recipient) {
-                    return Step::Keep(Some((held.clone(), false)));
-                }
-                end.deliveries.push(Delivery {
-                    recipient: recipient.into(),
-                    at: now,
-                    by: DeliveredBy::Wait,
-                });
-                Step::Write(Some((held.clone(), true)))
-            }) else {
-                return Ok(None);
-            };
-            let Some((held, by_this)) = written else {
-                return Ok(None);
-            };
-            answered = held;
-            delivered = by_this;
-        }
-        let Some(end) = answered.ends.iter().find(|end| end.of.key() == key) else {
+        let mut owing = self.owing();
+        let Some(end) = held.ends.iter().find(|end| end.of.key() == key) else {
             return Ok(None);
         };
+        let mut delivered = false;
+        if end.pending_to(&held.place, &owing, recipient) {
+            if let Some(delivery) = held.place.delivery_key(&end.of) {
+                let now = self.host.now();
+                match self
+                    .hand_over(&[delivery], recipient, DeliveredBy::Wait, now, confirms)
+                    .pop()
+                {
+                    Some(Ok(handed)) => delivered = handed,
+                    Some(Err(why)) => return Err(why),
+                    None => {}
+                }
+                owing = self.owing();
+            }
+        }
         Ok(Some(Answer::Waited {
             place: place.clone(),
             recipient: recipient.into(),
-            end: Some(EndStatus::of(end, &answered.place.recipients)),
+            end: Some(EndStatus::of(end, &held.place, &owing)),
             delivered,
         }))
     }
@@ -184,7 +173,19 @@ impl Engine {
     /// collects what the name read and nothing a settle tidied since, a
     /// document it removed giving nothing (43, 62, 119, 130, 193, 208;
     /// design 9).
-    pub fn inbox(&self, recipient: &str, place: Option<&PlaceId>) -> Answer {
+    pub fn inbox(&self, recipient: &str, place: Option<&PlaceId>, confirms: bool) -> Answer {
+        self.inbox_by(recipient, place, DeliveredBy::Inbox, confirms)
+    }
+
+    /// The inbox, each end it gives handed over `by` its way, and
+    /// confirmed on receipt where `confirms` (43; weir 103).
+    fn inbox_by(
+        &self,
+        recipient: &str,
+        place: Option<&PlaceId>,
+        by: DeliveredBy,
+        confirms: bool,
+    ) -> Answer {
         let named: Option<Vec<PlaceId>> = match place {
             Some(id) => {
                 let named: Vec<PlaceId> = self
@@ -213,47 +214,65 @@ impl Engine {
                 .map(|read| read.state)
                 .collect(),
         };
-        let mut ends = vec![];
+        let documents = self.recorded(documents);
+        let owing = self.owing();
         let mut waiting = vec![];
-        for held in documents {
-            waiting.extend(waits_on(&held, recipient));
-            if !held
-                .ends
-                .iter()
-                .any(|end| end.pending_to(&held.place.recipients, recipient))
-            {
-                continue;
+        let mut pending: Vec<(&HeldState, &EndHeld, String)> = vec![];
+        for held in &documents {
+            waiting.extend(waits_on(held, recipient));
+            for end in &held.ends {
+                if !end.pending_to(&held.place, &owing, recipient) {
+                    continue;
+                }
+                if let Some(delivery) = held.place.delivery_key(&end.of) {
+                    pending.push((held, end, delivery));
+                }
             }
-            let now = self.host.now();
-            let collected = self
-                .update(&held.place.id, |held| {
-                    let mut collected = vec![];
-                    let recipients = held.place.recipients.clone();
-                    for end in &mut held.ends {
-                        if !end.pending_to(&recipients, recipient) {
-                            continue;
-                        }
-                        end.deliveries.push(Delivery {
-                            recipient: recipient.into(),
-                            at: now,
-                            by: DeliveredBy::Inbox,
-                        });
-                        collected.push(EndStatus::of(end, &recipients));
-                    }
-                    if collected.is_empty() {
-                        Step::Keep(collected)
-                    } else {
-                        Step::Write(collected)
-                    }
-                })
-                .unwrap_or_default();
+        }
+        let keys: Vec<String> = pending.iter().map(|(_, _, key)| key.clone()).collect();
+        let handed = if keys.is_empty() {
+            vec![]
+        } else {
+            self.hand_over(&keys, recipient, by, self.host.now(), confirms)
+        };
+        let owing_before = owing.clone();
+        let owing = if keys.is_empty() { owing } else { self.owing() };
+        let expired_before: Vec<bool> = pending
+            .iter()
+            .map(|(held, end, _)| {
+                end.delivery(&held.place, &owing_before)
+                    .is_some_and(|delivery| {
+                        delivery
+                            .owed
+                            .iter()
+                            .any(|owed| owed.recipient == recipient && owed.expired)
+                    })
+            })
+            .collect();
+        let mut ends = vec![];
+        for (((held, end, _), handed), expired) in
+            pending.into_iter().zip(handed).zip(expired_before)
+        {
+            match handed {
+                Ok(true) => {}
+                Ok(false) => continue,
+                Err(why) => {
+                    self.host.log(&format!(
+                        "an end of {} was not handed to {recipient} by the inbox: {why}",
+                        held.place.id
+                    ));
+                    continue;
+                }
+            }
             let place = &held.place;
-            ends.extend(collected.into_iter().map(|end| Collected {
+            ends.push(Collected {
                 place: PlaceId::new(place.location.clone()),
                 kind: place.kind.name.clone(),
                 name: place.name.clone(),
-                end,
-            }));
+                end: EndStatus::of(end, place, &owing),
+                confirmed: confirms,
+                expired,
+            });
         }
         Answer::Inbox {
             recipient: recipient.into(),
@@ -271,7 +290,7 @@ impl Engine {
     /// C.4; design 9).
     pub fn session_inbox(&self) -> Option<Answer> {
         let session = self.caller_session()?;
-        Some(self.inbox(&session, None))
+        Some(self.inbox_by(&session, None, DeliveredBy::SessionStart, true))
     }
 }
 

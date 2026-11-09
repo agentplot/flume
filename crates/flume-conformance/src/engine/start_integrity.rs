@@ -475,8 +475,12 @@ fn twice_in_a_row(_: &()) -> Outcome {
     );
     let held = world.held(&id).ok_or("no held state")?;
     ensure_eq!(held.stages[0].starts, 2, "code's starts, no third begun");
-    let ends: Vec<&EndHeld> = held
+    let shown: Vec<EndHeld> = held
         .ends
+        .iter()
+        .map(|end| world.end_status(&held, end).end)
+        .collect();
+    let ends: Vec<&EndHeld> = shown
         .iter()
         .filter(|end| matches!(&end.of, EndOf::Stage { .. }))
         .collect();
@@ -509,12 +513,12 @@ fn twice_in_a_row(_: &()) -> Outcome {
         "the end's deliveries"
     );
     world.settle(&id);
-    let again = world.held(&id).ok_or("no held state")?;
     ensure_eq!(
-        again
+        world
+            .status(&id)?
             .ends
             .iter()
-            .map(|end| end.deliveries.len())
+            .map(|end| end.end.deliveries.len())
             .sum::<usize>(),
         1,
         "the end delivered once"

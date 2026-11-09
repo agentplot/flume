@@ -2511,36 +2511,37 @@ fn a_wait_exits_by_its_outcome() {
     );
     assert_eq!(launched.code, 0, "{}", launched.text);
     let place = host.place_of(&repository, "change--one");
-    let wait = |stage: &str| {
-        host.stand_in(
-            &repository.dir,
-            &[
-                "wait",
-                "change--one",
-                "--stage",
-                stage,
-                "--recipient",
-                "ops",
-                "--timeout",
-                "1s",
-                "--json",
-            ],
-            &[],
-        )
+    let wait = |stage: &str, confirm: bool| {
+        let mut args = vec![
+            "wait",
+            "change--one",
+            "--stage",
+            stage,
+            "--recipient",
+            "ops",
+            "--timeout",
+            "1s",
+            "--json",
+        ];
+        if confirm {
+            args.push("--confirm");
+        }
+        host.stand_in(&repository.dir, &args, &[])
     };
-    let waiting = answered(&wait("construct"), 3);
+    let waiting = answered(&wait("construct", false), 3);
     assert!(waiting["waited"]["end"].is_null(), "{waiting}");
     assert_eq!(waiting["waited"]["recipient"], "ops");
 
     deliver(&host, &repository.dir, &place, "construct");
-    let delivered = answered(&wait("construct"), 0);
+    // Confirmed on receipt, so the next wait reads it (43; weir 103).
+    let delivered = answered(&wait("construct", true), 0);
     assert_eq!(delivered["waited"]["delivered"], true, "{delivered}");
     assert_eq!(delivered["waited"]["end"]["state"], "delivered");
     assert_eq!(
         delivered["waited"]["end"]["deliveries"][0]["by"], "wait",
         "{delivered}"
     );
-    let read = answered(&wait("construct"), 0);
+    let read = answered(&wait("construct", false), 0);
     assert_eq!(read["waited"]["delivered"], false, "{read}");
     let person = host.stand_in(
         &repository.dir,
@@ -2572,7 +2573,7 @@ fn a_wait_exits_by_its_outcome() {
         ],
     );
     assert_eq!(needs.code, 0, "{}", needs.text);
-    let short = answered(&wait("code"), 2);
+    let short = answered(&wait("code", false), 2);
     assert_eq!(short["waited"]["end"]["state"], "ended_short", "{short}");
     assert_eq!(short["waited"]["end"]["end"]["words"], "which design?");
 
@@ -2672,7 +2673,7 @@ fn the_recipient_a_wait_and_an_inbox_default_to() {
     let by_variable = answered(
         &host.stand_in(
             &repository.dir,
-            &["inbox", "--json"],
+            &["inbox", "--confirm", "--json"],
             &[("FLUME_RECIPIENT", "ops"), ("FLUME_PLACE", &two)],
         ),
         0,
@@ -2688,7 +2689,7 @@ fn the_recipient_a_wait_and_an_inbox_default_to() {
     let by_role = answered(
         &host.stand_in(
             &repository.dir,
-            &["inbox", "--json"],
+            &["inbox", "--confirm", "--json"],
             &[("FLUME_PLACE", &two)],
         ),
         0,
@@ -2988,7 +2989,9 @@ fn the_helps_of_needs_hold_retry_tell_and_launch() {
         ("launch", "A name no pane holds is sent no notice"),
         ("launch", "until it collects them by `flume inbox` or `flume wait` as that name"),
         ("inbox", "[PLACE]"),
+        ("inbox", "--confirm"),
         ("inbox", "an inbox naming a place collects that place's ends alone"),
+        ("inbox", "an end the inbox gives stays pending"),
         ("inbox", "a tidied document's `<place>@<at>` naming that one alone"),
     ] {
         let words = help(command);
@@ -4036,8 +4039,10 @@ fn a_readers_place_collected_by_its_inbox() {
     // 7, 43, 52: the command-line spec's "A reader's place collected" and
     // "The helps": status gives both recipients before the drop, the
     // inbox naming the place as `boomdrive`, which no pane holds, gives
-    // its drop among its ends, each delivered by the inbox, and a second
-    // gives nothing; a launch naming `--caller` is refused, nothing made.
+    // its drop among its ends, each handed to it by the inbox and pending
+    // for it, a second with `--confirm` gives them again, each confirmed,
+    // and a third gives nothing; a launch naming `--caller` is refused,
+    // nothing made.
     let host = Host::new("reader-inbox");
     let repository = repository("reader-inbox", None);
     let dir = &repository.dir;
@@ -4068,17 +4073,12 @@ fn a_readers_place_collected_by_its_inbox() {
     host.end_agent(&place, "code", 1);
     let dropped = host.stand_in(dir, &["drop", "fix--one", "--json"], &[]);
     assert_eq!(dropped.code, 0, "{}", dropped.text);
-    let inbox = || {
-        answered(
-            &host.stand_in(
-                dir,
-                &["inbox", "fix--one", "--recipient", "boomdrive", "--json"],
-                &[],
-            ),
-            0,
-        )
+    let inbox = |more: &[&str]| {
+        let mut args = vec!["inbox", "fix--one", "--recipient", "boomdrive", "--json"];
+        args.extend_from_slice(more);
+        answered(&host.stand_in(dir, &args, &[]), 0)
     };
-    let collected = inbox();
+    let collected = inbox(&[]);
     assert_eq!(collected["inbox"]["recipient"], "boomdrive", "{collected}");
     let ends = collected["inbox"]["ends"].as_array().expect("ends");
     assert!(
@@ -4101,7 +4101,164 @@ fn a_readers_place_collected_by_its_inbox() {
                 .any(|delivery| delivery["recipient"] == "boomdrive" && delivery["by"] == "inbox"),
             "{collected}"
         );
+        assert_eq!(
+            end["end"]["pending_for"],
+            json!(["boomdrive", "ops"]),
+            "{collected}"
+        );
+        assert_eq!(end["confirmed"], false, "{collected}");
     }
-    let again = inbox();
-    assert_eq!(again["inbox"]["ends"], json!([]), "{again}");
+    let confirmed = inbox(&["--confirm"]);
+    let again = confirmed["inbox"]["ends"].as_array().expect("ends");
+    assert_eq!(again.len(), ends.len(), "{confirmed}");
+    for end in again {
+        assert_eq!(end["confirmed"], true, "{confirmed}");
+        assert_eq!(end["end"]["pending_for"], json!(["ops"]), "{confirmed}");
+    }
+    let third = inbox(&[]);
+    assert_eq!(third["inbox"]["ends"], json!([]), "{third}");
+}
+
+#[test]
+fn a_key_confirmed_through_the_binary() {
+    // 43; weir 102: the command-line spec's "A key confirmed through the
+    // binary": the drop's end's delivery key the inbox gives, confirmed
+    // twice as `boomdrive`, is confirmed with when, then confirmed before
+    // with the first time, and the next inbox gives nothing.
+    let host = Host::new("confirm-key");
+    let repository = repository("confirm-key", None);
+    let dir = &repository.dir;
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        dir,
+        &[
+            "launch",
+            "--kind",
+            "fix",
+            "--name",
+            "one",
+            "--kinds",
+            &kinds,
+            "--recipient",
+            "boomdrive",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "fix--one");
+    host.end_agent(&place, "code", 1);
+    let dropped = host.stand_in(dir, &["drop", "fix--one", "--json"], &[]);
+    assert_eq!(dropped.code, 0, "{}", dropped.text);
+    let inbox = || {
+        answered(
+            &host.stand_in(
+                dir,
+                &["inbox", "fix--one", "--recipient", "boomdrive", "--json"],
+                &[],
+            ),
+            0,
+        )
+    };
+    let collected = inbox();
+    let keys: Vec<String> = collected["inbox"]["ends"]
+        .as_array()
+        .expect("ends")
+        .iter()
+        .map(|end| {
+            end["end"]["delivery"]
+                .as_str()
+                .unwrap_or_else(|| panic!("an end with no delivery key: {collected}"))
+                .to_string()
+        })
+        .collect();
+    assert!(
+        keys.iter()
+            .any(|key| key.starts_with("fix--one/") && key.ends_with("/over/dropped")),
+        "{collected}"
+    );
+    let confirm = || {
+        let mut args = vec!["confirm"];
+        args.extend(keys.iter().map(String::as_str));
+        args.extend(["--recipient", "boomdrive", "--json"]);
+        answered(&host.stand_in(dir, &args, &[]), 0)
+    };
+    let first = confirm();
+    assert_eq!(first["confirmed"]["recipient"], "boomdrive", "{first}");
+    let confirmed = first["confirmed"]["confirmed"].as_array().expect("keys");
+    assert_eq!(confirmed.len(), keys.len(), "{first}");
+    for (key, answer) in keys.iter().zip(confirmed) {
+        assert_eq!(answer["key"], key.as_str(), "{first}");
+        assert_eq!(answer["before"], false, "{first}");
+        assert!(answer["at"].as_u64().is_some(), "{first}");
+    }
+    let second = confirm();
+    for (first, again) in confirmed
+        .iter()
+        .zip(second["confirmed"]["confirmed"].as_array().expect("keys"))
+    {
+        assert_eq!(again["before"], true, "{second}");
+        assert_eq!(again["at"], first["at"], "{second}");
+    }
+    let next = inbox();
+    assert_eq!(next["inbox"]["ends"], json!([]), "{next}");
+}
+
+#[test]
+fn a_key_refused_through_the_binary() {
+    // 43; weir 102: the command-line spec's "A key refused through the
+    // binary": a key no end is under is refused naming it, in the JSON
+    // form, and the command exits non-zero.
+    let host = Host::new("confirm-refused");
+    let ran = host.flume(
+        &outside(&host, "elsewhere"),
+        &[
+            "confirm",
+            "no/such/key",
+            "--recipient",
+            "boomdrive",
+            "--json",
+        ],
+        &[],
+    );
+    assert_ne!(ran.code, 0, "{}", ran.text);
+    let answer = ran.json();
+    let reason = answer["refused"]["refusal"]["reason"]
+        .as_str()
+        .unwrap_or_else(|| panic!("no refusal: {}", ran.text));
+    assert!(reason.contains("no/such/key"), "{reason}");
+    assert!(reason.contains("`key`"), "{reason}");
+}
+
+#[test]
+fn the_helps_of_confirm_and_wait() {
+    // 43, 61; core.35: the command-line spec's "The helps of confirm and
+    // wait": confirm's names the keys and `--recipient`, wait's names
+    // `--confirm`, and each says a hand-over delivers nothing until its
+    // recipient confirms it.
+    let host = Host::new("helps-confirm");
+    let help = |command: &str| {
+        let ran = host.flume(&outside(&host, "elsewhere"), &[command, "--help"], &[]);
+        assert_eq!(ran.code, 0, "{}", ran.text);
+        ran.text.split_whitespace().collect::<Vec<_>>().join(" ")
+    };
+    for (command, said) in [
+        ("confirm", "<KEY>..."),
+        ("confirm", "--recipient <RECIPIENT>"),
+        (
+            "confirm",
+            "a hand-over delivers nothing until its recipient confirms it",
+        ),
+        ("wait", "--confirm"),
+        (
+            "wait",
+            "A hand-over delivers nothing until its recipient confirms it",
+        ),
+    ] {
+        let words = help(command);
+        assert!(
+            words.contains(said),
+            "{command}'s help says not {said:?}: {words}"
+        );
+    }
 }

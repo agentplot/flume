@@ -11,6 +11,8 @@ flume-seams = { path = "../flume-seams" }
 flume-fakes = { path = "../flume-fakes" }
 flume-core = { path = "../flume-core" }
 serde_json.workspace = true
+weir-delivery.workspace = true
+weir-pack.workspace = true
 
 [lib]
 doctest = false

@@ -1145,7 +1145,7 @@ pub fn construct_in_east_kept(
 fn pending_for(world: &World, id: &PlaceId) -> Result<Vec<String>, String> {
     let held = world.held(id).ok_or("no place")?;
     let end = held.ends.last().ok_or("no end")?;
-    Ok(end.pending(&held.place.recipients))
+    Ok(end.pending(&held.place, &world.owing()))
 }
 
 /// The places of every role's run on the host, each with its stream.

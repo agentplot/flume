@@ -111,8 +111,11 @@ its agent's.
 In a session flume did not start, SessionStart runs `flume inbox` as
 the session the multiplexer names, the pane it runs in under herdr, and
 never as `FLUME_RECIPIENT` or a role's address, so your session never
-collects a role's ends. Where the inbox holds anything, the hook gives
-it to the agent as the session's added context: each end it collected,
+collects a role's ends. The inbox confirms on receipt each end it hands
+over, since the hook gives the agent its words whole: an end handed to
+your pane before and never confirmed is handed again here, and
+delivered. Where the inbox holds anything, the hook gives it to the
+agent as the session's added context: each end it collected,
 and each place waiting on your session with its question, the
 question's key, whether its agent is kept open and until when, and the
 three ways on:

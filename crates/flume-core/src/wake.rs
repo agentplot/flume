@@ -63,7 +63,7 @@ impl Engine {
             return Answer::Held {
                 address: address.into(),
                 standing: reach.status,
-                pending: pending_addresses(&every)
+                pending: pending_addresses(&every, &self.owing())
                     .remove(address)
                     .map(|status| status.pending)
                     .unwrap_or_default(),
@@ -174,7 +174,8 @@ impl Engine {
     }
 
     /// The settle's wake step (design 2): each role's address an end of
-    /// the place stands pending for is woken, and why one was not is kept
+    /// the place stands pending for, and that nothing has handed it to, is
+    /// woken, and why one was not is kept
     /// on the place for status, gone once it is woken; an address its
     /// source gives a standing agent or declares carried, the roles read
     /// once, is passed over, nothing launched and nothing kept (43, 132,
@@ -188,12 +189,22 @@ impl Engine {
             return;
         }
         // A drop's or a done's end stands pending for no role's address, so
-        // it wakes no role (43, 52, 114, 132).
-        let addresses: Vec<String> = held
-            .pending_for()
-            .into_iter()
-            .filter(|name| is_address(name))
-            .collect();
+        // it wakes no role; and an end anything handed to an address, a
+        // notice, a wait or a run's inbox, wakes no run for it again, so a
+        // run that never confirms wakes no run after it (43, 52, 114, 132,
+        // S122; core.28).
+        let owing = self.owing();
+        let mut addresses: Vec<String> = vec![];
+        for end in &held.ends {
+            for address in end.pending(&held.place, &owing) {
+                if is_address(&address)
+                    && !end.handed_to(&held.place, &owing, &address)
+                    && !addresses.contains(&address)
+                {
+                    addresses.push(address);
+                }
+            }
+        }
         let roles = if addresses.is_empty() {
             HostRoles::default()
         } else {
@@ -227,9 +238,9 @@ impl Engine {
     /// terminal and part asked once; for a carried one, its entry; and,
     /// where no source declares anything for it, why (56, 132, 190, 193;
     /// core.15, core.28).
-    pub(crate) fn addresses(&self, roles: &HostRoles) -> Vec<AddressStatus> {
+    pub(crate) fn addresses(&self, roles: &HostRoles, owing: &Owing) -> Vec<AddressStatus> {
         let every = self.every_held();
-        let mut by = pending_addresses(&every);
+        let mut by = pending_addresses(&every, owing);
         for (address, stall) in unheard_stalls(&every) {
             by.entry(address.clone())
                 .or_insert_with(|| AddressStatus::of(address))
@@ -283,11 +294,11 @@ impl Engine {
 /// Each role's address an end of `every` stands pending for, with those
 /// ends and why the last settle did not wake it, by the address (43,
 /// 132).
-fn pending_addresses(every: &[HeldState]) -> BTreeMap<String, AddressStatus> {
+fn pending_addresses(every: &[HeldState], owing: &Owing) -> BTreeMap<String, AddressStatus> {
     let mut by: BTreeMap<String, AddressStatus> = BTreeMap::new();
     for held in every {
         for end in &held.ends {
-            for address in end.pending(&held.place.recipients) {
+            for address in end.pending(&held.place, owing) {
                 if !is_address(&address) {
                     continue;
                 }

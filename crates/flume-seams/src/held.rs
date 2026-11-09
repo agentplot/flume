@@ -196,12 +196,12 @@ fn stall_after() -> Seconds {
 }
 
 impl HeldState {
-    /// The recipients each end stands pending for, in order, each named
-    /// once (43).
-    pub fn pending_for(&self) -> Vec<String> {
+    /// The recipients each end stands pending for, as `owing` read the
+    /// host's deliveries, in order, each named once (43; weir 105).
+    pub fn pending_for(&self, owing: &Owing) -> Vec<String> {
         let mut pending: Vec<String> = vec![];
         for end in &self.ends {
-            for recipient in end.pending(&self.place.recipients) {
+            for recipient in end.pending(&self.place, owing) {
                 if !pending.contains(&recipient) {
                     pending.push(recipient);
                 }
@@ -369,8 +369,9 @@ pub enum Waits {
 }
 
 /// An end of a place, recorded once by its key when a settle or an act
-/// reads it, with what 43 names of it, and delivered once to each
-/// recipient (43, 74).
+/// reads it, with what 43 names of it, its delivery to each recipient
+/// recorded in the host's deliveries and owed until that recipient
+/// confirms it (43, 74; weir 100, 102).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EndHeld {
     /// What ended, which is the end's key with what was read of it.
@@ -378,9 +379,18 @@ pub struct EndHeld {
     pub of: EndOf,
     /// When flume read it.
     pub read_at: Seconds,
-    /// Each delivery of it, to whom, when and by what.
+    /// The old form's deliveries, to whom, when and by what, as an end
+    /// written before its delivery was weir's held them: read and never
+    /// added to, emptied once the host's deliveries hold them, and still
+    /// written as `deliveries` so the form keeps the field (43, 61).
     #[serde(default)]
     pub deliveries: Vec<Delivery>,
+    /// Each notice of it claimed before its send, to whom and when, so
+    /// two settles at once send one notice; kept once its hand-over is
+    /// recorded, taken back where it was not sent, and none in an end
+    /// written before (43, 75).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub noticing: Vec<NoticeClaim>,
     /// For a stop-short needing an answer, the answer that answered it,
     /// once one did; none for any other end, and in an end written before
     /// (42).
@@ -393,6 +403,59 @@ pub struct EndHeld {
     /// not taken, and none in an end written before (42, 53, 75).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claim: Option<AnswerClaim>,
+}
+
+/// What the host's deliveries hold of the ends of its places, as one read
+/// of them gives it at one time, by each delivery's key: read once for a
+/// settle, a wait, an inbox or a status (43; weir 105, 111; core.15).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Owing {
+    pub deliveries: BTreeMap<String, EndDelivery>,
+    /// Each name a recipient has confirmed under (weir 106).
+    pub known: std::collections::BTreeSet<String>,
+}
+
+/// One end's delivery as the host's deliveries hold it at the time it was
+/// read: its readers, when it expires, each reader that has not confirmed
+/// it, each confirmation and each hand-over (43; weir 100 to 106).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct EndDelivery {
+    pub key: String,
+    pub readers: Vec<String>,
+    /// Its message, the end's notice as recorded (100; core.11).
+    pub message: String,
+    pub expires_at: Seconds,
+    /// Each reader that has not confirmed it, in its readers' order.
+    pub owed: Vec<OwedTo>,
+    /// Each reader's confirmation, in the order added.
+    pub confirmed: Vec<ConfirmedBy>,
+    /// Each hand-over, to whom, when and by what, in the order added.
+    pub handovers: Vec<Delivery>,
+}
+
+/// A recipient an end is owed to: whether its delivery has expired, and
+/// whether anything was ever confirmed under the recipient's name (43, 56;
+/// weir 104, 106).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwedTo {
+    pub recipient: String,
+    pub expired: bool,
+    pub known: bool,
+}
+
+/// A recipient's confirmation of an end, and when (43; weir 102).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfirmedBy {
+    pub recipient: String,
+    pub at: Seconds,
+}
+
+/// A notice of an end claimed for a recipient before its send, and when
+/// (43, 75).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NoticeClaim {
+    pub recipient: String,
+    pub at: Seconds,
 }
 
 /// An answer being taken for a stop-short: who gives it and the key it
@@ -528,21 +591,63 @@ impl EndHeld {
         every
     }
 
-    /// The recipients of the end it stands pending for, of a place whose
-    /// recipients are `recipients` (43, 130).
-    pub fn pending(&self, recipients: &[String]) -> Vec<String> {
-        self.recipients(recipients)
-            .into_iter()
-            .filter(|recipient| !self.delivered_to(recipient))
-            .collect()
+    /// The end's delivery as the host's deliveries hold it, of the place
+    /// `place`; none where none is recorded, as for an end with no
+    /// recipient or of a document written before (43; weir 100).
+    pub fn delivery<'a>(&self, place: &PlaceRecord, owing: &'a Owing) -> Option<&'a EndDelivery> {
+        owing.deliveries.get(&place.delivery_key(&self.of)?)
     }
 
-    /// Whether the end stands pending for `recipient`, of a place whose
-    /// recipients are `recipients` (43).
-    pub fn pending_to(&self, recipients: &[String], recipient: &str) -> bool {
-        self.pending(recipients)
+    /// The recipients the end stands pending for, of the place `place`:
+    /// each reader of its delivery that has not confirmed it, as `owing`
+    /// read it; or, where no delivery of it is recorded yet, each of its
+    /// recipients the old form delivered nothing to, as its record would
+    /// read (43, 130; weir 102, 105).
+    pub fn pending(&self, place: &PlaceRecord, owing: &Owing) -> Vec<String> {
+        match self.delivery(place, owing) {
+            Some(delivery) => delivery
+                .owed
+                .iter()
+                .map(|owed| owed.recipient.clone())
+                .collect(),
+            None => self
+                .recipients(&place.recipients)
+                .into_iter()
+                .filter(|recipient| !self.delivered_to(recipient))
+                .collect(),
+        }
+    }
+
+    /// Whether the end stands pending for `recipient`, of the place
+    /// `place` (43).
+    pub fn pending_to(&self, place: &PlaceRecord, owing: &Owing, recipient: &str) -> bool {
+        self.pending(place, owing)
             .iter()
             .any(|pending| pending == recipient)
+    }
+
+    /// Each hand-over of the end, to whom, when and by what, in the order
+    /// added: its delivery's, or, where none is recorded yet, the old
+    /// form's (43, 61; weir 103).
+    pub fn handovers(&self, place: &PlaceRecord, owing: &Owing) -> Vec<Delivery> {
+        match self.delivery(place, owing) {
+            Some(delivery) => delivery.handovers.clone(),
+            None => self.deliveries.clone(),
+        }
+    }
+
+    /// Whether anything handed the end to `recipient`: a hand-over of its
+    /// delivery, a notice claimed for it, or the old form's delivery (43,
+    /// 132; weir 103; core.28).
+    pub fn handed_to(&self, place: &PlaceRecord, owing: &Owing, recipient: &str) -> bool {
+        self.handovers(place, owing)
+            .iter()
+            .any(|handover| handover.recipient == recipient)
+            || self.delivered_to(recipient)
+            || self
+                .noticing
+                .iter()
+                .any(|claim| claim.recipient == recipient)
     }
 
     /// Whether a notice carries it to a recipient a pane holds, and a wake
@@ -876,14 +981,41 @@ pub struct Delivery {
     pub by: DeliveredBy,
 }
 
-/// What delivered an end: a notice through the terminal, a wait by
-/// place, or the inbox (43).
+/// What handed an end over: a notice through the terminal, a wait by
+/// place, the inbox, or a session's start collecting it (43, C.4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeliveredBy {
     Notice,
     Wait,
     Inbox,
+    SessionStart,
+}
+
+impl DeliveredBy {
+    /// The way a hand-over records it by in the host's deliveries (43;
+    /// weir 103).
+    pub fn way(self) -> &'static str {
+        match self {
+            DeliveredBy::Notice => "notice",
+            DeliveredBy::Wait => "wait",
+            DeliveredBy::Inbox => "inbox",
+            DeliveredBy::SessionStart => "session-start",
+        }
+    }
+
+    /// The hand-over a way of the host's deliveries names; none for a way
+    /// flume records none by.
+    pub fn of_way(way: &str) -> Option<DeliveredBy> {
+        [
+            DeliveredBy::Notice,
+            DeliveredBy::Wait,
+            DeliveredBy::Inbox,
+            DeliveredBy::SessionStart,
+        ]
+        .into_iter()
+        .find(|by| by.way() == way)
+    }
 }
 
 /// Where a launch took a place's recipients from, the first of these
@@ -999,6 +1131,12 @@ pub struct PlaceRecord {
     /// the fix's number and why; none for any other place (203).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fix_of: Option<FixOf>,
+    /// The token the place's launch took, by which its ends' deliveries
+    /// are keyed, so two launches of one place never share a key; none in
+    /// a document written before, which its first settle's write gives
+    /// one (43, C.7; weir 101).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
 }
 
 /// An intent's key: the name a launch gave it, else the repository and
@@ -1049,6 +1187,14 @@ impl PlaceRecord {
     /// The place as its agents' identities name it, `<kind>--<name>`.
     pub fn short(&self) -> String {
         format!("{}--{}", self.kind.name, self.name)
+    }
+
+    /// The key of the delivery of its end `of`, `<kind>--<name>/<token>/<end
+    /// key>`, so two launches of one place never share one; none while it
+    /// holds no token, as a document written before (43, C.7; weir 101).
+    pub fn delivery_key(&self, of: &EndOf) -> Option<String> {
+        let token = self.token.as_ref()?;
+        Some(format!("{}/{token}/{}", self.short(), of.end_key()))
     }
 
     /// The first line of its brief that holds anything, trimmed; none

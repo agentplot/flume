@@ -356,18 +356,22 @@ dependencies = [
  "flume-fakes",
  "flume-seams",
  "serde_json",
+ "weir-delivery",
+ "weir-pack",
 ]
 
 [[package]]
 name = "flume-core"
 version = "0.0.0"
 dependencies = [
+ "chrono",
  "flume-fakes",
  "flume-seams",
  "hmac",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "weir-delivery",
 ]
 
 [[package]]
@@ -384,6 +388,7 @@ version = "0.0.0"
 dependencies = [
  "serde",
  "serde_json",
+ "weir-delivery",
 ]
 
 [[package]]
@@ -1152,7 +1157,7 @@ dependencies = [
 [[package]]
 name = "weir-capture"
 version = "0.0.0"
-source = "git+https://github.com/agentplot/weir?rev=daacda39e59469029b2841f889c6cbd8cd7839d9#daacda39e59469029b2841f889c6cbd8cd7839d9"
+source = "git+https://github.com/agentplot/weir?rev=52b95528a495100e34fca39109d563d8bf75673a#52b95528a495100e34fca39109d563d8bf75673a"
 dependencies = [
  "jsonschema",
  "serde",
@@ -1163,12 +1168,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "weir-delivery"
+version = "0.0.0"
+source = "git+https://github.com/agentplot/weir?rev=52b95528a495100e34fca39109d563d8bf75673a#52b95528a495100e34fca39109d563d8bf75673a"
+dependencies = [
+ "serde",
+ "serde_json",
+ "time",
+ "weir-capture",
+]
+
+[[package]]
 name = "weir-kinds"
 version = "0.0.0"
-source = "git+https://github.com/agentplot/weir?rev=daacda39e59469029b2841f889c6cbd8cd7839d9#daacda39e59469029b2841f889c6cbd8cd7839d9"
+source = "git+https://github.com/agentplot/weir?rev=52b95528a495100e34fca39109d563d8bf75673a#52b95528a495100e34fca39109d563d8bf75673a"
 dependencies = [
  "toml",
  "weir-capture",
+]
+
+[[package]]
+name = "weir-pack"
+version = "0.0.0"
+source = "git+https://github.com/agentplot/weir?rev=52b95528a495100e34fca39109d563d8bf75673a#52b95528a495100e34fca39109d563d8bf75673a"
+dependencies = [
+ "serde",
+ "serde_json",
+ "time",
+ "toml",
+ "weir-capture",
+ "weir-delivery",
 ]
 
 [[package]]

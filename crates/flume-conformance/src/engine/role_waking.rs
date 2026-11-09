@@ -72,9 +72,19 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_wake_while_the_run_waits_for_room,
         },
         Scenario {
-            name: "role waking: a run's inbox with no recipient named collects every end pending for its address, each then delivered to it",
+            name: "role waking: a run's inbox with no recipient named, confirming on receipt, collects every end pending for its address, each handed to it by the inbox and confirmed by it",
             cites: &["132", "43"],
             run: the_run_starts,
+        },
+        Scenario {
+            name: "role waking: a stop-short a planner run's inbox was handed, the run dropped before it confirmed it, wakes no run at the next settle, and stays handed to the address by the inbox and pending for it (S122)",
+            cites: &["132", "43"],
+            run: a_run_that_did_not_confirm,
+        },
+        Scenario {
+            name: "role waking: the next end for the address wakes one run, whose inbox gives both ends, and once it confirms both delivery keys both are delivered to the address (S122)",
+            cites: &["132", "43"],
+            run: the_next_run_is_handed_it,
         },
         Scenario {
             name: "role waking: a place launched again under a name whose earlier place landed is not read landed by its first settle",
@@ -107,7 +117,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: ends_pending_while_the_agent_is_away,
         },
         Scenario {
-            name: "role waking: a carrier's wake of a standing address launches nothing and answers held, naming the agent, its session, what was found and the ends pending",
+            name: "role waking: a carrier's wake of a standing address launches nothing and answers held, naming the agent, its session, what was found and the ends pending, handed to it and not confirmed",
             cites: &["132"],
             run: a_carrier_wakes_a_standing_address,
         },
@@ -653,7 +663,7 @@ fn three_ends_one_run(_: &()) -> Outcome {
         .recipient(Some(&planner_id()))
         .ok_or("the run names no recipient")?;
     ensure_eq!(recipient, PLANNER, "the run's recipient");
-    let collected = match run.inbox(&recipient, None) {
+    let collected = match run.inbox(&recipient, None, true) {
         Answer::Inbox { ends, .. } => ends
             .iter()
             .map(|collected| {
@@ -733,23 +743,28 @@ fn the_run_starts(_: &()) -> Outcome {
     let recipient = run
         .recipient(Some(&planner_id()))
         .ok_or("the run names no recipient")?;
-    let ends = match run.inbox(&recipient, None) {
+    let ends = match run.inbox(&recipient, None, true) {
         Answer::Inbox { ends, .. } => ends,
         other => return Err(format!("the inbox answered {other:?}")),
     };
     ensure_eq!(ends.len(), 1, "the ends collected");
     let held = world.held(&one).ok_or("no place")?;
+    let statuses: Vec<_> = held
+        .ends
+        .iter()
+        .map(|end| world.end_status(&held, end))
+        .collect();
     ensure!(
-        held.ends
+        statuses
             .iter()
-            .all(|end| end.deliveries.iter().any(|delivery| {
+            .all(|end| end.end.deliveries.iter().any(|delivery| {
                 delivery.recipient == PLANNER && delivery.by == DeliveredBy::Inbox
             })),
         "an end not delivered to the address: {:?}",
-        held.ends
+        statuses
     );
     ensure_eq!(
-        held.pending_for(),
+        held.pending_for(&world.owing()),
         vec!["operator".to_string()],
         "the ends still pending"
     );
@@ -959,7 +974,7 @@ fn ends_pending_while_the_agent_is_away(_: &()) -> Outcome {
     for id in &places {
         let held = world.held(id).ok_or("no place")?;
         ensure_eq!(
-            held.pending_for(),
+            held.pending_for(&world.owing()),
             vec![PLANNER.to_string()],
             format!("pending for {id}")
         );
@@ -1027,13 +1042,16 @@ fn a_carrier_wakes_a_standing_address(_: &()) -> Outcome {
         "found once it waits"
     );
     ensure_eq!(
-        pending,
-        Vec::<PendingEnd>::new(),
-        "pending after the wake's settle"
+        pending
+            .iter()
+            .map(|end| (end.place.clone(), end.what.clone()))
+            .collect::<Vec<_>>(),
+        vec![(id.clone(), "code delivered".to_string())],
+        "pending after the wake's settle, handed by notice and not confirmed"
     );
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![code_delivered("one")],
+        vec![world.confirming(&code_delivered("one"))],
         "the notice the wake's settle sent"
     );
     ensure_eq!(world.store.places(), vec![id], "the places on the host");
@@ -1065,7 +1083,7 @@ fn a_standing_agent_over_a_run_still_live(_: &()) -> Outcome {
     delivered_for_planner(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![code_delivered("one")],
+        vec![world.confirming(&code_delivered("one"))],
         "the standing agent's notices"
     );
     ensure_eq!(
@@ -1089,7 +1107,7 @@ fn a_standing_entry_becomes_a_runs(_: &()) -> Outcome {
     delivered_for_planner(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![code_delivered("one")],
+        vec![world.confirming(&code_delivered("one"))],
         "the standing agent's first notice"
     );
     ensure_eq!(runs(&world), Vec::<PlaceId>::new(), "runs while it stands");
@@ -1258,7 +1276,7 @@ fn s99_one_declaration_two_streams(_: &()) -> Outcome {
             .recipient(Some(run))
             .ok_or_else(|| format!("{run} names no recipient"))?;
         ensure_eq!(recipient, address, format!("{run}'s recipient"));
-        let places = match engine.inbox(&recipient, None) {
+        let places = match engine.inbox(&recipient, None, true) {
             Answer::Inbox { ends, .. } => ends
                 .into_iter()
                 .map(|collected| collected.place)
@@ -1305,13 +1323,15 @@ fn a_run_an_earlier_flume_named(_: &()) -> Outcome {
     ensure_eq!(runs(&world), vec![earlier.clone()], "the runs on the host");
     ensure_eq!(
         world.terminal.notices(PLANNER),
-        vec![code_delivered("one")],
+        vec![world.confirming(&code_delivered("one"))],
         "the notices into the earlier run's pane"
     );
     ensure_eq!(
-        world.held(&one).map(|held| held.pending_for()),
-        Some(vec![]),
-        "the ends still pending"
+        world
+            .held(&one)
+            .map(|held| held.pending_for(&world.owing())),
+        Some(vec![PLANNER.to_string()]),
+        "the ends still pending, handed by notice and not confirmed"
     );
     let (woke, place) = woken(&world.engine.wake(PLANNER))?;
     ensure!(woke != Woke::Launched, "a wake launched a second run");
@@ -1351,7 +1371,9 @@ fn a_run_not_yet_given_its_prompt(_: &()) -> Outcome {
         "the notices into the run's pane before its prompt"
     );
     ensure_eq!(
-        world.held(&one).map(|held| held.pending_for()),
+        world
+            .held(&one)
+            .map(|held| held.pending_for(&world.owing())),
         Some(vec![PLANNER.to_string()]),
         "the ends pending before the run's prompt"
     );
@@ -1366,13 +1388,15 @@ fn a_run_not_yet_given_its_prompt(_: &()) -> Outcome {
     world.settle(&one);
     ensure_eq!(
         world.terminal.notices(PLANNER),
-        vec![code_delivered("one")],
+        vec![world.confirming(&code_delivered("one"))],
         "the notices into the run's pane"
     );
     ensure_eq!(
-        world.held(&one).map(|held| held.pending_for()),
-        Some(vec![]),
-        "the ends pending once the run is begun"
+        world
+            .held(&one)
+            .map(|held| held.pending_for(&world.owing())),
+        Some(vec![PLANNER.to_string()]),
+        "the ends pending once the run is begun, handed by notice and not confirmed"
     );
     Ok(())
 }
@@ -1395,7 +1419,7 @@ fn a_carried_address(_: &()) -> Outcome {
     ensure_eq!(runs(&world), Vec::<PlaceId>::new(), "runs launched");
     let held = world.held(&id).ok_or("no place")?;
     ensure_eq!(
-        held.pending_for(),
+        held.pending_for(&world.owing()),
         vec!["north/planner".to_string()],
         "the ends pending"
     );
@@ -1458,7 +1482,7 @@ fn a_standing_design_agent(_: &()) -> Outcome {
     let id = delivered_for_design(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![code_delivered("one")],
+        vec![world.confirming(&code_delivered("one"))],
         "the notices into east-design's pane"
     );
     ensure_eq!(runs(&world), Vec::<PlaceId>::new(), "runs launched");
@@ -1484,7 +1508,7 @@ fn the_crossing_to_its_kind(_: &()) -> Outcome {
     delivered_for_design(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![code_delivered("one")],
+        vec![world.confirming(&code_delivered("one"))],
         "east-design's notice before the crossing"
     );
     let streams = world.host.streams();
@@ -1792,7 +1816,9 @@ fn a_planners_run_is_lost(_: &()) -> Outcome {
     );
     let held = world.held(&id).ok_or("no run")?;
     ensure!(
-        !held.pending_for().contains(&PLANNER.to_string())
+        !held
+            .pending_for(&world.owing())
+            .contains(&PLANNER.to_string())
             && stall.recipients(&held.place.recipients) == vec!["east/operator".to_string()],
         "the stall's recipients: {:?}",
         stall.recipients(&held.place.recipients)
@@ -1812,7 +1838,7 @@ fn a_planners_run_is_lost(_: &()) -> Outcome {
         "a notice into the planner's own pane"
     );
     ensure_eq!(
-        held.pending_for(),
+        held.pending_for(&world.owing()),
         vec!["east/operator".to_string()],
         "the ends pending once the stall is read"
     );
@@ -1820,14 +1846,16 @@ fn a_planners_run_is_lost(_: &()) -> Outcome {
     world.engine().settle(None);
     ensure_eq!(
         world.terminal.notices("east/operator"),
-        vec![
+        vec![world.confirming(
             "flume: turn--east-planner stalled: a retry of plan [stall/1000000]; read: flume inbox"
-                .to_string()
-        ],
+        )],
         "the notices into the operator's run's pane"
     );
+    let held = world.held(&id).ok_or("no place")?;
     ensure_eq!(
-        stall_of(&world, &id)?
+        world
+            .end_status(&held, &stall_of(&world, &id)?)
+            .end
             .deliveries
             .into_iter()
             .map(|delivery| (delivery.recipient, delivery.by))
@@ -1878,5 +1906,130 @@ fn the_doors_own_run(_: &()) -> Outcome {
         Some((door, stall.of.end_key())),
         "the stall status names under the address"
     );
+    Ok(())
+}
+
+/// A fix `one` for the planner alone stops short while no run of the
+/// planner is live; the run it wakes is handed the stop-short by its own
+/// inbox, which confirms nothing, and is dropped before it confirms it,
+/// its tidy settled (132, S122).
+fn a_run_handed_and_dropped(world: &World) -> Result<PlaceId, String> {
+    world.engine.settle_every(30);
+    configure(
+        world,
+        "Read what is pending for you.",
+        planner_run(None, None),
+    );
+    let one = fix_for(world, "one", &[PLANNER])?;
+    asks(world, &one)?;
+    ensure_eq!(
+        runs(world),
+        vec![planner_id()],
+        "the run the stop-short woke"
+    );
+    let handed = match world.engine().inbox(PLANNER, None, false) {
+        Answer::Inbox { ends, .. } => ends,
+        other => return Err(format!("the run's inbox answered {other:?}")),
+    };
+    ensure_eq!(handed.len(), 1, "the ends the run's inbox gave");
+    let dropped = world.engine().drop_place(&planner_id(), true);
+    ensure!(dropped.refusal().is_none(), "the run's drop: {dropped:?}");
+    world.engine().settle(None);
+    ensure_eq!(runs(world), Vec::<PlaceId>::new(), "runs once dropped");
+    Ok(one)
+}
+
+/// The role-waking spec's "A run that did not confirm" (43, 132, S122).
+fn a_run_that_did_not_confirm(_: &()) -> Outcome {
+    let world = World::new();
+    let one = a_run_handed_and_dropped(&world)?;
+    world.settle(&one);
+    world.engine().settle(None);
+    ensure_eq!(runs(&world), Vec::<PlaceId>::new(), "runs woken again");
+    let short = world
+        .status(&one)?
+        .ends
+        .into_iter()
+        .find(|end| {
+            matches!(
+                &end.end.of,
+                EndOf::Stage {
+                    state: StageState::EndedShort,
+                    ..
+                }
+            )
+        })
+        .ok_or("no stop-short")?;
+    ensure!(
+        short
+            .end
+            .deliveries
+            .iter()
+            .any(|delivery| { delivery.recipient == PLANNER && delivery.by == DeliveredBy::Inbox }),
+        "the stop-short's hand-overs: {:?}",
+        short.end.deliveries
+    );
+    ensure_eq!(
+        short.pending_for,
+        vec![PLANNER.to_string()],
+        "whom the stop-short is pending for"
+    );
+    Ok(())
+}
+
+/// The role-waking spec's "The next run is handed it" (43, 132, S122).
+fn the_next_run_is_handed_it(_: &()) -> Outcome {
+    let world = World::new();
+    let one = a_run_handed_and_dropped(&world)?;
+    let two = fix_for(&world, "two", &[PLANNER])?;
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    deliver_fix(&world, &two);
+    world.settle(&two);
+    world.engine().settle(None);
+    ensure_eq!(
+        runs(&world),
+        vec![planner_id()],
+        "the runs the next end woke"
+    );
+    let handed = match world.engine().inbox(PLANNER, None, false) {
+        Answer::Inbox { ends, .. } => ends,
+        other => return Err(format!("the next run's inbox answered {other:?}")),
+    };
+    let mut gave: Vec<String> = handed
+        .iter()
+        .map(|collected| {
+            format!(
+                "{}--{} {}",
+                collected.kind, collected.name, collected.end.key
+            )
+        })
+        .collect();
+    gave.sort();
+    ensure_eq!(
+        gave,
+        vec![
+            "fix--one stage/code/1/ended-short".to_string(),
+            "fix--two stage/code/1/delivered".to_string(),
+        ],
+        "what the next run's inbox gave"
+    );
+    world.confirm(PLANNER, "fix--one", &["stage/code/1/ended-short"])?;
+    world.confirm(PLANNER, "fix--two", &["stage/code/1/delivered"])?;
+    for (id, key) in [
+        (&one, "stage/code/1/ended-short"),
+        (&two, "stage/code/1/delivered"),
+    ] {
+        let end = world
+            .status(id)?
+            .ends
+            .into_iter()
+            .find(|end| end.key.to_string() == key)
+            .ok_or(format!("no end {key}"))?;
+        ensure!(
+            end.pending_for.is_empty(),
+            "{key} pending once confirmed: {:?}",
+            end.pending_for
+        );
+    }
     Ok(())
 }

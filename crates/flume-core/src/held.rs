@@ -195,6 +195,7 @@ fn record_ends(next: &mut HeldState, now: Seconds) {
                 deliveries: vec![],
                 answer: None,
                 claim: None,
+                noticing: vec![],
             });
         }
     }
@@ -327,6 +328,7 @@ pub(crate) fn read_stall(
             deliveries: vec![],
             answer: None,
             claim: None,
+            noticing: vec![],
         });
     }
 }

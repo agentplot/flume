@@ -73,12 +73,12 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: under_the_printed_command,
         },
         Scenario {
-            name: "end delivery: a place landing with its recipient away is tidied, its document kept pending until delivered, then removed",
+            name: "end delivery: a place landing with its recipient away is tidied, its document kept pending until its recipient confirms its ends, then removed and their deliveries let go of, its name kept known (weir 106, 107)",
             cites: &["43", "62", "66", "67"],
             run: a_landing_with_its_recipient_away,
         },
         Scenario {
-            name: "end delivery: a tidied place dropped while an end is pending is gone with its ends",
+            name: "end delivery: a tidied place dropped while an end is pending for boomdrive is refused naming boomdrive and flume confirm, its document and pending ends staying (weir I9)",
             cites: &["43", "62", "52"],
             run: dropped_while_pending,
         },
@@ -93,12 +93,12 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: collected_after_the_tidy,
         },
         Scenario {
-            name: "end delivery: a place launched for ops and boomdrive, which no pane holds, lands, ops has its notice, and status gives the tidied place pending for boomdrive",
+            name: "end delivery: a place launched for ops and boomdrive, which no pane holds, lands, ops has its notices and confirms them, and status gives the tidied place pending for boomdrive",
             cites: &["62"],
             run: kept_for_a_reader,
         },
         Scenario {
-            name: "end delivery: a landing of a fix launched for ops and boomdrive, which no pane holds, is one notice to ops and none to boomdrive, its document kept with code's end and the landing pending for boomdrive alone until boomdrive's inbox naming the place collects them",
+            name: "end delivery: a landing of a fix launched for ops and boomdrive, which no pane holds, is one notice to ops and none to boomdrive, its document kept with code's end and the landing pending for ops, handed to it by notice, and for boomdrive, handed to none, until ops confirms them and boomdrive's inbox naming the place confirms them",
             cites: &["43", "62"],
             run: a_landing_for_a_reader,
         },
@@ -123,9 +123,14 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_done,
         },
         Scenario {
-            name: "end delivery: a recipient restarted while waiting on a submission waits again and is answered at once with the landing, delivered by the wait",
+            name: "end delivery: a recipient restarted while waiting on a submission waits again and is answered at once with the landing, handed to it by the wait and still pending for it",
             cites: &["43", "77", "133"],
             run: a_restarted_recipient_waits_again,
+        },
+        Scenario {
+            name: "end delivery: a wait run again with --confirm answers with the landing, its hand-over and the recipient's confirmation recorded together (weir 103)",
+            cites: &["43", "133"],
+            run: a_wait_that_confirms,
         },
         Scenario {
             name: "end delivery: a wait that finds nothing pending until its timeout exits still waiting and records nothing delivered",
@@ -133,7 +138,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: the_timeout,
         },
         Scenario {
-            name: "end delivery: an end already delivered is answered to a wait as a read, delivering nothing again",
+            name: "end delivery: an end its recipient confirmed is answered to a wait as a read, handing nothing over again",
             cites: &["43", "74"],
             run: a_wait_reads_an_end_delivered,
         },
@@ -153,9 +158,14 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_wait_refused,
         },
         Scenario {
-            name: "end delivery: a restarted recipient collects by the inbox every end pending for it, each delivered once, and status or another's inbox marks nothing",
+            name: "end delivery: a restarted recipient collects by the inbox every end pending for it, each handed to it by the inbox and still pending, a second inbox giving them again, and status or another's inbox marks nothing",
             cites: &["43", "57"],
             run: collected_after_a_restart,
+        },
+        Scenario {
+            name: "end delivery: an inbox with --confirm gives every end pending for its recipient, each confirmed by this call, and the next inbox gives nothing",
+            cites: &["43", "57"],
+            run: collected_and_confirmed,
         },
         Scenario {
             name: "end delivery: of two fixes launched for ops and boomdrive, which no pane holds, landed and tidied, boomdrive's inbox naming the first collects its ends alone, the second's ends and document staying until an inbox names it by its document",
@@ -253,7 +263,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_stream_not_declared,
         },
         Scenario {
-            name: "end delivery: the inbox collects an end pending for a standing address whose agent is away, delivered to the address, and no later settle sends a notice of it",
+            name: "end delivery: the inbox collects an end pending for a standing address whose agent is away, handed to the address by the inbox and pending for it, and no later settle sends a notice of it",
             cites: &["43", "132"],
             run: the_inbox_collects_for_a_standing_address,
         },
@@ -266,6 +276,51 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "end delivery: a talk whose agent was killed ends with no agent left, its notice saying nothing of one",
             cites: &["43", "45"],
             run: a_lost_talk_with_no_agent,
+        },
+        Scenario {
+            name: "end delivery: a code end handed to ops by notice, ops cleared before it confirms it, stays pending for ops, no second notice going at later settles, and ops's next inbox gives it (S122)",
+            cites: &["43", "74"],
+            run: handed_and_stopped_before_acting,
+        },
+        Scenario {
+            name: "end delivery: a notice answered sent whose hand-over the host's deliveries could not record is sent no second time, and the next settle records its hand-over at the claim's time",
+            cites: &["43", "75"],
+            run: a_notice_claimed_and_not_recorded,
+        },
+        Scenario {
+            name: "end delivery: ops confirming a code end's delivery key twice is confirmed at the first time and delivered, the second writing nothing and giving the first time (weir 102)",
+            cites: &["43", "74"],
+            run: confirmed_twice,
+        },
+        Scenario {
+            name: "end delivery: ops confirming a key of boomdrive's end is refused naming the key and reader, and a key no end is under refused naming key, nothing written (weir 102)",
+            cites: &["43"],
+            run: a_key_of_another_recipients,
+        },
+        Scenario {
+            name: "end delivery: a fix for the misspelt bomdrive lands and nothing collects its ends; a week on, status gives each expired for bomdrive, a name never confirmed under, the host lists them, the tidied document stays and its drop is refused naming bomdrive (S123; weir 104, 106)",
+            cites: &["43", "56", "62"],
+            run: a_misspelt_recipient,
+        },
+        Scenario {
+            name: "end delivery: the operator confirming as bomdrive the expired ends' delivery keys delivers them, bomdrive reads known, and the next settle removes the document (weir 104, 106, 107)",
+            cites: &["43", "56", "62"],
+            run: confirmed_once_expired,
+        },
+        Scenario {
+            name: "end delivery: a live place whose document the old form wrote, code's end delivered to ops by notice and pending for boomdrive, reads at its settle delivered to ops at its old time and pending for boomdrive, sends ops no notice, and its next settle writes nothing more",
+            cites: &["43", "61", "74"],
+            run: a_live_place_upgraded,
+        },
+        Scenario {
+            name: "end delivery: a fix launched, landed and tidied with nothing pending, then launched again, keys its two code ends' deliveries by two tokens, the second's recorded owed to its recipient (C.7; weir 101)",
+            cites: &["43", "3"],
+            run: a_place_launched_twice,
+        },
+        Scenario {
+            name: "end delivery: a live place's document written with no token is given one by its settle's write, and its ends' deliveries are keyed by it (C.7; weir 101)",
+            cites: &["43", "75"],
+            run: a_place_written_before_the_token,
         },
     ]
 }
@@ -328,7 +383,7 @@ fn a_delivery_and_its_record(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![delivered("one")],
+        vec![world.confirming(&delivered("one"))],
         "the notices to ops"
     );
     let ends = ends(&world, &id)?;
@@ -348,10 +403,10 @@ fn a_delivery_and_its_record(_: &()) -> Outcome {
         vec![("ops", world.host.now(), DeliveredBy::Notice)],
         "the delivery recorded"
     );
-    ensure!(
-        end.pending_for.is_empty(),
-        "pending for {:?}",
-        end.pending_for
+    ensure_eq!(
+        end.pending_for,
+        vec!["ops".to_string()],
+        "pending for, handed and not confirmed"
     );
     Ok(())
 }
@@ -381,12 +436,12 @@ fn an_agent_killed(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![notice(
+        vec![world.confirming(&notice(
             "one",
             "code lost",
             "stage/code/1/lost",
             "flume inbox"
-        )],
+        ))],
         "the notices to ops"
     );
     let ends = ends(&world, &id)?;
@@ -442,6 +497,9 @@ fn a_landing_and_a_failure(_: &()) -> Outcome {
         let once = if what == "code delivered" { 2 } else { 1 };
         ensure_eq!(sent, once, "notices of {what}");
     }
+    ensure_eq!(tidied(&world).len(), 1, "documents kept pending for ops");
+    world.confirm_every("ops");
+    world.engine().settle(None);
     ensure!(
         tidied(&world).is_empty(),
         "a document kept with nothing pending"
@@ -477,7 +535,7 @@ fn a_recipient_asking(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![delivered("one")],
+        vec![world.confirming(&delivered("one"))],
         "the notices once ops asks nothing"
     );
     Ok(())
@@ -520,7 +578,7 @@ fn a_recipient_away_and_back(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![delivered("one")],
+        vec![world.confirming(&delivered("one"))],
         "the notices once ops is back"
     );
     Ok(())
@@ -591,29 +649,60 @@ fn a_landing_with_its_recipient_away(_: &()) -> Outcome {
         "the notices once ops is back"
     );
     ensure!(
+        world.held(&kept_id).is_some(),
+        "the document gone while its ends are handed and not confirmed"
+    );
+    world.confirm_every("ops");
+    world.engine().settle(None);
+    ensure!(
         world.held(&kept_id).is_none(),
         "the document kept once every end was delivered"
+    );
+    let left: Vec<String> = world
+        .deliveries()
+        .iter()
+        .map(weir_delivery::json::write)
+        .collect();
+    ensure!(
+        left.len() == 1 && left[0].contains("weir-known/1") && left[0].contains("\"ops\""),
+        "the deliveries once let go of: {left:?}"
     );
     Ok(())
 }
 
+/// The end-delivery spec's "Dropped while pending" (62; weir I9).
 fn dropped_while_pending(_: &()) -> Outcome {
     let world = World::new();
-    let id = landed_away(&world, "one")?;
-    ensure_eq!(tidied(&world).len(), 1, "tidied documents");
+    let id = landed_with(&world, "one", &["boomdrive"])?;
+    let before = tidied(&world);
+    ensure_eq!(before.len(), 1, "tidied documents");
     let answer = world.engine().drop_place(&id, false);
-    ensure!(answer.refusal().is_none(), "the drop refused: {answer:?}");
+    let reason = refused(&answer)?;
+    ensure!(
+        reason.contains("boomdrive") && reason.contains("flume confirm"),
+        "the drop's refusal: {reason}"
+    );
+    ensure_eq!(
+        tidied(&world),
+        before,
+        "the document after the refused drop"
+    );
+    ensure!(
+        world
+            .status(&id)?
+            .ends
+            .iter()
+            .all(|end| end.pending_for == vec!["boomdrive".to_string()]),
+        "the ends after the refused drop"
+    );
+    // Once boomdrive confirms them, the drop takes the document away.
+    world.confirm_every("boomdrive");
+    let answer = world.engine().drop_place(&id, false);
+    ensure!(
+        answer.refusal().is_none(),
+        "the drop once confirmed: {answer:?}"
+    );
     ensure!(tidied(&world).is_empty(), "the document after its drop");
-    ensure!(
-        collected(&world.engine().inbox("ops", None))?.is_empty(),
-        "the inbox gave an end of a dropped place"
-    );
-    world.terminal.add_session("ops", AgentState::Waiting);
-    world.engine().settle(None);
-    ensure!(
-        world.terminal.notices("ops").is_empty(),
-        "an end of a dropped place delivered"
-    );
     Ok(())
 }
 
@@ -637,7 +726,7 @@ fn launched_again(_: &()) -> Outcome {
         after[0]
             .ends
             .iter()
-            .all(|end| end.pending(&after[0].place.recipients) == vec!["ops".to_string()]),
+            .all(|end| end.pending(&after[0].place, &world.owing()) == vec!["ops".to_string()]),
         "the tidied document's ends are not all pending for ops"
     );
     Ok(())
@@ -685,7 +774,7 @@ fn collected_after_the_tidy(_: &()) -> Outcome {
     ensure_eq!(kept.len(), 1, "tidied documents");
     let landed = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
     ensure_eq!(
-        collected(&world.engine().inbox("ops", None))?,
+        collected(&world.engine().inbox("ops", None, true))?,
         vec![
             "fix--one code delivered".to_string(),
             format!("fix--one submission landed {landed}"),
@@ -702,19 +791,25 @@ fn collected_after_the_tidy(_: &()) -> Outcome {
         "the document kept once every end was collected"
     );
     ensure!(
-        collected(&world.engine().inbox("ops", None))?.is_empty(),
+        collected(&world.engine().inbox("ops", None, true))?.is_empty(),
         "a second inbox gave something"
     );
     Ok(())
 }
 
 fn a_restarted_recipient_waits_again(_: &()) -> Outcome {
+    restarted_and_waited().map(|_| ())
+}
+
+/// The end-delivery spec's "A restarted recipient waits again": the
+/// landing handed to `ops` by its wait, and still pending for it (43).
+fn restarted_and_waited() -> Result<(World, PlaceId), String> {
     let world = World::new();
     world.terminal.add_session("ops", AgentState::Working);
     let id = fix_for_ops(&world, "one")?;
     let first = world
         .engine()
-        .wait(&id, &WaitFor::Submission, "ops", Some(10));
+        .wait(&id, &WaitFor::Submission, "ops", Some(10), true);
     ensure!(waited(&first)?.is_none(), "the first wait: {first:?}");
     ensure_eq!(first.exit(), 3, "the first wait's exit");
     world.terminal.remove_session("ops");
@@ -725,7 +820,7 @@ fn a_restarted_recipient_waits_again(_: &()) -> Outcome {
     world.host.log.clear();
     let again = world
         .engine
-        .wait(&id, &WaitFor::Submission, "ops", Some(10));
+        .wait(&id, &WaitFor::Submission, "ops", Some(10), false);
     ensure_eq!(world.host.log.count("sleep"), 0, "the wait slept");
     let (end, delivered) = waited(&again)?.ok_or("still waiting")?;
     let landed = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
@@ -734,22 +829,85 @@ fn a_restarted_recipient_waits_again(_: &()) -> Outcome {
         "the end answered: {:?}",
         end.end.of
     );
-    ensure!(delivered, "the wait did not deliver it");
+    ensure!(delivered, "the wait did not hand it over");
     ensure_eq!(again.exit(), 0, "the wait's exit");
     ensure_eq!(
         deliveries(&end.end),
         vec![("ops".to_string(), DeliveredBy::Wait)],
-        "the landing's deliveries"
+        "the landing's hand-overs"
     );
-    let status = world.status(&id)?;
-    let landing = status
-        .ends
-        .iter()
-        .find(|end| matches!(end.end.of, EndOf::Submission { .. }))
-        .ok_or("no landing in status")?;
+    let landing = landing_of(&world, &id)?;
     ensure!(
-        landing.end.delivered_to("ops") && landing.pending_for.is_empty(),
+        landing.end.delivered_to("ops") && landing.pending_for == vec!["ops".to_string()],
         "the landing as status gives it: {landing:?}"
+    );
+    Ok((world, id))
+}
+
+/// The landing of the place as status gives it.
+fn landing_of(world: &World, id: &PlaceId) -> Result<EndStatus, String> {
+    world
+        .status(id)?
+        .ends
+        .into_iter()
+        .find(|end| matches!(end.end.of, EndOf::Submission { .. }))
+        .ok_or("no landing in status".into())
+}
+
+/// The end-delivery spec's "A wait that confirms": its hand-over and the
+/// recipient's confirmation recorded together (43; weir 103).
+fn a_wait_that_confirms(_: &()) -> Outcome {
+    let (world, id) = restarted_and_waited()?;
+    world.host.advance(60);
+    let confirmed = world
+        .engine()
+        .wait(&id, &WaitFor::Submission, "ops", Some(10), true);
+    let (end, delivered) = waited(&confirmed)?.ok_or("still waiting")?;
+    ensure!(
+        delivered
+            && matches!(
+                &end.end.of,
+                EndOf::Submission {
+                    verdict: Verdict::Landed { .. },
+                    ..
+                }
+            ),
+        "the wait that confirms: {confirmed:?}"
+    );
+    ensure!(
+        end.pending_for.is_empty(),
+        "pending for {:?}",
+        end.pending_for
+    );
+    let landing = landing_of(&world, &id)?;
+    ensure_eq!(
+        deliveries(&landing.end),
+        vec![
+            ("ops".to_string(), DeliveredBy::Wait),
+            ("ops".to_string(), DeliveredBy::Wait)
+        ],
+        "the landing's hand-overs"
+    );
+    let now = world.host.now();
+    let owing = world.owing();
+    let delivery = owing
+        .deliveries
+        .values()
+        .find(|delivery| delivery.key.ends_with("/submission/1/landed"))
+        .ok_or("no delivery of the landing")?;
+    ensure_eq!(
+        (
+            delivery.confirmed.clone(),
+            delivery.handovers.last().map(|handover| handover.at)
+        ),
+        (
+            vec![ConfirmedBy {
+                recipient: "ops".into(),
+                at: now
+            }],
+            Some(now)
+        ),
+        "the confirmation and the hand-over it was recorded with"
     );
     Ok(())
 }
@@ -760,7 +918,7 @@ fn the_timeout(_: &()) -> Outcome {
     let began = world.host.now();
     let answer = world
         .engine()
-        .wait(&id, &WaitFor::Stage("code".into()), "ops", Some(60));
+        .wait(&id, &WaitFor::Stage("code".into()), "ops", Some(60), true);
     ensure!(waited(&answer)?.is_none(), "the wait: {answer:?}");
     ensure_eq!(answer.exit(), 3, "the wait's exit");
     ensure_eq!(world.host.now() - began, 60, "how long the wait followed");
@@ -769,9 +927,12 @@ fn the_timeout(_: &()) -> Outcome {
         Some(StageState::Begun),
         "code"
     );
-    let held = world.held(&id).ok_or("no place")?;
     ensure!(
-        held.ends.iter().all(|end| end.deliveries.is_empty()),
+        world
+            .status(&id)?
+            .ends
+            .iter()
+            .all(|end| end.end.deliveries.is_empty()),
         "a delivery recorded"
     );
     Ok(())
@@ -785,20 +946,25 @@ fn a_wait_reads_an_end_delivered(_: &()) -> Outcome {
     deliver_fix(&world, &id);
     world.settle(&id);
     ensure_eq!(world.terminal.notices("ops").len(), 1, "notices to ops");
+    world.confirm("ops", "fix--one", &["stage/code/1/delivered"])?;
     let answer = world
         .engine()
-        .wait(&id, &WaitFor::Stage("code".into()), "ops", Some(10));
+        .wait(&id, &WaitFor::Stage("code".into()), "ops", Some(10), true);
     let (end, delivered) = waited(&answer)?.ok_or("still waiting")?;
-    ensure!(!delivered, "the wait delivered an end delivered before");
+    ensure!(!delivered, "the wait handed over an end confirmed before");
     ensure_eq!(answer.exit(), 0, "the wait's exit");
     ensure_eq!(
         deliveries(&end.end),
         vec![("ops".to_string(), DeliveredBy::Notice)],
         "the deliveries"
     );
-    let other = world
-        .engine()
-        .wait(&id, &WaitFor::Stage("code".into()), "planner", Some(10));
+    let other = world.engine().wait(
+        &id,
+        &WaitFor::Stage("code".into()),
+        "planner",
+        Some(10),
+        true,
+    );
     let (end, delivered) = waited(&other)?.ok_or("still waiting")?;
     ensure!(!delivered, "a wait delivered to a recipient not named");
     ensure_eq!(
@@ -853,7 +1019,7 @@ fn a_wait_under_a_watch(_: &()) -> Outcome {
     clear_calls(&world);
     let first = world
         .engine()
-        .wait(&id, &WaitFor::Stage("code".into()), "ops", Some(20));
+        .wait(&id, &WaitFor::Stage("code".into()), "ops", Some(20), true);
     ensure!(waited(&first)?.is_none(), "the first wait: {first:?}");
     ensure_eq!(
         seam_calls(&world),
@@ -870,7 +1036,7 @@ fn a_wait_under_a_watch(_: &()) -> Outcome {
     clear_calls(&world);
     let second = world
         .engine()
-        .wait(&id, &WaitFor::Stage("code".into()), "ops", Some(20));
+        .wait(&id, &WaitFor::Stage("code".into()), "ops", Some(20), true);
     ensure_eq!(
         seam_calls(&world),
         Vec::<String>::new(),
@@ -901,7 +1067,7 @@ fn a_wait_attended(_: &()) -> Outcome {
     deliver_fix(&world, &id);
     let answer = world
         .engine()
-        .wait(&id, &WaitFor::Stage("code".into()), "ops", Some(20));
+        .wait(&id, &WaitFor::Stage("code".into()), "ops", Some(20), true);
     let (end, delivered) = waited(&answer)?.ok_or("still waiting")?;
     ensure!(
         delivered
@@ -927,14 +1093,15 @@ fn a_wait_refused(_: &()) -> Outcome {
         &WaitFor::Submission,
         "ops",
         Some(10),
+        true,
     );
     ensure!(refused(&none)?.contains("no place"), "{none:?}");
     ensure_eq!(none.exit(), 1, "the refusal's exit");
-    let stage = engine.wait(&id, &WaitFor::Stage("review".into()), "ops", Some(10));
+    let stage = engine.wait(&id, &WaitFor::Stage("review".into()), "ops", Some(10), true);
     ensure!(refused(&stage)?.contains("no stage review"), "{stage:?}");
     world.begun("notes", None, "two")?;
     let two = World::id("notes", "two");
-    let submission = engine.wait(&two, &WaitFor::Submission, "ops", Some(10));
+    let submission = engine.wait(&two, &WaitFor::Submission, "ops", Some(10), true);
     ensure!(
         refused(&submission)?.contains("does not land"),
         "{submission:?}"
@@ -963,12 +1130,12 @@ fn collected_after_a_restart(_: &()) -> Outcome {
     );
     world.engine().status(None);
     ensure!(
-        collected(&world.engine().inbox("planner", None))?.is_empty(),
+        collected(&world.engine().inbox("planner", None, true))?.is_empty(),
         "another recipient's inbox collected"
     );
     world.engine.settle_every(30);
     world.terminal.add_session("ops", AgentState::Working);
-    let answer = world.engine().inbox("ops", None);
+    let answer = world.engine().inbox("ops", None, false);
     ensure_eq!(
         collected(&answer)?,
         vec![
@@ -999,18 +1166,56 @@ fn collected_after_a_restart(_: &()) -> Outcome {
     for name in ["one", "two"] {
         let status = world.status(&World::id("fix", name))?;
         ensure!(
-            status.ends.iter().all(|end| end.pending_for.is_empty()),
+            status
+                .ends
+                .iter()
+                .all(|end| end.pending_for == vec!["ops".to_string()]),
             "pending after the inbox: {:?}",
             status.ends
         );
     }
-    ensure!(
-        collected(&world.engine().inbox("ops", None))?.is_empty(),
-        "a second inbox gave something"
+    ensure_eq!(
+        collected(&world.engine().inbox("ops", None, false))?,
+        vec![
+            "fix--one code delivered".to_string(),
+            "fix--two code delivered".to_string(),
+        ],
+        "what a second inbox gave"
     );
     ensure!(
         world.terminal.every_notice().is_empty(),
         "a notice sent besides the inbox"
+    );
+    Ok(())
+}
+
+/// The end-delivery spec's "Collected and confirmed" (43; weir 103).
+fn collected_and_confirmed(_: &()) -> Outcome {
+    let world = World::new();
+    two_pending(&world)?;
+    world.engine.settle_every(30);
+    world.terminal.add_session("ops", AgentState::Working);
+    collected(&world.engine().inbox("ops", None, false))?;
+    let answer = world.engine().inbox("ops", None, true);
+    ensure_eq!(
+        collected(&answer)?,
+        vec![
+            "fix--one code delivered".to_string(),
+            "fix--two code delivered".to_string(),
+        ],
+        "what ops collected and confirmed"
+    );
+    for name in ["one", "two"] {
+        let status = world.status(&World::id("fix", name))?;
+        ensure!(
+            status.ends.iter().all(|end| end.pending_for.is_empty()),
+            "pending after the inbox that confirms: {:?}",
+            status.ends
+        );
+    }
+    ensure!(
+        collected(&world.engine().inbox("ops", None, false))?.is_empty(),
+        "a third inbox gave something"
     );
     Ok(())
 }
@@ -1022,11 +1227,11 @@ fn two_inboxes_at_once(_: &()) -> Outcome {
     let other = Arc::new(Mutex::new(None));
     let engine = world.engine();
     let into = other.clone();
-    world.store.before_next_write(move || {
-        let answer = engine.inbox("ops", None);
+    world.store.before_next_host_write(move || {
+        let answer = engine.inbox("ops", None, true);
         *into.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(answer);
     });
-    let first = collected(&world.engine().inbox("ops", None))?;
+    let first = collected(&world.engine().inbox("ops", None, true))?;
     let second = other
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -1053,9 +1258,8 @@ fn two_inboxes_at_once(_: &()) -> Outcome {
         "the two inboxes did not meet at one write"
     );
     for name in ["one", "two"] {
-        let held = world.held(&World::id("fix", name)).ok_or("no place")?;
-        for end in &held.ends {
-            ensure_eq!(end.deliveries.len(), 1, "deliveries of {name}'s end");
+        for end in world.status(&World::id("fix", name))?.ends {
+            ensure_eq!(end.end.deliveries.len(), 1, "deliveries of {name}'s end");
         }
     }
     Ok(())
@@ -1127,7 +1331,7 @@ fn a_standing_agent_waiting(_: &()) -> Outcome {
     let id = delivered_for_planner(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![delivered("one")],
+        vec![world.confirming(&delivered("one"))],
         "the notices to the standing agent"
     );
     ensure_eq!(
@@ -1144,7 +1348,12 @@ fn a_standing_agent_waiting(_: &()) -> Outcome {
             .map(|delivery| (delivery.recipient.as_str(), delivery.at, delivery.by))
             .collect::<Vec<_>>(),
         vec![(PLANNER, world.host.now(), DeliveredBy::Notice)],
-        "the delivery recorded"
+        "the hand-over recorded"
+    );
+    ensure_eq!(
+        end.pending_for,
+        vec![PLANNER.to_string()],
+        "pending for, handed by notice"
     );
     ensure_eq!(world.store.places(), vec![id], "the places on the host");
     ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
@@ -1173,7 +1382,7 @@ fn a_standing_agent_asking(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![delivered("one")],
+        vec![world.confirming(&delivered("one"))],
         "the notices once it waits"
     );
     Ok(())
@@ -1240,7 +1449,7 @@ fn an_agent_revived_under_its_name(_: &()) -> Outcome {
     let one = delivered_for_planner(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&first),
-        vec![delivered("one")],
+        vec![world.confirming(&delivered("one"))],
         "the first agent's notices"
     );
     world.terminal.remove_agent(&first);
@@ -1252,7 +1461,7 @@ fn an_agent_revived_under_its_name(_: &()) -> Outcome {
     world.settle(&one);
     ensure_eq!(
         world.terminal.notices(&revived),
-        vec![delivered("two")],
+        vec![world.confirming(&delivered("two"))],
         "the revived agent's notices"
     );
     ensure_eq!(
@@ -1285,7 +1494,7 @@ fn the_session_from_the_addresss_stream(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         other.notices(&at),
-        vec![delivered("one")],
+        vec![world.confirming(&delivered("one"))],
         "the notices in w's terminal"
     );
     ensure!(
@@ -1320,7 +1529,7 @@ fn the_default_streams_own_session(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![delivered("one")],
+        vec![world.confirming(&delivered("one"))],
         "the notices in the terminal's own part"
     );
     ensure!(
@@ -1368,16 +1577,20 @@ fn the_inbox_collects_for_a_standing_address(_: &()) -> Outcome {
         "a notice sent while the agent is away"
     );
     ensure_eq!(
-        collected(&world.engine().inbox(PLANNER, None))?,
+        collected(&world.engine().inbox(PLANNER, None, false))?,
         vec!["fix--one code delivered".to_string()],
         "what the inbox collected"
     );
-    let held = world.held(&id).ok_or("no place")?;
-    for end in &held.ends {
+    for end in world.status(&id)?.ends {
         ensure_eq!(
-            deliveries(end),
+            deliveries(&end.end),
             vec![(PLANNER.to_string(), DeliveredBy::Inbox)],
-            "the deliveries"
+            "the hand-overs"
+        );
+        ensure_eq!(
+            end.pending_for,
+            vec![PLANNER.to_string()],
+            "pending for, handed by the inbox"
         );
     }
     let at = world
@@ -1425,10 +1638,9 @@ fn a_lost_talk_with_a_bare_agent(_: &()) -> Outcome {
     );
     ensure_eq!(
         notices,
-        vec![
+        vec![world.confirming(
             "flume: research--one (weigh the options) talk lost, and flume left the agent the terminal brought back in its pane [stage/talk/1/lost]; read: flume inbox"
-                .to_string()
-        ],
+        )],
         "the notices to ops"
     );
     Ok(())
@@ -1443,10 +1655,9 @@ fn a_lost_talk_with_no_agent(_: &()) -> Outcome {
     ensure!(!end.left_in_pane, "talk's lost end says an agent was left");
     ensure_eq!(
         notices,
-        vec![
+        vec![world.confirming(
             "flume: research--one (weigh the options) talk lost [stage/talk/1/lost]; read: flume inbox"
-                .to_string()
-        ],
+        )],
         "the notices to ops"
     );
     Ok(())
@@ -1468,14 +1679,14 @@ fn construct_short() -> EndKey {
 fn a_question_collected_then_a_restart(_: &()) -> Outcome {
     let world = World::new();
     let (id, asked) = construct_asks(&world, "plan", &["ops"], None)?;
-    let first = world.engine().inbox("ops", None);
+    let first = world.engine().inbox("ops", None, true);
     ensure_eq!(
         collected(&first)?,
         vec!["change--plan construct needs an answer".to_string()],
         "what ops collected first"
     );
     let before = world.held(&id);
-    let again = world.engine().inbox("ops", None);
+    let again = world.engine().inbox("ops", None, true);
     ensure!(collected(&again)?.is_empty(), "the restart collected again");
     ensure_eq!(world.held(&id), before, "the second inbox wrote the place");
     let waits = waiting(&again)?;
@@ -1523,7 +1734,7 @@ fn a_question_collected_then_a_restart(_: &()) -> Outcome {
     );
     ensure!(place.hold.is_none(), "a hold given: {:?}", place.hold);
     ensure!(
-        waiting(&world.engine().inbox("planner", None))?.is_empty(),
+        waiting(&world.engine().inbox("planner", None, true))?.is_empty(),
         "another recipient's inbox gives the place"
     );
     Ok(())
@@ -1534,7 +1745,7 @@ fn the_inbox_of_the_role_asked(_: &()) -> Outcome {
     east_and_west(&world);
     answerer_behind(&world, "east");
     let (id, _) = asks_in_east(&world, &["east/planner"], Some("ops"))?;
-    let waits = waiting(&world.engine.inbox("east/ops", None))?;
+    let waits = waiting(&world.engine.inbox("east/ops", None, true))?;
     let place = waits.iter().find(|place| place.place == id).ok_or(format!(
         "east/ops's inbox gives no waiting place: {waits:?}"
     ))?;
@@ -1548,7 +1759,7 @@ fn the_inbox_of_the_role_asked(_: &()) -> Outcome {
     );
     ensure_eq!(place.stream.as_str(), "east", "the place's stream");
     ensure!(
-        waiting(&world.engine.inbox("east/design", None))?
+        waiting(&world.engine.inbox("east/design", None, true))?
             .iter()
             .all(|place| place.place != id),
         "a role neither asked nor a recipient is given the place"
@@ -1565,7 +1776,7 @@ fn the_answerers_waiting_places(_: &()) -> Outcome {
     world.terminal.set_session(Some("ops"));
     let (id, _) = asks_in_east(&world, &[], None)?;
     ensure!(
-        waiting(&world.engine.inbox("east/operator", None))?
+        waiting(&world.engine.inbox("east/operator", None, true))?
             .iter()
             .all(|place| place.place != id),
         "the answerer is given a place that has not stalled"
@@ -1578,7 +1789,7 @@ fn the_answerers_waiting_places(_: &()) -> Outcome {
         "the answerer is a recipient: {:?}",
         held.place.recipients
     );
-    let waits = waiting(&world.engine.inbox("east/operator", None))?;
+    let waits = waiting(&world.engine.inbox("east/operator", None, true))?;
     let place = waits.iter().find(|place| place.place == id).ok_or(format!(
         "the answerer's inbox gives no waiting place: {waits:?}"
     ))?;
@@ -1616,7 +1827,7 @@ fn a_held_question_in_the_inbox(_: &()) -> Outcome {
         lapsed: None,
     });
     for read in ["the first", "the next"] {
-        let waits = waiting(&world.engine.inbox("east/planner", None))?;
+        let waits = waiting(&world.engine.inbox("east/planner", None, true))?;
         let place = waits
             .iter()
             .find(|place| place.place == id)
@@ -1677,10 +1888,14 @@ fn a_stop_shorts_notice(_: &()) -> Outcome {
         "the brief given is longer than 60 characters"
     );
     let notices = world.terminal.notices("ops");
+    let token = world
+        .held(&id)
+        .and_then(|held| held.place.token)
+        .ok_or("the place holds no token")?;
     ensure_eq!(
         notices,
         vec![format!(
-            "flume: change--every-question ({CUT_BRIEF}) construct needs an answer, its agent kept open for the answer until {} [stage/construct/1/ended-short]; read: flume inbox",
+            "flume: change--every-question ({CUT_BRIEF}) construct needs an answer, its agent kept open for the answer until {} [stage/construct/1/ended-short]; read: flume inbox; confirm: flume confirm change--every-question/{token}/stage/construct/1/ended-short",
             asked + flume_core::KEEP_OPEN
         )],
         "the notices to ops"
@@ -1698,10 +1913,14 @@ fn a_deliverys_notice(_: &()) -> Outcome {
     let id = every_question(&world)?;
     write_change(&world, "every-question");
     world.settle(&id);
+    let token = world
+        .held(&id)
+        .and_then(|held| held.place.token)
+        .ok_or("the place holds no token")?;
     ensure_eq!(
         world.terminal.notices("ops"),
         vec![format!(
-            "flume: change--every-question ({CUT_BRIEF}) construct delivered [stage/construct/1/delivered]; read: flume status change--every-question"
+            "flume: change--every-question ({CUT_BRIEF}) construct delivered [stage/construct/1/delivered]; read: flume status change--every-question; confirm: flume confirm change--every-question/{token}/stage/construct/1/delivered"
         )],
         "the notices to ops"
     );
@@ -1744,7 +1963,7 @@ fn a_restarted_sessions_words(_: &()) -> Outcome {
     world.terminal.set_session(Some("ops"));
     world.host.set_recipient(None);
     let (_, asked) = construct_asks(&world, "plan", &["ops"], None)?;
-    collected(&world.engine().inbox("ops", None))?;
+    collected(&world.engine().inbox("ops", None, true))?;
     let answer = world.engine.session_inbox().ok_or("no inbox")?;
     let words = flume_core::session_words(&answer).ok_or("no words")?;
     let until = asked + flume_core::KEEP_OPEN;
@@ -1838,6 +2057,8 @@ fn kept_for_a_reader(_: &()) -> Outcome {
     world.terminal.add_session("ops", AgentState::Waiting);
     let id = landed_with(&world, "one", &["ops", "boomdrive"])?;
     ensure_eq!(landing_notices(&world, "ops"), 1, "ops's notice");
+    world.confirm_every("ops");
+    world.engine().settle(None);
     let status = world.status(&id)?;
     ensure!(
         matches!(&status.phase, Phase::Tidied { pending_for, .. } if pending_for == &vec!["boomdrive".to_string()]),
@@ -1868,21 +2089,25 @@ fn a_landing_for_a_reader(_: &()) -> Outcome {
         "a notice went elsewhere than ops: {:?}",
         world.terminal.every_notice()
     );
+    let both = vec!["ops".to_string(), "boomdrive".to_string()];
     ensure_eq!(
         kept_pending_for(&world)?,
-        vec!["boomdrive".to_string()],
+        both,
         "whom the document waits on"
     );
     for key in ["stage/code/1/delivered", "submission/1/landed"] {
+        let end = end_keyed(&world, &id, key)?;
+        ensure_eq!(end.pending_for, both, format!("whom {key} waits on"));
         ensure_eq!(
-            end_keyed(&world, &id, key)?.pending_for,
-            vec!["boomdrive".to_string()],
-            format!("whom {key} waits on")
+            deliveries(&end.end),
+            vec![("ops".to_string(), DeliveredBy::Notice)],
+            format!("{key}'s hand-overs")
         );
     }
+    world.confirm_every("ops");
     let landed = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
     ensure_eq!(
-        collected(&world.engine().inbox("boomdrive", Some(&id)))?,
+        collected(&world.engine().inbox("boomdrive", Some(&id), true))?,
         vec![
             "fix--one code delivered".to_string(),
             format!("fix--one submission landed {landed}"),
@@ -1928,7 +2153,7 @@ fn a_drop_for_a_role_and_a_reader(_: &()) -> Outcome {
     );
     ensure!(!any_run(&world), "a run of east/planner was launched");
     ensure_eq!(
-        collected(&world.engine().inbox("boomdrive", None))?,
+        collected(&world.engine().inbox("boomdrive", None, true))?,
         vec!["fix--one dropped".to_string()],
         "what boomdrive collected"
     );
@@ -2005,7 +2230,7 @@ fn a_drop_for_a_session_in_a_pane(_: &()) -> Outcome {
         "whom the drop waits on"
     );
     ensure_eq!(
-        collected(&world.engine().inbox("ops", None))?,
+        collected(&world.engine().inbox("ops", None, true))?,
         vec!["fix--one dropped".to_string()],
         "what ops collected"
     );
@@ -2052,7 +2277,7 @@ fn a_done(_: &()) -> Outcome {
         "whom the document waits on"
     );
     ensure_eq!(
-        collected(&world.engine().inbox("boomdrive", None))?,
+        collected(&world.engine().inbox("boomdrive", None, true))?,
         vec!["notes--one done".to_string()],
         "what boomdrive collected"
     );
@@ -2072,7 +2297,8 @@ fn an_inbox_naming_a_place(_: &()) -> Outcome {
     let first = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
     let two = landed_with(&world, "two", &["ops", "boomdrive"])?;
     let second = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
-    let answer = world.engine().inbox("boomdrive", Some(&one));
+    world.confirm_every("ops");
+    let answer = world.engine().inbox("boomdrive", Some(&one), true);
     ensure_eq!(
         collected(&answer)?,
         vec![
@@ -2105,7 +2331,7 @@ fn an_inbox_naming_a_place(_: &()) -> Outcome {
         "whom the second's landing waits on"
     );
     // Its document gone once collected, nothing stands under its name.
-    refused(&world.engine().inbox("boomdrive", Some(&one)))?;
+    refused(&world.engine().inbox("boomdrive", Some(&one), true))?;
     // The second, named by its document, `<location>@<at>` (62).
     let document = kept[0].place.id.clone();
     ensure!(
@@ -2113,7 +2339,7 @@ fn an_inbox_naming_a_place(_: &()) -> Outcome {
         "the document's name: {document}"
     );
     ensure_eq!(
-        collected(&world.engine().inbox("boomdrive", Some(&document)))?,
+        collected(&world.engine().inbox("boomdrive", Some(&document), true))?,
         vec![
             "fix--two code delivered".to_string(),
             format!("fix--two submission landed {second}"),
@@ -2131,7 +2357,7 @@ fn a_name_under_which_nothing_stands(_: &()) -> Outcome {
     let one = landed_with(&world, "one", &["ops", "boomdrive"])?;
     let before = tidied(&world);
     let nothing = World::id("fix", "nothing");
-    let reason = refused(&world.engine().inbox("boomdrive", Some(&nothing)))?;
+    let reason = refused(&world.engine().inbox("boomdrive", Some(&nothing), true))?;
     ensure!(
         reason.contains(&nothing.0),
         "the refusal names no place: {reason}"
@@ -2141,6 +2367,518 @@ fn a_name_under_which_nothing_stands(_: &()) -> Outcome {
         end_keyed(&world, &one, "submission/1/landed")?.pending_for,
         vec!["ops".to_string(), "boomdrive".to_string()],
         "whom the landing waits on"
+    );
+    Ok(())
+}
+
+/// Whether `token` is eight hex characters, as a launch takes one (C.7).
+fn a_token(token: &str) -> bool {
+    token.len() == 8 && token.chars().all(|char| char.is_ascii_hexdigit())
+}
+
+/// The delivery the host's deliveries hold under `key`, as recorded.
+fn delivery_under(world: &World, key: &str) -> Option<weir_delivery::Delivery> {
+    world
+        .deliveries()
+        .into_iter()
+        .find_map(|record| match record {
+            weir_delivery::Record::Delivery(delivery) if delivery.key().as_str() == key => {
+                Some(delivery)
+            }
+            _ => None,
+        })
+}
+
+/// The readers weir's `owed` gives the delivery under `key` owed to, now
+/// by the fake host's clock (weir 105, 111).
+fn owed_to(world: &World, key: &str) -> Result<Vec<String>, String> {
+    let now = flume_core::deliveries::time(world.host.now());
+    let owed = weir_delivery::owed(&world.deliveries(), &now).map_err(|why| why.to_string())?;
+    Ok(owed
+        .readers
+        .iter()
+        .filter(|reader| {
+            reader
+                .deliveries
+                .iter()
+                .any(|owed| owed.delivery.key().as_str() == key)
+        })
+        .map(|reader| reader.reader.to_string())
+        .collect())
+}
+
+/// The deliveries spec's "A place launched twice": two launches of one
+/// place never share a delivery's key (43; weir 101).
+fn a_place_launched_twice(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    let id = fix_for_ops(&world, "twice")?;
+    let first = world
+        .held(&id)
+        .and_then(|held| held.place.token)
+        .ok_or("the first launch took no token")?;
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    world.confirm_every("ops");
+    world.engine().settle(None);
+    ensure!(
+        world.held(&id).is_none() && tidied(&world).is_empty(),
+        "the first place, landed with nothing pending, stands"
+    );
+    let first_key = format!("fix--twice/{first}/stage/code/1/delivered");
+    ensure!(
+        world
+            .terminal
+            .notices("ops")
+            .iter()
+            .any(|notice| notice.ends_with(&format!("; confirm: flume confirm {first_key}"))),
+        "no notice of the first code end names {first_key}: {:?}",
+        world.terminal.notices("ops")
+    );
+    world.terminal.remove_session("ops");
+    let id = fix_for_ops(&world, "twice")?;
+    let second = world
+        .held(&id)
+        .and_then(|held| held.place.token)
+        .ok_or("the second launch took no token")?;
+    ensure!(
+        a_token(&first) && a_token(&second) && first != second,
+        "the two launches' tokens: {first} and {second}"
+    );
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    let second_key = format!("fix--twice/{second}/stage/code/1/delivered");
+    let delivery = delivery_under(&world, &second_key)
+        .ok_or(format!("no delivery recorded under {second_key}"))?;
+    ensure_eq!(
+        delivery
+            .readers()
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
+        vec!["ops".to_string()],
+        "the second delivery's readers"
+    );
+    ensure_eq!(
+        owed_to(&world, &second_key)?,
+        vec!["ops".to_string()],
+        "whom the second delivery is owed to"
+    );
+    Ok(())
+}
+
+/// The deliveries spec's "A place written before the token": its settle's
+/// write gives it one, and its ends' deliveries are keyed by it (43, 75).
+fn a_place_written_before_the_token(_: &()) -> Outcome {
+    let world = World::new();
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = fix_for_ops(&world, "before")?;
+    world.engine.update(&id, |held| {
+        held.place.token = None;
+        flume_core::Step::Write(())
+    });
+    ensure!(
+        world.held(&id).ok_or("no place")?.place.token.is_none(),
+        "the document holds a token"
+    );
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    let token = world
+        .held(&id)
+        .ok_or("no place")?
+        .place
+        .token
+        .ok_or("the settle gave the document no token")?;
+    ensure!(a_token(&token), "the token given: {token}");
+    let key = format!("fix--before/{token}/stage/code/1/delivered");
+    ensure!(
+        delivery_under(&world, &key).is_some(),
+        "no delivery under {key}: {:?}",
+        world.deliveries()
+    );
+    Ok(())
+}
+
+/// The fix `one` for `ops`, its submission held, its code delivered and
+/// handed to `ops` by one notice.
+fn handed_to_ops(world: &World) -> Result<PlaceId, String> {
+    world.terminal.add_session("ops", AgentState::Waiting);
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = fix_for_ops(world, "one")?;
+    deliver_fix(world, &id);
+    world.settle(&id);
+    ensure_eq!(world.terminal.notices("ops").len(), 1, "notices to ops");
+    Ok(id)
+}
+
+/// The end-delivery spec's "Handed and stopped before acting" (43, S122;
+/// weir 103).
+fn handed_and_stopped_before_acting(_: &()) -> Outcome {
+    let world = World::new();
+    let id = handed_to_ops(&world)?;
+    world.terminal.remove_session("ops");
+    world.terminal.add_session("ops", AgentState::Waiting);
+    for _ in 0..3 {
+        world.host.advance(60);
+        world.settle(&id);
+    }
+    ensure_eq!(
+        world.terminal.notices("ops").len(),
+        1,
+        "notices to ops after it was cleared"
+    );
+    let end = end_keyed(&world, &id, "stage/code/1/delivered")?;
+    ensure_eq!(
+        deliveries(&end.end),
+        vec![("ops".to_string(), DeliveredBy::Notice)],
+        "code's hand-overs"
+    );
+    ensure_eq!(end.pending_for, vec!["ops".to_string()], "pending for");
+    ensure_eq!(
+        collected(&world.engine().inbox("ops", None, false))?,
+        vec!["fix--one code delivered".to_string()],
+        "what ops's next inbox gave"
+    );
+    Ok(())
+}
+
+/// The end-delivery spec's "A notice claimed and not recorded" (43, 75).
+fn a_notice_claimed_and_not_recorded(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Asking);
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = fix_for_ops(&world, "one")?;
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    ensure!(
+        world.terminal.notices("ops").is_empty(),
+        "a notice sent into a question"
+    );
+    world.terminal.set_session_state("ops", AgentState::Waiting);
+    // The claim is the settle's first write of the place; the host's
+    // deliveries refuse every write from it until the settle is over.
+    let store = world.store.clone();
+    world
+        .store
+        .before_next_write(move || store.refuse_host_writes(true));
+    world.host.advance(30);
+    let claimed_at = world.host.now();
+    world.settle(&id);
+    world.store.refuse_host_writes(false);
+    ensure_eq!(world.terminal.notices("ops").len(), 1, "notices sent");
+    ensure!(
+        world
+            .store
+            .log
+            .of("write_host")
+            .iter()
+            .any(|write| write.ends_with("refused")),
+        "the hand-over's write was not refused"
+    );
+    ensure!(
+        end_keyed(&world, &id, "stage/code/1/delivered")?
+            .end
+            .deliveries
+            .is_empty(),
+        "a hand-over recorded while the deliveries refused writes"
+    );
+    world.host.advance(30);
+    world.settle(&id);
+    ensure_eq!(world.terminal.notices("ops").len(), 1, "notices sent again");
+    let end = end_keyed(&world, &id, "stage/code/1/delivered")?;
+    ensure_eq!(
+        end.end
+            .deliveries
+            .iter()
+            .map(|delivery| (delivery.recipient.as_str(), delivery.at, delivery.by))
+            .collect::<Vec<_>>(),
+        vec![("ops", claimed_at, DeliveredBy::Notice)],
+        "the hand-over recorded at the claim's time"
+    );
+    Ok(())
+}
+
+/// The version of the host's deliveries document, none where none is.
+fn deliveries_version(world: &World) -> Option<u64> {
+    world
+        .store
+        .read_host(&HostKey::Deliveries)
+        .map(|read| read.version)
+}
+
+/// The end-delivery spec's "Confirmed twice" (43; weir 102).
+fn confirmed_twice(_: &()) -> Outcome {
+    let world = World::new();
+    let id = handed_to_ops(&world)?;
+    let key = world
+        .delivery_key("fix--one", "stage/code/1/delivered")
+        .ok_or("no delivery of code")?;
+    world.host.advance(60);
+    let first_at = world.host.now();
+    let first = world.engine().confirm("ops", std::slice::from_ref(&key));
+    ensure_eq!(
+        first,
+        Answer::Confirmed {
+            recipient: "ops".into(),
+            confirmed: vec![flume_core::KeyConfirmed {
+                key: key.clone(),
+                at: first_at,
+                before: false,
+            }],
+        },
+        "the first confirmation"
+    );
+    ensure_eq!(first.exit(), 0, "the first's exit");
+    ensure!(
+        end_keyed(&world, &id, "stage/code/1/delivered")?
+            .pending_for
+            .is_empty(),
+        "code pending once ops confirmed it"
+    );
+    let version = deliveries_version(&world);
+    world.host.advance(60);
+    let second = world.engine().confirm("ops", std::slice::from_ref(&key));
+    ensure_eq!(
+        second,
+        Answer::Confirmed {
+            recipient: "ops".into(),
+            confirmed: vec![flume_core::KeyConfirmed {
+                key,
+                at: first_at,
+                before: true,
+            }],
+        },
+        "the second confirmation"
+    );
+    ensure_eq!(
+        deliveries_version(&world),
+        version,
+        "the deliveries written by the second"
+    );
+    Ok(())
+}
+
+/// The end-delivery spec's "A key of another recipient's" (43; weir 102).
+fn a_key_of_another_recipients(_: &()) -> Outcome {
+    let world = World::new();
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let mut launch = launch("fix", "theirs", Some("mend it"));
+    launch.recipients = vec!["boomdrive".into()];
+    launched(&world.engine.launch(&launch))?;
+    let id = World::id("fix", "theirs");
+    world.settle(&id);
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    let key = world
+        .delivery_key("fix--theirs", "stage/code/1/delivered")
+        .ok_or("no delivery of code")?;
+    let version = deliveries_version(&world);
+    let theirs = world.engine().confirm("ops", std::slice::from_ref(&key));
+    let reason = refused(&theirs)?;
+    ensure!(
+        reason.contains(&key) && reason.contains("`reader`"),
+        "the refusal of boomdrive's key: {reason}"
+    );
+    ensure_eq!(theirs.exit(), 1, "the refusal's exit");
+    let none = world.engine().confirm("ops", &["no/such/key".to_string()]);
+    let reason = refused(&none)?;
+    ensure!(
+        reason.contains("no/such/key") && reason.contains("`key`"),
+        "the refusal of a key no end is under: {reason}"
+    );
+    ensure_eq!(
+        deliveries_version(&world),
+        version,
+        "the deliveries written by a refusal"
+    );
+    ensure_eq!(
+        end_keyed(&world, &id, "stage/code/1/delivered")?.pending_for,
+        vec!["boomdrive".to_string()],
+        "code's pending"
+    );
+    Ok(())
+}
+
+/// A fix for the misspelt `bomdrive`, landed and tidied with nothing
+/// collected, the fake host's clock a week on and the host settled (43,
+/// S123).
+fn misspelt_and_expired(world: &World) -> Result<PlaceId, String> {
+    let id = landed_with(world, "one", &["bomdrive"])?;
+    world.host.advance(ENDS_EXPIRE);
+    world.engine().settle(None);
+    Ok(id)
+}
+
+/// The end-delivery spec's "A misspelt recipient" (43, 56, S123; weir
+/// 104, 106).
+fn a_misspelt_recipient(_: &()) -> Outcome {
+    let world = World::new();
+    let id = misspelt_and_expired(&world)?;
+    let status = world.status(&id)?;
+    ensure_eq!(status.ends.len(), 2, "the ends");
+    for end in &status.ends {
+        ensure_eq!(
+            end.owed,
+            vec![OwedTo {
+                recipient: "bomdrive".into(),
+                expired: true,
+                known: false,
+            }],
+            format!("whom {} is owed to", end.key)
+        );
+        ensure!(
+            end.expires_at.is_some_and(|at| at <= world.host.now()),
+            "{}'s expiry: {:?}",
+            end.key,
+            end.expires_at
+        );
+    }
+    let Answer::Status { host, .. } = world.engine().status(None) else {
+        return Err("the host's status was refused".into());
+    };
+    let mut listed: Vec<(String, String, bool)> = host
+        .expired
+        .iter()
+        .map(|end| (end.key.to_string(), end.recipient.clone(), end.known))
+        .collect();
+    listed.sort();
+    ensure_eq!(
+        listed,
+        vec![
+            (
+                "stage/code/1/delivered".to_string(),
+                "bomdrive".to_string(),
+                false
+            ),
+            (
+                "submission/1/landed".to_string(),
+                "bomdrive".to_string(),
+                false
+            ),
+        ],
+        "the host's expired ends"
+    );
+    ensure_eq!(tidied(&world).len(), 1, "the tidied documents");
+    let reason = refused(&world.engine().drop_place(&id, false))?;
+    ensure!(reason.contains("bomdrive"), "the drop's refusal: {reason}");
+    Ok(())
+}
+
+/// The end-delivery spec's "Confirmed once expired" (43; weir 104, 106,
+/// 107).
+fn confirmed_once_expired(_: &()) -> Outcome {
+    let world = World::new();
+    let id = misspelt_and_expired(&world)?;
+    let keys: Vec<String> = world
+        .status(&id)?
+        .ends
+        .iter()
+        .filter_map(|end| end.delivery.clone())
+        .collect();
+    ensure_eq!(keys.len(), 2, "the delivery keys");
+    let answer = world.engine().confirm("bomdrive", &keys);
+    ensure!(
+        matches!(&answer, Answer::Confirmed { confirmed, .. } if confirmed.len() == 2),
+        "the confirmation: {answer:?}"
+    );
+    ensure!(
+        world
+            .status(&id)?
+            .ends
+            .iter()
+            .all(|end| end.pending_for.is_empty() && end.confirmed.len() == 1),
+        "the ends once confirmed"
+    );
+    ensure!(
+        world.owing().known.contains("bomdrive"),
+        "bomdrive not known once it confirmed"
+    );
+    world.engine().settle(None);
+    ensure!(tidied(&world).is_empty(), "the document once delivered");
+    ensure!(
+        world.owing().known.contains("bomdrive"),
+        "bomdrive's name let go of with its deliveries"
+    );
+    Ok(())
+}
+
+/// The end-delivery spec's "A live place upgraded" (43, 61; core.17).
+fn a_live_place_upgraded(_: &()) -> Outcome {
+    let world = World::new();
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = fix_with(&world, "old", &["ops", "boomdrive"])?;
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    // The document as the old form wrote it: no token, no claim, code's
+    // end delivered to ops by notice; and no deliveries on the host.
+    let delivered_at = world.host.now() - 30;
+    let read = world.store.read(&id).ok_or("no place")?;
+    let mut old = read.state.clone();
+    old.place.token = None;
+    for end in &mut old.ends {
+        end.noticing.clear();
+        if matches!(end.of, EndOf::Stage { .. }) {
+            end.deliveries = vec![Delivery {
+                recipient: "ops".into(),
+                at: delivered_at,
+                by: DeliveredBy::Notice,
+            }];
+        }
+    }
+    ensure!(
+        matches!(
+            world.store.write(&id, Some(read.version), Some(&old)),
+            Written::Written { .. }
+        ),
+        "the old form's document was not written"
+    );
+    if let Some(deliveries) = world.store.read_host(&HostKey::Deliveries) {
+        world
+            .store
+            .write_host(&HostKey::Deliveries, Some(deliveries.version), None);
+    }
+    world.terminal.add_session("ops", AgentState::Waiting);
+    world.host.advance(60);
+    world.settle(&id);
+    ensure!(
+        world.terminal.notices("ops").is_empty(),
+        "a notice to ops of an end the old form delivered to it: {:?}",
+        world.terminal.notices("ops")
+    );
+    let code = end_keyed(&world, &id, "stage/code/1/delivered")?;
+    ensure_eq!(
+        (code.confirmed.clone(), code.pending_for.clone()),
+        (
+            vec![ConfirmedBy {
+                recipient: "ops".into(),
+                at: delivered_at,
+            }],
+            vec!["boomdrive".to_string()]
+        ),
+        "code's end once upgraded"
+    );
+    ensure_eq!(
+        deliveries(&code.end),
+        vec![("ops".to_string(), DeliveredBy::Notice)],
+        "code's hand-overs"
+    );
+    let held = world.held(&id).ok_or("no place")?;
+    ensure!(
+        held.ends.iter().all(|end| end.deliveries.is_empty()),
+        "the old form's list left in the document"
+    );
+    let (version, records) = (deliveries_version(&world), world.deliveries());
+    world.host.advance(60);
+    world.settle(&id);
+    ensure_eq!(
+        (deliveries_version(&world), world.deliveries()),
+        (version, records),
+        "the deliveries after settling again"
+    );
+    ensure_eq!(
+        world.held(&id).ok_or("no place")?.ends,
+        held.ends,
+        "the ends after settling again"
     );
     Ok(())
 }

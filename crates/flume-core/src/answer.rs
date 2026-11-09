@@ -42,26 +42,33 @@ pub enum Answer {
     /// An act refused, naming why.
     Refused { refusal: Refusal },
     /// A wait by place: the end of the stage's current start or of the
-    /// submission it answers, delivered to the recipient by this wait or
-    /// answered as a read of one already delivered; no end where the
-    /// wait was still waiting when its timeout passed (43, design 9).
+    /// submission it answers, handed to the recipient by this wait, and
+    /// confirmed by it where the wait confirms on receipt, or answered as
+    /// a read of one the recipient confirmed; no end where the wait was
+    /// still waiting when its timeout passed (43, design 9; weir 103).
     Waited {
         place: PlaceId,
         recipient: String,
         end: Option<EndStatus>,
-        /// This wait delivered the end; false for a read.
+        /// This wait handed the end over; false for a read.
         delivered: bool,
     },
-    /// Every end pending for the recipient that the inbox collected and
-    /// delivered, of every place on the host, tidied places kept for
-    /// their ends among them, and every place that waits on its caller
-    /// and on this recipient, which marks nothing (43, 130, 193; design
-    /// 9).
+    /// Every end pending for the recipient, of every place on the host,
+    /// tidied places kept for their ends among them, each handed to it by
+    /// the inbox and confirmed where the inbox confirms on receipt, and
+    /// every place that waits on its caller and on this recipient, which
+    /// marks nothing (43, 130, 193; design 9; weir 103).
     Inbox {
         recipient: String,
         ends: Vec<Collected>,
         #[serde(default)]
         waiting: Vec<WaitingPlace>,
+    },
+    /// Each delivery key a recipient confirmed, with when, and whether it
+    /// had confirmed it before (43; weir 102).
+    Confirmed {
+        recipient: String,
+        confirmed: Vec<KeyConfirmed>,
     },
     /// A wake of a role's address: its run launched, or the run that
     /// stands for it, live or waiting, and nothing made (132).
@@ -244,6 +251,15 @@ pub enum WindowOutcome {
 pub struct LockedKind {
     pub kind: String,
     pub hash: String,
+}
+
+/// A delivery key confirmed: when the recipient confirmed it, and whether
+/// it had before this call, the time then being its first (43; weir 102).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeyConfirmed {
+    pub key: String,
+    pub at: Seconds,
+    pub before: bool,
 }
 
 /// What a wake of a role's address came to (132): its run launched by
@@ -577,16 +593,83 @@ pub struct EndStatus {
     /// open, and for every other end (43, 198).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub open_until: Option<Seconds>,
+    /// The key of its delivery, `<kind>--<name>/<token>/<end key>`, by
+    /// which a recipient confirms it; none for an end with no recipient,
+    /// and of a document that holds no token yet (43; weir 101).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delivery: Option<String>,
+    /// When its delivery expires, by the host's clock, fixed when it was
+    /// recorded; none where none is recorded (43; weir 104).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<Seconds>,
+    /// Each recipient that has not confirmed it, whether it is expired
+    /// for it, and whether anything was ever confirmed under its name (43,
+    /// 56; weir 104 to 106).
+    #[serde(default)]
+    pub owed: Vec<OwedTo>,
+    /// Each recipient's confirmation of it, and when (43; weir 102).
+    #[serde(default)]
+    pub confirmed: Vec<ConfirmedBy>,
 }
 
 impl EndStatus {
-    /// The end `end` as status gives it to a place whose recipients are
-    /// `recipients` (43, 198).
-    pub fn of(end: &EndHeld, recipients: &[String]) -> EndStatus {
+    /// The end `end` of the place `place` as status gives it, its
+    /// delivery read from `owing`, the host's deliveries as one read gave
+    /// them: each hand-over of it, and the recipients it stands pending for
+    /// (43, 198; weir 103, 105).
+    pub fn of(end: &EndHeld, place: &PlaceRecord, owing: &Owing) -> EndStatus {
+        let mut shown = end.clone();
+        shown.deliveries = end.handovers(place, owing);
+        // An end whose delivery is not recorded yet reads as its record
+        // would: owed to each recipient the old form delivered nothing to,
+        // each old delivery confirmed at its time (43, 61).
+        let (owed, confirmed, expires_at) = match end.delivery(place, owing) {
+            Some(delivery) => (
+                delivery.owed.clone(),
+                delivery.confirmed.clone(),
+                Some(delivery.expires_at),
+            ),
+            None => {
+                let mut confirmed: Vec<ConfirmedBy> = vec![];
+                for delivery in &end.deliveries {
+                    if !confirmed
+                        .iter()
+                        .any(|by| by.recipient == delivery.recipient)
+                    {
+                        confirmed.push(ConfirmedBy {
+                            recipient: delivery.recipient.clone(),
+                            at: delivery.at,
+                        });
+                    }
+                }
+                let owed = end
+                    .pending(place, owing)
+                    .into_iter()
+                    .map(|recipient| OwedTo {
+                        known: owing.known.contains(&recipient),
+                        recipient,
+                        expired: false,
+                    })
+                    .collect();
+                (owed, confirmed, None)
+            }
+        };
+        let delivery = if end.recipients(&place.recipients).is_empty() {
+            None
+        } else {
+            place.delivery_key(&end.of)
+        };
         EndStatus {
-            end: end.clone(),
+            end: shown,
             key: end.of.end_key(),
-            pending_for: end.pending(recipients),
+            pending_for: owed
+                .iter()
+                .map(|owed: &OwedTo| owed.recipient.clone())
+                .collect(),
+            delivery,
+            expires_at,
+            owed,
+            confirmed,
             open_until: match &end.of {
                 EndOf::Stage {
                     state: StageState::EndedShort,
@@ -608,6 +691,28 @@ pub struct Collected {
     pub kind: String,
     pub name: String,
     pub end: EndStatus,
+    /// This inbox confirmed it, as one that confirms on receipt does
+    /// (43; weir 103).
+    #[serde(default)]
+    pub confirmed: bool,
+    /// It is expired for the recipient: pending past the host's span
+    /// since it was read (43; weir 104).
+    #[serde(default)]
+    pub expired: bool,
+}
+
+/// An end expired for a recipient on the host, as status gives it: its
+/// place, as `flume status` names it, the end's key, its delivery's key,
+/// the recipient, whether anything was ever confirmed under its name, and
+/// when it expired (43, 56; weir 104, 106).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExpiredEnd {
+    pub place: PlaceId,
+    pub key: EndKey,
+    pub delivery: String,
+    pub recipient: String,
+    pub known: bool,
+    pub expires_at: Seconds,
 }
 
 /// A place the inbox gives as waiting on its recipient: one that waits on
@@ -703,6 +808,11 @@ pub struct HostStatus {
     /// 191; core.15).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sources: Vec<SourceStatus>,
+    /// Each end expired for a recipient on the host, of every place and
+    /// every tidied document, read from one read of the host's deliveries
+    /// (43, 56; weir 104, 106; core.15).
+    #[serde(default)]
+    pub expired: Vec<ExpiredEnd>,
 }
 
 /// A source the host declares as status gives it (56, 191, 193): its
@@ -755,6 +865,7 @@ impl Default for HostStatus {
             terminal_setup: vec![],
             configuration: HostConfiguration::default(),
             sources: vec![],
+            expired: vec![],
         }
     }
 }
