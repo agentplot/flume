@@ -2511,36 +2511,37 @@ fn a_wait_exits_by_its_outcome() {
     );
     assert_eq!(launched.code, 0, "{}", launched.text);
     let place = host.place_of(&repository, "change--one");
-    let wait = |stage: &str| {
-        host.stand_in(
-            &repository.dir,
-            &[
-                "wait",
-                "change--one",
-                "--stage",
-                stage,
-                "--recipient",
-                "ops",
-                "--timeout",
-                "1s",
-                "--json",
-            ],
-            &[],
-        )
+    let wait = |stage: &str, confirm: bool| {
+        let mut args = vec![
+            "wait",
+            "change--one",
+            "--stage",
+            stage,
+            "--recipient",
+            "ops",
+            "--timeout",
+            "1s",
+            "--json",
+        ];
+        if confirm {
+            args.push("--confirm");
+        }
+        host.stand_in(&repository.dir, &args, &[])
     };
-    let waiting = answered(&wait("construct"), 3);
+    let waiting = answered(&wait("construct", false), 3);
     assert!(waiting["waited"]["end"].is_null(), "{waiting}");
     assert_eq!(waiting["waited"]["recipient"], "ops");
 
     deliver(&host, &repository.dir, &place, "construct");
-    let delivered = answered(&wait("construct"), 0);
+    // Confirmed on receipt, so the next wait reads it (43; weir 103).
+    let delivered = answered(&wait("construct", true), 0);
     assert_eq!(delivered["waited"]["delivered"], true, "{delivered}");
     assert_eq!(delivered["waited"]["end"]["state"], "delivered");
     assert_eq!(
         delivered["waited"]["end"]["deliveries"][0]["by"], "wait",
         "{delivered}"
     );
-    let read = answered(&wait("construct"), 0);
+    let read = answered(&wait("construct", false), 0);
     assert_eq!(read["waited"]["delivered"], false, "{read}");
     let person = host.stand_in(
         &repository.dir,
@@ -2572,7 +2573,7 @@ fn a_wait_exits_by_its_outcome() {
         ],
     );
     assert_eq!(needs.code, 0, "{}", needs.text);
-    let short = answered(&wait("code"), 2);
+    let short = answered(&wait("code", false), 2);
     assert_eq!(short["waited"]["end"]["state"], "ended_short", "{short}");
     assert_eq!(short["waited"]["end"]["end"]["words"], "which design?");
 
@@ -2672,7 +2673,7 @@ fn the_recipient_a_wait_and_an_inbox_default_to() {
     let by_variable = answered(
         &host.stand_in(
             &repository.dir,
-            &["inbox", "--json"],
+            &["inbox", "--confirm", "--json"],
             &[("FLUME_RECIPIENT", "ops"), ("FLUME_PLACE", &two)],
         ),
         0,
@@ -2688,7 +2689,7 @@ fn the_recipient_a_wait_and_an_inbox_default_to() {
     let by_role = answered(
         &host.stand_in(
             &repository.dir,
-            &["inbox", "--json"],
+            &["inbox", "--confirm", "--json"],
             &[("FLUME_PLACE", &two)],
         ),
         0,
