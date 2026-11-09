@@ -9,9 +9,15 @@
 # written. Each declared key and table is null unless set and left out of
 # the file, so flume's own default holds; a key the module does not
 # declare passes to the file, and flume judges it. Each table of named
-# entries merges across modules. A string shaped as a credential by
-# flume's own shapes fails evaluation, since the file is in the store,
-# which every user reads (core.50).
+# entries merges across modules. `sources` is the host's sources of kinds,
+# each the file `sources/<source>.toml` beside config.toml under the names
+# that file gives each key (191, C.7; the change
+# flumes-module-writes-the-hosts-sources, design 1): `kinds_dir`, required,
+# and `roles`, each an absolute path or one under `~`, and any other key
+# free-form, for flume to judge. A string shaped as a credential by
+# flume's own shapes, in `settings` or in a source, fails evaluation,
+# since the files are in the store, which every user reads (core.50;
+# design 4).
 { packages }:
 {
   config,
@@ -48,6 +54,9 @@ let
   tables = options: types.attrsOf (table options);
 
   unsigned = types.ints.unsigned;
+  # A path on the host as a source's file names one: absolute, or under
+  # `~` (C.7).
+  located = types.strMatching "/.*|~|~/.*";
   view = types.enum [
     "terminal"
     "app"
@@ -113,7 +122,11 @@ let
       lib.concatLists (lib.imap0 (i: credentials "${named}[${toString i}]" name) value)
     else
       [ ];
-  found = credentials "services.flume.settings" "" cfg.settings;
+  found =
+    credentials "services.flume.settings" "" cfg.settings
+    ++ lib.concatLists (
+      lib.mapAttrsToList (name: credentials "services.flume.sources.${key name}" "") cfg.sources
+    );
 in
 {
   options.services.flume = {
@@ -151,6 +164,19 @@ in
       };
       default = { };
       description = "flume's managed file, `~/.config/flume/config.toml`, each key named as the file names it (C.7), rendered at evaluation. It holds no credential: name a variable of the host user's login environment by `$NAME` in its place.";
+    };
+
+    sources = mkOption {
+      type = types.attrsOf (table {
+        kinds_dir = mkOption {
+          type = located;
+          description = "Where the source's packages lie, an absolute path or one under `~` (191).";
+        };
+        roles = unset located "The source's roles file, an absolute path or one under `~`, which the source's own tool writes (193).";
+      });
+      default = { };
+      example = lib.literalExpression ''{ acme.kinds_dir = "~/.local/share/flume/kinds/acme"; }'';
+      description = "The host's sources of kinds, each the file `~/.config/flume/sources/<source>.toml`, each key named as the file names it (191, C.7), rendered at evaluation and linked by the activation. A source's name is ASCII letters, digits, `_` and `-`, and not `flume`, `repo` or `launch`. It holds no credential. The roles file and the packages it names are the source's own tool's, which the module never writes.";
     };
   };
 

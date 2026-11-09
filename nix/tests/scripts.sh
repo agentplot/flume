@@ -71,6 +71,29 @@ expect "$named" "its failure names no services.flume.settings.kinds.change.agent
 expect "$named" "its failure names not the values the file takes: $err" \
   says "$err" "strings, booleans, integers, floats, lists and tables"
 
+named="No kinds_dir"
+fresh
+fails noKindsDir
+expect "$named" 'a source acme giving roles alone evaluates' [ "$status" -ne 0 ]
+expect "$named" "its failure names no services.flume.sources.acme.kinds_dir: $err" \
+  says "$err" "services.flume.sources.acme.kinds_dir"
+
+named="A kinds_dir under no home"
+fresh
+fails kindsDirUnderNoHome
+expect "$named" 'a source acme whose kinds_dir is kinds/acme evaluates' [ "$status" -ne 0 ]
+expect "$named" "its failure names no services.flume.sources.acme.kinds_dir: $err" \
+  says "$err" "services.flume.sources.acme.kinds_dir"
+
+named="A path value in a source"
+fresh
+fails sourcePath
+expect "$named" "a source holding a path evaluates" [ "$status" -ne 0 ]
+expect "$named" "its failure names no services.flume.sources.acme.shelf: $err" \
+  says "$err" "services.flume.sources.acme.shelf"
+expect "$named" "its failure names not the values the file takes: $err" \
+  says "$err" "strings, booleans, integers, floats, lists and tables"
+
 # The activation's link, in a case's folder: its home, the module's file
 # in a store of its own, and where the link goes.
 activate=$nix/modules/activate.sh
