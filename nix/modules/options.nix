@@ -17,7 +17,8 @@
 # free-form, for flume to judge. A string shaped as a credential by
 # flume's own shapes, in `settings` or in a source, fails evaluation,
 # since the files are in the store, which every user reads (core.50;
-# design 4).
+# design 4). A source's name flume would refuse or pass over fails
+# evaluation too, since it is the file's name (design 2).
 { packages }:
 {
   config,
@@ -127,6 +128,24 @@ let
     ++ lib.concatLists (
       lib.mapAttrsToList (name: credentials "services.flume.sources.${key name}" "") cfg.sources
     );
+
+  # Why flume takes no source of the name `name`, or null where it takes
+  # it: weir's name (weir C.4, `weir_kinds::check_name`), and none of the
+  # sources of flume's own kinds, the repository's and a launch's
+  # (`source_fault`; 154, 191).
+  reserved = {
+    flume = "flume's own kinds";
+    repo = "the repository's kinds";
+    launch = "a launch's kinds";
+  };
+  nameFault =
+    name:
+    if builtins.match "[A-Za-z0-9_-]+" name == null then
+      "is no source's name: a source's name is one or more ASCII letters, digits, `_` and `-` (weir C.4), since it is the name of its file in ~/.config/flume/sources/, which flume reads and the activation links"
+    else if reserved ? ${name} then
+      "is the source of ${reserved.${name}}, which no host declares (154, 191): name the source otherwise"
+    else
+      null;
 in
 {
   options.services.flume = {
@@ -186,6 +205,10 @@ in
         assertion = found == [ ];
         message = "${builtins.head found} is shaped as a credential: flume's file is in the store, which every user reads, so it holds none. Name a variable of the host user's login environment in its place, as `$NAME`, which flume reads at each start (29).";
       }
-    ];
+    ]
+    ++ lib.mapAttrsToList (name: _: {
+      assertion = nameFault name == null;
+      message = "services.flume.sources.${key name} ${toString (nameFault name)}.";
+    }) cfg.sources;
   };
 }

@@ -5,8 +5,9 @@
 # key passes as written, two modules' tables merge into one file, and a
 # string shaped as a credential fails, naming its path and never its value.
 # A source of `sources` passes an undeclared key to its file as written,
-# and a token in it fails the same way (the change
-# flumes-module-writes-the-hosts-sources, design 1 and 4).
+# and a token in it fails the same way, and a source's name flume would
+# refuse fails, naming its option and why (the change
+# flumes-module-writes-the-hosts-sources, design 1, 2 and 4).
 # A mistyped key's failure is read by its words in nix/tests/scripts.sh.
 t:
 let
@@ -81,6 +82,46 @@ let
     inherit token;
   };
   tokenRefused = toString (sourceFailures tokened);
+
+  # Each name flume refuses, by its option as the failure names it, and
+  # why.
+  refusedNames = {
+    flume = {
+      option = "services.flume.sources.flume";
+      why = "flume's own kinds";
+    };
+    repo = {
+      option = "services.flume.sources.repo";
+      why = "the repository's kinds";
+    };
+    launch = {
+      option = "services.flume.sources.launch";
+      why = "a launch's kinds";
+    };
+    ".acme" = {
+      option = ''services.flume.sources.".acme"'';
+      why = "ASCII letters, digits, `_` and `-`";
+    };
+    "ac.me" = {
+      option = ''services.flume.sources."ac.me"'';
+      why = "ASCII letters, digits, `_` and `-`";
+    };
+    "a/b" = {
+      option = ''services.flume.sources."a/b"'';
+      why = "ASCII letters, digits, `_` and `-`";
+    };
+  };
+  named = name: { ${name}.kinds_dir = "/opt/kinds"; };
+  nameRefused =
+    name:
+    let
+      inherit (refusedNames.${name}) option why;
+      said = sourceFailures (named name);
+    in
+    t.expect (builtins.length said == 1)
+      "the source ${builtins.toJSON name} fails ${toString (builtins.length said)} assertions: ${toString said}"
+    ++ t.expect (lib.any (lib.hasInfix option) said) "the source ${builtins.toJSON name}'s failure names no ${option}: ${toString said}"
+    ++ t.expect (lib.any (lib.hasInfix why) said) "the source ${builtins.toJSON name}'s failure says not why, ${why}: ${toString said}";
 in
 {
   "Every key renders its file through the options" =
@@ -149,4 +190,10 @@ in
     t.expect (tokenRefused != "") "a token in a source's file evaluates"
     ++ t.expect (lib.hasInfix "services.flume.sources.acme.token" tokenRefused) "the failure names no services.flume.sources.acme.token: ${tokenRefused}"
     ++ t.expect (!lib.hasInfix "a1B2c3D4" tokenRefused) "the failure holds the token's text";
+
+  "Names flume refuses" =
+    lib.concatMap nameRefused (builtins.attrNames refusedNames)
+    ++ t.expect (
+      sourceFailures (named "acme-2_b") == [ ]
+    ) "the source acme-2_b fails: ${toString (sourceFailures (named "acme-2_b"))}";
 }
