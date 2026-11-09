@@ -21,8 +21,9 @@ sidebar:
 | `flume priority <place> <n>` | Set the place's priority in the host's queue. |
 | `flume tidy [<place>]` | Remove what is over, for one place or every place. |
 | `flume settle [<place>]` | Move a place, or every place, on; with `--every <time>`, every place as a watch over the host. |
-| `flume wait <place>` | Wait on a stage's end or the submission's outcome, as a recipient. |
-| `flume inbox [<place>]` | Collect every end pending for a recipient, on every place of the host, or on the place named alone. |
+| `flume wait <place>` | Wait on a stage's end or the submission's outcome, as a recipient; `--confirm` confirms the end as it is answered. |
+| `flume inbox [<place>]` | Collect every end pending for a recipient, on every place of the host, or on the place named alone; `--confirm` confirms each as it is given. |
+| `flume confirm <key>…` | Confirm, as a recipient, each end's delivery by its key, so the end is delivered and pending for it no more. |
 | `flume wake <address>` | Wake a role's address, `<stream>/<role>`: launch its run where none stands, and nothing where an agent already holds it. |
 | `flume kinds lock <identity>…` | Record each kind at its content's hash in a lock of kinds, or take it out. |
 | `flume open [<session>]` | Show a session of a stream's, by the session's name, in its stream's view: a window its terminal app opens, its multiplexer's own app, or the line to run. |
@@ -83,7 +84,7 @@ flume launch --kind <kind> --name <name> [--brief <text> | --brief-file <file>] 
 | `--kinds <file>` | A declaration of kinds the launch carries, read from disk with its prompts beside it. |
 | `--hold <stage>=<words>` | Hold that stage before it starts, with words saying what it waits for. Repeatable. |
 | `--hold-submission` | Hold the submission once the last stage delivers. |
-| `--recipient <name>` | A recipient of the place's ends: a terminal's session by its name, or a role's address, `<stream>/<role>`, of any stream, whose run is woken for them. A name no pane holds is sent no notice: its ends wait for it, the place's record kept once it is tidied, until it collects them by `flume inbox` or `flume wait` as that name ([the end of a place's work](/flume/guides/callers-and-holds/#the-end-of-a-places-work)). Repeatable. With none, `$FLUME_RECIPIENT`, else the terminal session the launch runs in, else the answerer behind the place's stream ([who answers a place](/flume/guides/callers-and-holds/#who-answers-a-place)). Every stall reaches that answerer too. |
+| `--recipient <name>` | A recipient of the place's ends: a terminal's session by its name, or a role's address, `<stream>/<role>`, of any stream, whose run is woken for them. A name no pane holds is sent no notice: its ends wait for it, the place's record kept once it is tidied, until it collects them by `flume inbox` or `flume wait` as that name and confirms them ([the end of a place's work](/flume/guides/callers-and-holds/#the-end-of-a-places-work)). Repeatable. With none, `$FLUME_RECIPIENT`, else the terminal session the launch runs in, else the answerer behind the place's stream ([who answers a place](/flume/guides/callers-and-holds/#who-answers-a-place)). Every stall reaches that answerer too. |
 | `--mark <mark>` | A mark the caller finds its places by, given back in status. |
 | `--priority <n>` | The place's priority in the host's queue, a whole number, negative allowed; `0` where none is given. |
 | `--stall-after <time>` | How long the place may wait on its caller under no hold's words before it is said stalled; five minutes where none is given. |
@@ -502,16 +503,21 @@ refused: --every settles every place as a caller's watch over the host, and take
 ## `flume wait`
 
 ```sh
-flume wait <place> --stage <stage> [--recipient <name>] [--timeout <time>]
-flume wait <place> --submission [--recipient <name>] [--timeout <time>]
+flume wait <place> --stage <stage> [--recipient <name>] [--timeout <time>] [--confirm]
+flume wait <place> --submission [--recipient <name>] [--timeout <time>] [--confirm]
 ```
 
 Waits as a recipient on the current start's end of a stage, or on the
 submission's outcome. An end pending for the recipient is answered at
-once and recorded delivered. One already delivered is read again,
-delivering nothing. Otherwise the wait follows the host's state until
-an end comes or the timeout passes. With no timeout it waits until an
-end comes.
+once and recorded handed to it by the wait. A hand-over delivers
+nothing: the end stays pending, and the next wait answers it again,
+until the recipient confirms it. With `--confirm` the wait confirms it
+as it answers it, the hand-over and the confirmation recorded together.
+An end the recipient confirmed is read again, handing nothing over.
+Otherwise the wait follows the host's state until an end comes or the
+timeout passes. With no timeout it waits until an end comes. The answer
+gives the end's `delivery`, the key [`flume confirm`](#flume-confirm)
+takes.
 
 | Exit | |
 |---|---|
@@ -526,21 +532,25 @@ a role's run serves, else the terminal session the command runs in.
 ## `flume inbox`
 
 ```sh
-flume inbox [<place>] [--recipient <name>]
+flume inbox [<place>] [--recipient <name>] [--confirm]
 ```
 
 Every end pending for the recipient, on every place of the host, a
-tidied place's kept record among them, each recorded delivered in the
-same write, each with its key, a drop's or a done's among them. Prints
-`nothing pending for <recipient>` when there is none. The recipient
-defaults as for `flume wait`.
+tidied place's kept record among them, each recorded handed to it by
+the inbox, each with its key and its delivery's key, a drop's or a
+done's among them, and whether it is expired. A hand-over delivers
+nothing: an end the inbox gives stays pending, and the next inbox gives
+it again, until the recipient confirms it, by `--confirm` as the inbox
+gives it, or by [`flume confirm`](#flume-confirm) naming its delivery's
+key. Prints `nothing pending for <recipient>` when there is none. The
+recipient defaults as for `flume wait`.
 
 Naming a place, as `flume status` names one, the inbox collects that
 place's ends alone: those of its record, or, once it was tidied, of the
 records kept for it, `<place>@<at>` naming one record. It reads them
 before it moves anything on, so it collects nothing tidied since. A
-name under which no record stands is refused, and nothing is marked
-delivered.
+name under which no record stands is refused, and nothing is handed
+over.
 
 Beneath them, `waiting` gives every place, or the place named, that
 waits on its caller and on the recipient: one it is a recipient of, one whose stop-short named
@@ -550,6 +560,40 @@ line, the move and since when, the stop-short's words, key and the
 role it asked, and a hold on the move that still holds. The inbox marks
 nothing for these
 ([flume inbox](/flume/guides/callers-and-holds/#flume-inbox)).
+
+## `flume confirm`
+
+```sh
+flume confirm <key>… [--recipient <name>]
+```
+
+Confirms, as the recipient, each end's delivery by its key,
+`<kind>--<name>/<token>/<end key>`, as the inbox, a wait, status and
+the notice give it. A notice, a wait, the inbox and a session's start
+hand an end over, and a hand-over delivers nothing: the end stays
+pending for its recipient until the recipient confirms it, so a
+recipient that stopped before it acted on what it was handed is handed
+it again. Each key answers with when it was confirmed; a key confirmed
+before writes nothing and gives when it first was. A key no end is
+under, or one whose end is another recipient's, is refused, naming the
+key and what failed, and the keys after it are not confirmed. The
+recipient defaults as for `flume wait`.
+
+```console
+$ flume confirm fix--one/0a1b2c3d/submission/1/landed --recipient ci
+fix--one/0a1b2c3d/submission/1/landed confirmed by ci at 1794150120
+```
+
+An end nobody confirms is never dropped: once the host's span,
+[`[host] ends_expire`](/flume/reference/configuration/), passes since it
+was read, status shows it expired with its recipient, and a name nothing
+was ever confirmed under as never confirmed, so a misspelt recipient is
+found and confirmed as that name.
+
+| Exit | |
+|---|---|
+| `0` | every key confirmed |
+| `1` | refused |
 
 ## `flume wake`
 
