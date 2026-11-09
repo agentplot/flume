@@ -4,8 +4,8 @@
 //! submit is `sluice submit <base> --no-wait --json` in the place, with
 //! every multiplexer's session stripped from its environment, so sluice
 //! records the place's worktree as the submitter, pushes into no pane and
-//! answers at once; never `--check`, never `wt submit` (111, 113, 117,
-//! core.6). Where sluice finds the submission decided as it takes it in,
+//! answers at once; never `--check` to a submit, never `wt submit` (111,
+//! 113, 117, core.6). Where sluice finds the submission decided as it takes it in,
 //! as on a base that takes pull requests, it answers with the entry's
 //! record, exiting as the outcome does, and records the outcome delivered
 //! to the place, so the outcome is read from that answer as the inbox
@@ -68,14 +68,19 @@
 //! submitted by name, `sluice submit <base> --head <branch> --no-wait
 //! --json` run in the repository, answered as any submit; sluice records
 //! the branch as the entry's `from.head`, so read-submission reads its
-//! outcome, and no inbox runs for it (99, 133, 203; sluice 124).
+//! outcome, and no inbox runs for it (99, 133, 203; sluice 124). A base
+//! place's branch is forecast by the same command with `--check` in
+//! place of `--no-wait`, run in the repository, which forms the
+//! candidate sluice forms for a head not yet submitted, behind every entry
+//! already submitted, and submits nothing; [`forecast_of`] reads its
+//! answer (203, 210, C.6; sluice 64, 65).
 
 use crate::git::Git;
 use crate::shell;
 use flume_seams::{
-    BaseRevision, BranchClosed, BranchOpened, Inbox, MergeQueue, PassedOver, PlaceRef, ReadAcross,
-    ReadyStep, Revision, Stepped, Submission, SubmissionOutcome, SubmissionRead, SubmissionState,
-    SubmitHead, Submitted,
+    BaseRevision, BranchClosed, BranchOpened, Forecast, Inbox, MergeQueue, PassedOver, PlaceRef,
+    ReadAcross, ReadyStep, Revision, Stepped, Submission, SubmissionOutcome, SubmissionRead,
+    SubmissionState, SubmitHead, Submitted,
 };
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -225,6 +230,85 @@ impl Sluice {
             .filter_map(|branch| branch.get("branch").and_then(Value::as_str))
             .map(str::to_string)
             .collect())
+    }
+}
+
+/// sluice's answer to a forecast of `<branch>` onto `<base>`, `submit
+/// <base> --check --head <branch> --json`, exiting `code`, as the seam's
+/// forecast: exit 0 with `conflict` null is clear; exit 2 with
+/// `conflict` is in conflict, its `paths` the files and each of its
+/// `with[]` an entry ahead it meets, `#<id>` with the branch it came
+/// from, none where it meets the base itself; and anything else could not
+/// be read, in sluice's words. The head and the base's revision are the
+/// answer's `head` and `onto`, and the words sluice's text form, under
+/// which the two lines a conflicting submission's words carry name the
+/// files contested and the base's revision, so a fix reads either alike
+/// (112, 210, C.6; sluice 64, 65).
+fn forecast_of(
+    code: Option<i32>,
+    stdout: &str,
+    stderr: &str,
+    args: &[&str],
+    base: &str,
+) -> Forecast {
+    let unread = || Forecast::CouldNotRead {
+        reason: words(args, stdout, stderr),
+    };
+    let Some(answer) = serde_json::from_str::<Value>(stdout.trim())
+        .ok()
+        .filter(|answer| answer.get("error").is_none())
+    else {
+        return unread();
+    };
+    let (Some(head), Some(onto)) = (text(&answer, "head"), text(&answer, "onto")) else {
+        return unread();
+    };
+    let (head, onto) = (Revision::new(head), Revision::new(onto));
+    match (code, answer.get("conflict")) {
+        (Some(0), Some(Value::Null)) => Forecast::Clear { head, onto },
+        (Some(2), Some(conflict @ Value::Object(_))) => {
+            let files: Vec<String> = conflict
+                .get("paths")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect();
+            let with: Vec<String> = conflict
+                .get("with")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .map(|entry| {
+                    let named = entry
+                        .get("from")
+                        .and_then(|from| text(from, "head").or_else(|| text(from, "worktree")));
+                    let id = id(entry).unwrap_or_default();
+                    match named {
+                        Some(named) => format!("#{id} ({named})"),
+                        None => format!("#{id}"),
+                    }
+                })
+                .collect();
+            let met = if with.is_empty() {
+                base.to_string()
+            } else {
+                with.join(", ")
+            };
+            let contested = files.join(", ");
+            let words = format!(
+                "would conflict: {contested} with {met}\n\nThe files contested: {contested}.\nThe base's revision the merge queue tested against: {onto}."
+            );
+            Forecast::Conflict {
+                head,
+                onto,
+                files,
+                with,
+                words,
+            }
+        }
+        _ => unread(),
     }
 }
 
@@ -853,6 +937,15 @@ impl MergeQueue for Sluice {
             },
         }
     }
+
+    fn forecast(&self, repository: &str, branch: &str, base: &str) -> Forecast {
+        let git = Git::at(repository);
+        let args = ["submit", base, "--check", "--head", branch, "--json"];
+        match self.exited(git.path(), &args) {
+            Ok((code, stdout, stderr)) => forecast_of(code, &stdout, &stderr, &args, base),
+            Err(reason) => Forecast::CouldNotRead { reason },
+        }
+    }
 }
 
 /// sluice's words for a refusal of `sluice branch <command>`.
@@ -921,6 +1014,110 @@ mod tests {
             "an into not found"
         );
         assert!(!gone("train/a", "", "sluice: could not read the policy"));
+    }
+
+    /// The arguments a forecast of `train/a` onto main runs sluice with.
+    const FORECAST: [&str; 6] = ["submit", "main", "--check", "--head", "train/a", "--json"];
+
+    /// sluice's forecast of `train/a` onto main as the profile reads it,
+    /// exiting `code` with `answer`.
+    fn forecast_read(code: i32, answer: &serde_json::Value) -> Forecast {
+        forecast_of(Some(code), &answer.to_string(), "", &FORECAST, "main")
+    }
+
+    #[test]
+    fn a_clear_forecast() {
+        let answer = serde_json::json!({
+            "conflict": null, "head": "aaa111", "onto": "c0ffee", "ahead": [3],
+        });
+        assert_eq!(
+            forecast_read(0, &answer),
+            Forecast::Clear {
+                head: Revision::new("aaa111"),
+                onto: Revision::new("c0ffee"),
+            }
+        );
+    }
+
+    #[test]
+    fn a_conflicts_words() {
+        // The merge-queue-profile spec's "A conflict's words": a conflict
+        // with the base itself, its words naming README.md and c0ffee in
+        // the lines a conflicting submission's words carry (112, 210).
+        let answer = serde_json::json!({
+            "conflict": {"paths": ["README.md"], "with": []},
+            "head": "aaa111", "onto": "c0ffee", "ahead": [],
+        });
+        assert_eq!(
+            forecast_read(2, &answer),
+            Forecast::Conflict {
+                head: Revision::new("aaa111"),
+                onto: Revision::new("c0ffee"),
+                files: vec!["README.md".into()],
+                with: vec![],
+                words: "would conflict: README.md with main\n\nThe files contested: README.md.\nThe base's revision the merge queue tested against: c0ffee.".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn a_conflict_with_entries_ahead() {
+        let answer = serde_json::json!({
+            "conflict": {
+                "paths": ["README.md", "src/lib.rs"],
+                "with": [
+                    {"id": 7, "from": {"agent": "a", "worktree": "unit/x", "path": "/w/x"}},
+                    {"id": 9, "from": {"agent": "", "worktree": "pull/4", "head": "unit/y"}},
+                ],
+            },
+            "head": "aaa111", "onto": "c0ffee", "ahead": [7, 9],
+        });
+        let Forecast::Conflict {
+            files, with, words, ..
+        } = forecast_read(2, &answer)
+        else {
+            panic!("no conflict read");
+        };
+        assert_eq!(files, vec!["README.md", "src/lib.rs"]);
+        assert_eq!(with, vec!["#7 (unit/x)", "#9 (unit/y)"]);
+        assert!(
+            words.starts_with(
+                "would conflict: README.md, src/lib.rs with #7 (unit/x), #9 (unit/y)\n\n"
+            ),
+            "{words}"
+        );
+    }
+
+    #[test]
+    fn a_forecast_refused() {
+        let refused = serde_json::json!({
+            "error": {"kind": "refused", "message": "no branch train/a to forecast", "next": ["sluice overview"]},
+        });
+        assert_eq!(
+            forecast_read(2, &refused),
+            Forecast::CouldNotRead {
+                reason: "sluice submit: no branch train/a to forecast".into(),
+            }
+        );
+        assert_eq!(
+            forecast_of(
+                Some(1),
+                "",
+                "the reader's document is torn",
+                &FORECAST,
+                "main"
+            ),
+            Forecast::CouldNotRead {
+                reason: "sluice submit: the reader's document is torn".into(),
+            }
+        );
+        let clear_but_failed = serde_json::json!({
+            "conflict": null, "head": "aaa111", "onto": "c0ffee", "ahead": [],
+        });
+        assert!(matches!(
+            forecast_read(2, &clear_but_failed),
+            Forecast::CouldNotRead { .. }
+        ));
     }
 
     #[test]

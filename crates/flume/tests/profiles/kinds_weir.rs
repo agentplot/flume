@@ -11,7 +11,12 @@
 //! back, and the packages refused at another identity, naming a part
 //! outside them, an environment or a program by a location (155 to 160,
 //! 192; S63); and a kind that lands with no stages beside one that does
-//! not and a table of settings (18, 202; weir 51, 57).
+//! not and a table of settings (18, 202; weir 51, 57); and such a kind
+//! naming its landing fix, by an identity with its version, and its
+//! bound, in a repository's declaration and a package, and what weir and
+//! flume refuse of them, and a base place's launch holding it, or refused
+//! where it resolves to no kind (23, 154, 157, 203; weir 52, 57, 89; weir
+//! record 0005).
 
 use crate::common::engine::{base_at, engine, PLACE_PROFILE};
 use crate::common::*;
@@ -521,6 +526,146 @@ fn a_kind_that_lands_with_no_stages_beside_one_that_does_not_and_settings() {
     }
 }
 
+/// A declaration of `train`, landing with no stages and `more` in its
+/// table, and `mend` at version 1, landing with one code stage delivering
+/// commits, its prompt at `prompts/code.md` (23, 202).
+fn trained(more: &str) -> String {
+    format!(
+        "[kinds.train]\nbranch = \"train\"\nlands = true\nstages = []\n{more}\n\n\
+         [kinds.mend]\nversion = 1\nbranch = \"mend\"\nlands = true\n\n\
+         [[kinds.mend.stages]]\nname = \"code\"\nprompt = \"prompts/code.md\"\n\
+         deliverables = [\"commits\"]\nagents = [{{}}]\n"
+    )
+}
+
+/// `repository` declaring `declaration`, mend's prompt beside it,
+/// committed as `message`; the revision.
+fn declaring_trained(repository: &Repository, declaration: &str, message: &str) -> Revision {
+    repository.write(DECLARATION, declaration);
+    repository.write(".config/prompts/code.md", "{{brief}}");
+    Revision::new(repository.commit(message))
+}
+
+/// Each kind `repository` declares at `revision`, by name, with the kind
+/// of its fixes and its bound; panics naming why where it could not be
+/// read.
+fn landing_fixes(
+    repository: &Repository,
+    revision: &Revision,
+) -> BTreeMap<String, (Option<String>, Option<u32>)> {
+    match Weir.read_kinds(&repository.name(), revision) {
+        KindsRead::Read { kinds, .. } => kinds
+            .into_iter()
+            .map(|kind| (kind.name, (kind.fix, kind.fix_limit)))
+            .collect(),
+        other => panic!("the declaration read as {other:?}"),
+    }
+}
+
+#[test]
+fn a_kind_with_no_stages_names_its_landing_fix_and_its_bound() {
+    // The kinds-profile spec's "A landing fix and its bound over a scratch
+    // repository": weir's crate reads a kind's `landing_fix` and
+    // `max_landing_fixes`, and the profile maps them onto the kind of its
+    // fixes, spelled as weir spells the identity, and its bound; a kind
+    // that gives neither names neither (23; weir 52; weir record 0005;
+    // core.4).
+    let repository = Repository::new("landing-fix");
+    let declared = format!(
+        "{}\n[kinds.yard]\nbranch = \"yard\"\nlands = true\nstages = []\n",
+        trained("landing_fix = \"repo/mend@1\"\nmax_landing_fixes = 2")
+    );
+    let revision = declaring_trained(&repository, &declared, "train names its landing fix");
+    let none = (None, None);
+    assert_eq!(
+        landing_fixes(&repository, &revision),
+        BTreeMap::from([
+            ("mend".to_string(), none.clone()),
+            (
+                "train".to_string(),
+                (Some("repo/mend@1".to_string()), Some(2))
+            ),
+            ("yard".to_string(), none),
+        ]),
+        "each kind's landing fix and its bound"
+    );
+}
+
+#[test]
+fn a_landing_fix_weir_refuses_is_named_in_weirs_words() {
+    // The kinds-profile spec's "A landing fix weir refuses": a bare name, a
+    // name with no version, and either field on a kind with stages are
+    // answered as could not be read in weir's words, naming the field (57;
+    // weir record 0005).
+    let repository = Repository::new("landing-fix-refused");
+    for named in ["mend", "repo/mend"] {
+        declaring_trained(
+            &repository,
+            &trained(&format!("landing_fix = \"{named}\"")),
+            &format!("train names {named} its landing fix"),
+        );
+        let reason = could_not_read(&repository);
+        assert!(
+            reason.contains("kinds.train.landing_fix") && reason.contains("is no identity"),
+            "{named} not refused as no identity: {reason}"
+        );
+    }
+    declaring_trained(
+        &repository,
+        &format!(
+            "{}\n[kinds.bump]\nbranch = \"bump\"\n\
+             landing_fix = \"flume/fix@1\"\nmax_landing_fixes = 1\n\n\
+             [[kinds.bump.stages]]\nname = \"code\"\nprompt = \"prompts/code.md\"\n\
+             deliverables = [\"commits\"]\nagents = [{{}}]\n",
+            trained("")
+        ),
+        "a one-stage kind names a landing fix",
+    );
+    let reason = could_not_read(&repository);
+    for field in ["kinds.bump.landing_fix", "kinds.bump.max_landing_fixes"] {
+        assert!(
+            reason.contains(&format!("{field}: is on a kind with stages")),
+            "{field} not refused as on a kind with stages: {reason}"
+        );
+    }
+}
+
+#[test]
+fn a_landing_fix_bound_past_what_flume_counts_is_refused() {
+    // The kinds-profile spec's "A bound past what flume counts": weir reads
+    // the count, and the profile refuses the declaration naming the field
+    // (4, 84).
+    let repository = Repository::new("landing-fix-bound");
+    declaring_trained(
+        &repository,
+        &trained("landing_fix = \"repo/mend@1\"\nmax_landing_fixes = 4294967296"),
+        "train's bound past what flume counts",
+    );
+    let reason = could_not_read(&repository);
+    assert!(
+        reason.contains("kinds.train.max_landing_fixes: is more than flume counts"),
+        "{reason}"
+    );
+}
+
+#[test]
+fn fix_and_max_fixes_are_sections_naming_no_landing_fix() {
+    // The kinds-profile spec's "The fields' old spellings": weir returns
+    // `fix` and `max_fixes` as sections, and flume reads no fix and no
+    // bound from them (23; weir record 0005; core.4).
+    let repository = Repository::new("old-spellings");
+    let revision = declaring_trained(
+        &repository,
+        &trained("fix = \"repo/mend@1\"\nmax_fixes = 2"),
+        "train names its fix in the old spelling",
+    );
+    assert_eq!(
+        landing_fixes(&repository, &revision).get("train"),
+        Some(&(None, None)),
+        "train's landing fix and its bound"
+    );
+}
+
 /// A one-stage kind `bump` of the repository's at `version`, not landing.
 fn bump(version: u32, stages: &[&str]) -> Kind {
     Kind {
@@ -547,6 +692,8 @@ fn bump(version: u32, stages: &[&str]) -> Kind {
                 repeats: false,
             })
             .collect(),
+        fix: None,
+        fix_limit: None,
     }
 }
 
@@ -607,6 +754,92 @@ fn s33_a_repository_with_no_table_refuses_a_fix_naming_the_merge_queue_it_needs(
         "the refusal names not the kind and the merge queue: {reason}"
     );
     assert_eq!(world.place.log.count("make"), 0, "places made");
+    assert!(world.store.places().is_empty(), "held state was left");
+}
+
+/// A scratch repository `label` binding the fakes' merge queue by the
+/// name the world binds it by, and declaring `train` naming `landing_fix`
+/// its landing fix with a bound of 2 beside `mend` at version 1; and the
+/// launch of `train--spring` on `main` for the recipient `ops`, a session
+/// that asks nothing, through the kinds profile, with the world it was
+/// launched in and its answer (21, 203).
+fn spring_through_the_profile(label: &str, landing_fix: &str) -> (Repository, World, Answer) {
+    let repository = Repository::new(label);
+    let revision = declaring_trained(
+        &repository,
+        &format!(
+            "[profiles]\nmerge_queue = \"queue\"\n\n{}",
+            trained(&format!(
+                "landing_fix = \"{landing_fix}\"\nmax_landing_fixes = 2"
+            ))
+        ),
+        "train names its landing fix",
+    );
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    base_at(&world, &repository.name(), &revision.0);
+    let spring = Launch {
+        repository: repository.name(),
+        recipients: vec!["ops".into()],
+        ..launch("train", "spring", None)
+    };
+    let answer = engine(&world, Arc::new(Weir)).launch(&spring);
+    (repository, world, answer)
+}
+
+#[test]
+fn a_base_places_launch_holds_the_landing_fix_the_profile_reads() {
+    // The kinds-profile spec's "The landing fix held through the profile":
+    // the core resolves the landing fix the profile read as a launch's
+    // whole identity, holds it with where it came from, and status gives
+    // it with the kind's bound (21, 56, 203).
+    let (repository, world, answer) = spring_through_the_profile("landing-fix-held", "repo/mend@1");
+    launched(&answer).expect("the launch taken");
+    let id = PlaceId::new(flume_fakes::place_location(
+        &repository.name(),
+        "train--spring",
+    ));
+    let held = world.held(&id).expect("the base place held");
+    let fixes_as = held.place.fixes_as.expect("the kind of its fixes held");
+    assert_eq!(fixes_as.identity.spelled, "repo/mend@1");
+    assert_eq!(fixes_as.from.source, REPO_SOURCE, "where it came from");
+    assert_eq!(
+        (
+            fixes_as.from.declaration_file.as_deref(),
+            fixes_as.from.revision.clone()
+        ),
+        (Some(DECLARATION), Some(Revision::new(repository.head()))),
+        "the repository's declaration at the launch's revision"
+    );
+    let places = match engine(&world, Arc::new(Weir)).status(Some(&id)) {
+        Answer::Status { places, .. } => places,
+        other => panic!("status answered {other:?}"),
+    };
+    assert_eq!(
+        places
+            .iter()
+            .map(|place| (place.fix_kind.clone(), place.fix_limit))
+            .collect::<Vec<_>>(),
+        vec![(Some(fixes_as), Some(2))],
+        "train--spring's fix kind and its bound in status"
+    );
+}
+
+#[test]
+fn a_landing_fix_at_a_version_not_declared_refuses_the_launch() {
+    // The kinds-profile spec's "A landing fix at a version the repository
+    // does not declare": the identity resolves at the version it names, so
+    // `repo/mend@2` beside `mend` at version 1 refuses the launch before the
+    // merge queue opens anything, and nothing is held (4, 154; core.8,
+    // core.34).
+    let (_repository, world, answer) =
+        spring_through_the_profile("landing-fix-undeclared", "repo/mend@2");
+    let reason = refused(&answer).expect("the launch refused");
+    assert!(
+        reason.contains("repo/mend@2") && reason.contains("declares mend at version 1"),
+        "the refusal names neither the landing fix nor the version declared: {reason}"
+    );
+    assert_eq!(world.queue.log.count("open"), 0, "the merge queue's opens");
     assert!(world.store.places().is_empty(), "held state was left");
 }
 
@@ -2242,6 +2475,29 @@ fn a_packages_hash_wherever_it_lies() {
     assert_ne!(edited.hash, first.hash, "a prompt's byte changed its hash");
     assert_eq!(edited.kind.stages[0].prompt, "Review {{brief}}!\n");
     assert_eq!(package_at(&linked.join("kinds"), "review", 1), second);
+}
+
+#[test]
+fn a_packages_kind_names_its_landing_fix() {
+    // The kinds-profile spec's "A package's landing fix": the package's
+    // kind is mapped by the same reader as a repository's, naming the kind
+    // of its fixes and its bound (157; weir 89; weir record 0005).
+    let scratch = Scratch::new("package-landing-fix");
+    let kinds_dir = scratch.path("kinds");
+    write_package(
+        &kinds_dir,
+        "train@1",
+        "[kinds.train]\nversion = 1\nbranch = \"train\"\nlands = true\nstages = []\n\
+         landing_fix = \"flume/fix@1\"\nmax_landing_fixes = 1\n",
+        &[],
+    );
+    let package = package_at(&kinds_dir, "train", 1);
+    assert_eq!(package.identity.spelled, "acme/train@1");
+    assert_eq!(
+        (package.kind.fix.as_deref(), package.kind.fix_limit),
+        (Some("flume/fix@1"), Some(1)),
+        "the package's landing fix and its bound"
+    );
 }
 
 #[test]

@@ -179,7 +179,38 @@ words reads them for it.
 
 A launch keeps where its recipients came from, `recipients_from`:
 `from` `launch`, `environment`, `session`, or `answerer` with its
-`source`. A place an earlier release launched keeps none.
+`source`; or `base-place`, for a fix flume launched for a base place,
+which takes the base place's recipients. A place an earlier release
+launched keeps none.
+
+### A base place's fixes
+
+A kind that lands with no stages may name the kind its fixes run as,
+kept in the place's `kind` as `fix`, with `fix_limit`, how many fixes it
+runs before its place waits on its caller. A base place whose kind names
+one keeps, in its record, `fixes_as`: the `identity` its launch resolved
+the name to and `from`, where that kind came from, as `kind_from` gives
+it. It's written once, at the launch, and each fix launches that
+identity.
+
+Its held state keeps `forecast`, the newest forecast a settle read of
+its branch against its base, with `at`, when it was read. The forecast
+is `clear` with its `head` and `onto`, the base's revision; `conflict`
+with those, its `files`, `with` and `words`; or `could_not_read` with
+its `reason`. A conflict's `with` names each entry queued ahead it
+meets, left out where it meets the base itself, and its `words` are the
+merge queue's. A settle writes it only where its outcome, its head or
+the base's revision changed. It keeps too `fixes`, each fix flume
+launched for it, in order. A fix gives its `number`, from 1; its `name`,
+the base place's name and the number joined by `-`; and its `place`, the
+fix's location. Its `cause` is `forecast` with the `head` and `onto` it
+was formed on, or `failed` or `conflicted` with the merge queue's
+`submission`. It gives `launched`, when it was written, and `ended`:
+`live`, `landed` with its `commit`, `dropped`, or `refused` with the
+launch's `reason`. A fix's
+own record keeps `fix_of`: the base place's `place`, the fix's `number`
+and its `cause`. Each is left out where it does not apply, and a place
+an earlier release launched keeps none of them.
 
 ### The kind a place keeps
 
@@ -276,11 +307,15 @@ Each place:
 | `refused_acts` | each act the guard refused |
 | `cannot_read` | each fact flume could not read when asked; among them, each branch the merge queue could not read, in its words, which flume reads past unless it is the place's base, where the place's own submission is |
 | `failures` | each act that failed, in flume's words |
-| `recipients`, `recipients_from` | the place's recipients, and where its launch took them from: `from` `launch`, `environment`, `$FLUME_RECIPIENT`, `session`, the session it ran in, or `answerer` with the `source` that declares the answerer behind its stream; `recipients_from` left out for a place an earlier release launched and for a role's run |
+| `recipients`, `recipients_from` | the place's recipients, and where its launch took them from: `from` `launch`, `environment`, `$FLUME_RECIPIENT`, `session`, the session it ran in, or `answerer` with the `source` that declares the answerer behind its stream, or `base-place`, a fix flume launched for a base place, whose recipients are its base place's; `recipients_from` left out for a place an earlier release launched and for a role's run |
 | `waiting_on`, `stalled` | what the place waits on its caller for, since when and in whose words, or, with `act` `answer` and `why` `dialog`, on a person to answer its agent's dialog, in the dialog's words; for an answer, `open_until`, the time its stage's agent is kept open until, while it is, and `closed`, once a settle let it go, as the stage's `end` gives it; for a base place with no place on its branch live, `act` `retry` and `why` `unsubmitted`, or `submission` with the merge queue's words where its submission failed, conflicted or was withdrawn; whether it is stalled |
 | `waits_on` | whom a live place waits on, as the list gives it: `caller`, `host`, `session`, `merge_queue`, or `places`, a base place's while a place on its branch is live, which is never stalled; left out where it waits on nobody |
 | `worktree` | `false`, for a base place alone, which has no worktree; left out for every other place |
 | `on_branch` | for a base place alone, the places being made or live whose base is its branch, by their locations; left out for every other place |
+| `fix_kind`, `fix_limit` | for a base place whose kind names the kind its fixes run as, that kind's `identity` as its launch resolved it and `from`, where it came from, as `kind_from` gives it; and how many fixes it runs before it waits on its caller, its kind's bound or flume's default; left out for every other place |
+| `forecast` | for such a base place, the newest forecast a settle read of its branch, as its held state keeps it ([a base place's fixes](#a-base-places-fixes)); status forms no forecast of its own; left out where no settle read one |
+| `fixes` | for a base place, each fix flume launched for it, with its `number`, `name`, `place`, `cause`, `launched` and `ended`, as its held state keeps them; left out where it has none |
+| `fix_of` | for a place flume launched as a base place's fix, the base place's `place`, the fix's `number` and its `cause`; left out for every other place |
 | `waits_on_session` | the stage waiting on its session, as its line says `waiting on its session`: `stage`; `processes`, each process that runs the conversation its start would carry, by its `pid` and `started`; or `unread`, what flume could not read, naming a variable or the host's processes and never a path; and `since`, when it began waiting. It is never stalled. Left out where no stage waits so |
 | `holds`, `hold_words` | each hold and its words: `on`, `stage` with its `stage`, `submission`, or `waiting`, the move the place waits on; `words`; `since`; and for a hold on the waiting move, `bound`, in seconds, and `lapsed`, when it lapsed, each left out where it has none |
 | `priority` | the place's priority |

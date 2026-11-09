@@ -45,7 +45,7 @@ impl Engine {
     /// Launches one place, or refuses naming why (2).
     pub fn launch(&self, launch: &Launch) -> Answer {
         self.settle_attended();
-        match self.make_place(launch, None) {
+        match self.make_place(launch, None, None) {
             Ok(held) => Answer::Launched {
                 place: self.place_status(&held),
             },
@@ -563,13 +563,73 @@ impl Engine {
         Ok(())
     }
 
+    /// The kind a base place's fixes run as, where its kind names one:
+    /// the name resolved as a launch's kind name resolves, over the
+    /// launch's declaration, the repository's at the base's revision the
+    /// launch read and flume's own, a source named only where a lock
+    /// records it, with where it came from; refused, naming the kind of
+    /// its fixes and why, where it resolves to no kind, to one that does
+    /// not land, to one with no stages, to one flume does not run, or to
+    /// one that reads a change while the repository binds no change
+    /// profile, so the launch is refused before the merge queue opens
+    /// anything (4, 19 to 21, 23, 154, 203; core.8, core.34).
+    fn fix_kind_of(
+        &self,
+        launch: &Launch,
+        kind: &Kind,
+        identity: &KindIdentity,
+        revision: &Revision,
+        binds_change: bool,
+    ) -> Result<Option<FixKind>, String> {
+        let Some(fix) = &kind.fix else {
+            return Ok(None);
+        };
+        let refused = |why: String| {
+            format!(
+                "the kind {identity} names {fix} the kind of its fixes, which flume could not launch on its branch: {why} (4, 23, 203)"
+            )
+        };
+        let named = Launch {
+            kind: fix.clone(),
+            ..launch.clone()
+        };
+        let Resolved {
+            kind: fixes, from, ..
+        } = self.resolve_kind(&named, revision).map_err(refused)?;
+        let at = &from.identity;
+        if !fixes.lands {
+            return Err(refused(format!(
+                "the kind {at} does not land, so a fix of it would land nothing on the branch"
+            )));
+        }
+        if fixes.stages.is_empty() {
+            return Err(refused(format!(
+                "the kind {at} has no stages, and a kind with no stages runs no fix"
+            )));
+        }
+        Self::runs(&fixes, at).map_err(refused)?;
+        if reads_change(&fixes) && !binds_change {
+            return Err(refused(format!(
+                "the kind {at} reads a change, and {} binds no change profile",
+                launch.repository
+            )));
+        }
+        Ok(Some(FixKind {
+            identity: at.clone(),
+            from,
+        }))
+    }
+
     /// Makes the launch's place, a role's run where `role` names the
     /// address it serves: its agents' session named by the address and no
-    /// recipient of its own (132).
+    /// recipient of its own (132); and a base place's fix where `fix_of`
+    /// names the base place, holding it, its recipients the base place's
+    /// as the launch carries them (43, 203).
     pub(crate) fn make_place(
         &self,
         launch: &Launch,
         role: Option<&str>,
+        fix_of: Option<&FixOf>,
     ) -> Result<HeldState, String> {
         let repository = &launch.repository;
         let kinds = self.resolver.kinds();
@@ -599,6 +659,17 @@ impl Engine {
             from,
         } = self.resolve_kind(launch, &base_revision)?;
         Self::runs(&kind, &from.identity)?;
+        let fixes_as = if crate::base::base_place(&kind) {
+            self.fix_kind_of(
+                launch,
+                &kind,
+                &from.identity,
+                &base_revision,
+                change.is_some(),
+            )?
+        } else {
+            None
+        };
         no_stage_lacking(&kind, &launch.settings, &repository_settings)?;
         // Every layer's own settings the launch read are checked before
         // anything is made or held, and kept as checked; the host's are
@@ -698,7 +769,10 @@ impl Engine {
             },
             _ => None,
         };
-        let (recipients, recipients_from) = self.recipients_of(launch, role, &stream.name)?;
+        let (recipients, recipients_from) = match fix_of {
+            Some(_) => (launch.recipients.clone(), Some(RecipientsFrom::BasePlace)),
+            None => self.recipients_of(launch, role, &stream.name)?,
+        };
         let held = HeldState {
             place: PlaceRecord {
                 id: id.clone(),
@@ -727,6 +801,8 @@ impl Engine {
                 recipients_from,
                 stream,
                 intent,
+                fix_of: fix_of.cloned(),
+                fixes_as,
             },
             phase: Phase::Making {
                 by: self.host.command(),
@@ -766,6 +842,8 @@ impl Engine {
             holds: launch_holds(launch, self.host.now()),
             waiting: None,
             stall_after: launch.stall_after.unwrap_or(STALL_AFTER),
+            fixes: vec![],
+            forecast: None,
         };
         let programs = kind
             .stages

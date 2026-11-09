@@ -72,6 +72,8 @@ pub fn flumes_own() -> Vec<Kind> {
             ),
             verify,
         ],
+        fix: None,
+        fix_limit: None,
     };
     let mut repeating = change.clone();
     repeating.version = 2;
@@ -90,6 +92,8 @@ pub fn flumes_own() -> Vec<Kind> {
             agents: KindSettings::default(),
             label: None,
             stages: vec![code.clone()],
+            fix: None,
+            fix_limit: None,
         },
         Kind {
             name: "chore".into(),
@@ -100,6 +104,8 @@ pub fn flumes_own() -> Vec<Kind> {
             agents: KindSettings::default(),
             label: None,
             stages: vec![code],
+            fix: None,
+            fix_limit: None,
         },
         change,
         repeating,
@@ -1046,6 +1052,38 @@ impl MergeQueueHarness for FakeMergeQueueHarness {
 
     fn branch_head(&self, repository: &str, branch: &str) -> Option<Revision> {
         self.git.branch_head(repository, branch)
+    }
+
+    fn change_on(&self, repository: &str, branch: &str, file: &str) -> Revision {
+        self.git.commit(repository, branch, &[file])
+    }
+
+    /// The fake forms no merge: its forecast of `branch` is scripted in
+    /// conflict on `file` with the base's new revision (210).
+    fn move_base_against(
+        &self,
+        repository: &str,
+        base: &str,
+        branch: &str,
+        file: &str,
+    ) -> Revision {
+        let moved = self.git.commit(repository, base, &[file]);
+        let head = self
+            .git
+            .branch_head(repository, branch)
+            .expect("the branch");
+        self.queue.answer_forecast(
+            repository,
+            branch,
+            Forecast::Conflict {
+                head,
+                onto: moved.clone(),
+                files: vec![file.into()],
+                with: vec![],
+                words: format!("would conflict: {file} with {base}"),
+            },
+        );
+        moved
     }
 }
 

@@ -58,6 +58,16 @@ pub trait MergeQueueHarness {
     /// The revision `branch` of the repository stands at, none where it
     /// has no such branch.
     fn branch_head(&self, repository: &str, branch: &str) -> Option<Revision>;
+
+    /// `file` changed on `branch`, one the merge queue lands on, as work
+    /// landed there would change it: the branch's new head.
+    fn change_on(&self, repository: &str, branch: &str, file: &str) -> Revision;
+
+    /// `base` moved with a change of its own to `file`, which `branch`
+    /// also changed, so the branch's head would conflict with it were it
+    /// submitted: the base's new revision (210).
+    fn move_base_against(&self, repository: &str, base: &str, branch: &str, file: &str)
+        -> Revision;
 }
 
 fn found(read: impl Into<ReadAcross>) -> Result<Submission, String> {
@@ -546,6 +556,11 @@ pub fn base_place_scenarios<H: MergeQueueHarness>() -> Vec<Scenario<H>> {
             cites: &["99", "117", "203"],
             run: a_submit_by_name::<H>,
         },
+        Scenario {
+            name: "merge queue: a branch it lands on is forecast clear onto its base while the two merge, then in conflict on the file both changed once the base moves, with no entry ahead and no submission made by either",
+            cites: &["210"],
+            run: clear_then_in_conflict::<H>,
+        },
     ]
 }
 
@@ -649,6 +664,57 @@ fn a_submit_by_name<H: MergeQueueHarness>(harness: &H) -> Outcome {
         found(harness.seam().read_submission(&place.repository, OPENED))?.id,
         submission.id,
         "the submission read by its branch"
+    );
+    Ok(())
+}
+
+/// The seam-contracts spec's "Clear, then in conflict": a forecast of a
+/// branch that merges onto its base answers clear with its head and the
+/// base's revision, and once the base moves with a change to the file
+/// the branch changed, in conflict on that file at the base's new
+/// revision, meeting the base itself; neither creates an entry (210).
+fn clear_then_in_conflict<H: MergeQueueHarness>(harness: &H) -> Outcome {
+    const FILE: &str = "README.md";
+    let (place, _) = harness.place();
+    let repository = &place.repository;
+    opened(harness, &place)?;
+    let head = harness.change_on(repository, OPENED, FILE);
+    let BaseRevision::At { revision: base } = harness.seam().base_revision(repository, &place.base)
+    else {
+        return Err(format!("{} has no revision to forecast onto", place.base));
+    };
+    ensure_eq!(
+        harness.seam().forecast(repository, OPENED, &place.base),
+        Forecast::Clear {
+            head: head.clone(),
+            onto: base,
+        },
+        "the forecast while the two merge"
+    );
+    let moved = harness.move_base_against(repository, &place.base, OPENED, FILE);
+    match harness.seam().forecast(repository, OPENED, &place.base) {
+        Forecast::Conflict {
+            head: at,
+            onto,
+            files,
+            with,
+            words,
+        } => {
+            ensure_eq!(at, head, "the head forecast");
+            ensure_eq!(onto, moved, "the base's revision forecast onto");
+            ensure_eq!(files, vec![FILE.to_string()], "the files contested");
+            ensure!(with.is_empty(), "a conflict with the base met {with:?}");
+            ensure!(
+                words.contains(FILE),
+                "the conflict's words name no {FILE}: {words}"
+            );
+        }
+        other => return Err(format!("the forecast once the base moved: {other:?}")),
+    }
+    ensure_eq!(
+        harness.seam().read_submission(repository, OPENED).read,
+        SubmissionRead::None,
+        "a submission of the branch forecast"
     );
     Ok(())
 }

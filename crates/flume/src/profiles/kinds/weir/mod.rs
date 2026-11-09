@@ -6,7 +6,12 @@
 //! weir refuses is answered as could not be read, naming every field that
 //! fails (84). A kind that lands and declares `stages = []` is mapped to a
 //! kind with no stages, which weir refuses on a kind that does not land
-//! (18, 202; weir 51, 57). A kind's `agents` table, and a `[kinds.<kind>]` table that
+//! (18, 202; weir 51, 57). Such a kind's `landing_fix`, the identity with
+//! its version of the kind its fixes run as, and its `max_landing_fixes`
+//! are mapped onto the seam's kind of its fixes and its bound, the
+//! identity spelled as weir's crate spells it, which the core resolves at
+//! its place's launch as a launch's name (23, 154, 203; weir 52, 57; weir
+//! record 0005). A kind's `agents` table, and a `[kinds.<kind>]` table that
 //! gives settings to a kind declared elsewhere, are weir's too: each is
 //! mapped onto the seam's settings for every stage and for each stage it
 //! names, the latter returned apart from the kinds (32, C.2; weir 52,
@@ -764,7 +769,13 @@ fn refused(refusal: &Refusal) -> String {
 /// weir 52 and C.4 name none and weir 94 gives a statechart kind's
 /// `label` another meaning, and flume reads no field of the format
 /// itself; until then only the host's configuration gives a place a
-/// label (180; record 0033; core.4).
+/// label (180; record 0033; core.4). Its kind of fixes is the kind's
+/// `landing_fix` as weir-kinds reads it, an identity with its version
+/// spelled by weir's `Display`, and its bound is the kind's
+/// `max_landing_fixes`, a count past what flume counts a problem naming
+/// the field; nothing else feeds either, so a kind's `fix` and
+/// `max_fixes`, which weir returns as sections, are ignored (23; weir 52,
+/// 57; weir record 0005; core.4).
 fn map_kind(kind: &weir_kinds::Kind, beside: Reader, problems: &mut Vec<String>) -> Kind {
     let at = format!("kinds.{}", kind.name);
     let version = u32::try_from(kind.version).unwrap_or_else(|_| {
@@ -785,6 +796,13 @@ fn map_kind(kind: &weir_kinds::Kind, beside: Reader, problems: &mut Vec<String>)
             .map(|(n, stage)| map_stage(stage, &format!("{at}.stages[{n}]"), beside, problems))
             .collect(),
         label: None,
+        fix: kind.landing_fix.as_ref().map(ToString::to_string),
+        fix_limit: kind.max_landing_fixes.map(|times| {
+            u32::try_from(times).unwrap_or_else(|_| {
+                problems.push(format!("{at}.max_landing_fixes: is more than flume counts"));
+                0
+            })
+        }),
     }
 }
 
