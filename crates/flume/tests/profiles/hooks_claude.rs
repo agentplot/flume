@@ -1344,11 +1344,13 @@ fn fixture_text(name: &str) -> String {
 
 #[test]
 fn a_restarted_pane() {
-    // S94, 43, C.4, design 9: a session flume did not start, begun again
-    // in the pane its place's end was delivered to, is given at its start
-    // the place, the stop-short's words, its key and the three ways on;
-    // the inbox it ran is the pane's, so the end it collected before stays
-    // collected and the place waits as it did.
+    // S94, 43, C.4, design 9; weir 103: the claude-code-plugin spec's "A
+    // restarted pane": a session flume did not start, begun again in the
+    // pane a stop-short was handed to before, is given at its start the
+    // place, the stop-short's words, its key and the three ways on; the
+    // inbox it ran is the pane's and confirms on receipt, so the
+    // stop-short reads handed to the pane by session_start and confirmed
+    // by it, and the place waits as it did.
     let host = Host::new("restarted-pane");
     let session = pane_session(&host, "w1-p2");
     let agent = asks_for(&host, &session);
@@ -1374,8 +1376,42 @@ fn a_restarted_pane() {
         assert!(words.contains(said), "{said:?} not in:\n{words}");
     }
     assert!(
-        !words.contains("Ends delivered to this session now"),
-        "an end collected twice:\n{words}"
+        words.contains("Ends delivered to this session now")
+            && words.contains("[stage/code/1/ended-short]"),
+        "the stop-short handed before not given:\n{words}"
+    );
+    assert_eq!(ran.code, 0, "{}", ran.out);
+    let status = host.status(&agent.place);
+    let end = status["places"][0]["ends"]
+        .as_array()
+        .expect("ends")
+        .iter()
+        .find(|end| end["key"] == "stage/code/1/ended-short")
+        .unwrap_or_else(|| panic!("no stop-short: {status}"))
+        .clone();
+    let handed: Vec<&str> = end["deliveries"]
+        .as_array()
+        .expect("deliveries")
+        .iter()
+        .filter(|delivery| delivery["recipient"] == session.as_str())
+        .filter_map(|delivery| delivery["by"].as_str())
+        .collect();
+    assert_eq!(handed, vec!["inbox", "session_start"], "{end}");
+    assert!(
+        end["confirmed"]
+            .as_array()
+            .expect("confirmed")
+            .iter()
+            .any(|confirmed| confirmed["recipient"] == session.as_str()),
+        "{end}"
+    );
+    assert!(
+        !end["pending_for"]
+            .as_array()
+            .expect("pending_for")
+            .iter()
+            .any(|pending| pending == session.as_str()),
+        "{end}"
     );
 }
 
