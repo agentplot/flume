@@ -282,7 +282,7 @@ impl Host for RealHost {
     }
 
     fn ends_expire(&self) -> Seconds {
-        flume_seams::ENDS_EXPIRE
+        self.config.ends_expire
     }
 
     fn recipient(&self) -> Option<String> {
