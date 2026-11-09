@@ -212,3 +212,152 @@ fails unknownSystem
 expect "$named" "services.flume.package on riscv64-linux evaluates" [ "$status" -ne 0 ]
 expect "$named" "its failure names not the systems the flake gives: $err" \
   says "$err" "gives no package for riscv64-linux: it gives aarch64-darwin, aarch64-linux, x86_64-linux"
+
+# The activation's sources, in a case's folder: its home, where the
+# sources go, and each module file in a store of the case's own,
+# `<n>-flume-source-<source>.toml` (the change
+# flumes-module-writes-the-hosts-sources, design 5).
+sources_home() {
+  home=$dir/home
+  folder=$home/.config/flume
+  sources=$folder/sources
+  mkdir -p "$home" "$dir/store"
+}
+# The module's file `$1`-flume-source-`$2`.toml, made in the case's store.
+store_file() {
+  made=$dir/store/$1-flume-source-$2.toml
+  echo "# the module's $2" >"$made"
+  echo "$made"
+}
+# `$1` is a link to `$2`.
+links() {
+  [ -L "$1" ] && [ "$(readlink "$1")" = "$2" ]
+}
+# The folder `$1` holds no name beginning with `.`.
+no_dot() {
+  [ -z "$(cd "$1" && find . -mindepth 1 -maxdepth 1 -name '.*')" ]
+}
+
+named="Sources in a fresh home"
+fresh
+sources_home
+acme=$(store_file 1 acme)
+tools=$(store_file 1 tools)
+activation sources acme "$acme" tools "$tools"
+expect "$named" "sources exits $status: $err" [ "$status" -eq 0 ]
+expect "$named" "$sources/acme.toml is no link to $acme" links "$sources/acme.toml" "$acme"
+expect "$named" "$sources/tools.toml is no link to $tools" links "$sources/tools.toml" "$tools"
+expect "$named" "$sources holds $(listed "$sources"), not acme.toml and tools.toml alone" \
+  entries "$sources" "acme.toml tools.toml"
+expect "$named" "sources says \"$out\", not that it linked each" \
+  [ "$out" = "flume: linked $sources/acme.toml to $acme
+flume: linked $sources/tools.toml to $tools" ]
+
+named="A source's link of an earlier activation"
+fresh
+sources_home
+earlier=$(store_file 1 acme)
+acme=$(store_file 2 acme)
+mkdir -p "$sources"
+ln -s "$earlier" "$sources/acme.toml"
+activation sources acme "$acme"
+expect "$named" "sources exits $status: $err" [ "$status" -eq 0 ]
+expect "$named" "$sources/acme.toml is no link to $acme" links "$sources/acme.toml" "$acme"
+expect "$named" "sources moved the earlier link aside" missing "$sources/acme.toml.before-nix"
+expect "$named" "$sources holds a name beginning with .: $(listed "$sources")" no_dot "$sources"
+expect "$named" "sources says \"$out\", not that it linked acme" \
+  [ "$out" = "flume: linked $sources/acme.toml to $acme" ]
+
+named="A hand-written file of a declared source"
+fresh
+sources_home
+acme=$(store_file 1 acme)
+mkdir -p "$sources"
+echo 'kinds_dir = "/srv/kinds/acme"' >"$sources/acme.toml"
+activation sources acme "$acme"
+expect "$named" "sources exits $status: $err" [ "$status" -eq 0 ]
+expect "$named" "$sources/acme.toml is no link to $acme" links "$sources/acme.toml" "$acme"
+expect "$named" "$sources/acme.toml.before-nix does not hold the hand-written file" \
+  holds "$sources/acme.toml.before-nix" 'kinds_dir = "/srv/kinds/acme"'
+expect "$named" "sources says \"$out\", not both paths" \
+  [ "$out" = "flume: moved $sources/acme.toml to $sources/acme.toml.before-nix
+flume: linked $sources/acme.toml to $acme" ]
+
+named="A source's file aside already"
+fresh
+sources_home
+acme=$(store_file 1 acme)
+tools=$(store_file 1 tools)
+mkdir -p "$sources"
+echo '# by hand' >"$sources/acme.toml"
+echo '# by hand before' >"$sources/acme.toml.before-nix"
+activation sources acme "$acme" tools "$tools"
+expect "$named" "sources exits $status, not non-zero" [ "$status" -ne 0 ]
+expect "$named" "sources changed $sources/acme.toml" holds "$sources/acme.toml" '# by hand'
+expect "$named" "sources changed $sources/acme.toml.before-nix" \
+  holds "$sources/acme.toml.before-nix" '# by hand before'
+expect "$named" "sources' refusal \"$err\" names not both paths" \
+  names "$err" "$sources/acme.toml" "$sources/acme.toml.before-nix"
+expect "$named" "$sources/tools.toml is no link to $tools" links "$sources/tools.toml" "$tools"
+
+named="A sources that is no folder"
+fresh
+sources_home
+acme=$(store_file 1 acme)
+mkdir -p "$folder"
+echo '# not a folder' >"$sources"
+activation sources acme "$acme"
+expect "$named" "sources acme exits $status, not non-zero" [ "$status" -ne 0 ]
+expect "$named" "sources acme's refusal \"$err\" names not $sources" says "$err" "$sources"
+activation sources
+expect "$named" "sources with no source exits $status: $err" [ "$status" -eq 0 ]
+expect "$named" "sources with no source says \"$out$err\"" [ -z "$out$err" ]
+expect "$named" "$sources is not as it was" holds "$sources" '# not a folder'
+
+named="No source in a fresh home"
+fresh
+sources_home
+activation sources
+expect "$named" "sources exits $status: $err" [ "$status" -eq 0 ]
+expect "$named" "sources says \"$out$err\"" [ -z "$out$err" ]
+expect "$named" "sources made $folder" missing "$folder"
+
+named="A source no longer declared"
+fresh
+sources_home
+gone=$(store_file 1 acme)
+tools=$(store_file 2 tools)
+mkdir -p "$sources" "$dir/theirs"
+ln -s "$gone" "$sources/acme.toml"
+echo 'kinds_dir = "/srv/kinds/mine"' >"$sources/mine.toml"
+echo 'kinds_dir = "/srv/kinds/theirs"' >"$dir/theirs/theirs.toml"
+ln -s "$dir/theirs/theirs.toml" "$sources/theirs.toml"
+echo '# moved aside' >"$sources/old.toml.before-nix"
+activation sources tools "$tools"
+expect "$named" "sources exits $status: $err" [ "$status" -eq 0 ]
+expect "$named" "sources left $sources/acme.toml" missing "$sources/acme.toml"
+expect "$named" "sources says \"$out\", not that it removed acme.toml" \
+  says "$out" "removed $sources/acme.toml"
+expect "$named" "$sources/tools.toml is no link to $tools" links "$sources/tools.toml" "$tools"
+expect "$named" "sources changed mine.toml" holds "$sources/mine.toml" 'kinds_dir = "/srv/kinds/mine"'
+expect "$named" "sources changed theirs.toml" links "$sources/theirs.toml" "$dir/theirs/theirs.toml"
+expect "$named" "sources changed old.toml.before-nix" holds "$sources/old.toml.before-nix" '# moved aside'
+expect "$named" "$sources holds $(listed "$sources")" \
+  entries "$sources" "mine.toml old.toml.before-nix theirs.toml tools.toml"
+
+named="The sources beside the rest of the folder"
+fresh
+sources_home
+acme=$(store_file 1 acme)
+mkdir -p "$folder"
+echo '# by hand' >"$folder/config.toml"
+echo '[streams.work]' >"$folder/config.local.toml"
+echo '# the host lock' >"$folder/flume.lock"
+before=$(cd "$folder" && cat config.toml config.local.toml flume.lock | cksum)
+activation sources acme "$acme"
+after=$(cd "$folder" && cat config.toml config.local.toml flume.lock | cksum)
+expect "$named" "sources exits $status: $err" [ "$status" -eq 0 ]
+expect "$named" "$sources/acme.toml is no link to $acme" links "$sources/acme.toml" "$acme"
+expect "$named" "config.toml, config.local.toml or flume.lock changed" [ "$before" = "$after" ]
+expect "$named" "$folder holds $(listed "$folder")" \
+  entries "$folder" "config.local.toml config.toml flume.lock sources"
