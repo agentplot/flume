@@ -100,6 +100,31 @@ which flume reads at each agent's start. With
 `services.flume.package = null` the module writes the file and installs
 no `flume`.
 
+Declare each source of kinds the host keeps under
+`services.flume.sources`, each key named as
+[the source's file](/flume/reference/configuration/#the-hosts-sources)
+names it:
+
+```nix
+{
+  services.flume.sources.acme = {
+    kinds_dir = "~/.local/share/flume/kinds/acme";
+    roles = "~/.local/state/acme/flume/roles.toml";
+  };
+}
+```
+
+Each activation links `~/.config/flume/sources/<source>.toml` for each
+source to the file the module writes for it into the Nix store. A file
+already there that is no link moves aside once, to
+`<source>.toml.before-nix`. A source you stop declaring loses the
+module's link at the next activation. The module removes only its own
+links, so a source you write by hand, or one another program writes,
+stays as it stands. A source's name flume would refuse fails the
+evaluation, as a credential in a source does. The roles file a source
+names and the packages in its `kinds_dir` belong to the source's own
+tool, and the module never writes them.
+
 ## The host's configuration
 
 flume reads one file on the host, `$XDG_CONFIG_HOME/flume/config.toml`,
