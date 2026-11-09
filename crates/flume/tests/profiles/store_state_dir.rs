@@ -234,6 +234,77 @@ fn s12_a_restart_over_the_state_directory_loses_nothing() {
     );
 }
 
+#[test]
+fn the_hosts_deliveries_are_seen_by_another_process() {
+    // C.7; weir 112: the store-profile spec's "Seen by another process":
+    // one engine over a scratch state directory records an end's
+    // delivery, a second engine over the same directory reads it as
+    // written, and `deliveries.json` is readable by the host's user alone.
+    use flume_core::deliveries::{owing, read};
+    use std::os::unix::fs::PermissionsExt;
+    let scratch = Scratch::new("deliveries");
+    let root = scratch.path("state/flume");
+    let world = World::new();
+    let over = |store: Arc<dyn Store>| {
+        Engine::new(
+            world.resolver.clone(),
+            world.terminal.clone(),
+            store,
+            world.history.clone(),
+            world.host.clone(),
+            world.defaults.clone(),
+        )
+    };
+    let one = StateDir::at(&root);
+    let engine = over(Arc::new(StateDir::at(&root)));
+    let id = World::id("fix", "one");
+    launched(&engine.launch(&launch("fix", "one", Some("x")))).expect("the launch");
+    engine.settle(Some(&id));
+    let dropped = engine.drop_place(&id, true);
+    assert!(dropped.refusal().is_none(), "the drop: {dropped:?}");
+    let (version, written) = read(&one).expect("the deliveries read");
+    let recorded = owing(&written, world.host.now());
+    assert!(
+        recorded
+            .deliveries
+            .keys()
+            .any(|key| key.starts_with("fix--one/") && key.ends_with("/over/dropped")),
+        "no delivery of the drop recorded: {recorded:?}"
+    );
+    let two = StateDir::at(&root);
+    assert_eq!(
+        read(&two).expect("the deliveries read again"),
+        (version, written),
+        "the deliveries another process reads"
+    );
+    let flume_core::Answer::Status { places, .. } =
+        over(Arc::new(StateDir::at(&root))).status(Some(&id))
+    else {
+        panic!("status was refused");
+    };
+    let end = places[0]
+        .ends
+        .iter()
+        .find(|end| end.key.to_string() == "over/dropped")
+        .expect("the drop's end");
+    assert!(
+        end.delivery.is_some() && end.pending_for == vec![world_caller()],
+        "the drop's end as another engine gives it: {end:?}"
+    );
+    let file = root.join("deliveries.json");
+    let mode = std::fs::metadata(&file)
+        .unwrap_or_else(|error| panic!("{}: {error}", file.display()))
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o600, "the deliveries' mode");
+}
+
+/// The recipient the fakes' world names in its calling command's
+/// environment, which a launch that names none takes (7).
+fn world_caller() -> String {
+    flume_conformance::engine::world::CALLER.to_string()
+}
+
 /// The account `work-1` of the pool `work` spent until `until`.
 fn spent_until(until: Seconds) -> HostDocument {
     HostDocument::Account(AccountSpent {
