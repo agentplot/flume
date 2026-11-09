@@ -154,6 +154,18 @@ impl World {
         }
     }
 
+    /// The end `end` of `held` as status gives it, its delivery read from
+    /// the host's deliveries now (43).
+    pub fn end_status(&self, held: &HeldState, end: &EndHeld) -> flume_core::EndStatus {
+        flume_core::EndStatus::of(end, &held.place, &self.owing())
+    }
+
+    /// What the host's deliveries hold of each end's delivery now, as an
+    /// engine reads them (43; weir 111).
+    pub fn owing(&self) -> Owing {
+        flume_core::deliveries::owing(&self.deliveries(), self.host.now())
+    }
+
     /// The key of the newest delivery recorded of the end `end_key` of the
     /// place `short`, `<kind>--<name>`, as its launch's token keys it (43;
     /// weir 101).

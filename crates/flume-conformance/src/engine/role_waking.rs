@@ -739,17 +739,22 @@ fn the_run_starts(_: &()) -> Outcome {
     };
     ensure_eq!(ends.len(), 1, "the ends collected");
     let held = world.held(&one).ok_or("no place")?;
+    let statuses: Vec<_> = held
+        .ends
+        .iter()
+        .map(|end| world.end_status(&held, end))
+        .collect();
     ensure!(
-        held.ends
+        statuses
             .iter()
-            .all(|end| end.deliveries.iter().any(|delivery| {
+            .all(|end| end.end.deliveries.iter().any(|delivery| {
                 delivery.recipient == PLANNER && delivery.by == DeliveredBy::Inbox
             })),
         "an end not delivered to the address: {:?}",
-        held.ends
+        statuses
     );
     ensure_eq!(
-        held.pending_for(),
+        held.pending_for(&world.owing()),
         vec!["operator".to_string()],
         "the ends still pending"
     );
@@ -959,7 +964,7 @@ fn ends_pending_while_the_agent_is_away(_: &()) -> Outcome {
     for id in &places {
         let held = world.held(id).ok_or("no place")?;
         ensure_eq!(
-            held.pending_for(),
+            held.pending_for(&world.owing()),
             vec![PLANNER.to_string()],
             format!("pending for {id}")
         );
@@ -1309,7 +1314,9 @@ fn a_run_an_earlier_flume_named(_: &()) -> Outcome {
         "the notices into the earlier run's pane"
     );
     ensure_eq!(
-        world.held(&one).map(|held| held.pending_for()),
+        world
+            .held(&one)
+            .map(|held| held.pending_for(&world.owing())),
         Some(vec![]),
         "the ends still pending"
     );
@@ -1351,7 +1358,9 @@ fn a_run_not_yet_given_its_prompt(_: &()) -> Outcome {
         "the notices into the run's pane before its prompt"
     );
     ensure_eq!(
-        world.held(&one).map(|held| held.pending_for()),
+        world
+            .held(&one)
+            .map(|held| held.pending_for(&world.owing())),
         Some(vec![PLANNER.to_string()]),
         "the ends pending before the run's prompt"
     );
@@ -1370,7 +1379,9 @@ fn a_run_not_yet_given_its_prompt(_: &()) -> Outcome {
         "the notices into the run's pane"
     );
     ensure_eq!(
-        world.held(&one).map(|held| held.pending_for()),
+        world
+            .held(&one)
+            .map(|held| held.pending_for(&world.owing())),
         Some(vec![]),
         "the ends pending once the run is begun"
     );
@@ -1395,7 +1406,7 @@ fn a_carried_address(_: &()) -> Outcome {
     ensure_eq!(runs(&world), Vec::<PlaceId>::new(), "runs launched");
     let held = world.held(&id).ok_or("no place")?;
     ensure_eq!(
-        held.pending_for(),
+        held.pending_for(&world.owing()),
         vec!["north/planner".to_string()],
         "the ends pending"
     );
@@ -1792,7 +1803,9 @@ fn a_planners_run_is_lost(_: &()) -> Outcome {
     );
     let held = world.held(&id).ok_or("no run")?;
     ensure!(
-        !held.pending_for().contains(&PLANNER.to_string())
+        !held
+            .pending_for(&world.owing())
+            .contains(&PLANNER.to_string())
             && stall.recipients(&held.place.recipients) == vec!["east/operator".to_string()],
         "the stall's recipients: {:?}",
         stall.recipients(&held.place.recipients)
@@ -1812,7 +1825,7 @@ fn a_planners_run_is_lost(_: &()) -> Outcome {
         "a notice into the planner's own pane"
     );
     ensure_eq!(
-        held.pending_for(),
+        held.pending_for(&world.owing()),
         vec!["east/operator".to_string()],
         "the ends pending once the stall is read"
     );
@@ -1825,8 +1838,11 @@ fn a_planners_run_is_lost(_: &()) -> Outcome {
         )],
         "the notices into the operator's run's pane"
     );
+    let held = world.held(&id).ok_or("no place")?;
     ensure_eq!(
-        stall_of(&world, &id)?
+        world
+            .end_status(&held, &stall_of(&world, &id)?)
+            .end
             .deliveries
             .into_iter()
             .map(|delivery| (delivery.recipient, delivery.by))

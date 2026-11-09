@@ -2981,6 +2981,21 @@ mod tests {
         assert_eq!(line(&[], None), None);
     }
 
+    /// The end `end` as status gives it to a place whose recipients are
+    /// `recipients`, no delivery of it recorded (43).
+    fn end_status(end: &EndHeld, recipients: &[&str]) -> EndStatus {
+        let recipients: Vec<String> = recipients.iter().map(ToString::to_string).collect();
+        EndStatus {
+            end: end.clone(),
+            key: end.of.end_key(),
+            pending_for: end.recipients(&recipients),
+            open_until: match &end.of {
+                EndOf::Stage { end, .. } => end.open_until,
+                _ => None,
+            },
+        }
+    }
+
     #[test]
     fn a_drops_end_line() {
         // 43, 52, 56; core.14: a drop's end as any end's line, pending for
@@ -2988,7 +3003,7 @@ mod tests {
         let place = PlaceStatus {
             recipients: vec!["east/planner".into(), "boomdrive".into()],
             recipients_from: Some(RecipientsFrom::Launch),
-            ends: vec![EndStatus::of(
+            ends: vec![end_status(
                 &EndHeld {
                     of: EndOf::Over {
                         over: flume_seams::Over::Dropped,
@@ -2999,7 +3014,7 @@ mod tests {
                     claim: None,
                     noticing: vec![],
                 },
-                &["east/planner".to_string(), "boomdrive".to_string()],
+                &["east/planner", "boomdrive"],
             )],
             ..a_place()
         };
@@ -4052,7 +4067,7 @@ mod tests {
                 place: PlaceId::new("/d/places/1/fix--one"),
                 kind: "fix".into(),
                 name: "one".into(),
-                end: EndStatus::of(&end, &["ops".to_string()]),
+                end: end_status(&end, &["ops"]),
             }],
             waiting: vec![],
         };

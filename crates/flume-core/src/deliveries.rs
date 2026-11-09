@@ -13,10 +13,11 @@ use crate::ends::notice;
 use crate::{Engine, Step};
 use chrono::{DateTime, SecondsFormat, Utc};
 use flume_seams::{
-    Deliveries, DeliveryRecord, HeldState, HostDocument, HostKey, HostVersioned, PlaceId, Seconds,
-    Secret, Store, Written,
+    ConfirmedBy, DeliveredBy, Deliveries, Delivery, DeliveryRecord, EndDelivery, EndOf, HeldState,
+    HostDocument, HostKey, HostVersioned, OwedTo, Owing, PlaceId, Seconds, Secret, Store, Written,
 };
-use weir_delivery::{Record, Recorded};
+use std::collections::BTreeMap;
+use weir_delivery::{Handed, Record, Recorded};
 
 /// How many times a write of the host's deliveries reads again on a
 /// moved version before it says so (75).
@@ -144,6 +145,87 @@ pub fn seconds(time: &str) -> Option<Seconds> {
         .and_then(|at| Seconds::try_from(at.timestamp()).ok())
 }
 
+/// What `records` hold of each end's delivery at `now`: each delivery's
+/// readers, message and expiry, each hand-over and each confirmation in
+/// the order added, and, through weir's `owed`, each reader that has not
+/// confirmed it, expired or not, its name known or not (43; weir 104 to
+/// 106, 111). A hand-over by a way flume records none by is passed over.
+pub fn owing(records: &[Record], now: Seconds) -> Owing {
+    let at = |time: &weir_delivery::Time| seconds(time.as_str()).unwrap_or_default();
+    let mut deliveries: BTreeMap<String, EndDelivery> = BTreeMap::new();
+    for record in records {
+        match record {
+            Record::Delivery(delivery) => {
+                let key = delivery.key().to_string();
+                deliveries
+                    .entry(key.clone())
+                    .or_insert_with(|| EndDelivery {
+                        key,
+                        readers: delivery.readers().iter().map(ToString::to_string).collect(),
+                        message: delivery.message().to_string(),
+                        expires_at: at(delivery.expires_at()),
+                        owed: vec![],
+                        confirmed: vec![],
+                        handovers: vec![],
+                    });
+            }
+            Record::Handover(handover) => {
+                let (Some(delivery), Some(by)) = (
+                    deliveries.get_mut(handover.key.as_str()),
+                    DeliveredBy::of_way(handover.by.as_str()),
+                ) else {
+                    continue;
+                };
+                delivery.handovers.push(Delivery {
+                    recipient: handover.reader.to_string(),
+                    at: at(&handover.at),
+                    by,
+                });
+            }
+            Record::Confirmation(confirmation) => {
+                let Some(delivery) = deliveries.get_mut(confirmation.key.as_str()) else {
+                    continue;
+                };
+                let recipient = confirmation.reader.to_string();
+                if !delivery
+                    .confirmed
+                    .iter()
+                    .any(|confirmed| confirmed.recipient == recipient)
+                {
+                    delivery.confirmed.push(ConfirmedBy {
+                        recipient,
+                        at: at(&confirmation.at),
+                    });
+                }
+            }
+            Record::Known(_) => {}
+        }
+    }
+    if let Ok(owed) = weir_delivery::owed(records, &time(now)) {
+        for reader in owed.readers {
+            for owed in reader.deliveries {
+                if let Some(delivery) = deliveries.get_mut(owed.delivery.key().as_str()) {
+                    delivery.owed.push(OwedTo {
+                        recipient: reader.reader.to_string(),
+                        expired: owed.expired,
+                        known: reader.known,
+                    });
+                }
+            }
+        }
+    }
+    for delivery in deliveries.values_mut() {
+        let readers = delivery.readers.clone();
+        delivery.owed.sort_by_key(|owed| {
+            readers
+                .iter()
+                .position(|reader| *reader == owed.recipient)
+                .unwrap_or(usize::MAX)
+        });
+    }
+    Owing { deliveries }
+}
+
 /// A place's token, eight hex characters of `secret`, by which its ends'
 /// deliveries are keyed, so two launches of one place never share a key
 /// (43, C.7; weir 101).
@@ -188,6 +270,17 @@ impl Engine {
             .iter()
             .flat_map(|held| {
                 held.ends.iter().filter_map(move |end| {
+                    // A stall an earlier flume recorded is recorded once a
+                    // settle has read whom it reaches (130, 193).
+                    if matches!(
+                        end.of,
+                        EndOf::Stall {
+                            answerer_read: false,
+                            ..
+                        }
+                    ) {
+                        return None;
+                    }
                     let readers = end.recipients(&held.place.recipients);
                     if readers.is_empty() {
                         return None;
@@ -239,20 +332,55 @@ impl Engine {
         documents
     }
 
-    /// The message each delivery of the host's deliveries was recorded
-    /// with, by its key (100; core.11).
-    pub(crate) fn messages(&self) -> std::collections::BTreeMap<String, String> {
-        read(&*self.store)
-            .map(|(_, records)| records)
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|record| match record {
-                Record::Delivery(delivery) => {
-                    Some((delivery.key().to_string(), delivery.message().to_string()))
+    /// What the host's deliveries hold of each end's delivery now, read
+    /// once (43; weir 111; core.15).
+    pub(crate) fn owing(&self) -> Owing {
+        match read(&*self.store) {
+            Ok((_, records)) => owing(&records, self.host.now()),
+            Err(why) => {
+                self.host.log(&why);
+                Owing::default()
+            }
+        }
+    }
+
+    /// Hands the delivery under each of `keys` to `recipient` `by` a way at
+    /// `at`, through weir's `hand`, in one write, confirming each on
+    /// receipt where `confirms`: for each key, whether this call handed it
+    /// over, false where the recipient had confirmed it, or the refusal
+    /// weir gave. A hand-over confirms nothing by itself (43; weir 103,
+    /// 109; core.25).
+    pub(crate) fn hand_over(
+        &self,
+        keys: &[String],
+        recipient: &str,
+        by: DeliveredBy,
+        at: Seconds,
+        confirms: bool,
+    ) -> Vec<Result<bool, String>> {
+        let at = time(at);
+        let mut answers: Vec<Result<bool, String>> = vec![];
+        let written = update(&*self.store, |records| {
+            answers.clear();
+            let mut all = records.to_vec();
+            let mut added = vec![];
+            for key in keys {
+                match weir_delivery::hand(&all, key, recipient, by.way(), &at, confirms) {
+                    Ok(Handed::Add(records)) => {
+                        all.extend(records.iter().cloned());
+                        added.extend(records);
+                        answers.push(Ok(true));
+                    }
+                    Ok(Handed::Confirmed(_)) => answers.push(Ok(false)),
+                    Err(refusal) => answers.push(Err(format!("{key}: {refusal}"))),
                 }
-                _ => None,
-            })
-            .collect()
+            }
+            added
+        });
+        if let Err(why) = written {
+            return keys.iter().map(|_| Err(why.clone())).collect();
+        }
+        answers
     }
 }
 

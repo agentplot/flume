@@ -580,13 +580,17 @@ pub struct EndStatus {
 }
 
 impl EndStatus {
-    /// The end `end` as status gives it to a place whose recipients are
-    /// `recipients` (43, 198).
-    pub fn of(end: &EndHeld, recipients: &[String]) -> EndStatus {
+    /// The end `end` of the place `place` as status gives it, its
+    /// delivery read from `owing`, the host's deliveries as one read gave
+    /// them: each hand-over of it, and the recipients it stands pending for
+    /// (43, 198; weir 103, 105).
+    pub fn of(end: &EndHeld, place: &PlaceRecord, owing: &Owing) -> EndStatus {
+        let mut shown = end.clone();
+        shown.deliveries = end.handovers(place, owing);
         EndStatus {
-            end: end.clone(),
+            end: shown,
             key: end.of.end_key(),
-            pending_for: end.pending(recipients),
+            pending_for: end.pending(place, owing),
             open_until: match &end.of {
                 EndOf::Stage {
                     state: StageState::EndedShort,

@@ -723,7 +723,9 @@ fn stalled_after_five_minutes(_: &()) -> Outcome {
         "the stall"
     );
     ensure!(
-        stalls[0].pending(&["ops".into(), "lead".into()]).is_empty(),
+        stalls[0]
+            .pending(&world.held(&id).ok_or("no place")?.place, &world.owing())
+            .is_empty(),
         "the stall still pending"
     );
     Ok(())
@@ -863,7 +865,10 @@ pub fn stall_and_settle(world: &World, id: &PlaceId) {
 /// each as often as it was.
 fn stall_reached(world: &World, id: &PlaceId) -> Result<Vec<String>, String> {
     let stall = stalls(world, id).pop().ok_or("no stall")?;
-    let mut reached: Vec<String> = stall
+    let held = world.held(id).ok_or("no place")?;
+    let mut reached: Vec<String> = world
+        .end_status(&held, &stall)
+        .end
         .deliveries
         .into_iter()
         .map(|delivery| delivery.recipient)
@@ -898,16 +903,18 @@ fn the_stall_reaches_the_answerer(_: &()) -> Outcome {
     ensure_eq!(held.place.recipients, vec!["ops".to_string()], "recipients");
     let stall = stalls(&world, &id).pop().ok_or("no stall")?;
     ensure_eq!(
-        stall
+        world
+            .end_status(&held, &stall)
+            .end
             .deliveries
             .iter()
-            .map(|delivery| delivery.recipient.as_str())
+            .map(|delivery| delivery.recipient.clone())
             .collect::<Vec<_>>(),
-        vec!["ops"],
+        vec!["ops".to_string()],
         "the stall's deliveries"
     );
     ensure_eq!(
-        stall.pending(&held.place.recipients),
+        stall.pending(&held.place, &world.owing()),
         vec!["east/operator".to_string()],
         "the stall pending for"
     );
@@ -1050,6 +1057,10 @@ fn a_stall_from_the_earlier_release(_: &()) -> Outcome {
     let read = world.store.read(&id).ok_or("no place")?;
     let mut json = serde_json::to_value(&read.state).map_err(|error| error.to_string())?;
     json["place"]["recipients"] = serde_json::json!([]);
+    json["place"]
+        .as_object_mut()
+        .ok_or("a place")?
+        .remove("token");
     for end in json["ends"].as_array_mut().ok_or("no ends")? {
         if end["of"] == "stall" {
             let end = end.as_object_mut().ok_or("an end")?;
@@ -1078,13 +1089,16 @@ fn a_stall_from_the_earlier_release(_: &()) -> Outcome {
         world.engine().settle(None);
     }
     let stall = stalls(&world, &id).pop().ok_or("no stall")?;
+    let held = world.held(&id).ok_or("no place")?;
     ensure_eq!(
-        stall
+        world
+            .end_status(&held, &stall)
+            .end
             .deliveries
             .iter()
-            .map(|delivery| delivery.recipient.as_str())
+            .map(|delivery| delivery.recipient.clone())
             .collect::<Vec<_>>(),
-        vec!["east/operator"],
+        vec!["east/operator".to_string()],
         "the stall's deliveries"
     );
     ensure_eq!(

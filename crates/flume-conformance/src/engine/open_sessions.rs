@@ -222,11 +222,11 @@ fn short_ends(
     stage: &str,
     start: u32,
 ) -> Result<Vec<EndHeld>, String> {
-    Ok(world
-        .held(id)
-        .ok_or("no held state")?
+    let held = world.held(id).ok_or("no held state")?;
+    Ok(held
         .ends
-        .into_iter()
+        .iter()
+        .map(|end| world.end_status(&held, end).end)
         .filter(|end| {
             matches!(
                 &end.of,

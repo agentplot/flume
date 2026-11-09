@@ -647,7 +647,7 @@ fn launched_again(_: &()) -> Outcome {
         after[0]
             .ends
             .iter()
-            .all(|end| end.pending(&after[0].place.recipients) == vec!["ops".to_string()]),
+            .all(|end| end.pending(&after[0].place, &world.owing()) == vec!["ops".to_string()]),
         "the tidied document's ends are not all pending for ops"
     );
     Ok(())
@@ -779,9 +779,12 @@ fn the_timeout(_: &()) -> Outcome {
         Some(StageState::Begun),
         "code"
     );
-    let held = world.held(&id).ok_or("no place")?;
     ensure!(
-        held.ends.iter().all(|end| end.deliveries.is_empty()),
+        world
+            .status(&id)?
+            .ends
+            .iter()
+            .all(|end| end.end.deliveries.is_empty()),
         "a delivery recorded"
     );
     Ok(())
@@ -1032,7 +1035,7 @@ fn two_inboxes_at_once(_: &()) -> Outcome {
     let other = Arc::new(Mutex::new(None));
     let engine = world.engine();
     let into = other.clone();
-    world.store.before_next_write(move || {
+    world.store.before_next_host_write(move || {
         let answer = engine.inbox("ops", None);
         *into.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(answer);
     });
@@ -1063,9 +1066,8 @@ fn two_inboxes_at_once(_: &()) -> Outcome {
         "the two inboxes did not meet at one write"
     );
     for name in ["one", "two"] {
-        let held = world.held(&World::id("fix", name)).ok_or("no place")?;
-        for end in &held.ends {
-            ensure_eq!(end.deliveries.len(), 1, "deliveries of {name}'s end");
+        for end in world.status(&World::id("fix", name))?.ends {
+            ensure_eq!(end.end.deliveries.len(), 1, "deliveries of {name}'s end");
         }
     }
     Ok(())
@@ -1382,10 +1384,9 @@ fn the_inbox_collects_for_a_standing_address(_: &()) -> Outcome {
         vec!["fix--one code delivered".to_string()],
         "what the inbox collected"
     );
-    let held = world.held(&id).ok_or("no place")?;
-    for end in &held.ends {
+    for end in world.status(&id)?.ends {
         ensure_eq!(
-            deliveries(end),
+            deliveries(&end.end),
             vec![(PLANNER.to_string(), DeliveredBy::Inbox)],
             "the deliveries"
         );

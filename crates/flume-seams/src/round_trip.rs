@@ -3179,10 +3179,13 @@ fn an_ends_key_and_its_pending_recipients() {
     );
     assert!(!ends[0].same(&ends[1].of), "a later start is another end");
     let recipients = vec!["operator".to_string(), "ops".to_string()];
-    assert_eq!(ends[0].pending(&recipients), vec!["ops".to_string()]);
-    assert_eq!(ends[1].pending(&recipients), recipients);
-    assert!(ends[1].pending_to(&recipients, "ops"));
-    assert!(!ends[0].pending_to(&recipients, "operator"));
+    let mut place = held().place;
+    place.recipients = recipients.clone();
+    let none = Owing::default();
+    assert_eq!(ends[0].pending(&place, &none), vec!["ops".to_string()]);
+    assert_eq!(ends[1].pending(&place, &none), recipients);
+    assert!(ends[1].pending_to(&place, &none, "ops"));
+    assert!(!ends[0].pending_to(&place, &none, "operator"));
 }
 
 #[test]
@@ -3223,13 +3226,14 @@ fn whom_each_end_is_pending_for() {
             over: Over::Dropped,
         }),
     ];
-    let recipients = state.place.recipients.clone();
+    let place = state.place.clone();
+    let none = Owing::default();
     let both = vec!["east/planner".to_string(), "boomdrive".to_string()];
     assert_eq!(
         state
             .ends
             .iter()
-            .map(|end| end.pending(&recipients))
+            .map(|end| end.pending(&place, &none))
             .collect::<Vec<_>>(),
         vec![both.clone(), both.clone(), vec!["boomdrive".to_string()]]
     );
@@ -3237,20 +3241,37 @@ fn whom_each_end_is_pending_for() {
         state.ends.iter().map(EndHeld::noticed).collect::<Vec<_>>(),
         vec![true, true, false]
     );
-    assert!(!state.ends[2].pending_to(&recipients, "east/planner"));
-    assert_eq!(state.pending_for(), both);
+    assert!(!state.ends[2].pending_to(&place, &none, "east/planner"));
+    assert_eq!(state.pending_for(&none), both);
     let mut dropped = state.ends[2].clone();
     dropped.deliveries.push(Delivery {
         recipient: "boomdrive".into(),
         at: 101,
         by: DeliveredBy::Inbox,
     });
-    assert!(dropped.pending(&recipients).is_empty());
+    assert!(dropped.pending(&place, &none).is_empty());
+    // Its delivery recorded, each end stands pending for each reader that
+    // has not confirmed it, as the host's deliveries hold them (weir 102).
+    let mut place = place.clone();
+    place.token = Some("0a1b2c3d".into());
+    let key = place.delivery_key(&state.ends[2].of).unwrap();
+    let confirmed = Owing {
+        deliveries: BTreeMap::from([(
+            key.clone(),
+            EndDelivery {
+                key,
+                readers: vec!["boomdrive".into()],
+                ..EndDelivery::default()
+            },
+        )]),
+    };
+    assert!(state.ends[2].pending(&place, &confirmed).is_empty());
+    assert_eq!(state.ends[0].pending(&place, &confirmed), both);
     // A drop of a place whose recipients are all roles' addresses stands
     // pending for no one (43, 62).
-    assert!(state.ends[2]
-        .pending(&["east/planner".to_string()])
-        .is_empty());
+    let mut roles_alone = state.place.clone();
+    roles_alone.recipients = vec!["east/planner".to_string()];
+    assert!(state.ends[2].pending(&roles_alone, &none).is_empty());
 }
 
 #[test]
@@ -3263,9 +3284,11 @@ fn a_stop_shorts_end_goes_to_the_role_it_named_alone() {
     }
     end.deliveries.clear();
     let recipients = vec!["operator".to_string(), "ops".to_string()];
+    let mut place = held().place;
+    place.recipients = recipients.clone();
     assert_eq!(end.recipients(&recipients), vec!["west/ops".to_string()]);
-    assert!(end.pending_to(&recipients, "west/ops"));
-    assert!(!end.pending_to(&recipients, "operator"));
+    assert!(end.pending_to(&place, &Owing::default(), "west/ops"));
+    assert!(!end.pending_to(&place, &Owing::default(), "operator"));
 }
 
 #[test]
@@ -3288,8 +3311,10 @@ fn a_stalls_answerer_beside_the_places_recipients() {
         stall.recipients(&["east/operator".to_string(), "west/ops".to_string()]),
         vec!["east/operator".to_string(), "west/ops".to_string()]
     );
+    let mut alone = held().place;
+    alone.recipients = vec![];
     assert_eq!(
-        stall.pending(&[]),
+        stall.pending(&alone, &Owing::default()),
         vec!["west/ops".to_string(), "east/operator".to_string()]
     );
     let before: EndOf =
@@ -3307,7 +3332,7 @@ fn a_stalls_answerer_beside_the_places_recipients() {
         }
     );
     assert_eq!(
-        held().pending_for(),
+        held().pending_for(&Owing::default()),
         vec![
             "operator".to_string(),
             "role:planner".to_string(),

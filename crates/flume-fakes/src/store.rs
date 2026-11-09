@@ -18,6 +18,9 @@ type Holds = Box<dyn Fn(&HeldState) -> bool + Send>;
 pub struct FakeStore {
     state: Mutex<StoreState>,
     before_write: Mutex<Vec<Interleaved>>,
+    /// Acts run once, just before the next write of a host's document is
+    /// decided.
+    before_host_write: Mutex<Vec<Interleaved>>,
     after_read: Mutex<Vec<(Holds, Interleaved)>>,
     root: String,
     pub log: Log,
@@ -48,6 +51,7 @@ impl FakeStore {
         FakeStore {
             state: Mutex::default(),
             before_write: Mutex::default(),
+            before_host_write: Mutex::default(),
             after_read: Mutex::default(),
             root: root.into(),
             log: Log::default(),
@@ -57,6 +61,12 @@ impl FakeStore {
     /// `act` runs once, just before the next write is decided.
     pub fn before_next_write(&self, act: impl FnOnce() + Send + 'static) {
         lock(&self.before_write).push(Box::new(act));
+    }
+
+    /// `act` runs once, just before the next write of a host's document is
+    /// decided, the host's deliveries among them.
+    pub fn before_next_host_write(&self, act: impl FnOnce() + Send + 'static) {
+        lock(&self.before_host_write).push(Box::new(act));
     }
 
     /// `act` runs once, just after the first read of a place that hands
@@ -248,6 +258,10 @@ impl Store for FakeStore {
     }
 
     fn write_host(&self, key: &HostKey, at: Option<u64>, next: Option<&HostDocument>) -> Written {
+        let hooks: Vec<Interleaved> = std::mem::take(&mut *lock(&self.before_host_write));
+        for hook in hooks {
+            hook();
+        }
         let mut state = lock(&self.state);
         let current = state.host.get(key).map(|versioned| versioned.version);
         let what = if next.is_some() {

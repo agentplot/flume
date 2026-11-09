@@ -85,6 +85,7 @@ impl Engine {
                 .map(|read| read.state)
                 .collect(),
         };
+        let owing = self.owing();
         let mut submissions = self.submissions(&held);
         let read: Vec<(&HeldState, Option<ReadAcross>)> = held
             .iter()
@@ -92,7 +93,7 @@ impl Engine {
             .map(|(at, held)| (held, submissions.remove(&at)))
             .collect();
         let places = side_by_side(&read, |(held, submission)| {
-            self.place_status_read(held, submission.clone())
+            self.place_status_read(held, submission.clone(), &owing)
         });
         let agents: BTreeMap<PlaceId, AgentState> = places
             .iter()
@@ -100,7 +101,7 @@ impl Engine {
             .collect();
         Answer::Status {
             places,
-            host: self.host_status(&agents),
+            host: self.host_status(&agents, &owing),
         }
     }
 
@@ -159,13 +160,18 @@ impl Engine {
     /// Every fact of one place, as it stands when asked.
     pub(crate) fn place_status(&self, held: &HeldState) -> PlaceStatus {
         let submission = self.submissions(std::slice::from_ref(held)).remove(&0);
-        self.place_status_read(held, submission)
+        self.place_status_read(held, submission, &self.owing())
     }
 
     /// Every fact of one place, as it stands when asked, its submission
     /// as `submission` read it where its repository's merge queue was
-    /// read for it.
-    fn place_status_read(&self, held: &HeldState, submission: Option<ReadAcross>) -> PlaceStatus {
+    /// read for it, and its ends' deliveries as `owing` read them.
+    fn place_status_read(
+        &self,
+        held: &HeldState,
+        submission: Option<ReadAcross>,
+        owing: &Owing,
+    ) -> PlaceStatus {
         let place = &held.place;
         let mut cannot_read = vec![];
         let mut refused_acts = vec![];
@@ -412,7 +418,7 @@ impl Engine {
             ends: held
                 .ends
                 .iter()
-                .map(|end| EndStatus::of(end, &place.recipients))
+                .map(|end| EndStatus::of(end, place, owing))
                 .collect(),
             role: held.role.clone(),
             clues: self.place_clues(held, agent_state, group.as_ref()),
