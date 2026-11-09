@@ -1,7 +1,7 @@
 ---
 number: 61
 title: A place's ends are weir's deliveries, delivered once their recipient confirms them
-status: proposed
+status: accepted
 date: 2026-11-08
 decision-makers:
 - Chuck Swanberg
@@ -10,7 +10,7 @@ decision-makers:
 
 # A place's ends are weir's deliveries, delivered once their recipient confirms them
 
-Status: proposed on 2026-11-08 by the construct stage of the change `flumes-inbox-is-weirs-delivery-form`. The direction is the user's and accepted, in weir's record 0006; the rules below that weir leaves to its deliverer are this stage's own, each cheap to change, and the record is proposed until the user has seen it as a record.
+Status: accepted on 2026-11-09 by agentplot-design. The direction is the user's and accepted, in weir's record 0006. The rules below that weir leaves to its deliverer are the construct stage's own, made on 2026-11-08 in the change `flumes-inbox-is-weirs-delivery-form`, each cheap to change, so no card of the user's is asked for them.
 
 Deciders: the user, in agentplot-design's pane on 2026-11-08, on how flume and sluice hand a reader what it waits for: "it seems like we're maybe inventing multiple similar solutions", "Is it actually tracking what was read?", "Is it done well?", and "So would we move a shared crate under Weir so that it's loose and Flume could use the same inbox system?"; then on agentplot-design's card of the same day: "Runner as one more recipient now; one shared inbox in weir next". weir's record 0006, accepted on that card, fixes the form and its order of work: "Flume, then sluice, move onto the crate, each in a change of its own." The brief of this change carries it: "Flume's ends are owed and delivered by weir's delivery form: a notice, a wait or an inbox hands an end over, it is done only once its reader confirms it, and one nobody collects expires and is shown in status."
 
