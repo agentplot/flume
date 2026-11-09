@@ -92,7 +92,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: the_moves_waited_on,
         },
         Scenario {
-            name: "status: a place stalled on a retry of construct gives the move, since when, stalled, and its end delivered to one recipient and pending for another and for the answerer behind its stream",
+            name: "status: a place stalled on a retry of construct gives the move, since when, stalled, and its end handed to one recipient by notice and confirmed by it, and pending for another and for the answerer behind its stream",
             cites: &["56", "130", "43", "193"],
             run: a_stalled_place_with_a_pending_end,
         },
@@ -1392,7 +1392,7 @@ fn a_place_gone(_: &()) -> Outcome {
     world.engine.drop_place(&id, true);
     // Its drop's end is pending for its recipient until it collects it,
     // and the settle after that removes the document (43, 62).
-    world.engine.inbox(CALLER, None);
+    world.engine.inbox(CALLER, None, true);
     world.engine.settle(None);
     let reason = refused(&world.engine.status(Some(&id)))?;
     ensure!(
@@ -1415,6 +1415,7 @@ fn a_stalled_place_with_a_pending_end(_: &()) -> Outcome {
     world.host.advance(STALL_AFTER);
     let stalled_at = world.host.now();
     world.settle(&id);
+    world.confirm("ops", "change--plan", &[&format!("stall/{asked}")])?;
     let status = world.status(&id)?;
     let waiting = status.waiting_on.ok_or("the place waits on nobody")?;
     ensure_eq!(

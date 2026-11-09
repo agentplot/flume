@@ -187,6 +187,48 @@ impl World {
             })
     }
 
+    /// `recipient` confirming the newest delivery of each end of the place
+    /// `short`, `<kind>--<name>`, that `end_keys` name, by `flume confirm`,
+    /// as a recipient that acts on an end does (43; weir 102).
+    pub fn confirm(&self, recipient: &str, short: &str, end_keys: &[&str]) -> Result<(), String> {
+        let keys = end_keys
+            .iter()
+            .map(|end_key| {
+                self.delivery_key(short, end_key)
+                    .ok_or(format!("no delivery recorded of {short} [{end_key}]"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        match self.engine().confirm(recipient, &keys) {
+            flume_core::Answer::Confirmed { .. } => Ok(()),
+            other => Err(format!("{recipient}'s confirmation answered {other:?}")),
+        }
+    }
+
+    /// `recipient` confirming every end pending for it, by its inbox
+    /// confirming on receipt, as a recipient that acts on what it collects
+    /// does (43; weir 103).
+    pub fn confirm_every(&self, recipient: &str) {
+        self.engine().inbox(recipient, None, true);
+    }
+
+    /// Every recipient of every document on the host confirming every end
+    /// pending for it, by its inbox confirming on receipt (43; weir 103).
+    pub fn confirm_all(&self) {
+        let mut recipients: Vec<String> = vec![];
+        for read in self.store.read_every() {
+            for end in &read.state.ends {
+                for recipient in end.recipients(&read.state.place.recipients) {
+                    if !recipients.contains(&recipient) {
+                        recipients.push(recipient);
+                    }
+                }
+            }
+        }
+        for recipient in recipients {
+            self.confirm_every(&recipient);
+        }
+    }
+
     /// A notice as it was sent, `flume: <kind>--<name> … [<end key>];
     /// read: …`, with the way to confirm its end's delivery after it, by
     /// the key recorded for it (43; core.11).

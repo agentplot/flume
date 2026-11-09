@@ -547,6 +547,7 @@ fn two_terminals_and_no_watch(_: &()) -> Outcome {
         &flume_core::WaitFor::Stage("code".into()),
         "ops",
         Some(10),
+        true,
     );
     ensure!(
         matches!(&waited, flume_core::Answer::Waited { end: Some(_), .. }),

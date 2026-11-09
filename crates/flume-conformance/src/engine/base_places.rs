@@ -1034,9 +1034,11 @@ fn the_landed_base_place_tidied(_: &()) -> Outcome {
         world.held(&spring).is_none(),
         "the base place's held state stays"
     );
+    world.confirm_all();
+    world.engine().settle(None);
     ensure!(
         world.store.places().is_empty(),
-        "documents stay: {:?}",
+        "documents stay once every end is confirmed: {:?}",
         world.store.places()
     );
     match answer {

@@ -174,7 +174,8 @@ impl Engine {
     }
 
     /// The settle's wake step (design 2): each role's address an end of
-    /// the place stands pending for is woken, and why one was not is kept
+    /// the place stands pending for, and that nothing has handed it to, is
+    /// woken, and why one was not is kept
     /// on the place for status, gone once it is woken; an address its
     /// source gives a standing agent or declares carried, the roles read
     /// once, is passed over, nothing launched and nothing kept (43, 132,
@@ -188,12 +189,22 @@ impl Engine {
             return;
         }
         // A drop's or a done's end stands pending for no role's address, so
-        // it wakes no role (43, 52, 114, 132).
-        let addresses: Vec<String> = held
-            .pending_for(&self.owing())
-            .into_iter()
-            .filter(|name| is_address(name))
-            .collect();
+        // it wakes no role; and an end anything handed to an address, a
+        // notice, a wait or a run's inbox, wakes no run for it again, so a
+        // run that never confirms wakes no run after it (43, 52, 114, 132,
+        // S122; core.28).
+        let owing = self.owing();
+        let mut addresses: Vec<String> = vec![];
+        for end in &held.ends {
+            for address in end.pending(&held.place, &owing) {
+                if is_address(&address)
+                    && !end.handed_to(&held.place, &owing, &address)
+                    && !addresses.contains(&address)
+                {
+                    addresses.push(address);
+                }
+            }
+        }
         let roles = if addresses.is_empty() {
             HostRoles::default()
         } else {

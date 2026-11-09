@@ -115,6 +115,18 @@ pub fn person(answer: &Answer) -> String {
                 lines.extend(waiting_place_lines(recipient, place));
             }
         }
+        Answer::Confirmed {
+            recipient,
+            confirmed,
+        } => {
+            for key in confirmed {
+                lines.push(if key.before {
+                    format!("{} confirmed by {recipient} before, at {}", key.key, key.at)
+                } else {
+                    format!("{} confirmed by {recipient} at {}", key.key, key.at)
+                });
+            }
+        }
         Answer::Woken {
             address,
             woke,

@@ -62,18 +62,19 @@ impl Engine {
         of: &WaitFor,
         recipient: &str,
         timeout: Option<Seconds>,
+        confirms: bool,
     ) -> Answer {
         let watched = !self.attended();
         let deadline = timeout.map(|timeout| self.host.now() + timeout);
         loop {
-            match self.waited(place, of, recipient) {
+            match self.waited(place, of, recipient, confirms) {
                 Err(reason) => return Answer::refused(reason),
                 Ok(Some(answer)) => return answer,
                 Ok(None) => {}
             }
             if !watched {
                 self.settle_all();
-                match self.waited(place, of, recipient) {
+                match self.waited(place, of, recipient, confirms) {
                     Err(reason) => return Answer::refused(reason),
                     Ok(Some(answer)) => return answer,
                     Ok(None) => {}
@@ -104,6 +105,7 @@ impl Engine {
         place: &PlaceId,
         of: &WaitFor,
         recipient: &str,
+        confirms: bool,
     ) -> Result<Option<Answer>, String> {
         let Some(held) = self.document(place) else {
             return Err(format!("no place {place} stands on this host"));
@@ -130,7 +132,7 @@ impl Engine {
             if let Some(delivery) = held.place.delivery_key(&end.of) {
                 let now = self.host.now();
                 match self
-                    .hand_over(&[delivery], recipient, DeliveredBy::Wait, now, true)
+                    .hand_over(&[delivery], recipient, DeliveredBy::Wait, now, confirms)
                     .pop()
                 {
                     Some(Ok(handed)) => delivered = handed,
@@ -171,13 +173,19 @@ impl Engine {
     /// collects what the name read and nothing a settle tidied since, a
     /// document it removed giving nothing (43, 62, 119, 130, 193, 208;
     /// design 9).
-    pub fn inbox(&self, recipient: &str, place: Option<&PlaceId>) -> Answer {
-        self.inbox_by(recipient, place, DeliveredBy::Inbox)
+    pub fn inbox(&self, recipient: &str, place: Option<&PlaceId>, confirms: bool) -> Answer {
+        self.inbox_by(recipient, place, DeliveredBy::Inbox, confirms)
     }
 
-    /// The inbox, each end it gives handed over `by` its way (43; weir
-    /// 103).
-    fn inbox_by(&self, recipient: &str, place: Option<&PlaceId>, by: DeliveredBy) -> Answer {
+    /// The inbox, each end it gives handed over `by` its way, and
+    /// confirmed on receipt where `confirms` (43; weir 103).
+    fn inbox_by(
+        &self,
+        recipient: &str,
+        place: Option<&PlaceId>,
+        by: DeliveredBy,
+        confirms: bool,
+    ) -> Answer {
         let named: Option<Vec<PlaceId>> = match place {
             Some(id) => {
                 let named: Vec<PlaceId> = self
@@ -225,7 +233,7 @@ impl Engine {
         let handed = if keys.is_empty() {
             vec![]
         } else {
-            self.hand_over(&keys, recipient, by, self.host.now(), true)
+            self.hand_over(&keys, recipient, by, self.host.now(), confirms)
         };
         let owing = if keys.is_empty() { owing } else { self.owing() };
         let mut ends = vec![];
@@ -265,7 +273,7 @@ impl Engine {
     /// C.4; design 9).
     pub fn session_inbox(&self) -> Option<Answer> {
         let session = self.caller_session()?;
-        Some(self.inbox_by(&session, None, DeliveredBy::SessionStart))
+        Some(self.inbox_by(&session, None, DeliveredBy::SessionStart, true))
     }
 }
 

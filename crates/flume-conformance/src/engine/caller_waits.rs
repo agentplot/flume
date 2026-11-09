@@ -70,7 +70,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_lost_stage_waits_on_its_caller,
         },
         Scenario {
-            name: "caller waits: a construct ended short needing an answer under a watch is stalled at five minutes, each recipient delivered that once",
+            name: "caller waits: a construct ended short needing an answer under a watch is stalled at five minutes, each recipient handed that once by notice and the stall pending for each until it confirms it",
             cites: &["130", "43", "42", "122"],
             run: stalled_after_five_minutes,
         },
@@ -85,7 +85,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_held_place_is_not_stalled,
         },
         Scenario {
-            name: "caller waits: a place launched from the pane ops stalls in east, behind which acme declares east/operator with a run, and its stall is delivered once to ops and stands pending for east/operator, whose run the settle wakes and whose inbox gives the stall with the stop-short's words and key",
+            name: "caller waits: a place launched from the pane ops stalls in east, behind which acme declares east/operator with a run, and its stall is handed once to ops by notice and stands pending for ops and east/operator, whose run the settle wakes and whose inbox gives the stall with the stop-short's words and key",
             cites: &["193", "130", "43", "132", "S94"],
             run: the_stall_reaches_the_answerer,
         },
@@ -722,11 +722,10 @@ fn stalled_after_five_minutes(_: &()) -> Outcome {
         },
         "the stall"
     );
-    ensure!(
-        stalls[0]
-            .pending(&world.held(&id).ok_or("no place")?.place, &world.owing())
-            .is_empty(),
-        "the stall still pending"
+    ensure_eq!(
+        stalls[0].pending(&world.held(&id).ok_or("no place")?.place, &world.owing()),
+        vec!["ops".to_string(), "lead".to_string()],
+        "the stall pending for, handed and not confirmed"
     );
     Ok(())
 }
@@ -915,14 +914,14 @@ fn the_stall_reaches_the_answerer(_: &()) -> Outcome {
     );
     ensure_eq!(
         stall.pending(&held.place, &world.owing()),
-        vec!["east/operator".to_string()],
+        vec!["ops".to_string(), "east/operator".to_string()],
         "the stall pending for"
     );
     ensure!(
         world.held(&World::id("turn", "east-operator")).is_some(),
         "no run of east/operator woken"
     );
-    let ends = match world.engine.inbox("east/operator", None) {
+    let ends = match world.engine.inbox("east/operator", None, true) {
         Answer::Inbox { ends, .. } => ends,
         other => return Err(format!("the inbox answered {other:?}")),
     };

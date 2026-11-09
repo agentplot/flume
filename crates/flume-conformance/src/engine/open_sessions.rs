@@ -1612,8 +1612,8 @@ fn the_notice_of_a_question(_: &()) -> Outcome {
         .collect();
     ensure_eq!(
         read,
-        vec![(Some(until), vec!["ops".to_string()], vec![])],
-        "code's stop-short: until when its agent is kept open, whom it was delivered to, and whom it is pending for"
+        vec![(Some(until), vec!["ops".to_string()], vec!["ops".to_string()])],
+        "code's stop-short: until when its agent is kept open, whom it was handed to, and whom it is pending for"
     );
     let json = serde_json::to_value(&ends[0]).map_err(|error| error.to_string())?;
     ensure_eq!(
@@ -1635,7 +1635,7 @@ fn waiting_again_after_an_answer(_: &()) -> Outcome {
     let world = World::new();
     let (id, _) = asking_for(&world, "one", &["ops"])?;
     let code_stage = WaitFor::Stage("code".into());
-    let first = waited(&world.engine().wait(&id, &code_stage, "ops", Some(0)))?;
+    let first = waited(&world.engine().wait(&id, &code_stage, "ops", Some(0), true))?;
     ensure_eq!(
         first.map(|(end, delivered)| (words_of(&end), delivered)),
         Some((Some(QUESTION.to_string()), true)),
@@ -1646,7 +1646,7 @@ fn waiting_again_after_an_answer(_: &()) -> Outcome {
             .engine
             .retry(&id, Retry::Current, Some("notes.md".into()), false),
     )?;
-    let again = world.engine().wait(&id, &code_stage, "ops", Some(60));
+    let again = world.engine().wait(&id, &code_stage, "ops", Some(60), true);
     ensure!(
         waited(&again)?.is_none(),
         "the wait after the answer answered {again:?}"
@@ -1659,7 +1659,7 @@ fn waiting_again_after_an_answer(_: &()) -> Outcome {
         "And its text?",
         StopKind::NeedsAnswer,
     )?;
-    let next = waited(&world.engine().wait(&id, &code_stage, "ops", Some(0)))?;
+    let next = waited(&world.engine().wait(&id, &code_stage, "ops", Some(0), true))?;
     ensure_eq!(
         next.map(|(end, delivered)| (words_of(&end), delivered)),
         Some((Some("And its text?".to_string()), true)),

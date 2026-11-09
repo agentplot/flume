@@ -242,14 +242,17 @@ fn an_address_carried_whole(_: &()) -> Outcome {
         "status's ends: {:?}",
         status.ends
     );
-    match world
-        .engine()
-        .wait(&id, &WaitFor::Stage("code".into()), "planner", Some(0))
-    {
+    match world.engine().wait(
+        &id,
+        &WaitFor::Stage("code".into()),
+        "planner",
+        Some(0),
+        true,
+    ) {
         Answer::Waited { end: Some(end), .. } if carried(&end.end.of) => {}
         other => return Err(format!("the wait answered {other:?}")),
     }
-    match world.engine().inbox("ops", None) {
+    match world.engine().inbox("ops", None, true) {
         Answer::Inbox { ends, .. } if ends.len() == 1 && carried(&ends[0].end.end.of) => {}
         other => return Err(format!("the inbox answered {other:?}")),
     }

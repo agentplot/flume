@@ -10,14 +10,14 @@
 //! status gives every time in seconds as it gives every other (56).
 
 use crate::ends::notice;
-use crate::{Engine, Step};
+use crate::{Answer, Engine, KeyConfirmed, Step};
 use chrono::{DateTime, SecondsFormat, Utc};
 use flume_seams::{
     ConfirmedBy, DeliveredBy, Deliveries, Delivery, DeliveryRecord, EndDelivery, EndOf, HeldState,
     HostDocument, HostKey, HostVersioned, OwedTo, Owing, PlaceId, Seconds, Secret, Store, Written,
 };
 use std::collections::BTreeMap;
-use weir_delivery::{Handed, Record, Recorded};
+use weir_delivery::{Confirmed, Handed, Record, Recorded};
 
 /// How many times a write of the host's deliveries reads again on a
 /// moved version before it says so (75).
@@ -341,6 +341,67 @@ impl Engine {
                 self.host.log(&why);
                 Owing::default()
             }
+        }
+    }
+
+    /// Confirms each of `keys` as `recipient`, through weir's `confirm`, in
+    /// one write: each key with when it was confirmed and whether it had
+    /// been before, its first time then; or, at the first key weir refuses,
+    /// that refusal naming the key and its field, the keys before it
+    /// confirmed and none after it (43; weir 102, 106, 110; core.25).
+    pub fn confirm(&self, recipient: &str, keys: &[String]) -> Answer {
+        let now = self.host.now();
+        let at = time(now);
+        let mut confirmed: Vec<KeyConfirmed> = vec![];
+        let mut refused: Option<String> = None;
+        let written = update(&*self.store, |records| {
+            confirmed.clear();
+            refused = None;
+            let mut all = records.to_vec();
+            let mut added = vec![];
+            for key in keys {
+                match weir_delivery::confirm(&all, key, recipient, &at) {
+                    Ok(Confirmed::Add(records)) => {
+                        all.extend(records.iter().cloned());
+                        added.extend(records);
+                        confirmed.push(KeyConfirmed {
+                            key: key.clone(),
+                            at: now,
+                            before: false,
+                        });
+                    }
+                    Ok(Confirmed::Already(first)) => confirmed.push(KeyConfirmed {
+                        key: key.clone(),
+                        at: seconds(first.as_str()).unwrap_or_default(),
+                        before: true,
+                    }),
+                    Err(refusal) => {
+                        refused = Some(format!(
+                            "the delivery key {key} was not confirmed as {recipient}: {refusal}"
+                        ));
+                        break;
+                    }
+                }
+            }
+            added
+        });
+        if let Err(why) = written {
+            return Answer::refused(why);
+        }
+        match refused {
+            Some(why) if confirmed.is_empty() => Answer::refused(why),
+            Some(why) => Answer::refused(format!(
+                "{why}; the keys before it were confirmed: {}",
+                confirmed
+                    .iter()
+                    .map(|key| key.key.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
+            None => Answer::Confirmed {
+                recipient: recipient.into(),
+                confirmed,
+            },
         }
     }
 

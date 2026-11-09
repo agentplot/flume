@@ -21,6 +21,9 @@ pub struct FakeStore {
     /// Acts run once, just before the next write of a host's document is
     /// decided.
     before_host_write: Mutex<Vec<Interleaved>>,
+    /// Whether every write of a host's document is refused, as a store
+    /// whose version moves at each write would refuse it.
+    refuses_host_writes: Mutex<bool>,
     after_read: Mutex<Vec<(Holds, Interleaved)>>,
     root: String,
     pub log: Log,
@@ -52,6 +55,7 @@ impl FakeStore {
             state: Mutex::default(),
             before_write: Mutex::default(),
             before_host_write: Mutex::default(),
+            refuses_host_writes: Mutex::default(),
             after_read: Mutex::default(),
             root: root.into(),
             log: Log::default(),
@@ -61,6 +65,12 @@ impl FakeStore {
     /// `act` runs once, just before the next write is decided.
     pub fn before_next_write(&self, act: impl FnOnce() + Send + 'static) {
         lock(&self.before_write).push(Box::new(act));
+    }
+
+    /// Every write of a host's document refused from now while `refuses`,
+    /// as moved, and taken again once it is false.
+    pub fn refuse_host_writes(&self, refuses: bool) {
+        *lock(&self.refuses_host_writes) = refuses;
     }
 
     /// `act` runs once, just before the next write of a host's document is
@@ -264,6 +274,12 @@ impl Store for FakeStore {
         }
         let mut state = lock(&self.state);
         let current = state.host.get(key).map(|versioned| versioned.version);
+        if *lock(&self.refuses_host_writes) {
+            let at_text = at.map_or("new".to_string(), |version| version.to_string());
+            self.log
+                .push(format!("write_host {key} at {at_text} refused"));
+            return Written::Moved;
+        }
         let what = if next.is_some() {
             "write_host"
         } else {

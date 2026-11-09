@@ -42,26 +42,33 @@ pub enum Answer {
     /// An act refused, naming why.
     Refused { refusal: Refusal },
     /// A wait by place: the end of the stage's current start or of the
-    /// submission it answers, delivered to the recipient by this wait or
-    /// answered as a read of one already delivered; no end where the
-    /// wait was still waiting when its timeout passed (43, design 9).
+    /// submission it answers, handed to the recipient by this wait, and
+    /// confirmed by it where the wait confirms on receipt, or answered as
+    /// a read of one the recipient confirmed; no end where the wait was
+    /// still waiting when its timeout passed (43, design 9; weir 103).
     Waited {
         place: PlaceId,
         recipient: String,
         end: Option<EndStatus>,
-        /// This wait delivered the end; false for a read.
+        /// This wait handed the end over; false for a read.
         delivered: bool,
     },
-    /// Every end pending for the recipient that the inbox collected and
-    /// delivered, of every place on the host, tidied places kept for
-    /// their ends among them, and every place that waits on its caller
-    /// and on this recipient, which marks nothing (43, 130, 193; design
-    /// 9).
+    /// Every end pending for the recipient, of every place on the host,
+    /// tidied places kept for their ends among them, each handed to it by
+    /// the inbox and confirmed where the inbox confirms on receipt, and
+    /// every place that waits on its caller and on this recipient, which
+    /// marks nothing (43, 130, 193; design 9; weir 103).
     Inbox {
         recipient: String,
         ends: Vec<Collected>,
         #[serde(default)]
         waiting: Vec<WaitingPlace>,
+    },
+    /// Each delivery key a recipient confirmed, with when, and whether it
+    /// had confirmed it before (43; weir 102).
+    Confirmed {
+        recipient: String,
+        confirmed: Vec<KeyConfirmed>,
     },
     /// A wake of a role's address: its run launched, or the run that
     /// stands for it, live or waiting, and nothing made (132).
@@ -244,6 +251,15 @@ pub enum WindowOutcome {
 pub struct LockedKind {
     pub kind: String,
     pub hash: String,
+}
+
+/// A delivery key confirmed: when the recipient confirmed it, and whether
+/// it had before this call, the time then being its first (43; weir 102).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeyConfirmed {
+    pub key: String,
+    pub at: Seconds,
+    pub before: bool,
 }
 
 /// What a wake of a role's address came to (132): its run launched by

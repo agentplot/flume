@@ -217,7 +217,7 @@ impl Engine {
                             &recipient,
                             DeliveredBy::Notice,
                             now,
-                            true,
+                            false,
                         );
                         for refused in handed.into_iter().filter_map(Result::err) {
                             self.host.log(&format!(
@@ -271,7 +271,7 @@ impl Engine {
                     &claim.recipient,
                     DeliveredBy::Notice,
                     claim.at,
-                    true,
+                    false,
                 );
                 for answer in answers {
                     match answer {

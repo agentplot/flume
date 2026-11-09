@@ -673,13 +673,13 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             let timeout = timeout.as_deref().map(read_span).transpose()?;
             let core = build()?;
             let recipient = recipient_of(&core, recipient)?;
-            core.wait(&place, &of, &recipient, timeout)
+            core.wait(&place, &of, &recipient, timeout, false)
         }
         Command::Inbox { place, recipient } => {
             let place = maybe(place)?;
             let core = build()?;
             let recipient = recipient_of(&core, recipient)?;
-            core.inbox(&recipient, place.as_ref())
+            core.inbox(&recipient, place.as_ref(), false)
         }
         Command::Wake { address } => build()?.wake(address),
         Command::Kinds {
