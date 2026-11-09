@@ -2,13 +2,21 @@
 # flume-publishes-its-own-flake-and-module, design 4, 5 and 9): the module
 # evaluated in a system of aarch64-darwin whose primary user is alice, at
 # /Users/alice, its system profile and its post-activation read, and the
-# module imported twice.
+# module imported twice. The post-activation runs the sources step after
+# the link, with each source of nix/tests/sources.nix and its file, or
+# with none (the change flumes-module-writes-the-hosts-sources, design 7).
 t:
 let
   inherit (t) lib;
   set = t.outputs.packages.aarch64-darwin;
 
   base = t.darwinSystem { };
+  sourced = t.darwinSystem { services.flume.sources = import ./sources.nix; };
+  # NixOS's user activation with no source, beside nix-darwin's.
+  nixos =
+    builtins.unsafeDiscardStringContext
+      (t.nixosSystem { }).config.system.userActivationScripts.script;
+  activate = builtins.unsafeDiscardStringContext "${../modules/activate.sh}";
   none = t.darwinSystem { services.flume.package = null; };
   noHome = t.darwinSystem { users.users.alice.home = lib.mkForce null; };
   twice = t.darwinSystem { imports = [ { imports = [ t.outputs.darwinModules.flume ]; } ]; };
@@ -23,16 +31,20 @@ let
     evaluated:
     builtins.unsafeDiscardStringContext evaluated.config.system.activationScripts.postActivation.text;
   # As the primary user, under their home, with the file rendered from
-  # the default settings.
+  # the default settings, and then the sources step with `sources`, each
+  # source's name and its file rendered from it.
   link =
-    evaluated:
+    sources: evaluated:
     builtins.unsafeDiscardStringContext ''
       sudo --user=alice -- /usr/bin/env HOME=/Users/alice \
         /bin/sh ${../modules/activate.sh} link ${(evaluated.pkgs.writeText "flume-config.toml" (builtins.readFile ./files/empty.toml)).outPath} || true
+      sudo --user=alice -- /usr/bin/env HOME=/Users/alice \
+        /bin/sh ${../modules/activate.sh} sources${t.sourcesGiven evaluated.pkgs sources} || true
     '';
-  links =
-    evaluated:
-    t.expect (lib.hasInfix (link evaluated) (activationOf evaluated)) "the post-activation runs no ${builtins.toJSON (link evaluated)}: ${builtins.toJSON (activationOf evaluated)}";
+  runs =
+    sources: evaluated:
+    t.expect (lib.hasInfix (link sources evaluated) (activationOf evaluated)) "the post-activation runs no ${builtins.toJSON (link sources evaluated)}: ${builtins.toJSON (activationOf evaluated)}";
+  links = runs [ ];
 
   # Every launchd job nix-darwin declares, by its name.
   jobs =
@@ -54,6 +66,17 @@ in
     ++ t.expect (
       !lib.any (lib.hasInfix "flume") (jobs base)
     ) "a launchd job is declared for flume: ${toString (jobs base)}";
+
+  "Sources on nix-darwin" =
+    t.expect (t.failures sourced == [ ]) "the system fails: ${toString (t.failures sourced)}"
+    ++ runs [
+      "acme"
+      "tools"
+    ] sourced;
+
+  "No source declared" =
+    links base
+    ++ t.expect (lib.hasInfix "${activate} sources || true" (lib.last (lib.splitString "${activate} link " nixos))) "NixOS's user activation runs no activate.sh sources with no source after the link: ${builtins.toJSON nixos}";
 
   "No package on nix-darwin" =
     t.expect (t.failures none == [ ]) "the system fails: ${toString (t.failures none)}"

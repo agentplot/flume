@@ -9,7 +9,7 @@
 mod common;
 
 use common::*;
-use flume::host::config::HostConfig;
+use flume::host::config::{self, HostConfig};
 use flume::host::history::GitHistory;
 use flume::host::{command_of, RealHost};
 use flume_conformance::scenario::pass_all;
@@ -1349,10 +1349,13 @@ fn the_room_lock_is_exclusive_between_processes() {
     assert!(Path::new(&host.room_lock()).is_file());
 }
 
-/// The files the flake's module renders, under `nix/tests/files`: each
-/// read whole by flume's own reader of the host's configuration, its named
-/// files read beside it in a scratch folder (the host-module spec; the
-/// change flume-publishes-its-own-flake-and-module, design 7 and 11).
+/// The files the flake's module renders from `settings`, directly under
+/// `nix/tests/files`: each read whole by flume's own reader of the host's
+/// configuration, its named files read beside it in a scratch folder, and
+/// the folder `sources/` passed over, as a configuration directory's is
+/// (the host-module spec; the change
+/// flume-publishes-its-own-flake-and-module, design 7 and 11, and the
+/// change flumes-module-writes-the-hosts-sources, design 6).
 #[test]
 fn the_modules_files_read_whole() {
     let files = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../nix/tests/files");
@@ -1366,6 +1369,9 @@ fn the_modules_files_read_whole() {
     for entry in std::fs::read_dir(&files).expect("nix/tests/files") {
         let path = entry.unwrap().path();
         let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        if name == config::SOURCES && path.is_dir() {
+            continue;
+        }
         let text = std::fs::read_to_string(&path).unwrap();
         let config = HostConfig::parse_in(&text, &scratch.root)
             .unwrap_or_else(|fault| panic!("nix/tests/files/{name} reads with a fault: {fault}"));
@@ -1561,5 +1567,33 @@ fn the_modules_files_read_whole() {
     assert_eq!(
         config.streams_agents["work"].effort.as_deref(),
         Some("high")
+    );
+}
+
+/// The sources the flake's module renders from `nix/tests/sources.nix`,
+/// under `nix/tests/files/sources`: each read whole by flume's own reader
+/// of the host's sources, `~` read as the home (the host-module spec; the
+/// change flumes-module-writes-the-hosts-sources, design 6).
+#[test]
+fn the_modules_sources_read_whole() {
+    let files = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../nix/tests/files/sources");
+    let read = config::read_sources(&files).expect("nix/tests/files/sources lists");
+    assert_eq!(
+        read.keys().map(String::as_str).collect::<Vec<_>>(),
+        ["acme", "tools"]
+    );
+    assert_eq!(
+        read["acme"].read,
+        HostSourceRead::Read {
+            kinds_dir: format!("{}/.local/share/flume/kinds/acme", home()),
+            roles: Some(format!("{}/.local/state/acme/flume/roles.toml", home())),
+        }
+    );
+    assert_eq!(
+        read["tools"].read,
+        HostSourceRead::Read {
+            kinds_dir: "/opt/kinds/tools".into(),
+            roles: None,
+        }
     );
 }

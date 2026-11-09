@@ -2,13 +2,17 @@
 # flume-publishes-its-own-flake-and-module, design 4, 5 and 9): the module
 # evaluated in a system of x86_64-linux whose normal users are alice, the
 # module's, and bob, its system profile and its user activation read, and
-# the module imported twice.
+# the module imported twice. The user activation runs the sources step
+# after the link, with each source of nix/tests/sources.nix and its file,
+# or with none (the change flumes-module-writes-the-hosts-sources, design
+# 7).
 t:
 let
   inherit (t) lib;
   set = t.outputs.packages.x86_64-linux;
 
   base = t.nixosSystem { };
+  sourced = t.nixosSystem { services.flume.sources = import ./sources.nix; };
   none = t.nixosSystem { services.flume.package = null; };
   noUser = t.nixosSystem { services.flume.user = lib.mkForce "carol"; };
   twice = t.nixosSystem { imports = [ { imports = [ t.outputs.nixosModules.flume ]; } ]; };
@@ -22,17 +26,20 @@ let
   activationOf =
     evaluated: builtins.unsafeDiscardStringContext evaluated.config.system.userActivationScripts.script;
   # alice's alone: the link with the file rendered from the default
-  # settings, and nothing for any other user.
+  # settings, then the sources step with `sources`, each source's name and
+  # its file rendered from it, and nothing for any other user.
   link =
-    evaluated:
+    sources: evaluated:
     builtins.unsafeDiscardStringContext ''
       if [ "$(id -un)" = alice ]; then
         ${evaluated.pkgs.runtimeShell} ${../modules/activate.sh} link ${(evaluated.pkgs.writeText "flume-config.toml" (builtins.readFile ./files/empty.toml)).outPath} || true
+        ${evaluated.pkgs.runtimeShell} ${../modules/activate.sh} sources${t.sourcesGiven evaluated.pkgs sources} || true
       fi
     '';
-  links =
-    evaluated:
-    t.expect (lib.hasInfix (link evaluated) (activationOf evaluated)) "the user activation runs no ${builtins.toJSON (link evaluated)}: ${builtins.toJSON (activationOf evaluated)}";
+  runs =
+    sources: evaluated:
+    t.expect (lib.hasInfix (link sources evaluated) (activationOf evaluated)) "the user activation runs no ${builtins.toJSON (link sources evaluated)}: ${builtins.toJSON (activationOf evaluated)}";
+  links = runs [ ];
 
   # Every systemd unit NixOS declares, the system's and the users', by its
   # name.
@@ -55,6 +62,13 @@ in
     ++
       t.expect (!lib.any (lib.hasInfix "flume") (units base))
         "a systemd unit is declared for flume: ${toString (builtins.filter (lib.hasInfix "flume") (units base))}";
+
+  "Sources on NixOS" =
+    t.expect (t.failures sourced == [ ]) "the system fails: ${toString (t.failures sourced)}"
+    ++ runs [
+      "acme"
+      "tools"
+    ] sourced;
 
   "No package on NixOS" =
     t.expect (t.failures none == [ ]) "the system fails: ${toString (t.failures none)}"

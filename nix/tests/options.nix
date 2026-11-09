@@ -4,6 +4,10 @@
 # renders its file, only the keys flume reads are declared, an undeclared
 # key passes as written, two modules' tables merge into one file, and a
 # string shaped as a credential fails, naming its path and never its value.
+# A source of `sources` passes an undeclared key to its file as written,
+# and a token in it fails the same way, and a source's name flume would
+# refuse fails, naming its option and why (the change
+# flumes-module-writes-the-hosts-sources, design 1, 2 and 4).
 # A mistyped key's failure is read by its words in nix/tests/scripts.sh.
 t:
 let
@@ -13,9 +17,9 @@ let
   every = import ./every-key.nix;
 
   # options.nix enabled with each of `given`'s modules beside a system's
-  # `assertions`.
-  evaluated =
-    given:
+  # `assertions`, and each of `modules`.
+  evaluate =
+    modules:
     lib.evalModules {
       modules = [
         (import ../modules/options.nix { inherit (t.outputs) packages; })
@@ -30,10 +34,20 @@ let
           services.flume.enable = true;
         }
       ]
-      ++ map (settings: { services.flume = { inherit settings; }; }) given;
+      ++ modules;
     };
+  evaluated = given: evaluate (map (settings: { services.flume = { inherit settings; }; }) given);
   failures =
     given: map (a: a.message) (lib.filter (a: !a.assertion) (evaluated given).config.assertions);
+
+  # The same with `sources` set, and the text of its source `name`.
+  sourced = sources: evaluate [ { services.flume = { inherit sources; }; } ];
+  sourceFailures =
+    sources: map (a: a.message) (lib.filter (a: !a.assertion) (sourced sources).config.assertions);
+  sourceText =
+    sources: name:
+    toml.render "services.flume.sources.${name}"
+      (sourced sources).config.services.flume.sources.${name};
   text = given: toml.text (evaluated given).config.services.flume.settings;
   header = "# Written by flume's module from services.flume.settings; a change goes there.";
 
@@ -58,6 +72,56 @@ let
   withEnv = value: [ { pools.work.accounts = [ { env.CLAUDE_CODE_OAUTH_TOKEN = value; } ]; } ];
   tokenAt = "services.flume.settings.pools.work.accounts[0].env.CLAUDE_CODE_OAUTH_TOKEN";
   refused = toString (failures (withEnv token));
+
+  shelved.acme = {
+    kinds_dir = "/opt/kinds/acme";
+    shelf = "upper";
+  };
+  tokened.acme = {
+    kinds_dir = "/opt/kinds/acme";
+    inherit token;
+  };
+  tokenRefused = toString (sourceFailures tokened);
+
+  # Each name flume refuses, by its option as the failure names it, and
+  # why.
+  refusedNames = {
+    flume = {
+      option = "services.flume.sources.flume";
+      why = "flume's own kinds";
+    };
+    repo = {
+      option = "services.flume.sources.repo";
+      why = "the repository's kinds";
+    };
+    launch = {
+      option = "services.flume.sources.launch";
+      why = "a launch's kinds";
+    };
+    ".acme" = {
+      option = ''services.flume.sources.".acme"'';
+      why = "ASCII letters, digits, `_` and `-`";
+    };
+    "ac.me" = {
+      option = ''services.flume.sources."ac.me"'';
+      why = "ASCII letters, digits, `_` and `-`";
+    };
+    "a/b" = {
+      option = ''services.flume.sources."a/b"'';
+      why = "ASCII letters, digits, `_` and `-`";
+    };
+  };
+  named = name: { ${name}.kinds_dir = "/opt/kinds"; };
+  nameRefused =
+    name:
+    let
+      inherit (refusedNames.${name}) option why;
+      said = sourceFailures (named name);
+    in
+    t.expect (builtins.length said == 1)
+      "the source ${builtins.toJSON name} fails ${toString (builtins.length said)} assertions: ${toString said}"
+    ++ t.expect (lib.any (lib.hasInfix option) said) "the source ${builtins.toJSON name}'s failure names no ${option}: ${toString said}"
+    ++ t.expect (lib.any (lib.hasInfix why) said) "the source ${builtins.toJSON name}'s failure says not why, ${why}: ${toString said}";
 in
 {
   "Every key renders its file through the options" =
@@ -112,4 +176,24 @@ in
       failures (withEnv "$AGENT_TOKEN") == [ ]
     ) "$AGENT_TOKEN fails: ${toString (failures (withEnv "$AGENT_TOKEN"))}"
     ++ t.expect (lib.hasInfix ''CLAUDE_CODE_OAUTH_TOKEN = "$AGENT_TOKEN"'' (text (withEnv "$AGENT_TOKEN"))) "the file does not hold $AGENT_TOKEN: ${text (withEnv "$AGENT_TOKEN")}";
+
+  "A key the module does not declare in a source" =
+    t.expect (
+      sourceFailures shelved == [ ]
+    ) "the source's undeclared key fails: ${toString (sourceFailures shelved)}"
+    ++
+      t.expect (builtins.fromTOML (sourceText shelved "acme") == shelved.acme)
+        "the source acme's kinds_dir and shelf render ${builtins.toJSON (sourceText shelved "acme")}, not as written alone"
+    ++ t.expect (lib.hasPrefix "# Written by flume's module from services.flume.sources.acme; a change goes there.\n" (sourceText shelved "acme")) "the source acme's file does not name its option first: ${builtins.toJSON (sourceText shelved "acme")}";
+
+  "A token in a source's file" =
+    t.expect (tokenRefused != "") "a token in a source's file evaluates"
+    ++ t.expect (lib.hasInfix "services.flume.sources.acme.token" tokenRefused) "the failure names no services.flume.sources.acme.token: ${tokenRefused}"
+    ++ t.expect (!lib.hasInfix "a1B2c3D4" tokenRefused) "the failure holds the token's text";
+
+  "Names flume refuses" =
+    lib.concatMap nameRefused (builtins.attrNames refusedNames)
+    ++ t.expect (
+      sourceFailures (named "acme-2_b") == [ ]
+    ) "the source acme-2_b fails: ${toString (sourceFailures (named "acme-2_b"))}";
 }

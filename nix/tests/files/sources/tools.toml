@@ -1,0 +1,2 @@
+# Written by flume's module from services.flume.sources.tools; a change goes there.
+kinds_dir = "/opt/kinds/tools"
