@@ -448,8 +448,10 @@ pub fn hook(
 
 /// SessionStart in a session flume did not start: `flume inbox` run as
 /// the session the terminal names, never as the environment's recipient or
-/// a role's address, so a person's session never takes a role's ends, and
-/// what it gives handed to the agent as the session's added context, each
+/// a role's address, so a person's session never takes a role's ends,
+/// confirming on receipt each end it is handed, since the agent is given
+/// the inbox's words whole (weir 103), and what it gives handed to the
+/// agent as the session's added context, each
 /// end and each waiting place with its key and the ways on; nothing where
 /// it gives nothing, no terminal names the session, as under the printed
 /// command, or flume cannot be reached (43, C.4; design 9). It holds up no

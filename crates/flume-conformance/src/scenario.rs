@@ -144,6 +144,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
             },
             fix_of: None,
             fixes_as: None,
+            token: None,
         },
         ends: vec![],
         role: None,

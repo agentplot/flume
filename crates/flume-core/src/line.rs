@@ -349,6 +349,7 @@ mod tests {
             },
             fix_of: None,
             fixes_as: None,
+            token: None,
         };
         serde_json::from_value(json!({
             "place": to_value(place).unwrap(),

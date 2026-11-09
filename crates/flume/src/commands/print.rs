@@ -82,10 +82,17 @@ pub fn person(answer: &Answer) -> String {
         } => lines.push(match end {
             None => format!("still waiting on {place} as {recipient}"),
             Some(end) => {
-                let how = if *delivered {
-                    "delivered by this wait"
-                } else {
-                    "read; delivered before"
+                let confirmed = end
+                    .confirmed
+                    .iter()
+                    .any(|confirmed| confirmed.recipient == *recipient);
+                let how = match (*delivered, confirmed) {
+                    (true, true) => "handed over and confirmed by this wait".to_string(),
+                    (true, false) => format!(
+                        "handed over by this wait; pending until {recipient} confirms it{}",
+                        confirm_words(end)
+                    ),
+                    (false, _) => "read; confirmed before".to_string(),
                 };
                 format!(
                     "{place} {} for {recipient}: {how}",
@@ -102,8 +109,13 @@ pub fn person(answer: &Answer) -> String {
                 lines.push(format!("nothing pending for {recipient}"));
             }
             for collected in ends {
+                let state = match (collected.confirmed, collected.expired) {
+                    (true, _) => "; confirmed".to_string(),
+                    (false, true) => format!("; expired{}", confirm_words(&collected.end)),
+                    (false, false) => confirm_words(&collected.end),
+                };
                 lines.push(format!(
-                    "{}--{} {} [{}]; read: flume status {}",
+                    "{}--{} {} [{}]; read: flume status {}{state}",
                     collected.kind,
                     collected.name,
                     flume_core::end_words(&collected.end.end.of),
@@ -113,6 +125,18 @@ pub fn person(answer: &Answer) -> String {
             }
             for place in waiting {
                 lines.extend(waiting_place_lines(recipient, place));
+            }
+        }
+        Answer::Confirmed {
+            recipient,
+            confirmed,
+        } => {
+            for key in confirmed {
+                lines.push(if key.before {
+                    format!("{} confirmed by {recipient} before, at {}", key.key, key.at)
+                } else {
+                    format!("{} confirmed by {recipient} at {}", key.key, key.at)
+                });
             }
         }
         Answer::Woken {
@@ -394,19 +418,20 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         if let Some(answer) = &end.end.answer {
             line.push_str(&format!("; {}", answered_words(answer)));
         }
-        let delivered: Vec<&str> = end
-            .end
-            .deliveries
-            .iter()
-            .map(|delivery| delivery.recipient.as_str())
-            .collect();
-        if !delivered.is_empty() {
-            line.push_str(&format!("; delivered to {}", delivered.join(", ")));
+        let mut handed: Vec<&str> = vec![];
+        for delivery in &end.end.deliveries {
+            if !handed.contains(&delivery.recipient.as_str()) {
+                handed.push(&delivery.recipient);
+            }
+        }
+        if !handed.is_empty() {
+            line.push_str(&format!("; handed to {}", handed.join(", ")));
         }
         if !end.pending_for.is_empty() {
             line.push_str(&format!("; pending for {}", end.pending_for.join(", ")));
         }
         lines.push(line);
+        lines.extend(recipient_lines(end));
     }
     for (name, list) in [
         ("refused act", &place.refused_acts),
@@ -1556,7 +1581,46 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
     for setup in &host.terminal_setup {
         lines.push(format!("    {setup}"));
     }
+    for end in &host.expired {
+        let never = if end.known { "" } else { ", never confirmed" };
+        lines.push(format!(
+            "  expired: {} {} for {} since {}{never}; confirm: flume confirm --recipient {} {}",
+            end.place, end.key, end.recipient, end.expires_at, end.recipient, end.delivery
+        ));
+    }
     lines
+}
+
+/// Under an end, each of its recipients: pending, and expired since when
+/// where its span passed, or confirmed and when; a name never confirmed
+/// under said so (43, 56; weir 104, 106).
+fn recipient_lines(end: &flume_core::EndStatus) -> Vec<String> {
+    let mut lines = vec![];
+    for owed in &end.owed {
+        let expired = match (owed.expired, end.expires_at) {
+            (true, Some(at)) => format!(", expired since {at}"),
+            (true, None) => ", expired".to_string(),
+            (false, _) => String::new(),
+        };
+        let never = if owed.known { "" } else { ", never confirmed" };
+        lines.push(format!("    {}: pending{expired}{never}", owed.recipient));
+    }
+    for confirmed in &end.confirmed {
+        lines.push(format!(
+            "    {}: confirmed at {}",
+            confirmed.recipient, confirmed.at
+        ));
+    }
+    lines
+}
+
+/// How a recipient confirms the end: `; confirm: flume confirm <key>`,
+/// none where the end has no delivery (43).
+fn confirm_words(end: &flume_core::EndStatus) -> String {
+    end.delivery
+        .as_ref()
+        .map(|key| format!("; confirm: flume confirm {key}"))
+        .unwrap_or_default()
 }
 
 /// Whether a caller keeps watch over the host, with its bound and when
@@ -2982,13 +3046,120 @@ mod tests {
     }
 
     #[test]
+    fn an_ends_recipients_pending_expired_and_confirmed() {
+        // 43, 56; weir 104, 106: under an end, each recipient pending,
+        // expired since when and never confirmed under, or confirmed and
+        // when.
+        let end = EndStatus {
+            owed: vec![
+                flume_seams::OwedTo {
+                    recipient: "bomdrive".into(),
+                    expired: true,
+                    known: false,
+                },
+                flume_seams::OwedTo {
+                    recipient: "ops".into(),
+                    expired: false,
+                    known: true,
+                },
+            ],
+            confirmed: vec![flume_seams::ConfirmedBy {
+                recipient: "boomdrive".into(),
+                at: 131,
+            }],
+            delivery: Some("fix--one/0a1b2c3d/submission/1/landed".into()),
+            expires_at: Some(604_930),
+            pending_for: vec!["bomdrive".into(), "ops".into()],
+            ..end_status(
+                &EndHeld {
+                    of: EndOf::Submission {
+                        submit: 1,
+                        verdict: flume_seams::Verdict::Landed {
+                            commit: flume_seams::Revision::new("c9"),
+                            place_removed: false,
+                            branch_removed: false,
+                        },
+                    },
+                    read_at: 130,
+                    deliveries: vec![],
+                    answer: None,
+                    claim: None,
+                    noticing: vec![],
+                },
+                &["bomdrive", "ops", "boomdrive"],
+            )
+        };
+        let lines = place_lines(&PlaceStatus {
+            ends: vec![end],
+            ..a_place()
+        });
+        let at = lines
+            .iter()
+            .position(|line| line.starts_with("  ended submission/1/landed: "))
+            .expect("the landing's line");
+        assert_eq!(
+            lines[at + 1..at + 4],
+            [
+                "    bomdrive: pending, expired since 604930, never confirmed".to_string(),
+                "    ops: pending".to_string(),
+                "    boomdrive: confirmed at 131".to_string(),
+            ],
+            "{lines:#?}"
+        );
+    }
+
+    #[test]
+    fn the_hosts_expired_ends() {
+        // 43, 56; weir 104, 106: the place-status spec's "Two expired
+        // ends" in the person's form: a line for each, saying never
+        // confirmed, and how its recipient confirms it.
+        let expired = |name: &str| flume_core::ExpiredEnd {
+            place: PlaceId::new(format!("/d/places/1/fix--{name}")),
+            key: "submission/1/landed".parse().unwrap(),
+            delivery: format!("fix--{name}/0a1b2c3d/submission/1/landed"),
+            recipient: "bomdrive".into(),
+            known: false,
+            expires_at: 604_930,
+        };
+        let lines = host_lines(&HostStatus {
+            expired: vec![expired("one"), expired("two")],
+            ..HostStatus::default()
+        });
+        for name in ["one", "two"] {
+            let line = format!(
+                "  expired: /d/places/1/fix--{name} submission/1/landed for bomdrive since 604930, never confirmed; confirm: flume confirm --recipient bomdrive fix--{name}/0a1b2c3d/submission/1/landed"
+            );
+            assert!(lines.contains(&line), "{line} not in {lines:#?}");
+        }
+    }
+
+    /// The end `end` as status gives it to a place whose recipients are
+    /// `recipients`, no delivery of it recorded (43).
+    fn end_status(end: &EndHeld, recipients: &[&str]) -> EndStatus {
+        let recipients: Vec<String> = recipients.iter().map(ToString::to_string).collect();
+        EndStatus {
+            end: end.clone(),
+            key: end.of.end_key(),
+            pending_for: end.recipients(&recipients),
+            open_until: match &end.of {
+                EndOf::Stage { end, .. } => end.open_until,
+                _ => None,
+            },
+            confirmed: vec![],
+            delivery: None,
+            expires_at: None,
+            owed: vec![],
+        }
+    }
+
+    #[test]
     fn a_drops_end_line() {
         // 43, 52, 56; core.14: a drop's end as any end's line, pending for
         // the recipient that is no role's address, and no caller's line.
         let place = PlaceStatus {
             recipients: vec!["east/planner".into(), "boomdrive".into()],
             recipients_from: Some(RecipientsFrom::Launch),
-            ends: vec![EndStatus::of(
+            ends: vec![end_status(
                 &EndHeld {
                     of: EndOf::Over {
                         over: flume_seams::Over::Dropped,
@@ -2997,8 +3168,9 @@ mod tests {
                     deliveries: vec![],
                     answer: None,
                     claim: None,
+                    noticing: vec![],
                 },
-                &["east/planner".to_string(), "boomdrive".to_string()],
+                &["east/planner", "boomdrive"],
             )],
             ..a_place()
         };
@@ -3802,10 +3974,15 @@ mod tests {
                 deliveries: vec![],
                 answer: None,
                 claim: None,
+                noticing: vec![],
             },
             key: "stage/talk/1/lost".parse().unwrap(),
             pending_for: vec!["ops".into()],
             open_until: None,
+            confirmed: vec![],
+            delivery: None,
+            expires_at: None,
+            owed: vec![],
         };
         let place = PlaceStatus {
             agent: Some(AgentStatus {
@@ -3838,6 +4015,8 @@ mod tests {
                 kind: "research".into(),
                 name: "one".into(),
                 end,
+                confirmed: false,
+                expired: false,
             }],
             waiting: vec![],
         };
@@ -4042,6 +4221,7 @@ mod tests {
             deliveries: vec![],
             answer: None,
             claim: None,
+            noticing: vec![],
         };
         let inbox = Answer::Inbox {
             recipient: "ops".into(),
@@ -4049,7 +4229,9 @@ mod tests {
                 place: PlaceId::new("/d/places/1/fix--one"),
                 kind: "fix".into(),
                 name: "one".into(),
-                end: EndStatus::of(&end, &["ops".to_string()]),
+                end: end_status(&end, &["ops"]),
+                confirmed: false,
+                expired: false,
             }],
             waiting: vec![],
         };
@@ -4413,10 +4595,15 @@ mod tests {
                 deliveries: vec![],
                 answer: None,
                 claim: None,
+                noticing: vec![],
             },
             key: "stall/3700".parse().unwrap(),
             pending_for: vec!["east/planner".into()],
             open_until: None,
+            confirmed: vec![],
+            delivery: None,
+            expires_at: None,
+            owed: vec![],
         };
         let place = PlaceStatus {
             ends: vec![stall.clone()],
@@ -4471,10 +4658,15 @@ mod tests {
                     key: Some("stage/construct/1/ended-short".parse().unwrap()),
                 }),
                 claim: None,
+                noticing: vec![],
             },
             key: "stage/construct/1/ended-short".parse().unwrap(),
             pending_for: vec![],
             open_until: None,
+            confirmed: vec![],
+            delivery: None,
+            expires_at: None,
+            owed: vec![],
         };
         let place = PlaceStatus {
             ends: vec![answered.clone()],

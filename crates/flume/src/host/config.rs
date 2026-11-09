@@ -6,8 +6,11 @@
 //! multiplexer` the terminal profile bound for the host, `[host]
 //! terminal` the word written before it and read as it (105, 190), and
 //! `[host] view` and `terminal_app` how a person is shown a stream's
-//! agents (186, 188); a file or a word left out is no bound, the printed
-//! command, a terminal view and the printed window. Its
+//! agents (186, 188), and `[host] ends_expire` the span after which an
+//! end pending for a recipient is expired, `<n>`, `<n>s`, `<n>m` or
+//! `<n>h` as `keep_open` is, at least a second (43, C.7); a file or a
+//! word left out is no bound, the printed command, a terminal view, the
+//! printed window and a week. Its
 //! `[kinds.<kind>.agents]` and `[repos."<repository>".kinds.<kind>.agents]`
 //! tables, each naming one stage's by a further `.stages.<stage>` table,
 //! give a kind's agents in every repository and in one their `model`,
@@ -79,8 +82,9 @@ use crate::profiles::kinds::weir::source_fault;
 use flume_seams::{
     read_span, Account, ConfigLayer, ConfigValue, HostConfiguration, HostSource, HostSourceRead,
     KindSessions, KindSettings, LabelFrom, LabelHeld, LocalLayer, NamedBy, PinnedKey, Pool,
-    PoolFrom, PoolNamed, ProfileHeld, RepositoryName, Settings, Share, StageSession, Strategy,
-    Stream, StreamDisplay, StreamFrom, StreamHeld, View, ViewHeld, DEFAULT_STREAM, SET,
+    PoolFrom, PoolNamed, ProfileHeld, RepositoryName, Seconds, Settings, Share, StageSession,
+    Strategy, Stream, StreamDisplay, StreamFrom, StreamHeld, View, ViewHeld, DEFAULT_STREAM,
+    ENDS_EXPIRE, SET,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -170,6 +174,10 @@ pub struct HostConfig {
     /// The window profile the host binds, `[host] terminal_app`; none for
     /// the printed window (188).
     pub terminal_app: Option<String>,
+    /// The span after which an end pending for a recipient is expired,
+    /// `[host] ends_expire`; flume's own week where it gives none (43,
+    /// C.7; weir 104).
+    pub ends_expire: Seconds,
     /// The settings given each kind's agents in every repository, by the
     /// kind's name (32).
     pub kinds: BTreeMap<String, KindSettings>,
@@ -240,6 +248,7 @@ impl Default for HostConfig {
             terminal: None,
             view: None,
             terminal_app: None,
+            ends_expire: ENDS_EXPIRE,
             kinds: BTreeMap::new(),
             repos: BTreeMap::new(),
             repos_agents: BTreeMap::new(),
@@ -497,6 +506,7 @@ impl HostConfig {
             config.terminal_app = text_of(host, "terminal_app", "host")
                 .map_err(|_| "[host] terminal_app is not a name".to_string())?;
             config.pool = text_of(host, "pool", "host")?;
+            config.ends_expire = ends_expire_of(host)?;
         }
         let declared = |pool: &str| config.pools.contains_key(pool);
         if let Some(pool) = config.pool.as_deref().filter(|pool| !declared(pool)) {
@@ -1619,6 +1629,27 @@ pub(super) fn keep_open_of(table: &Table, at: &str) -> Result<Option<String>, St
     }
 }
 
+/// `[host] ends_expire`, the span after which an end pending for a
+/// recipient is expired: a string [`read_span`] takes, as `keep_open` is
+/// written, of at least a second, since a delivery's span is; flume's own
+/// week where the table gives none; `0` and any other value refused naming
+/// the key (43, C.7; weir 104).
+fn ends_expire_of(host: &Table) -> Result<Seconds, String> {
+    let refused = |why: String| format!("host.ends_expire: {why}");
+    match host.get("ends_expire") {
+        None => Ok(ENDS_EXPIRE),
+        Some(Value::String(written)) => match read_span(written).map_err(refused)? {
+            0 => Err(refused(format!(
+                "{written} is no span: an end expires at least a second after it was read"
+            ))),
+            span => Ok(span),
+        },
+        Some(_) => Err(refused(
+            "is not a string: it is <n>, <n>s, <n>m or <n>h".into(),
+        )),
+    }
+}
+
 /// A settings file a host's agents table names at `written`, read on the
 /// host now: absolute, beginning `~/` read against the home as a
 /// repository's key is, or relative to `directory`, the configuration's,
@@ -1840,6 +1871,60 @@ mod tests {
             refused.contains("kinds.change.agents") && refused.contains("model"),
             "{refused}"
         );
+    }
+
+    #[test]
+    fn an_ends_expire_stated() {
+        // 43, C.7: the store-profile spec's "A span stated", read from the
+        // managed layer with its layer.
+        let config = HostConfig::layers("[host]\nends_expire = \"48h\"\n", None).unwrap();
+        assert_eq!(config.ends_expire, 48 * 60 * 60);
+        assert_eq!(
+            value_at(&config, "host.ends_expire"),
+            Some(("\"48h\"".into(), ConfigLayer::Managed))
+        );
+    }
+
+    #[test]
+    fn no_ends_expire_stated() {
+        // 43, C.7: the store-profile spec's "No span stated": flume's own
+        // week.
+        let config = HostConfig::layers("[host]\nagents = 3\n", None).unwrap();
+        assert_eq!(config.ends_expire, 604_800);
+        assert_eq!(HostConfig::default().ends_expire, ENDS_EXPIRE);
+        assert_eq!(value_at(&config, "host.ends_expire"), None);
+    }
+
+    #[test]
+    fn an_ends_expire_refused() {
+        // 4, C.7: the store-profile spec's "A span refused": `0`, a form
+        // no time takes and a number not written as a string each refuse
+        // the configuration naming `host.ends_expire`.
+        for written in ["\"0\"", "\"2d\"", "48"] {
+            let refused =
+                HostConfig::parse(&format!("[host]\nends_expire = {written}\n")).unwrap_err();
+            assert!(refused.contains("host.ends_expire"), "{written}: {refused}");
+        }
+    }
+
+    #[test]
+    fn an_ends_expire_in_the_local_layer() {
+        // C.7; core.45: the store-profile spec's "A span in the local
+        // layer": the local layer is not taken, status naming the key, and
+        // the span reads a week.
+        let config = HostConfig::layers(
+            "[host]\nagents = 3\n",
+            Some("[host]\nends_expire = \"1h\"\n"),
+        )
+        .unwrap();
+        assert_eq!(
+            config.configuration.local,
+            LocalLayer::NotTaken {
+                keys: vec!["host.ends_expire".into()],
+                fault: None,
+            }
+        );
+        assert_eq!(config.ends_expire, ENDS_EXPIRE);
     }
 
     #[test]

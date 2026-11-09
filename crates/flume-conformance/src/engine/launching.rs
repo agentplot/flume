@@ -243,7 +243,7 @@ fn the_address_kept_and_given(_: &()) -> Outcome {
     let world = World::new();
     world
         .git
-        .set_origin_url(REPOSITORY, "https://user:token@github.com/acme/acme.git");
+        .set_origin_url(REPOSITORY, "https://user:sekrit@github.com/acme/acme.git");
     world.host.set_stream("work", Some(Stream::default()));
     world
         .host
@@ -271,7 +271,10 @@ fn the_address_kept_and_given(_: &()) -> Outcome {
         "the held address"
     );
     let held = serde_json::to_string(&held).map_err(|error| error.to_string())?;
-    ensure!(!held.contains("token"), "the held state holds the token");
+    ensure!(
+        !held.contains("sekrit") && !held.contains("user:"),
+        "the held state holds the origin's credential"
+    );
     let status = serde_json::to_string(&status).map_err(|error| error.to_string())?;
     ensure!(!status.contains("token"), "status holds the token");
     Ok(())

@@ -784,7 +784,7 @@ pub fn affinity(world: &World, intent: &IntentKey) -> Option<Affinity> {
         digest: intent.digest().to_string(),
     })? {
         HostDocument::Intent(affinity) => Some(affinity),
-        HostDocument::Account(_) | HostDocument::Watch(_) => None,
+        HostDocument::Account(_) | HostDocument::Watch(_) | HostDocument::Deliveries(_) => None,
     }
 }
 
@@ -1368,7 +1368,7 @@ fn spent_until(world: &World, pool: &str, account: &str) -> Option<AccountSpent>
         account: account.into(),
     })? {
         HostDocument::Account(spent) => Some(spent),
-        HostDocument::Intent(_) | HostDocument::Watch(_) => None,
+        HostDocument::Intent(_) | HostDocument::Watch(_) | HostDocument::Deliveries(_) => None,
     }
 }
 
@@ -1780,7 +1780,12 @@ fn a_stage_under_no_account(_: &()) -> Outcome {
         "the agent under no account was ended"
     );
     ensure!(
-        world.store.log.of("write_host").is_empty(),
+        !world
+            .store
+            .log
+            .of("write_host")
+            .iter()
+            .any(|write| write.contains("account")),
         "an account recorded spent: {:?}",
         world.store.log.of("write_host")
     );

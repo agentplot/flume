@@ -33,10 +33,13 @@ pub const NOTICE_BRIEF: usize = 60;
 /// [`NOTICE_BRIEF`] characters, what ended, until when a stop-short's
 /// agent is kept open for its answer, the end's key, and the command that
 /// reads it whole: `flume inbox` where the place, as `held` gives it when
-/// the notice is sent, waits on a move of its caller's, which gives the
-/// question and how to answer it, and `flume status <place>` otherwise.
-/// It names no fact to act on blindly, and no question's words, which
-/// are many lines (43, 198; core.11, core.25; design 9).
+/// the end's delivery is recorded, waits on a move of its caller's, which
+/// gives the question and how to answer it, and `flume status <place>`
+/// otherwise; and `flume confirm` with the delivery's key. It is the
+/// delivery's message, fixed when the delivery is recorded and sent as
+/// recorded. It names no fact to act on blindly, and no question's words,
+/// which are many lines (43, 198; weir 100; core.11, core.25; design 4,
+/// 9).
 pub fn notice(held: &HeldState, of: &EndOf) -> String {
     let place = &held.place;
     let short = place.short();
@@ -49,8 +52,12 @@ pub fn notice(held: &HeldState, of: &EndOf) -> String {
     } else {
         format!("flume status {short}")
     };
+    let confirm = place
+        .delivery_key(of)
+        .map(|key| format!("; confirm: flume confirm {key}"))
+        .unwrap_or_default();
     format!(
-        "flume: {short}{brief} {} [{}]; read: {read}",
+        "flume: {short}{brief} {} [{}]; read: {read}{confirm}",
         end_words(of),
         of.end_key()
     )
@@ -133,23 +140,38 @@ pub fn what_ended(of: &EndOf) -> String {
 
 impl Engine {
     /// Sends each end of the place a notice carries, pending for a
-    /// recipient whose session asks no question, once, through the first
-    /// terminal the host binds
-    /// that holds the session, or, for a recipient the host's standing
-    /// entries name, read once, into the one agent of the entry's name in
-    /// its stream's terminal and session; claimed before the send and
-    /// released where the send was not made, and claimed not at all where
-    /// no one agent asking no question is found (43, 75, 132, 190, C.7;
-    /// core.11, core.28).
+    /// recipient whose session asks no question and to which nothing has
+    /// handed it, once, as the message its delivery was recorded with,
+    /// through the first terminal the host binds that holds the session,
+    /// or, for a recipient the host's standing entries name, read once,
+    /// into the one agent of the entry's name in its stream's terminal and
+    /// session. The notice is claimed on the place before the send, so two
+    /// settles at once send one; on the terminal's answer sent its
+    /// hand-over is recorded through weir's `hand`, by `notice`, and the
+    /// claim kept; a send not made takes the claim back; and a claim whose
+    /// hand-over the host's deliveries lack is recorded at the next settle
+    /// at the claim's time. No one agent asking no question found claims
+    /// nothing (43, 75, 132, 190, C.7; weir 103; core.11, core.28; design
+    /// 5).
     pub(crate) fn deliver_ends(&self, id: &PlaceId) {
-        let Some(read) = self.store.read(id) else {
+        let Some(held) = self.with_token(id) else {
             return;
         };
-        let held = read.state;
+        self.record_deliveries(std::slice::from_ref(&held));
+        let mut owing = self.owing();
+        if self.record_claims(&held, &owing) {
+            owing = self.owing();
+        }
         let mut standing = None;
         let mut states: BTreeMap<String, Option<Reached>> = BTreeMap::new();
         for end in held.ends.iter().filter(|end| end.noticed()) {
-            for recipient in end.pending(&held.place.recipients) {
+            let Some(delivery) = end.delivery(&held.place, &owing) else {
+                continue;
+            };
+            for recipient in end.pending(&held.place, &owing) {
+                if end.handed_to(&held.place, &owing, &recipient) {
+                    continue;
+                }
                 let Some(Reached {
                     terminal,
                     state: AgentState::Working | AgentState::Waiting,
@@ -171,13 +193,16 @@ impl Engine {
                         let Some(end) = held.ends.iter_mut().find(|end| end.of.key() == key) else {
                             return Step::Keep(false);
                         };
-                        if end.delivered_to(&recipient) {
+                        if end
+                            .noticing
+                            .iter()
+                            .any(|claim| claim.recipient == recipient)
+                        {
                             return Step::Keep(false);
                         }
-                        end.deliveries.push(Delivery {
+                        end.noticing.push(NoticeClaim {
                             recipient: recipient.clone(),
                             at: now,
-                            by: DeliveredBy::Notice,
                         });
                         Step::Write(true)
                     })
@@ -185,8 +210,22 @@ impl Engine {
                 if !claimed {
                     continue;
                 }
-                let why = match terminal.send_to(&at, &notice(&held, &end.of)) {
-                    ToSession::Sent => continue,
+                let why = match terminal.send_to(&at, &delivery.message) {
+                    ToSession::Sent => {
+                        let handed = self.hand_over(
+                            std::slice::from_ref(&delivery.key),
+                            &recipient,
+                            DeliveredBy::Notice,
+                            now,
+                            false,
+                        );
+                        for refused in handed.into_iter().filter_map(Result::err) {
+                            self.host.log(&format!(
+                                "the notice of {id}'s end {key} to {recipient} was sent, and its hand-over not recorded: {refused}"
+                            ));
+                        }
+                        continue;
+                    }
                     ToSession::NotFound => format!("no session is named {at}"),
                     ToSession::Refused { reason } => reason,
                 };
@@ -196,16 +235,56 @@ impl Engine {
                 ));
                 self.update(id, |held| {
                     if let Some(end) = held.ends.iter_mut().find(|end| end.of.key() == key) {
-                        end.deliveries.retain(|delivery| {
-                            !(delivery.recipient == recipient
-                                && delivery.at == now
-                                && delivery.by == DeliveredBy::Notice)
-                        });
+                        end.noticing
+                            .retain(|claim| !(claim.recipient == recipient && claim.at == now));
                     }
                     Step::Write(())
                 });
             }
         }
+    }
+
+    /// Records, at its time, the hand-over of each notice claimed on the
+    /// place whose hand-over the host's deliveries lack, its send answered
+    /// and its record never written, so it is sent no second time; true
+    /// where it recorded any (43, 75; weir 103; design 5).
+    fn record_claims(&self, held: &HeldState, owing: &Owing) -> bool {
+        let mut recorded = false;
+        for end in &held.ends {
+            let Some(delivery) = end.delivery(&held.place, owing) else {
+                continue;
+            };
+            for claim in &end.noticing {
+                let handed = delivery
+                    .handovers
+                    .iter()
+                    .any(|handover| handover.recipient == claim.recipient);
+                let owed = delivery
+                    .owed
+                    .iter()
+                    .any(|owed| owed.recipient == claim.recipient);
+                if handed || !owed {
+                    continue;
+                }
+                let answers = self.hand_over(
+                    std::slice::from_ref(&delivery.key),
+                    &claim.recipient,
+                    DeliveredBy::Notice,
+                    claim.at,
+                    false,
+                );
+                for answer in answers {
+                    match answer {
+                        Ok(_) => recorded = true,
+                        Err(why) => self.host.log(&format!(
+                            "the notice claimed of {}'s end to {} was not recorded: {why}",
+                            held.place.id, claim.recipient
+                        )),
+                    }
+                }
+            }
+        }
+        recorded
     }
 
     /// The document of a place whose worktree and branch are gone, kept
@@ -214,7 +293,7 @@ impl Engine {
     /// holding no line of what its stages made; none kept where nothing
     /// is pending (43, 62, 129).
     pub(crate) fn keep_for_ends(&self, held: &HeldState, over: &Over) -> Option<PlaceId> {
-        let pending = held.pending_for();
+        let pending = held.pending_for(&self.owing());
         if pending.is_empty() {
             return None;
         }
@@ -247,15 +326,20 @@ impl Engine {
     }
 
     /// A tidied place's document: removed once no end of it stands
-    /// pending, and otherwise kept naming the recipients it waits on; true
-    /// when it changed something (43, 62).
+    /// pending, every record of its ends' deliveries let go of then, and
+    /// otherwise kept naming the recipients it waits on; true when it
+    /// changed something (43, 62; weir 107).
     pub(crate) fn settle_tidied(&self, id: &PlaceId) -> bool {
         let Some(read) = self.store.read(id) else {
             return false;
         };
-        let pending = read.state.pending_for();
+        let pending = read.state.pending_for(&self.owing());
         if pending.is_empty() {
-            return self.remove_held(id);
+            let removed = self.remove_held(id);
+            if removed {
+                self.let_go_of(&read.state);
+            }
+            return removed;
         }
         self.update(id, |held| match &mut held.phase {
             Phase::Tidied { pending_for, .. } if *pending_for != pending => {

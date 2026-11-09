@@ -70,6 +70,8 @@ struct HostState {
     command: u64,
     alive: BTreeSet<String>,
     bound: Option<u32>,
+    /// The host's span for an end pending for a recipient (43, C.7).
+    ends_expire: Seconds,
     recipient: Option<String>,
     /// The agents' settings by kind, for every repository.
     kinds: BTreeMap<String, KindSettings>,
@@ -157,6 +159,7 @@ impl Default for FakeHost {
                 command: 1,
                 alive: BTreeSet::from(["command-1".to_string()]),
                 bound: None,
+                ends_expire: flume_seams::ENDS_EXPIRE,
                 recipient: None,
                 kinds: BTreeMap::new(),
                 repos: BTreeMap::new(),
@@ -232,6 +235,12 @@ impl FakeHost {
     /// The bound on agents the host's configuration states, or none.
     pub fn set_bound(&self, bound: Option<u32>) {
         lock(&self.state).bound = bound;
+    }
+
+    /// The host's span for an end pending for a recipient, a week until
+    /// set (43, C.7).
+    pub fn set_ends_expire(&self, span: Seconds) {
+        lock(&self.state).ends_expire = span;
     }
 
     /// The recipient the calling command's environment names, or none.
@@ -608,6 +617,10 @@ impl Host for FakeHost {
     fn bound(&self) -> Option<u32> {
         self.log.push("bound");
         lock(&self.state).bound
+    }
+
+    fn ends_expire(&self) -> Seconds {
+        lock(&self.state).ends_expire
     }
 
     fn recipient(&self) -> Option<String> {

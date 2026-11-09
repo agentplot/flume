@@ -102,6 +102,7 @@ attribution = { commit = "", pr = "", sessionUrl = false }
 | `view` | `"terminal"`, `"app"` | How `flume open` shows a stream's agents where the stream names none: in a window of a terminal app, or in the multiplexer's own app. `"terminal"` where none is given. |
 | `terminal_app` | `"ghostty"`, `"terminal"`, `"printed"` | The program that opens a stream's window where the stream names none: Ghostty, Terminal.app on macOS, or none, `flume open` printing the line to run. `"printed"` where none is given. Any other name refuses each stream's `flume open` that takes it, naming the window profiles there are; every other command runs. |
 | `pool` | a pool's name | The pool of a place whose stream names none. With none, such a place's agents run under no account. |
+| `ends_expire` | a string, `<n>`, `<n>s`, `<n>m` or `<n>h`, at least one second | How long an end may stay pending for a recipient before status shows it expired: a week, `"168h"`, where none is given. An expired end is never dropped; it stays pending, shown expired with its recipient and whether anything was ever confirmed under that name, until the recipient confirms it ([flume confirm](/flume/reference/commands/#flume-confirm)). Each end's delivery takes the span as it stands when the end's delivery is recorded. `"0"` and any other form refuse the configuration, naming `host.ends_expire`. |
 | `pin` | a list of dotted keys, such as `"streams.work.agents"` | The keys the local layer may not set over the managed one. Each names a key the local layer could set, or a table of such keys, as `"streams.work"` does. A local key a pin holds is passed over, status naming it with its pin, and the rest of the local file is taken. |
 
 ### `[streams.<stream>]`
@@ -370,6 +371,8 @@ flume refuses the file, naming the key, for:
 - a `keep_open` in an agents table that is not a string of the form
   `<n>`, `<n>s`, `<n>m` or `<n>h`, a table of programs among them,
   naming the table and `keep_open`;
+- a `[host] ends_expire` that is not such a string, or is `"0"`, naming
+  `host.ends_expire`;
 - a `programs` in an agents table that is not a table of entries, an
   entry's key other than `file` and `settings`, or a TOML date or time
   in one, naming the key;

@@ -17,8 +17,8 @@ use crate::settings::program_name;
 use crate::start::Starts;
 use crate::{
     side_by_side, Act, AgentSettings, AgentStatus, Answer, Bound, EffortStatus, EndStatus, Engine,
-    GroupStatus, ModeStatus, MoveStatus, OwnFileStatus, OwnStatus, PlaceStatus, SessionAnswer,
-    SessionWait, SourceStatus, StageStatus, SubmissionStatus, WaitingOn, Waits,
+    ExpiredEnd, GroupStatus, ModeStatus, MoveStatus, OwnFileStatus, OwnStatus, PlaceStatus,
+    SessionAnswer, SessionWait, SourceStatus, StageStatus, SubmissionStatus, WaitingOn, Waits,
 };
 use flume_seams::*;
 use std::collections::BTreeMap;
@@ -85,6 +85,7 @@ impl Engine {
                 .map(|read| read.state)
                 .collect(),
         };
+        let owing = self.owing();
         let mut submissions = self.submissions(&held);
         let read: Vec<(&HeldState, Option<ReadAcross>)> = held
             .iter()
@@ -92,7 +93,7 @@ impl Engine {
             .map(|(at, held)| (held, submissions.remove(&at)))
             .collect();
         let places = side_by_side(&read, |(held, submission)| {
-            self.place_status_read(held, submission.clone())
+            self.place_status_read(held, submission.clone(), &owing)
         });
         let agents: BTreeMap<PlaceId, AgentState> = places
             .iter()
@@ -100,8 +101,34 @@ impl Engine {
             .collect();
         Answer::Status {
             places,
-            host: self.host_status(&agents),
+            host: self.host_status(&agents, &owing),
         }
+    }
+
+    /// Each end expired for a recipient on the host, of every place and
+    /// every tidied document, as `owing`, one read of the host's
+    /// deliveries, gives them (43, 56; weir 104, 106; core.15).
+    pub(crate) fn expired(&self, owing: &Owing) -> Vec<ExpiredEnd> {
+        let mut expired = vec![];
+        for read in self.store.read_every() {
+            let place = &read.state.place;
+            for end in &read.state.ends {
+                let Some(delivery) = end.delivery(place, owing) else {
+                    continue;
+                };
+                for owed in delivery.owed.iter().filter(|owed| owed.expired) {
+                    expired.push(ExpiredEnd {
+                        place: PlaceId::new(place.location.clone()),
+                        key: end.of.end_key(),
+                        delivery: delivery.key.clone(),
+                        recipient: owed.recipient.clone(),
+                        known: owed.known,
+                        expires_at: delivery.expires_at,
+                    });
+                }
+            }
+        }
+        expired
     }
 
     /// The submission of each of `held` that status reads, by its index:
@@ -159,13 +186,18 @@ impl Engine {
     /// Every fact of one place, as it stands when asked.
     pub(crate) fn place_status(&self, held: &HeldState) -> PlaceStatus {
         let submission = self.submissions(std::slice::from_ref(held)).remove(&0);
-        self.place_status_read(held, submission)
+        self.place_status_read(held, submission, &self.owing())
     }
 
     /// Every fact of one place, as it stands when asked, its submission
     /// as `submission` read it where its repository's merge queue was
-    /// read for it.
-    fn place_status_read(&self, held: &HeldState, submission: Option<ReadAcross>) -> PlaceStatus {
+    /// read for it, and its ends' deliveries as `owing` read them.
+    fn place_status_read(
+        &self,
+        held: &HeldState,
+        submission: Option<ReadAcross>,
+        owing: &Owing,
+    ) -> PlaceStatus {
         let place = &held.place;
         let mut cannot_read = vec![];
         let mut refused_acts = vec![];
@@ -412,7 +444,7 @@ impl Engine {
             ends: held
                 .ends
                 .iter()
-                .map(|end| EndStatus::of(end, &place.recipients))
+                .map(|end| EndStatus::of(end, place, owing))
                 .collect(),
             role: held.role.clone(),
             clues: self.place_clues(held, agent_state, group.as_ref()),

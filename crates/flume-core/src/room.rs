@@ -1056,7 +1056,11 @@ impl Engine {
     /// the room it is short of, and the same for each stream (56, 70,
     /// 130, 143); each base's count taking the state of each agent in
     /// `agents` as status read it for its place (139).
-    pub(crate) fn host_status(&self, agents: &BTreeMap<PlaceId, AgentState>) -> HostStatus {
+    pub(crate) fn host_status(
+        &self,
+        agents: &BTreeMap<PlaceId, AgentState>,
+        owing: &Owing,
+    ) -> HostStatus {
         let queue = self.queue();
         let declared = self.host.streams();
         let configuration = self.host.configuration();
@@ -1171,7 +1175,7 @@ impl Engine {
             streams,
             pools,
             terminal_kept: self.terminal.kept(),
-            addresses: self.addresses(&roles),
+            addresses: self.addresses(&roles, owing),
             watch,
             watch_settled,
             watch_lapsed,
@@ -1180,6 +1184,7 @@ impl Engine {
             terminal_setup: self.terminal.setup(),
             configuration,
             sources: self.host_sources(&roles),
+            expired: self.expired(owing),
         }
     }
 

@@ -15,6 +15,7 @@ mod answer;
 mod base;
 mod clues;
 mod deliver;
+pub mod deliveries;
 mod end;
 mod ends;
 mod fixes;
@@ -314,6 +315,7 @@ mod tests {
             },
             fix_of: None,
             fixes_as: None,
+            token: None,
         }
     }
 

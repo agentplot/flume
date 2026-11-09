@@ -64,14 +64,15 @@ pub trait Store: Send + Sync {
 }
 
 /// A document of the host's own, by what it is of: an account of a pool,
-/// an intent by its digest, or the host's watch, one for the host (146,
-/// 147, 153, 208).
+/// an intent by its digest, the host's watch, one for the host, or the
+/// host's deliveries, one for the host (43, 146, 147, 153, 208, C.7).
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(tag = "of", rename_all = "snake_case")]
 pub enum HostKey {
     Account { pool: String, account: String },
     Intent { digest: String },
     Watch,
+    Deliveries,
 }
 
 impl std::fmt::Display for HostKey {
@@ -80,6 +81,7 @@ impl std::fmt::Display for HostKey {
             HostKey::Account { pool, account } => write!(f, "account {pool}/{account}"),
             HostKey::Intent { digest } => write!(f, "intent {digest}"),
             HostKey::Watch => write!(f, "the host's watch"),
+            HostKey::Deliveries => write!(f, "the host's deliveries"),
         }
     }
 }
@@ -92,13 +94,54 @@ pub struct HostVersioned {
 }
 
 /// A host's own document: an account's spent time, an intent's
-/// affinity, or the host's watch (146, 147, 153, 208).
+/// affinity, the host's watch, or the host's deliveries (43, 146, 147,
+/// 153, 208, C.7).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "of", rename_all = "snake_case")]
 pub enum HostDocument {
     Account(AccountSpent),
     Intent(Affinity),
     Watch(Watched),
+    Deliveries(Deliveries),
+}
+
+/// The host's deliveries: every record of weir's C.8 for the ends of the
+/// host's places, in the order added, written whole by compare-and-set
+/// (43, C.7; weir 112).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Deliveries {
+    pub records: Vec<DeliveryRecord>,
+}
+
+/// One of weir's delivery records, written as the object weir's
+/// `json::write` spells it and read back through weir's `json::read`, a
+/// refusal naming weir's field: flume spells no field of it (C.8;
+/// core.4).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeliveryRecord(pub weir_delivery::Record);
+
+impl From<weir_delivery::Record> for DeliveryRecord {
+    fn from(record: weir_delivery::Record) -> Self {
+        DeliveryRecord(record)
+    }
+}
+
+impl Serialize for DeliveryRecord {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let spelled = weir_delivery::json::write(&self.0);
+        let raw =
+            serde_json::value::RawValue::from_string(spelled).map_err(serde::ser::Error::custom)?;
+        raw.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for DeliveryRecord {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let object = serde_json::Value::deserialize(deserializer)?;
+        weir_delivery::json::read(&object.to_string())
+            .map(DeliveryRecord)
+            .map_err(|refused| serde::de::Error::custom(format!("a delivery record {refused}")))
+    }
 }
 
 /// The newest settle of every place a caller asked as its watch: when it

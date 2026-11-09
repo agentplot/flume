@@ -200,19 +200,19 @@ still pending for `me`.
 ## 6. Reading the ends
 
 `flume wait` waits as a recipient for one end, here the submission's,
-and delivers it:
+hands it over and, with `--confirm`, confirms it, so it is delivered:
 
 ```console
-$ flume wait fix--the-parser-reads-tabs --submission --recipient me
-~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs submission landed d185a879b51dba33555c036392b50443f4dfc5e8 for me: delivered by this wait
+$ flume wait fix--the-parser-reads-tabs --submission --recipient me --confirm
+~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs submission landed d185a879b51dba33555c036392b50443f4dfc5e8 for me: handed over and confirmed by this wait
 ```
 
-It exits `0`. `flume inbox` collects everything else pending for the
-recipient, on every place of the host:
+It exits `0`. `flume inbox --confirm` collects and confirms everything
+else pending for the recipient, on every place of the host:
 
 ```console
-$ flume inbox --recipient me
-fix--the-parser-reads-tabs code delivered [stage/code/1/delivered]; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
+$ flume inbox --recipient me --confirm
+fix--the-parser-reads-tabs code delivered [stage/code/1/delivered]; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs; confirmed
 $ flume inbox --recipient me
 nothing pending for me
 $ flume status
@@ -222,7 +222,10 @@ host: 0 agents running, no bound
 
 With every end delivered, flume removed the place's record too. Under
 herdr, each end reaches the recipient's own pane as a notice at the
-settle that reads it, and the inbox is for a session that restarted.
+settle that reads it, naming the key `flume confirm` takes, and the
+inbox is for a session that restarted. A notice, a wait and the inbox
+hand an end over and deliver nothing: it stays pending until its
+recipient confirms it.
 
 ## What a change adds
 

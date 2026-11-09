@@ -263,6 +263,7 @@ fn held() -> HeldState {
             },
             fix_of: None,
             fixes_as: None,
+            token: None,
         },
         phase: Phase::Over {
             over: Over::Landed {
@@ -606,6 +607,7 @@ fn ends() -> Vec<EndHeld> {
             ],
             answer: None,
             claim: None,
+            noticing: vec![],
         },
         EndHeld {
             of: EndOf::Stage {
@@ -625,6 +627,7 @@ fn ends() -> Vec<EndHeld> {
             deliveries: vec![],
             answer: None,
             claim: None,
+            noticing: vec![],
         },
         EndHeld {
             of: EndOf::Submission {
@@ -643,6 +646,7 @@ fn ends() -> Vec<EndHeld> {
             }],
             answer: None,
             claim: None,
+            noticing: vec![],
         },
         EndHeld {
             of: EndOf::Stall {
@@ -662,6 +666,7 @@ fn ends() -> Vec<EndHeld> {
             deliveries: vec![],
             answer: None,
             claim: None,
+            noticing: vec![],
         },
     ]
 }
@@ -2266,6 +2271,7 @@ fn two_answers() -> HeldState {
         }],
         answer: Some(answer),
         claim: None,
+        noticing: vec![],
     };
     state.ends = vec![
         stop_short(
@@ -2570,6 +2576,7 @@ fn every_ends_key_round_trips() {
         deliveries: vec![],
         answer: None,
         claim: None,
+        noticing: vec![],
     });
     round_trips(state.clone());
     let end = state.ends.last().expect("the drop's end");
@@ -3172,10 +3179,13 @@ fn an_ends_key_and_its_pending_recipients() {
     );
     assert!(!ends[0].same(&ends[1].of), "a later start is another end");
     let recipients = vec!["operator".to_string(), "ops".to_string()];
-    assert_eq!(ends[0].pending(&recipients), vec!["ops".to_string()]);
-    assert_eq!(ends[1].pending(&recipients), recipients);
-    assert!(ends[1].pending_to(&recipients, "ops"));
-    assert!(!ends[0].pending_to(&recipients, "operator"));
+    let mut place = held().place;
+    place.recipients = recipients.clone();
+    let none = Owing::default();
+    assert_eq!(ends[0].pending(&place, &none), vec!["ops".to_string()]);
+    assert_eq!(ends[1].pending(&place, &none), recipients);
+    assert!(ends[1].pending_to(&place, &none, "ops"));
+    assert!(!ends[0].pending_to(&place, &none, "operator"));
 }
 
 #[test]
@@ -3191,6 +3201,7 @@ fn whom_each_end_is_pending_for() {
         deliveries: vec![],
         answer: None,
         claim: None,
+        noticing: vec![],
     };
     let mut state = held();
     state.place.recipients = vec!["east/planner".into(), "boomdrive".into()];
@@ -3215,13 +3226,14 @@ fn whom_each_end_is_pending_for() {
             over: Over::Dropped,
         }),
     ];
-    let recipients = state.place.recipients.clone();
+    let place = state.place.clone();
+    let none = Owing::default();
     let both = vec!["east/planner".to_string(), "boomdrive".to_string()];
     assert_eq!(
         state
             .ends
             .iter()
-            .map(|end| end.pending(&recipients))
+            .map(|end| end.pending(&place, &none))
             .collect::<Vec<_>>(),
         vec![both.clone(), both.clone(), vec!["boomdrive".to_string()]]
     );
@@ -3229,20 +3241,38 @@ fn whom_each_end_is_pending_for() {
         state.ends.iter().map(EndHeld::noticed).collect::<Vec<_>>(),
         vec![true, true, false]
     );
-    assert!(!state.ends[2].pending_to(&recipients, "east/planner"));
-    assert_eq!(state.pending_for(), both);
+    assert!(!state.ends[2].pending_to(&place, &none, "east/planner"));
+    assert_eq!(state.pending_for(&none), both);
     let mut dropped = state.ends[2].clone();
     dropped.deliveries.push(Delivery {
         recipient: "boomdrive".into(),
         at: 101,
         by: DeliveredBy::Inbox,
     });
-    assert!(dropped.pending(&recipients).is_empty());
+    assert!(dropped.pending(&place, &none).is_empty());
+    // Its delivery recorded, each end stands pending for each reader that
+    // has not confirmed it, as the host's deliveries hold them (weir 102).
+    let mut place = place.clone();
+    place.token = Some("0a1b2c3d".into());
+    let key = place.delivery_key(&state.ends[2].of).unwrap();
+    let confirmed = Owing {
+        deliveries: BTreeMap::from([(
+            key.clone(),
+            EndDelivery {
+                key,
+                readers: vec!["boomdrive".into()],
+                ..EndDelivery::default()
+            },
+        )]),
+        ..Owing::default()
+    };
+    assert!(state.ends[2].pending(&place, &confirmed).is_empty());
+    assert_eq!(state.ends[0].pending(&place, &confirmed), both);
     // A drop of a place whose recipients are all roles' addresses stands
     // pending for no one (43, 62).
-    assert!(state.ends[2]
-        .pending(&["east/planner".to_string()])
-        .is_empty());
+    let mut roles_alone = state.place.clone();
+    roles_alone.recipients = vec!["east/planner".to_string()];
+    assert!(state.ends[2].pending(&roles_alone, &none).is_empty());
 }
 
 #[test]
@@ -3255,9 +3285,11 @@ fn a_stop_shorts_end_goes_to_the_role_it_named_alone() {
     }
     end.deliveries.clear();
     let recipients = vec!["operator".to_string(), "ops".to_string()];
+    let mut place = held().place;
+    place.recipients = recipients.clone();
     assert_eq!(end.recipients(&recipients), vec!["west/ops".to_string()]);
-    assert!(end.pending_to(&recipients, "west/ops"));
-    assert!(!end.pending_to(&recipients, "operator"));
+    assert!(end.pending_to(&place, &Owing::default(), "west/ops"));
+    assert!(!end.pending_to(&place, &Owing::default(), "operator"));
 }
 
 #[test]
@@ -3280,8 +3312,10 @@ fn a_stalls_answerer_beside_the_places_recipients() {
         stall.recipients(&["east/operator".to_string(), "west/ops".to_string()]),
         vec!["east/operator".to_string(), "west/ops".to_string()]
     );
+    let mut alone = held().place;
+    alone.recipients = vec![];
     assert_eq!(
-        stall.pending(&[]),
+        stall.pending(&alone, &Owing::default()),
         vec!["west/ops".to_string(), "east/operator".to_string()]
     );
     let before: EndOf =
@@ -3299,7 +3333,7 @@ fn a_stalls_answerer_beside_the_places_recipients() {
         }
     );
     assert_eq!(
-        held().pending_for(),
+        held().pending_for(&Owing::default()),
         vec![
             "operator".to_string(),
             "role:planner".to_string(),
@@ -4920,5 +4954,164 @@ fn a_held_state_written_before_base_places_fixes() {
         serde_json::to_value(&read).expect("written again"),
         before,
         "nothing of a base place's fixes written where none is held"
+    );
+}
+
+/// One record of each of weir's four formats, as weir's calls give them:
+/// a delivery to `operator` and `planner`, and `operator`'s hand-over
+/// confirmed on receipt, with its name made known (weir 100, 103, 106).
+fn delivery_records() -> Vec<DeliveryRecord> {
+    let key = "fix--a-thing/0a1b2c3d/stage/code/1/delivered";
+    let weir_delivery::Recorded::Add(mut records) = weir_delivery::record(
+        &[],
+        key,
+        "fix--a-thing: code delivered",
+        &["operator", "planner"],
+        "2026-11-08T15:02:00Z",
+        604_800,
+    )
+    .expect("recorded") else {
+        panic!("a first record adds the delivery")
+    };
+    let weir_delivery::Handed::Add(handed) = weir_delivery::hand(
+        &records,
+        key,
+        "operator",
+        "wait",
+        "2026-11-08T15:03:00Z",
+        true,
+    )
+    .expect("handed") else {
+        panic!("a first hand-over adds its records")
+    };
+    records.extend(handed);
+    records.into_iter().map(DeliveryRecord).collect()
+}
+
+#[test]
+fn a_deliveries_document_round_trips() {
+    // The seam-contracts spec's round trips for the host's deliveries: its
+    // key, and a document holding one record of each of weir's four
+    // formats, read back as written, in order, each spelled as weir's
+    // `json::write` spells it (43, C.7; weir C.8; core.4).
+    round_trips(HostKey::Deliveries);
+    assert_eq!(
+        serde_json::to_value(HostKey::Deliveries).unwrap(),
+        serde_json::json!({"of": "deliveries"})
+    );
+    assert_eq!(HostKey::Deliveries.to_string(), "the host's deliveries");
+    let records = delivery_records();
+    let formats: Vec<&str> = records.iter().map(|record| record.0.format()).collect();
+    assert_eq!(
+        formats,
+        [
+            weir_delivery::DELIVERY,
+            weir_delivery::HANDOVER,
+            weir_delivery::CONFIRMATION,
+            weir_delivery::KNOWN
+        ]
+    );
+    let versioned = HostVersioned {
+        version: 7,
+        document: HostDocument::Deliveries(Deliveries {
+            records: records.clone(),
+        }),
+    };
+    round_trips(versioned.clone());
+    let json = serde_json::to_string(&versioned).expect("written");
+    for record in &records {
+        let spelled = weir_delivery::json::write(&record.0);
+        assert!(json.contains(&spelled), "{spelled} not in {json}");
+    }
+    let back: HostVersioned = serde_json::from_str(&json).expect("read back");
+    let HostDocument::Deliveries(read) = back.document else {
+        panic!("the host's deliveries read back as another document")
+    };
+    assert_eq!(read.records, records, "in order, as written");
+}
+
+#[test]
+fn a_delivery_record_weir_refuses_is_refused() {
+    // The seam-contracts spec's "A record weir refuses": a delivery naming
+    // no reader is refused naming weir's field, `readers`, in weir's words
+    // (weir 100).
+    let read = serde_json::from_value::<HostVersioned>(serde_json::json!({
+        "version": 1,
+        "document": {
+            "of": "deliveries",
+            "records": [{
+                "format": "weir-delivery/1",
+                "key": "fix--a-thing/0a1b2c3d/stage/code/1/delivered",
+                "readers": [],
+                "message": "fix--a-thing: code delivered",
+                "recorded_at": "2026-11-08T15:02:00Z",
+                "expires_at": "2026-11-15T15:02:00Z",
+            }],
+        },
+    }));
+    let refused = read.expect_err("a delivery with no reader is refused");
+    assert!(
+        refused.to_string().contains("`readers`: names no reader"),
+        "{refused}"
+    );
+}
+
+#[test]
+fn a_token_and_a_notice_claim_round_trip() {
+    // The seam-contracts spec's round trips: a place's record with a token,
+    // an end with a notice claimed, and a hand-over by a session's start,
+    // each read back as written (43, 75, C.7; C.4).
+    let mut state = held();
+    state.place.token = Some("0a1b2c3d".into());
+    let mut end = ends().remove(0);
+    end.noticing = vec![NoticeClaim {
+        recipient: "operator".into(),
+        at: 141,
+    }];
+    state.ends = vec![end.clone()];
+    round_trips(end.noticing[0].clone());
+    round_trips(end.clone());
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).unwrap();
+    assert_eq!(json["place"]["token"], "0a1b2c3d");
+    assert_eq!(
+        json["ends"][0]["noticing"],
+        serde_json::json!([{"recipient": "operator", "at": 141}])
+    );
+    round_trips(DeliveredBy::SessionStart);
+    assert_eq!(
+        serde_json::to_value(DeliveredBy::SessionStart).unwrap(),
+        "session_start"
+    );
+}
+
+#[test]
+fn held_state_written_before_reads_its_old_deliveries() {
+    // The seam-contracts spec's "State written before": a held state
+    // written before this change, an end holding deliveries by notice and
+    // by the inbox, reads with no token and no claim, and its deliveries
+    // read and write back as they were (61, 75).
+    let mut state = held();
+    state.ends = ends();
+    let before = serde_json::to_value(&state).expect("held state as JSON");
+    assert!(before["place"].get("token").is_none(), "no token written");
+    for end in before["ends"].as_array().unwrap() {
+        assert!(end.get("noticing").is_none(), "no claim written: {end}");
+    }
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
+    assert_eq!(read.place.token, None);
+    assert!(read.ends.iter().all(|end| end.noticing.is_empty()));
+    assert_eq!(
+        read.ends[0]
+            .deliveries
+            .iter()
+            .map(|delivery| delivery.by)
+            .collect::<Vec<_>>(),
+        [DeliveredBy::Notice, DeliveredBy::Inbox]
+    );
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "its old deliveries written back as they were"
     );
 }

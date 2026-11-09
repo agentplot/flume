@@ -70,7 +70,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_lost_stage_waits_on_its_caller,
         },
         Scenario {
-            name: "caller waits: a construct ended short needing an answer under a watch is stalled at five minutes, each recipient delivered that once",
+            name: "caller waits: a construct ended short needing an answer under a watch is stalled at five minutes, each recipient handed that once by notice and the stall pending for each until it confirms it",
             cites: &["130", "43", "42", "122"],
             run: stalled_after_five_minutes,
         },
@@ -85,7 +85,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_held_place_is_not_stalled,
         },
         Scenario {
-            name: "caller waits: a place launched from the pane ops stalls in east, behind which acme declares east/operator with a run, and its stall is delivered once to ops and stands pending for east/operator, whose run the settle wakes and whose inbox gives the stall with the stop-short's words and key",
+            name: "caller waits: a place launched from the pane ops stalls in east, behind which acme declares east/operator with a run, and its stall is handed once to ops by notice and stands pending for ops and east/operator, whose run the settle wakes and whose inbox gives the stall with the stop-short's words and key",
             cites: &["193", "130", "43", "132", "S94"],
             run: the_stall_reaches_the_answerer,
         },
@@ -657,9 +657,9 @@ fn a_lost_stage_waits_on_its_caller(_: &()) -> Outcome {
     ensure!(world.status(&id)?.stalled, "not stalled at five minutes");
     ensure_eq!(
         stall_notices(&world, "ops"),
-        vec![format!(
+        vec![world.confirming(&format!(
             "flume: build--one (do the work) stalled: a retry of work [stall/{lost_at}]; read: flume inbox"
-        )],
+        ))],
         "the stall delivered"
     );
     Ok(())
@@ -689,9 +689,9 @@ fn stalled_after_five_minutes(_: &()) -> Outcome {
         (Some("construct"), Waits::Answer, Some(asked)),
         "the move stalled on"
     );
-    let notice = format!(
+    let notice = world.confirming(&format!(
         "flume: change--plan (plan it) stalled: a retry of construct [stall/{asked}]; read: flume inbox"
-    );
+    ));
     for _ in 0..3 {
         world.host.advance(30);
         world.settle(&id);
@@ -722,9 +722,10 @@ fn stalled_after_five_minutes(_: &()) -> Outcome {
         },
         "the stall"
     );
-    ensure!(
-        stalls[0].pending(&["ops".into(), "lead".into()]).is_empty(),
-        "the stall still pending"
+    ensure_eq!(
+        stalls[0].pending(&world.held(&id).ok_or("no place")?.place, &world.owing()),
+        vec!["ops".to_string(), "lead".to_string()],
+        "the stall pending for, handed and not confirmed"
     );
     Ok(())
 }
@@ -863,7 +864,10 @@ pub fn stall_and_settle(world: &World, id: &PlaceId) {
 /// each as often as it was.
 fn stall_reached(world: &World, id: &PlaceId) -> Result<Vec<String>, String> {
     let stall = stalls(world, id).pop().ok_or("no stall")?;
-    let mut reached: Vec<String> = stall
+    let held = world.held(id).ok_or("no place")?;
+    let mut reached: Vec<String> = world
+        .end_status(&held, &stall)
+        .end
         .deliveries
         .into_iter()
         .map(|delivery| delivery.recipient)
@@ -898,24 +902,26 @@ fn the_stall_reaches_the_answerer(_: &()) -> Outcome {
     ensure_eq!(held.place.recipients, vec!["ops".to_string()], "recipients");
     let stall = stalls(&world, &id).pop().ok_or("no stall")?;
     ensure_eq!(
-        stall
+        world
+            .end_status(&held, &stall)
+            .end
             .deliveries
             .iter()
-            .map(|delivery| delivery.recipient.as_str())
+            .map(|delivery| delivery.recipient.clone())
             .collect::<Vec<_>>(),
-        vec!["ops"],
+        vec!["ops".to_string()],
         "the stall's deliveries"
     );
     ensure_eq!(
-        stall.pending(&held.place.recipients),
-        vec!["east/operator".to_string()],
+        stall.pending(&held.place, &world.owing()),
+        vec!["ops".to_string(), "east/operator".to_string()],
         "the stall pending for"
     );
     ensure!(
         world.held(&World::id("turn", "east-operator")).is_some(),
         "no run of east/operator woken"
     );
-    let ends = match world.engine.inbox("east/operator", None) {
+    let ends = match world.engine.inbox("east/operator", None, true) {
         Answer::Inbox { ends, .. } => ends,
         other => return Err(format!("the inbox answered {other:?}")),
     };
@@ -1025,10 +1031,12 @@ fn the_answerer_is_the_recipient(_: &()) -> Outcome {
     ensure_eq!(
         world.terminal.notices("east/operator"),
         vec![
-            "flume: change--plan (one of two designs) construct needs an answer, its agent kept open for the answer until 1003600 [stage/construct/1/ended-short]; read: flume inbox"
-                .to_string(),
-            "flume: change--plan (one of two designs) stalled: a retry of construct [stall/1000000]; read: flume inbox"
-                .to_string()
+            world.confirming(
+                "flume: change--plan (one of two designs) construct needs an answer, its agent kept open for the answer until 1003600 [stage/construct/1/ended-short]; read: flume inbox"
+            ),
+            world.confirming(
+                "flume: change--plan (one of two designs) stalled: a retry of construct [stall/1000000]; read: flume inbox"
+            ),
         ],
         "the notices into the answerer's run's pane"
     );
@@ -1048,6 +1056,10 @@ fn a_stall_from_the_earlier_release(_: &()) -> Outcome {
     let read = world.store.read(&id).ok_or("no place")?;
     let mut json = serde_json::to_value(&read.state).map_err(|error| error.to_string())?;
     json["place"]["recipients"] = serde_json::json!([]);
+    json["place"]
+        .as_object_mut()
+        .ok_or("a place")?
+        .remove("token");
     for end in json["ends"].as_array_mut().ok_or("no ends")? {
         if end["of"] == "stall" {
             let end = end.as_object_mut().ok_or("an end")?;
@@ -1076,13 +1088,16 @@ fn a_stall_from_the_earlier_release(_: &()) -> Outcome {
         world.engine().settle(None);
     }
     let stall = stalls(&world, &id).pop().ok_or("no stall")?;
+    let held = world.held(&id).ok_or("no place")?;
     ensure_eq!(
-        stall
+        world
+            .end_status(&held, &stall)
+            .end
             .deliveries
             .iter()
-            .map(|delivery| delivery.recipient.as_str())
+            .map(|delivery| delivery.recipient.clone())
             .collect::<Vec<_>>(),
-        vec!["east/operator"],
+        vec!["east/operator".to_string()],
         "the stall's deliveries"
     );
     ensure_eq!(

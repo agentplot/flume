@@ -3065,8 +3065,18 @@ fn a_standing_agent_under_herdr_takes_a_fixs_end_through_the_binary() {
             !took().is_empty()
         });
     // The submission is held, so the place waits on its caller's move and
-    // the notice points at the inbox (43; design 9).
-    let notice = "flume: fix--one (fix the parser) code delivered [stage/code/1/delivered]; read: flume inbox".to_string();
+    // the notice points at the inbox, and names the key that confirms the
+    // end's delivery (43; design 4, 9).
+    let delivery = host.walk.everything()["places"][0]["ends"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|end| end["key"] == "stage/code/1/delivered")
+        .and_then(|end| end["delivery"].as_str().map(str::to_string))
+        .unwrap_or_else(|| panic!("code's end gives no delivery key"));
+    let notice = format!(
+        "flume: fix--one (fix the parser) code delivered [stage/code/1/delivered]; read: flume inbox; confirm: flume confirm {delivery}"
+    );
     assert_eq!(took(), vec![notice.clone()], "what the standing agent took");
     host.walk.settle(&place);
     assert_eq!(took(), vec![notice], "taken again at the next settle");
@@ -3087,7 +3097,16 @@ fn a_standing_agent_under_herdr_takes_a_fixs_end_through_the_binary() {
         .cloned()
         .unwrap_or_else(|| panic!("status gives no w/planner: {everything}"));
     assert_eq!(planner["run"], Value::Null, "{planner}");
-    assert_eq!(planner["pending"], json!([]), "{planner}");
+    // Handed over by its notice, the end stays pending for the address
+    // until the agent confirms it (43; weir 103).
+    assert_eq!(
+        planner["pending"].as_array().map(|pending| pending
+            .iter()
+            .map(|end| end["key"].clone())
+            .collect::<Vec<_>>()),
+        Some(vec![json!("stage/code/1/delivered")]),
+        "{planner}"
+    );
     assert_eq!(
         planner["standing"],
         json!({

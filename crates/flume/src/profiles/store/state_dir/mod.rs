@@ -10,11 +10,13 @@
 //! lines of `made.jsonl` a stage's run wrote there (129). The host's own
 //! documents lie beside the places, an account's spent time at
 //! `accounts/<pool>/<account>.json`, an intent's affinity at
-//! `intents/<digest>.json` and the host's watch at `watch.json`, each
-//! written whole the same way under its own lock, readable by the host's
-//! user alone (153, 208, C.7). A file an agent's command lists is written
-//! into the place's folder whole, beside and renamed over, readable by the
-//! host's user alone, and goes with the folder (196). Nothing is written
+//! `intents/<digest>.json`, the host's watch at `watch.json` and the
+//! host's deliveries, weir's records as its JSON spells them, at
+//! `deliveries.json`, each written whole the same way under its own lock,
+//! readable by the host's user alone (43, 153, 208, C.7; weir 112). A
+//! file an agent's command lists is written into the place's folder
+//! whole, beside and renamed over, readable by the host's user alone, and
+//! goes with the folder (196). Nothing is written
 //! into a repository (104, core.16).
 
 use flume_seams::{
@@ -95,6 +97,7 @@ impl StateDir {
             ),
             HostKey::Intent { digest } => (self.root.join("intents"), flat_name(digest)),
             HostKey::Watch => (self.root.clone(), "watch".into()),
+            HostKey::Deliveries => (self.root.clone(), "deliveries".into()),
         };
         (
             directory.join(format!("{name}.json")),
