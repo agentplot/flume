@@ -1,6 +1,6 @@
 id = "agentplot.flume"
 name = "flume"
-version = "0.0.0"
+version = "0.21.2"
 min_herdr_version = "0.9.5"
 description = "flume's places in flight in a popup that reads flume's status when it opens and after each key that acts, whose keys act through flume's commands; the sidebar's rows are the clues flume's settles show. It keeps no process and runs no settle: its startup writes what herdr's configuration lacks for it, and exits."
 platforms = ["linux", "macos"]
