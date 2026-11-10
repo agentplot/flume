@@ -1,7 +1,7 @@
 ---
 number: 59
 title: The site's packages are fetched outside the gate's sandbox and installed with no network
-status: proposed
+status: accepted
 date: 2026-11-08
 decision-makers:
 - fix/flume-names-each-repository-by-its-address--site-install-reaches-its-registry
@@ -9,7 +9,7 @@ decision-makers:
 
 # The site's packages are fetched outside the gate's sandbox and installed with no network
 
-Status: proposed on 2026-11-08 by the code stage of the fix `flume-names-each-repository-by-its-address--site-install-reaches-its-registry`. The brief left the choice between installing within what the sandbox allows and opening the policy's network to the registry; keeping the network shut, and how the packages reach the sandbox, are the stage's own choices, cheap to change.
+Status: accepted by the user on 2026-11-09, on their card. Proposed on 2026-11-08 by the code stage of the fix `flume-names-each-repository-by-its-address--site-install-reaches-its-registry`. The brief left the choice between installing within what the sandbox allows and opening the policy's network to the registry; keeping the network shut, and how the packages reach the sandbox, are the stage's own choices, cheap to change.
 
 Deciders: the code stage, on the brief: "Make site:install pass in main's gate without reaching beyond what the sandbox allows, or change the policy in this bolt so the task that fetches packages may reach the registry, as flume's records allow."
 

@@ -54,7 +54,7 @@ Option 3, the user's "Keep it open an hour, then end it".
 
 ## Amendment, 2026-11-06: a conversation's agent lost with its host while kept open is carried at its answer's retry
 
-Status: proposed by the code stage of the change `an-answer-reaches-the-open-session-within-an-hour` on 2026-11-06, the choice its own, for the user's word. Its statement amendment, of 49, 179 and 198, is on agentplot/blueprints, branch `design/flume-an-asking-conversation-lost-is-carried` at 6529c04, cut from main at a4eeec3, committed and not pushed.
+Status: accepted by the user on 2026-11-09, on their card. Proposed by the code stage of the change `an-answer-reaches-the-open-session-within-an-hour` on 2026-11-06, the choice its own, for the user's word. Its statement amendment, of 49, 179 and 198, is on agentplot/blueprints main at 2d33790.
 
 Deciders: the words the code stage was started again with: "Reconcile with #130's lost-conversation retry and the settles change, since an agent kept open for its answer meets both". Record 0052 leaves "a conversation let go after its stop-short's hour (198)" to this record (its option 3).
 Sources: `agentplot/blueprints:design/flume/requirements.md` on main at a4eeec3, clauses 45, 49, 77, 109, 179, 198 and 207, and S113 to S117; record 0052; rules core.10 and core.27; `crates/flume-core/src/acts.rs` (`Engine::retry`), `crates/flume-core/src/end.rs` (`read_end`, `end_foreign`) and `crates/flume-core/src/start.rs` (`StartReason::Resumed`, `StartReason::Lost`).
