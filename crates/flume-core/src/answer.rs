@@ -594,8 +594,10 @@ pub struct EndStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub open_until: Option<Seconds>,
     /// The key of its delivery, `<kind>--<name>/<token>/<end key>`, by
-    /// which a recipient confirms it; none for an end with no recipient,
-    /// and of a document that holds no token yet (43; weir 101).
+    /// which a recipient confirms it, given only once the host's
+    /// deliveries record it; none for an end with no recipient, one no
+    /// settle has recorded yet, and one of a document that holds no token
+    /// yet (43; weir 101).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delivery: Option<String>,
     /// When its delivery expires, by the host's clock, fixed when it was
@@ -654,11 +656,11 @@ impl EndStatus {
                 (owed, confirmed, None)
             }
         };
-        let delivery = if end.recipients(&place.recipients).is_empty() {
-            None
-        } else {
-            place.delivery_key(&end.of)
-        };
+        // Only a key the host's deliveries hold is named, so a recipient
+        // never confirms a key flume has not recorded (43; weir 101, 102).
+        let delivery = end
+            .delivery(place, owing)
+            .map(|delivery| delivery.key.clone());
         EndStatus {
             end: shown,
             key: end.of.end_key(),

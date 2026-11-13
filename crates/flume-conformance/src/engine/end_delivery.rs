@@ -332,6 +332,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["43", "75"],
             run: a_place_written_before_the_token,
         },
+        Scenario {
+            name: "end delivery: a code end whose delivery the host's deliveries refused to record is given by status pending for ops with no delivery key, and once the next settle records it status names its key and ops's confirmation of that key is taken (43, 56; weir 101, 102)",
+            cites: &["43", "56"],
+            run: a_delivery_not_yet_recorded,
+        },
+        Scenario {
+            name: "end delivery: a fix for ops and boomdrive lands, both confirm its code end and ops its landing; its tidied document keeps both deliveries through every settle and every command that settles the host, status naming each key, code's confirmed by both and the landing pending for boomdrive, and only once boomdrive confirms the landing does a settle remove the document and let go of both (43, 62; weir 107, I9)",
+            cites: &["43", "62"],
+            run: a_tidied_place_keeps_its_deliveries,
+        },
+        Scenario {
+            name: "end delivery: flume's log names each delivery as a settle records it, its place, its readers and its expiry, once however often the place is settled, and each as it is let go of, the readers that confirmed it and why (43, 62; weir 101, 107)",
+            cites: &["43", "62"],
+            run: the_log_names_each_delivery,
+        },
+        Scenario {
+            name: "end delivery: a fix for ops lands while ops is away and the document kept for its ends cannot be written: the place's own document stays, status giving its ends pending for ops with their keys and flume's log saying why, and the next settle keeps the document for them and removes the place's own (43, 62; weir I9)",
+            cites: &["43", "62"],
+            run: a_kept_document_not_written,
+        },
     ]
 }
 
@@ -3007,5 +3027,260 @@ fn a_live_place_upgraded(_: &()) -> Outcome {
         held.ends,
         "the ends after settling again"
     );
+    Ok(())
+}
+
+/// The lines of flume's log that begin with `start`.
+fn logged(world: &World, start: &str) -> Vec<String> {
+    world
+        .host
+        .logged
+        .calls()
+        .into_iter()
+        .filter(|line| line.starts_with(start))
+        .collect()
+}
+
+/// The end-delivery spec's "A delivery not yet recorded" (43, 56; weir
+/// 101, 102).
+fn a_delivery_not_yet_recorded(_: &()) -> Outcome {
+    let world = World::new();
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = fix_for_ops(&world, "one")?;
+    deliver_fix(&world, &id);
+    world.store.refuse_host_writes(true);
+    world.settle(&id);
+    world.store.refuse_host_writes(false);
+    ensure!(
+        world
+            .delivery_key("fix--one", "stage/code/1/delivered")
+            .is_none(),
+        "a delivery recorded while the deliveries refused writes"
+    );
+    let end = end_keyed(&world, &id, "stage/code/1/delivered")?;
+    ensure_eq!(
+        end.pending_for,
+        vec!["ops".to_string()],
+        "pending for, unrecorded"
+    );
+    ensure_eq!(end.delivery, None, "the key status names, unrecorded");
+    ensure_eq!(end.expires_at, None, "the expiry, unrecorded");
+    world.settle(&id);
+    let key = world
+        .delivery_key("fix--one", "stage/code/1/delivered")
+        .ok_or("no delivery recorded by the next settle")?;
+    let end = end_keyed(&world, &id, "stage/code/1/delivered")?;
+    ensure_eq!(end.delivery, Some(key.clone()), "the key status names");
+    ensure_eq!(
+        end.pending_for,
+        vec!["ops".to_string()],
+        "pending for, recorded"
+    );
+    let answer = world.engine().confirm("ops", std::slice::from_ref(&key));
+    ensure!(
+        matches!(&answer, Answer::Confirmed { recipient, confirmed }
+            if recipient == "ops" && confirmed.len() == 1 && confirmed[0].key == key),
+        "ops's confirmation of the key status named: {answer:?}"
+    );
+    ensure!(
+        end_keyed(&world, &id, "stage/code/1/delivered")?
+            .pending_for
+            .is_empty(),
+        "code's end once ops confirmed it"
+    );
+    Ok(())
+}
+
+/// The end-delivery spec's "Kept until each recipient confirms" (43, 62;
+/// weir 107, I9).
+fn a_tidied_place_keeps_its_deliveries(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    let id = landed_with(&world, "one", &["ops", "boomdrive"])?;
+    let code = "stage/code/1/delivered";
+    let landing = "submission/1/landed";
+    world.confirm("ops", "fix--one", &[code, landing])?;
+    world.confirm("boomdrive", "fix--one", &[code])?;
+    let keys: Vec<String> = [code, landing]
+        .iter()
+        .map(|end| world.delivery_key("fix--one", end))
+        .collect::<Option<_>>()
+        .ok_or("a delivery not recorded")?;
+    let notices = world.terminal.notices("ops").len();
+    let kept = |world: &World| -> Outcome {
+        ensure_eq!(
+            kept_pending_for(world)?,
+            vec!["boomdrive".to_string()],
+            "whom the tidied document waits on"
+        );
+        for (end, key) in [code, landing].iter().zip(&keys) {
+            ensure_eq!(
+                world.delivery_key("fix--one", end),
+                Some(key.clone()),
+                "the delivery of {end} in the host's deliveries"
+            );
+            ensure_eq!(
+                end_keyed(world, &id, end)?.delivery,
+                Some(key.clone()),
+                "the key status names for {end}"
+            );
+        }
+        let code_end = end_keyed(world, &id, code)?;
+        ensure!(
+            code_end.pending_for.is_empty()
+                && code_end
+                    .confirmed
+                    .iter()
+                    .map(|by| by.recipient.as_str())
+                    .eq(["ops", "boomdrive"]),
+            "code's end, confirmed by both: {code_end:?}"
+        );
+        ensure_eq!(
+            end_keyed(world, &id, landing)?.pending_for,
+            vec!["boomdrive".to_string()],
+            "the landing's pending for"
+        );
+        ensure!(
+            logged(world, "let go of the delivery").is_empty(),
+            "a delivery let go of while its document stands"
+        );
+        Ok(())
+    };
+    world.engine().settle(None);
+    kept(&world)?;
+    for _ in 0..2 {
+        world.host.advance(60);
+        world.engine().settle(None);
+        world.engine().tidy(None);
+        world.engine().inbox("ops", None, false);
+        kept(&world)?;
+    }
+    ensure_eq!(
+        world.terminal.notices("ops").len(),
+        notices,
+        "notices to ops while the document stands"
+    );
+    world.confirm("boomdrive", "fix--one", &[landing])?;
+    world.engine().settle(None);
+    ensure!(
+        tidied(&world).is_empty(),
+        "the document once every end was delivered"
+    );
+    ensure!(
+        [code, landing]
+            .iter()
+            .all(|end| world.delivery_key("fix--one", end).is_none()),
+        "a delivery kept once its document went"
+    );
+    Ok(())
+}
+
+/// The deliveries spec's "Each delivery logged as it is recorded and let
+/// go of" (43, 62; weir 101, 107).
+fn the_log_names_each_delivery(_: &()) -> Outcome {
+    let world = World::new();
+    let id = landed_away(&world, "one")?;
+    let kept = tidied(&world);
+    ensure_eq!(kept.len(), 1, "tidied documents");
+    let kept_id = kept[0].place.id.clone();
+    let mut recorded = vec![];
+    let mut keys = vec![];
+    for end in ["stage/code/1/delivered", "submission/1/landed"] {
+        let key = world
+            .delivery_key("fix--one", end)
+            .ok_or(format!("no delivery of {end}"))?;
+        let status = end_keyed(&world, &id, end)?;
+        let expires = status.expires_at.ok_or(format!("no expiry of {end}"))?;
+        recorded.push(format!(
+            "recorded the delivery {key} of {id}, owed to ops, expiring at {}",
+            flume_core::deliveries::time(expires)
+        ));
+        keys.push(key);
+    }
+    ensure_eq!(
+        logged(&world, "recorded the delivery"),
+        recorded,
+        "the log once the ends were recorded"
+    );
+    world.host.advance(60);
+    world.engine().settle(None);
+    world.engine().settle(None);
+    ensure_eq!(
+        logged(&world, "recorded the delivery"),
+        recorded,
+        "the log once settled again"
+    );
+    ensure!(
+        logged(&world, "let go of the delivery").is_empty(),
+        "a delivery logged let go of while pending"
+    );
+    world.confirm_every("ops");
+    world.engine().settle(None);
+    ensure!(
+        world.held(&kept_id).is_none(),
+        "the document once confirmed"
+    );
+    ensure_eq!(
+        logged(&world, "let go of the delivery"),
+        keys.iter()
+            .map(|key| format!(
+                "let go of the delivery {key}, confirmed by ops: the document {kept_id} was removed"
+            ))
+            .collect::<Vec<_>>(),
+        "the log once the document went"
+    );
+    Ok(())
+}
+
+/// The end-delivery spec's "A kept document not written" (43, 62; weir
+/// I9).
+fn a_kept_document_not_written(_: &()) -> Outcome {
+    let world = World::new();
+    let id = fix_for_ops(&world, "one")?;
+    deliver_fix(&world, &id);
+    let kept = PlaceId::new(format!("{}@{}", id.0, world.host.now()));
+    world.store.refuse_next_write_of(&kept);
+    world.settle(&id);
+    ensure!(
+        matches!(
+            world.held(&id).map(|held| held.phase),
+            Some(Phase::Gone { .. })
+        ),
+        "the place's own document once the one kept was refused"
+    );
+    ensure!(world.held(&kept).is_none(), "a document kept");
+    ensure_eq!(
+        logged(&world, "the place "),
+        vec![format!(
+            "the place {id} was not removed: the document {kept} kept for its ends pending for ops could not be written"
+        )],
+        "the log"
+    );
+    let keys: Vec<Option<String>> = ["stage/code/1/delivered", "submission/1/landed"]
+        .iter()
+        .map(|end| world.delivery_key("fix--one", end))
+        .collect();
+    ensure!(keys.iter().all(Option::is_some), "the deliveries recorded");
+    let ends = ends(&world, &id)?;
+    ensure_eq!(
+        ends.iter()
+            .map(|end| (end.delivery.clone(), end.pending_for.clone()))
+            .collect::<Vec<_>>(),
+        keys.iter()
+            .map(|key| (key.clone(), vec!["ops".to_string()]))
+            .collect::<Vec<_>>(),
+        "status's ends while the place's own document stays"
+    );
+    world.settle(&id);
+    ensure!(
+        world.held(&id).is_none(),
+        "the place's own document once the one kept was written"
+    );
+    ensure_eq!(
+        kept_pending_for(&world)?,
+        vec!["ops".to_string()],
+        "whom the document kept waits on"
+    );
+    ensure!(world.held(&kept).is_some(), "the document kept, by its id");
     Ok(())
 }

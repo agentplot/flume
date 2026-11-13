@@ -216,9 +216,22 @@ impl Engine {
         self.intent_left(&place.intent, id);
         self.deliver_ends(id);
         let read = self.store.read(id);
-        let kept = read
+        // A place whose ends stand pending is removed only once the
+        // document kept for them stands, so no pending end is left with
+        // no document to read it from; the next settle tidies it again
+        // (43, 62; weir I9).
+        let kept = match read
             .as_ref()
-            .and_then(|read| self.keep_for_ends(&read.state, &over));
+            .map(|read| self.keep_for_ends(&read.state, &over))
+        {
+            Some(Err(why)) => {
+                self.host
+                    .log(&format!("the place {id} was not removed: {why}"));
+                return false;
+            }
+            Some(Ok(kept)) => kept,
+            None => None,
+        };
         if self.remove_held(id) {
             // The tidy that keeps no document lets go of its ends'
             // deliveries, every one delivered (62; weir 107).

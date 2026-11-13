@@ -20,6 +20,7 @@
 //! end of it stands pending, and it goes once every end is delivered or
 //! its caller drops it (3, 62).
 
+use crate::answer::and_list;
 use crate::prompt::group_name;
 use crate::standing::Reached;
 use crate::{Engine, Step};
@@ -316,11 +317,17 @@ impl Engine {
     /// apart from a live place's under its id and the tidy's time while an
     /// end of it stands pending, naming the recipients it waits on, and
     /// holding no line of what its stages made; none kept where nothing
-    /// is pending (43, 62, 129).
-    pub(crate) fn keep_for_ends(&self, held: &HeldState, over: &Over) -> Option<PlaceId> {
+    /// is pending; or why it could not be written, so the tidy keeps the
+    /// place's own document and no pending end is left with none (43, 62,
+    /// 129; weir I9).
+    pub(crate) fn keep_for_ends(
+        &self,
+        held: &HeldState,
+        over: &Over,
+    ) -> Result<Option<PlaceId>, String> {
         let pending = held.pending_for(&self.owing());
         if pending.is_empty() {
-            return None;
+            return Ok(None);
         }
         let at = match &held.phase {
             Phase::Gone { at: Some(at), .. } => *at,
@@ -332,7 +339,7 @@ impl Engine {
         kept.phase = Phase::Tidied {
             over: over.clone(),
             at,
-            pending_for: pending,
+            pending_for: pending.clone(),
         };
         // The made lines go with the place's folder, so the document kept
         // for its ends holds none of them (62, 129; core.23).
@@ -345,8 +352,14 @@ impl Engine {
             }
         }
         match self.store.write(&id, None, Some(&kept)) {
-            Written::Written { .. } => Some(id),
-            Written::Moved => self.store.read(&id).map(|_| id),
+            Written::Written { .. } => Ok(Some(id)),
+            Written::Moved => match self.store.read(&id) {
+                Some(_) => Ok(Some(id)),
+                None => Err(format!(
+                    "the document {id} kept for its ends pending for {} could not be written",
+                    and_list(&pending)
+                )),
+            },
         }
     }
 
