@@ -367,7 +367,7 @@ fn one_notice_for_the_stage(_: &()) -> Outcome {
             .filter(code)
             .collect::<Vec<_>>(),
         vec![world.confirming(
-            "flume: change--plan (plan it) code delivered [stage/code/3/delivered]; read: flume status change--plan"
+            "flume: change--plan (plan it) code delivered [stage/code/3/delivered]; read: flume status change--plan", "ops"
         )],
         "code's notices to ops"
     );
@@ -702,7 +702,7 @@ fn a_retry_after_a_stop_short(_: &()) -> Outcome {
         world.terminal.notices("ops").contains(&world.confirming(&format!(
             "flume: change--plan (plan it) code on group 2. Two needs an answer, its agent kept open for the answer until {} [stage/code/2/ended-short]; read: flume inbox",
             asked + flume_core::KEEP_OPEN
-        ))),
+        ), "ops")),
         "the notice of the stop-short: {:?}",
         world.terminal.notices("ops")
     );

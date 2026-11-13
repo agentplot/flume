@@ -567,8 +567,9 @@ impl Engine {
             if !pending.is_empty() {
                 return Answer::refused(format!(
                     "the tidied place {place} stays while its ends stand pending for {}: each \
-                     confirms them by flume confirm <key>…, or by flume inbox --confirm naming \
-                     the place, and the next settle removes it (62; weir I9)",
+                     confirms them by flume confirm --recipient <recipient> <key>…, or by flume \
+                     inbox --recipient <recipient> --confirm naming the place, and the next \
+                     settle removes it (62; weir I9)",
                     and_list(pending)
                 ));
             }

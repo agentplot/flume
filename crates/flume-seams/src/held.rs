@@ -422,7 +422,9 @@ pub struct Owing {
 pub struct EndDelivery {
     pub key: String,
     pub readers: Vec<String>,
-    /// Its message, the end's notice as recorded (100; core.11).
+    /// Its message as recorded, every reader's: the end's notice but the
+    /// way to confirm it, which a notice adds for the recipient it goes
+    /// to (43; weir 100; core.11).
     pub message: String,
     pub expires_at: Seconds,
     /// Each reader that has not confirmed it, in its readers' order.

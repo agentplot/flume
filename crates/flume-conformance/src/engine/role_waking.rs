@@ -1051,7 +1051,7 @@ fn a_carrier_wakes_a_standing_address(_: &()) -> Outcome {
     );
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![world.confirming(&code_delivered("one"))],
+        vec![world.confirming(&code_delivered("one"), PLANNER)],
         "the notice the wake's settle sent"
     );
     ensure_eq!(world.store.places(), vec![id], "the places on the host");
@@ -1083,7 +1083,7 @@ fn a_standing_agent_over_a_run_still_live(_: &()) -> Outcome {
     delivered_for_planner(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![world.confirming(&code_delivered("one"))],
+        vec![world.confirming(&code_delivered("one"), PLANNER)],
         "the standing agent's notices"
     );
     ensure_eq!(
@@ -1107,7 +1107,7 @@ fn a_standing_entry_becomes_a_runs(_: &()) -> Outcome {
     delivered_for_planner(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![world.confirming(&code_delivered("one"))],
+        vec![world.confirming(&code_delivered("one"), PLANNER)],
         "the standing agent's first notice"
     );
     ensure_eq!(runs(&world), Vec::<PlaceId>::new(), "runs while it stands");
@@ -1323,7 +1323,7 @@ fn a_run_an_earlier_flume_named(_: &()) -> Outcome {
     ensure_eq!(runs(&world), vec![earlier.clone()], "the runs on the host");
     ensure_eq!(
         world.terminal.notices(PLANNER),
-        vec![world.confirming(&code_delivered("one"))],
+        vec![world.confirming(&code_delivered("one"), PLANNER)],
         "the notices into the earlier run's pane"
     );
     ensure_eq!(
@@ -1388,7 +1388,7 @@ fn a_run_not_yet_given_its_prompt(_: &()) -> Outcome {
     world.settle(&one);
     ensure_eq!(
         world.terminal.notices(PLANNER),
-        vec![world.confirming(&code_delivered("one"))],
+        vec![world.confirming(&code_delivered("one"), PLANNER)],
         "the notices into the run's pane"
     );
     ensure_eq!(
@@ -1482,7 +1482,7 @@ fn a_standing_design_agent(_: &()) -> Outcome {
     let id = delivered_for_design(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![world.confirming(&code_delivered("one"))],
+        vec![world.confirming(&code_delivered("one"), "east/design")],
         "the notices into east-design's pane"
     );
     ensure_eq!(runs(&world), Vec::<PlaceId>::new(), "runs launched");
@@ -1508,7 +1508,7 @@ fn the_crossing_to_its_kind(_: &()) -> Outcome {
     delivered_for_design(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![world.confirming(&code_delivered("one"))],
+        vec![world.confirming(&code_delivered("one"), "east/design")],
         "east-design's notice before the crossing"
     );
     let streams = world.host.streams();
@@ -1847,7 +1847,8 @@ fn a_planners_run_is_lost(_: &()) -> Outcome {
     ensure_eq!(
         world.terminal.notices("east/operator"),
         vec![world.confirming(
-            "flume: turn--east-planner stalled: a retry of plan [stall/1000000]; read: flume inbox"
+            "flume: turn--east-planner stalled: a retry of plan [stall/1000000]; read: flume inbox",
+            "east/operator"
         )],
         "the notices into the operator's run's pane"
     );

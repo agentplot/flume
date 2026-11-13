@@ -229,10 +229,11 @@ impl World {
         }
     }
 
-    /// A notice as it was sent, `flume: <kind>--<name> … [<end key>];
-    /// read: …`, with the way to confirm its end's delivery after it, by
-    /// the key recorded for it (43; core.11).
-    pub fn confirming(&self, notice: &str) -> String {
+    /// A notice as it was sent to `recipient`, `flume: <kind>--<name> …
+    /// [<end key>]; read: …`, with the way that recipient confirms its
+    /// end's delivery after it, by its name and the key recorded for it
+    /// (43; core.11).
+    pub fn confirming(&self, notice: &str, recipient: &str) -> String {
         let short = notice
             .strip_prefix("flume: ")
             .and_then(|rest| rest.split(' ').next())
@@ -243,7 +244,7 @@ impl World {
             .map(|(key, _)| key)
             .unwrap_or_default();
         match self.delivery_key(short, end_key) {
-            Some(key) => format!("{notice}; confirm: flume confirm {key}"),
+            Some(key) => format!("{notice}; confirm: flume confirm --recipient {recipient} {key}"),
             None => format!("{notice}; confirm: no delivery recorded of {short} [{end_key}]"),
         }
     }
