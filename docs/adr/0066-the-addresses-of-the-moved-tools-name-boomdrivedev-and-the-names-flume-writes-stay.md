@@ -1,7 +1,7 @@
 ---
 number: 66
 title: The addresses of the moved tools name boomdrivedev, and the names flume writes stay
-status: accepted
+status: deprecated
 date: 2026-11-12
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # The addresses of the moved tools name boomdrivedev, and the names flume writes stay
 
-Status: accepted on the brief of the fix `flumes-addresses-name-boomdrivedev`, 2026-11-12, which decides the addresses in its words: "Every agentplot/ address in flume's tree of a tool that has moved names boomdrivedev/ instead: its flake inputs, its site's address, its README, policies and skills." Which names are no address, and which mentions are history, are the fix's own choices below, cheap to change.
+Status: deprecated on 2026-11-13. It holds a one-off move, which is the plan's and no record's (crew's rule briefs.15 as amended 2026-11-13).
 
 Deciders: the brief, above; the fix's code stage, for the choices.
 Sources: the brief; `gh repo list boomdrivedev` and `gh repo list agentplot`, read on 2026-11-12; the sites' answers on 2026-11-12; record 0034, whose split of live mentions from history is the precedent; timber's record 0032 on its fix `timbers-addresses-name-boomdrivedev`, which moves timber's tree the same way; afterthought/kit-standard `docs/orgs/`, which holds `agentplot.md` and no org named boomdrivedev; the OpenSpec change `flumes-addresses-name-boomdrivedev`.
