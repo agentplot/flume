@@ -15,7 +15,7 @@ Status: accepted. The direction is the user's, in agentplot-design's pane on 202
 Amends record 0033 where it names a label's `reserve` and `keep_free`.
 
 Deciders: the user, 2026-11-09, above; agentplot-design, for the form.
-Sources: `agentplot/blueprints:design/principles.md` 13 ("A key is named in its reader's words. A number's unit and range are in its name or in its description, in the module's option and the tool's configuration reference"); `design/flume/requirements.md` 70, 143, 166, 167, 181, 185, C.7 and the vocabulary's reserve; record 0033; agentplot/sluice's `[runs] reserved`, which keeps that many runs of the host's bound for submissions, "an agent's run in its worktree waits rather than take one" (its configuration reference); agentplot/boomdrive's drive option `stream.labels.<label>.reserve`, Flume's `reserve` (its `nix/modules/options.nix` on the bolt `the-boomdrive-flake-configures-the-whole-host`); this repository's `nix/modules/options.nix` and `site/src/content/docs/reference/configuration.md`.
+Sources: `boomdrivedev/blueprints:design/principles.md` 13 ("A key is named in its reader's words. A number's unit and range are in its name or in its description, in the module's option and the tool's configuration reference"); `design/flume/requirements.md` 70, 143, 166, 167, 181, 185, C.7 and the vocabulary's reserve; record 0033; boomdrivedev/sluice's `[runs] reserved`, which keeps that many runs of the host's bound for submissions, "an agent's run in its worktree waits rather than take one" (its configuration reference); boomdrivedev/boomdrive's drive option `stream.labels.<label>.reserve`, Flume's `reserve` (its `nix/modules/options.nix` on the bolt `the-boomdrive-flake-configures-the-whole-host`); this repository's `nix/modules/options.nix` and `site/src/content/docs/reference/configuration.md`.
 
 ## Context and problem statement
 
@@ -50,4 +50,4 @@ Not taken: the other options above, for the reasons given there.
 
 - Good: a reader of a host's file, or of the Boomdrive set's options, reads what each number is without the statement beside it.
 - Bad: every host file that names `reserve` or `keep_free` is refused until it names `owed` and `reserved`. A host's file is written by its module, so the module's next release mends it; a hand-written file is mended by hand.
-- The statement's vocabulary, 70's room, 181, C.7 and its example say it, at agentplot/blueprints. core.26 and core.46 say it here. Boomdrive's drive option renames with it, which is Boomdrive's to follow.
+- The statement's vocabulary, 70's room, 181, C.7 and its example say it, at boomdrivedev/blueprints. core.26 and core.46 say it here. Boomdrive's drive option renames with it, which is Boomdrive's to follow.

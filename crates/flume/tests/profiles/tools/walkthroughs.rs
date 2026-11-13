@@ -3539,6 +3539,31 @@ fn location(host: &UnderHerdr, place: &str) -> String {
     .expect("the place's location")
 }
 
+/// Whether `deliveries`, an end's hand-overs, reach `recipient` as a
+/// settle's notice and the recipient's own inbox may meet: at least once,
+/// by a notice at most once, and by no notice later than a hand-over by
+/// another way, which may follow a notice since an inbox gives an end
+/// again until its recipient confirms it (43; core.25).
+fn handed_with_one_notice(deliveries: &[&Value], recipient: &str) -> bool {
+    let to: Vec<&Value> = deliveries
+        .iter()
+        .copied()
+        .filter(|delivery| delivery["recipient"] == recipient)
+        .collect();
+    let at = |by_notice: bool| -> Vec<u64> {
+        to.iter()
+            .filter(|delivery| (delivery["by"] == "notice") == by_notice)
+            .filter_map(|delivery| delivery["at"].as_u64())
+            .collect()
+    };
+    let (notices, others) = (at(true), at(false));
+    !to.is_empty()
+        && notices.len() <= 1
+        && notices
+            .iter()
+            .all(|notice| others.iter().all(|other| notice <= other))
+}
+
 /// The question construct asks east's ops in S93.
 const ASKED_OPS: &str = "Which queue's settings are live in east?";
 
@@ -3687,12 +3712,13 @@ fn s93_a_question_for_easts_ops_is_answered_once_by_its_woken_run() {
         .filter(|end| end["key"] == CONSTRUCT_KEY)
         .flat_map(|end| end["deliveries"].as_array().into_iter().flatten())
         .collect();
-    assert_eq!(
+    // Handed to east/ops alone: by its run's inbox, by a notice into its
+    // run, or by a notice its inbox then gives again (43, 132).
+    assert!(
         deliveries
             .iter()
-            .map(|delivery| &delivery["recipient"])
-            .collect::<Vec<_>>(),
-        [&json!("east/ops")],
+            .all(|delivery| delivery["recipient"] == "east/ops")
+            && handed_with_one_notice(&deliveries, "east/ops"),
         "the stop-short's deliveries: {retry}"
     );
     let prompts = host.prompts("construct", 1);
@@ -3978,8 +4004,8 @@ fn s94_a_restarted_session_is_given_its_place_and_the_stall_reaches_the_door() {
 
     let since = five_minutes_on(&host, &place);
     let stall = format!("stall/{since}");
-    // The stall reaches east/operator's woken run once, as a notice into
-    // its session by the settle its inbox runs first, or by the inbox;
+    // The stall reaches east/operator's woken run by its inbox, by a
+    // notice into its session, or by a notice its inbox then gives again;
     // either way its inbox gives the place as waiting on it, the answerer
     // given a stall of the move the place waits on (43, 130, 193).
     settled_until(&host, "east/operator's run reading its inbox", || {
@@ -4006,14 +4032,9 @@ fn s94_a_restarted_session_is_given_its_place_and_the_stall_reaches_the_door() {
         .flatten()
         .filter(|end| end["key"] == stall.as_str())
         .flat_map(|end| end["deliveries"].as_array().into_iter().flatten())
-        .map(|delivery| &delivery["recipient"])
         .collect();
     assert!(
-        delivered
-            .iter()
-            .filter(|to| **to == "east/operator")
-            .count()
-            == 1,
+        handed_with_one_notice(&delivered, "east/operator"),
         "the stall's deliveries: {status}"
     );
     settled_until(&host, "the stall in the person's session", || {

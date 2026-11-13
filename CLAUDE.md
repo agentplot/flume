@@ -9,7 +9,7 @@ tidied once the work lands or is dropped. It runs: a fix and a change
 are carried through to their landing by the walkthroughs of the
 `check-tools` layer.
 
-The design is in agentplot/blueprints: the capture design,
+The design is in boomdrivedev/blueprints: the capture design,
 `design/capture/design.md`, section "Launching: flume", and its plan,
 `plan.md` beside it (decision 12, steps L1 to L4, and P6 and C7 where it
 meets millpond and crew). flume's statement,
@@ -23,7 +23,7 @@ and the design disagree, the design wins.
 **The family.** This tool works with the others of the Boomdrive
 family: sluice (the merge queue), Flume (places and their agents),
 Boomdrive (the runner), timber, weir and boom. Each tool's statement is
-in agentplot/blueprints, `design/<tool>/requirements.md`. Before
+in boomdrivedev/blueprints, `design/<tool>/requirements.md`. Before
 designing or fixing a behavior here, look at how the related tools do
 the same thing, in their code and their statements: readiness,
 configuration, credentials, retries, what a place is. Where two tools do
@@ -93,7 +93,7 @@ the fast layer, `:#check-tools` the tools layer; `site-build` and
 each approved by name, so a session in a trusted folder starts them
 unasked. devenv writes `.mcp.json` and `.claude/settings.json` on
 entering the shell, and as a place's readiness sources it, and git
-ignores both (agentplot/boomdrive's record 0022): a Claude Code setting
+ignores both (boomdrivedev/boomdrive's record 0022): a Claude Code setting
 of the repository's goes into devenv's options, never into those files.
 OpenSpec's skills and commands under `.claude/` are tracked as the
 pinned OpenSpec writes them (`openspec init --tools claude --profile

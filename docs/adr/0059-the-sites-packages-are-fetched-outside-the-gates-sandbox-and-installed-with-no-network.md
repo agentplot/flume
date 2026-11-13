@@ -13,7 +13,7 @@ Status: accepted by the user on 2026-11-09, on their card. Proposed on 2026-11-0
 
 Deciders: the code stage, on the brief: "Make site:install pass in main's gate without reaching beyond what the sandbox allows, or change the policy in this bolt so the task that fetches packages may reach the registry, as flume's records allow."
 
-Sources: sluice's #165 and #166 on main, each failed by `site:install`, its log at `flume.git/sluice/.logs/main/c147/site:install.log` on deneb, 297 lines like `error: DNSResolveFailed downloading tarball picomatch@2.3.2`; `.config/sluice.toml`'s `[executor]`, `network = "localhost"`; sluice's `crates/sluice/src/profiles/checks.rs` at its main, whose Seatbelt profile for `"localhost"` denies every other connection, name lookups through mDNSResponder's socket among them; `agentplot/blueprints:design/sluice/requirements.md`, clauses 35 ("A cache changes how fast a check runs, never what it reports"), 83 and 84, and C.3's sandbox row; the change flume-publishes-its-own-flake-and-module, design 11, whose `FLUME_FLAKE_INPUTS` the devenv shell fetches outside the sandbox; bun 1.4.2, as `devenv.nix` pins it; rules core.21 and core.22.
+Sources: sluice's #165 and #166 on main, each failed by `site:install`, its log at `flume.git/sluice/.logs/main/c147/site:install.log` on deneb, 297 lines like `error: DNSResolveFailed downloading tarball picomatch@2.3.2`; `.config/sluice.toml`'s `[executor]`, `network = "localhost"`; sluice's `crates/sluice/src/profiles/checks.rs` at its main, whose Seatbelt profile for `"localhost"` denies every other connection, name lookups through mDNSResponder's socket among them; `boomdrivedev/blueprints:design/sluice/requirements.md`, clauses 35 ("A cache changes how fast a check runs, never what it reports"), 83 and 84, and C.3's sandbox row; the change flume-publishes-its-own-flake-and-module, design 11, whose `FLUME_FLAKE_INPUTS` the devenv shell fetches outside the sandbox; bun 1.4.2, as `devenv.nix` pins it; rules core.21 and core.22.
 
 ## Context and problem statement
 
@@ -43,4 +43,4 @@ Option 1.
 - Good: CI's shell, on Linux and macOS, builds the same cache and installs from it as the gate does.
 - Bad: a move of bun's pin can change how bun names its cache's folders; `site:install` then fails naming a package not in the cache, and the build's rename is the place to look.
 - Bad: each install copies about 230 MB.
-- Neutral: agentplot/boom installs its site the same way under the same network, and stands where flume stood until its host's cache empties.
+- Neutral: boomdrivedev/boom installs its site the same way under the same network, and stands where flume stood until its host's cache empties.

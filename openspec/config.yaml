@@ -12,7 +12,7 @@ context: |
   Starlight. Until the first crate lands the tree holds the site, the
   docs and the shell.
 
-  The design is in agentplot/blueprints (local:
+  The design is in boomdrivedev/blueprints (local:
   ~/Code/github_agentplot/blueprints/main): the capture design,
   design/capture/design.md, section "Launching: flume", its plan,
   plan.md beside it (decision 12, steps L1 to L4, and P6 and C7 where it
@@ -21,7 +21,7 @@ context: |
   it by bare number, (23), and never restates it. Where this repository
   and the design disagree, the design wins: a clause that no longer
   holds is changed in the statement first, never worked around here
-  (core.19). The kind format is weir's (agentplot/weir); flume defines no
+  (core.19). The kind format is weir's (boomdrivedev/weir); flume defines no
   field of it (core.4).
 
   Rules: flume's own are docs/architecture/ (core.md binds every change;
@@ -68,7 +68,7 @@ rules:
   design:
     - "Cite by id the rules in docs/architecture/ that this design relies on, and name each page of docs/architecture/ whose area the change touches. Where the design departs from a rule, name the rule and say why."
     - "Where flume has no rule of its own for the area, cite the kit standard's rules the same way, as kit:<id>; a departure from one is recorded as an ADR in docs/adr/ naming the rule (kit:kit.4)."
-    - "Cite by number the clauses of the statement (design/flume/requirements.md in agentplot/blueprints) the design satisfies (core.19)."
+    - "Cite by number the clauses of the statement (design/flume/requirements.md in boomdrivedev/blueprints) the design satisfies (core.19)."
     - "Where the design reaches a tool, name the seam it goes through and the profile that implements it; the core names no tool and holds no profile's branch (core.1, core.2), and a profile is chosen from the [profiles] table alone (core.3)."
     - "The design holds no proof list of any name, no *Proof in dev*, no *Proof on real work*: a change is proved by flume's checks, named task by task (kit:testing.5)."
   tasks:
@@ -82,5 +82,5 @@ operations:
   apply:
     guidance:
       - "Tick a task only once the check it names passes, run as the task names it."
-      - "Where a task leaves a detail open, decide it the way a careful engineer would from docs/architecture (where flume has no rule, the kit standard's), openspec/specs, the statement in agentplot/blueprints, CLAUDE.md and the code, in that order, hold similar things to the same rule, and name each choice in your summary. An open detail is not a reason to pause."
+      - "Where a task leaves a detail open, decide it the way a careful engineer would from docs/architecture (where flume has no rule, the kit standard's), openspec/specs, the statement in boomdrivedev/blueprints, CLAUDE.md and the code, in that order, hold similar things to the same rule, and name each choice in your summary. An open detail is not a reason to pause."
       - "Pause only when the same check still fails after two attempts, or when passing would mean changing a rule in docs/architecture, a spec under openspec/specs or a clause of the statement that the task does not tell you to change."

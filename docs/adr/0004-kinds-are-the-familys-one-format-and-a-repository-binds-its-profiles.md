@@ -12,7 +12,7 @@ decision-makers:
 Status: accepted by the user on 2026-10-26, on their card.
 
 Deciders: the user, in the capture design's rulings 3 and 12 and in flume's statement (the shared kind format; the `[profiles]` table; no-tool profiles by default, 4015b33).
-Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 18 to 24, 84, 85, 105, 106, C.1 to C.3, C.6, section 9; `agentplot/blueprints:design/weir/requirements.md` A.8, C.4; `agentplot/blueprints:design/capture/design.md`, "Launching: flume".
+Sources: `boomdrivedev/blueprints:design/flume/requirements.md` clauses 18 to 24, 84, 85, 105, 106, C.1 to C.3, C.6, section 9; `boomdrivedev/blueprints:design/weir/requirements.md` A.8, C.4; `boomdrivedev/blueprints:design/capture/design.md`, "Launching: flume".
 
 ## Context and problem statement
 

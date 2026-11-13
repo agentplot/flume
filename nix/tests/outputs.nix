@@ -18,7 +18,7 @@ let
     name:
     let
       set = outputs.${name};
-      key = "github:agentplot/flume#${name}.flume";
+      key = "github:boomdrivedev/flume#${name}.flume";
     in
     t.expect (
       builtins.attrNames set == [

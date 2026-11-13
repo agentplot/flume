@@ -1,5 +1,5 @@
 // flume's site, built by Astro with Starlight and published to GitHub Pages
-// at https://agentplot.github.io/flume by .github/workflows/pages.yml. The SVG
+// at https://boomdrivedev.github.io/flume by .github/workflows/pages.yml. The SVG
 // diagrams are drawn at build time by src/diagrams/*.ts and inlined, so they
 // follow the theme toggle and need no script; the one canvas,
 // src/components/Delivery.astro, draws itself from the time in its loop.
@@ -9,7 +9,7 @@ import { defineConfig } from "astro/config";
 import starlightLinksValidator from "starlight-links-validator";
 
 export default defineConfig({
-  site: "https://agentplot.github.io",
+  site: "https://boomdrivedev.github.io",
   base: "/flume",
   integrations: [
     starlight({
@@ -34,9 +34,9 @@ export default defineConfig({
       },
       // The family's type, ink and accent, then the diagrams' palette.
       customCss: ["@agentplot/site-theme/starlight.css", "./src/styles/brand.css"],
-      social: [{ icon: "github", label: "GitHub", href: "https://github.com/agentplot/flume" }],
+      social: [{ icon: "github", label: "GitHub", href: "https://github.com/boomdrivedev/flume" }],
       editLink: {
-        baseUrl: "https://github.com/agentplot/flume/edit/main/site/",
+        baseUrl: "https://github.com/boomdrivedev/flume/edit/main/site/",
       },
       plugins: [starlightLinksValidator()],
       sidebar: [

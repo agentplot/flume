@@ -44,7 +44,7 @@ A stream's multiplexer is herdr or the printed command. No profile is
 written yet for herdr-core, Rex, cmux or TUIOS. Each is a change of its
 own, checked against its release, and offers the views its multiplexer
 has: a window running its terminal client, its own app, or both
-([record 0037](https://github.com/agentplot/flume/blob/main/docs/adr/0037-a-stream-names-its-multiplexer-its-view-and-its-terminal-app-the-hosts-where-it-names-none-and-a-person-opens-its-agents-in-that-view.md)).
+([record 0037](https://github.com/boomdrivedev/flume/blob/main/docs/adr/0037-a-stream-names-its-multiplexer-its-view-and-its-terminal-app-the-hosts-where-it-names-none-and-a-person-opens-its-agents-in-that-view.md)).
 Until then a stream naming one refuses its launches and starts, naming
 the profiles there are.
 
@@ -55,7 +55,7 @@ flume's statement, and waits on its build. Until then flume behaves as
 the rest of this site says.
 
 - **A stage that repeats per task group**
-  ([record 0019](https://github.com/agentplot/flume/blob/main/docs/adr/0019-a-stage-may-repeat-per-task-group-a-fresh-agent-for-each-group-and-change-2s-code-stage-does.md)).
+  ([record 0019](https://github.com/boomdrivedev/flume/blob/main/docs/adr/0019-a-stage-may-repeat-per-task-group-a-fresh-agent-for-each-group-and-change-2s-code-stage-does.md)).
   A stage whose deliverable is `tasks` may say `repeat = "per-task-group"`,
   and runs a fresh agent for each task group of the change, the first
   group with a task unticked each time, rather than one agent for every
@@ -68,7 +68,7 @@ the rest of this site says.
   the kind format reading `repeat`.
 
 - **Prompts in layers**
-  ([record 0021](https://github.com/agentplot/flume/blob/main/docs/adr/0021-an-agents-prompt-is-assembled-in-layers-from-the-most-stable-to-the-least-the-stable-ones-in-its-standing-prompt.md)).
+  ([record 0021](https://github.com/boomdrivedev/flume/blob/main/docs/adr/0021-an-agents-prompt-is-assembled-in-layers-from-the-most-stable-to-the-least-the-stable-ones-in-its-standing-prompt.md)).
   Each agent starts with a standing prompt in the system prompt. It
   holds the repository's goals, from a file `[prompt] goals` names or
   from the launch, then the intent's brief. Then come the stage's
@@ -81,7 +81,7 @@ the rest of this site says.
   from it. It waits on the kind format reading `standing`.
 
 - **Kinds as shareable packages**
-  ([record 0022](https://github.com/agentplot/flume/blob/main/docs/adr/0022-a-kind-is-a-shareable-package-named-by-its-source-name-and-version-and-a-kind-from-outside-runs-only-as-a-lock-records-it.md)).
+  ([record 0022](https://github.com/boomdrivedev/flume/blob/main/docs/adr/0022-a-kind-is-a-shareable-package-named-by-its-source-name-and-version-and-a-kind-from-outside-runs-only-as-a-lock-records-it.md)).
   A kind is named `<source>/<name>@<version>`, as in `flume/change@2`,
   and a source may hold several versions side by side. A launch names
   `change`, `change@1` or `flume/change@1`; a name two outside sources
@@ -93,7 +93,7 @@ the rest of this site says.
   hold for every version of it.
 
 - **Points, a points bound and a pace**
-  ([record 0025](https://github.com/agentplot/flume/blob/main/docs/adr/0025-work-carries-its-callers-points-and-a-stream-may-bound-its-points-in-flight-and-set-a-pace-over-a-rolling-span.md)).
+  ([record 0025](https://github.com/boomdrivedev/flume/blob/main/docs/adr/0025-work-carries-its-callers-points-and-a-stream-may-bound-its-points-in-flight-and-set-a-pace-over-a-rolling-span.md)).
   `flume launch --points <n>` gives a place's points, a number of the
   Fibonacci scale its caller sets and flume never estimates. They are
   in flight from the place's first start until its last stage delivers,

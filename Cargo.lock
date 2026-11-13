@@ -1157,7 +1157,7 @@ dependencies = [
 [[package]]
 name = "weir-capture"
 version = "0.0.0"
-source = "git+https://github.com/agentplot/weir?rev=52b95528a495100e34fca39109d563d8bf75673a#52b95528a495100e34fca39109d563d8bf75673a"
+source = "git+https://github.com/boomdrivedev/weir?rev=52b95528a495100e34fca39109d563d8bf75673a#52b95528a495100e34fca39109d563d8bf75673a"
 dependencies = [
  "jsonschema",
  "serde",
@@ -1170,7 +1170,7 @@ dependencies = [
 [[package]]
 name = "weir-delivery"
 version = "0.0.0"
-source = "git+https://github.com/agentplot/weir?rev=52b95528a495100e34fca39109d563d8bf75673a#52b95528a495100e34fca39109d563d8bf75673a"
+source = "git+https://github.com/boomdrivedev/weir?rev=52b95528a495100e34fca39109d563d8bf75673a#52b95528a495100e34fca39109d563d8bf75673a"
 dependencies = [
  "serde",
  "serde_json",
@@ -1181,7 +1181,7 @@ dependencies = [
 [[package]]
 name = "weir-kinds"
 version = "0.0.0"
-source = "git+https://github.com/agentplot/weir?rev=52b95528a495100e34fca39109d563d8bf75673a#52b95528a495100e34fca39109d563d8bf75673a"
+source = "git+https://github.com/boomdrivedev/weir?rev=52b95528a495100e34fca39109d563d8bf75673a#52b95528a495100e34fca39109d563d8bf75673a"
 dependencies = [
  "toml",
  "weir-capture",
@@ -1190,7 +1190,7 @@ dependencies = [
 [[package]]
 name = "weir-pack"
 version = "0.0.0"
-source = "git+https://github.com/agentplot/weir?rev=52b95528a495100e34fca39109d563d8bf75673a#52b95528a495100e34fca39109d563d8bf75673a"
+source = "git+https://github.com/boomdrivedev/weir?rev=52b95528a495100e34fca39109d563d8bf75673a#52b95528a495100e34fca39109d563d8bf75673a"
 dependencies = [
  "serde",
  "serde_json",

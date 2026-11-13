@@ -572,9 +572,13 @@ impl Engine {
     /// Hands the delivery under each of `keys` to `recipient` `by` a way at
     /// `at`, through weir's `hand`, in one write, confirming each on
     /// receipt where `confirms`: for each key, whether this call handed it
-    /// over, false where the recipient had confirmed it, or the refusal
-    /// weir gave. A hand-over confirms nothing by itself (43; weir 103,
-    /// 109; core.25).
+    /// over, false where the recipient had confirmed it or, `by` a notice,
+    /// where a notice's hand-over to it is recorded already, or the refusal
+    /// weir gave. A notice's hand-over is so recorded once in the write
+    /// that reads the records, however many settles record it: the settle
+    /// that sent it on the terminal's answer, and another that read its
+    /// claim while the send was in flight. A hand-over confirms nothing by
+    /// itself (43, 75; weir 103, 109; core.25).
     pub(crate) fn hand_over(
         &self,
         keys: &[String],
@@ -590,6 +594,10 @@ impl Engine {
             let mut all = records.to_vec();
             let mut added = vec![];
             for key in keys {
+                if by == DeliveredBy::Notice && noticed(&all, key, recipient) {
+                    answers.push(Ok(false));
+                    continue;
+                }
                 match weir_delivery::hand(&all, key, recipient, by.way(), &at, confirms) {
                     Ok(Handed::Add(records)) => {
                         all.extend(records.iter().cloned());
@@ -607,6 +615,21 @@ impl Engine {
         }
         answers
     }
+}
+
+/// Whether `records` hold a notice's hand-over of the delivery under `key`
+/// to `recipient`, read as `owing` reads a hand-over, so a notice is
+/// recorded to a recipient once (43; weir 103; core.25).
+fn noticed(records: &[Record], key: &str, recipient: &str) -> bool {
+    records.iter().any(|record| {
+        matches!(
+            record,
+            Record::Handover(handover)
+                if handover.key.as_str() == key
+                    && handover.reader.as_str() == recipient
+                    && DeliveredBy::of_way(handover.by.as_str()) == Some(DeliveredBy::Notice)
+        )
+    })
 }
 
 #[cfg(test)]

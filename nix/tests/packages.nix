@@ -24,7 +24,7 @@ let
   weir = crates."weir-kinds-0.0.0".rev;
   moved = "1111111111111111111111111111111111111111";
   source = url: rev: "git+${url}?rev=${rev}#${rev}";
-  weirAt = source "https://github.com/agentplot/weir";
+  weirAt = source "https://github.com/boomdrivedev/weir";
   package = name: src: ''
     [[package]]
     name = "${name}"

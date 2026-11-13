@@ -40,7 +40,7 @@ rustPlatform.buildRustPackage {
   doCheck = false;
   meta = {
     description = "Places and their agents";
-    homepage = "https://github.com/agentplot/flume";
+    homepage = "https://github.com/boomdrivedev/flume";
     license = lib.licenses.mit;
     mainProgram = "flume";
     inherit platforms;

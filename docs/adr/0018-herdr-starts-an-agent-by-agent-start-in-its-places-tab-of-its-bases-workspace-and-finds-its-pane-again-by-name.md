@@ -12,7 +12,7 @@ decision-makers:
 Status: accepted by the user, 2026-10-28, in their design session ("write 18"), on a trial of herdr 0.9.5's `agent start` against flume's herdr profile.
 
 Deciders: the user, who chose `agent start`, that flume's agents run the program their settings name and no wrapper of the host's, and that herdr's workspaces are kept one per repository and base, never left behind, and carry display clues; the readings of herdr's answers, the bounds and the commands are the reviewing agent's.
-Sources: `agentplot/blueprints:design/flume/requirements.md` at f44ec91, clauses 32, 34, 35, 38, 43, 46, 56, 64, 77, 94 to 98, 132, 135 to 139, C.4, C.5, S39 to S41 and S45 to S49, as amended with this record; records 0016 and 0017; rules core.10, core.12, core.29; herdr 0.9.5's own skill text (`herdr --skill`) and its `--help` for `agent start`, `pane split`, `tab create`, `tab close`, `workspace create`, `workspace close`, `pane report-metadata` and `workspace report-metadata`; a trial of herdr 0.9.5 on a server of its own on a scratch socket, 2026-10-28.
+Sources: `boomdrivedev/blueprints:design/flume/requirements.md` at f44ec91, clauses 32, 34, 35, 38, 43, 46, 56, 64, 77, 94 to 98, 132, 135 to 139, C.4, C.5, S39 to S41 and S45 to S49, as amended with this record; records 0016 and 0017; rules core.10, core.12, core.29; herdr 0.9.5's own skill text (`herdr --skill`) and its `--help` for `agent start`, `pane split`, `tab create`, `tab close`, `workspace create`, `workspace close`, `pane report-metadata` and `workspace report-metadata`; a trial of herdr 0.9.5 on a server of its own on a scratch socket, 2026-10-28.
 
 ## Context and problem statement
 

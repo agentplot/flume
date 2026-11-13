@@ -12,7 +12,7 @@ decision-makers:
 Status: accepted by the user on 2026-10-28, in their design session ("yes to all recommendations"; "change 2: yes to all"), on the questions the OpenSpec changes `flume-runs-a-kind-through` and `flume-runs-unattended-and-wakes-roles` raised.
 
 Deciders: the user; the recommendations are the reviewing agent's.
-Sources: `agentplot/blueprints:design/flume/requirements.md` at e5f92f6, clauses 7, 8, 14, 43, 62, 112, 130, 134, C.6, C.7, S1, S19; records 0002, 0007, 0009, 0012, 0013, 0014; rules core.5, core.11.
+Sources: `boomdrivedev/blueprints:design/flume/requirements.md` at e5f92f6, clauses 7, 8, 14, 43, 62, 112, 130, 134, C.6, C.7, S1, S19; records 0002, 0007, 0009, 0012, 0013, 0014; rules core.5, core.11.
 
 ## Context and problem statement
 

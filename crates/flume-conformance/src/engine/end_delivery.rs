@@ -288,6 +288,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_notice_claimed_and_not_recorded,
         },
         Scenario {
+            name: "end delivery: a notice whose send is in flight while another settle records its claim is recorded handed over to ops once, at the claim's time",
+            cites: &["43", "75"],
+            run: a_notice_recorded_by_two_settles,
+        },
+        Scenario {
+            name: "end delivery: an inbox that hands ops a code end between a settle's reading and its claim of the notice is followed by no notice, the claim taken back",
+            cites: &["43", "75"],
+            run: an_inbox_before_the_notices_claim,
+        },
+        Scenario {
             name: "end delivery: ops confirming a code end's delivery key twice is confirmed at the first time and delivered, the second writing nothing and giving the first time (weir 102)",
             cites: &["43", "74"],
             run: confirmed_twice,
@@ -2594,6 +2604,123 @@ fn a_notice_claimed_and_not_recorded(_: &()) -> Outcome {
             .collect::<Vec<_>>(),
         vec![("ops", claimed_at, DeliveredBy::Notice)],
         "the hand-over recorded at the claim's time"
+    );
+    Ok(())
+}
+
+/// A notice's hand-over met by another settle's record of its claim, as
+/// two settles at once meet on a host: the one sending it records it on
+/// the terminal's answer, the other read the claim while the send was in
+/// flight (43, 75; weir 103).
+fn a_notice_recorded_by_two_settles(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Asking);
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = fix_for_ops(&world, "one")?;
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    ensure!(
+        world.terminal.notices("ops").is_empty(),
+        "a notice sent into a question"
+    );
+    world.terminal.set_session_state("ops", AgentState::Waiting);
+    // The settle's first write of the host's deliveries is the sent
+    // notice's hand-over; another settle runs just before it, reading the
+    // claim with no hand-over recorded.
+    let engine = world.engine();
+    let other = id.clone();
+    world
+        .store
+        .before_next_host_write(move || drop(engine.settle(Some(&other))));
+    world.host.advance(30);
+    let claimed_at = world.host.now();
+    world.settle(&id);
+    ensure_eq!(world.terminal.notices("ops").len(), 1, "notices sent");
+    ensure!(
+        world
+            .store
+            .log
+            .of("write_host")
+            .iter()
+            .any(|write| write.ends_with("moved")),
+        "the two settles did not meet at one write"
+    );
+    world.host.advance(30);
+    world.settle(&id);
+    ensure_eq!(world.terminal.notices("ops").len(), 1, "notices sent again");
+    let end = end_keyed(&world, &id, "stage/code/1/delivered")?;
+    ensure_eq!(
+        end.end
+            .deliveries
+            .iter()
+            .map(|delivery| (delivery.recipient.as_str(), delivery.at, delivery.by))
+            .collect::<Vec<_>>(),
+        vec![("ops", claimed_at, DeliveredBy::Notice)],
+        "the hand-over recorded once at the claim's time"
+    );
+    Ok(())
+}
+
+/// An inbox met by a settle's notice, as a role's run collects its end
+/// while a caller's watch settles: the inbox hands the end over after the
+/// settle read it handed to no one and before it claims the notice (43,
+/// 75; core.25).
+fn an_inbox_before_the_notices_claim(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Asking);
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = fix_for_ops(&world, "one")?;
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    ensure!(
+        world.terminal.notices("ops").is_empty(),
+        "a notice sent into a question"
+    );
+    // A caller keeps watch, so the inbox settles nothing itself.
+    world.engine.settle_every(3600);
+    world.terminal.set_session_state("ops", AgentState::Waiting);
+    // The claim is the settle's first write of the place; ops's inbox
+    // runs just before it.
+    let collected_by = Arc::new(Mutex::new(None));
+    let engine = world.engine();
+    let into = collected_by.clone();
+    world.store.before_next_write(move || {
+        let answer = engine.inbox("ops", None, false);
+        *into.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(answer);
+    });
+    world.host.advance(30);
+    world.settle(&id);
+    let answer = collected_by
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take()
+        .ok_or("the inbox did not run")?;
+    ensure_eq!(
+        collected(&answer)?,
+        vec!["fix--one code delivered".to_string()],
+        "what ops's inbox gave"
+    );
+    ensure!(
+        world.terminal.notices("ops").is_empty(),
+        "a notice sent after the inbox handed the end: {:?}",
+        world.terminal.notices("ops")
+    );
+    world.host.advance(30);
+    world.settle(&id);
+    ensure!(
+        world.terminal.notices("ops").is_empty(),
+        "a notice sent at the next settle"
+    );
+    let end = end_keyed(&world, &id, "stage/code/1/delivered")?;
+    ensure_eq!(
+        deliveries(&end.end),
+        vec![("ops".to_string(), DeliveredBy::Inbox)],
+        "code's hand-overs"
+    );
+    let held = world.held(&id).ok_or("no place")?;
+    ensure!(
+        held.ends.iter().all(|end| end.noticing.is_empty()),
+        "a claim left on the place"
     );
     Ok(())
 }

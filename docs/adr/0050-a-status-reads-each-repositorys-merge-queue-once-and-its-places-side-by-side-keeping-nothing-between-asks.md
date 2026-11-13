@@ -12,7 +12,7 @@ decision-makers:
 Status: accepted on 2026-11-06 by madswan-design, the design agent: the statement's clauses and rule core.15 decide it, and the bound of eight is cheap to change. Written on 2026-11-05 by the code stage of the fix `a-hosts-full-status-read-takes-seconds`. The direction is the statement's: C.6 reads read-submission "once for each repository at each ask", and 58 reads places side by side and keeps no fact between asks. The seam's shape, the bound of eight reads at once and reading each agent once are the stage's choices.
 
 Deciders: madswan-design, taking the code stage's choices on clauses 58, 99, 139 and C.6 and rule core.15.
-Sources: `agentplot/blueprints:design/flume/requirements.md` on main at c188bf3, clauses 56, 58, 99, 139, 200 and C.6's two sluice tables; `design/sluice/requirements.md` on main, clause 129, and sluice's rules core.25 and core.41 at 0a77608b; sluice 0.67.0's `status` and `overview`; the fix's brief, from deneb on 2026-11-05; rules core.14 and core.15; `crates/flume-core/src/status.rs`, `clues.rs` and `line.rs`, and `crates/flume/src/profiles/merge_queue/sluice/mod.rs`.
+Sources: `boomdrivedev/blueprints:design/flume/requirements.md` on main at c188bf3, clauses 56, 58, 99, 139, 200 and C.6's two sluice tables; `design/sluice/requirements.md` on main, clause 129, and sluice's rules core.25 and core.41 at 0a77608b; sluice 0.67.0's `status` and `overview`; the fix's brief, from deneb on 2026-11-05; rules core.14 and core.15; `crates/flume-core/src/status.rs`, `clues.rs` and `line.rs`, and `crates/flume/src/profiles/merge_queue/sluice/mod.rs`.
 
 ## Context and problem statement
 
