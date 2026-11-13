@@ -22,7 +22,7 @@ and keeps its meaning.
 - Beside it, the tree's addresses of the moved tools name boomdrivedev:
   the README, CLAUDE.md, `openspec/config.yaml`, the rules, the flake,
   the crates' git sources, the shell's sluice release, the site and the
-  plugins, as record 0065 decides.
+  plugins, as record 0066 decides.
 
 ## Capabilities
 
@@ -39,7 +39,7 @@ None.
 
 - The herdr plugin's id and action, `agentplot.flume` and
   `agentplot.flume.places`, which the herdr-plugin spec names, are names
-  and stay, as record 0065 decides.
+  and stay, as record 0066 decides.
 - No code reads the spec's address: the suite's revision is a commit
   (`crates/flume-conformance/src/clauses.rs`), the same in either
   owner's repository.
