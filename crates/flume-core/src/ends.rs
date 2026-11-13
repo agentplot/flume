@@ -146,7 +146,9 @@ impl Engine {
     /// or, for a recipient the host's standing entries name, read once,
     /// into the one agent of the entry's name in its stream's terminal and
     /// session. The notice is claimed on the place before the send, so two
-    /// settles at once send one; on the terminal's answer sent its
+    /// settles at once send one, and the host's deliveries read again once
+    /// it is claimed, a hand-over by any other way to the recipient taking
+    /// the claim back unsent; on the terminal's answer sent its
     /// hand-over is recorded through weir's `hand`, by `notice`, and the
     /// claim kept; a send not made takes the claim back; and a claim whose
     /// hand-over the host's deliveries lack is recorded at the next settle
@@ -211,6 +213,33 @@ impl Engine {
                 if !claimed {
                     continue;
                 }
+                let take_back = || {
+                    self.update(id, |held| {
+                        if let Some(end) = held.ends.iter_mut().find(|end| end.of.key() == key) {
+                            end.noticing
+                                .retain(|claim| !(claim.recipient == recipient && claim.at == now));
+                        }
+                        Step::Write(())
+                    });
+                };
+                // An inbox, a wait or a session's start that handed the
+                // end over between this settle's reading and its claim is
+                // read now, after the claim, and the notice not sent; one
+                // that hands it after this reading follows the notice, as
+                // an inbox may (43; core.25).
+                if self
+                    .owing()
+                    .deliveries
+                    .get(&delivery.key)
+                    .is_some_and(|read| {
+                        read.handovers.iter().any(|handover| {
+                            handover.recipient == recipient && handover.by != DeliveredBy::Notice
+                        })
+                    })
+                {
+                    take_back();
+                    continue;
+                }
                 let why = match terminal.send_to(&at, &delivery.message) {
                     ToSession::Sent => {
                         let handed = self.hand_over(
@@ -234,13 +263,7 @@ impl Engine {
                 self.host.log(&format!(
                     "the notice of {id}'s end {key} was not sent to {recipient}: {why}"
                 ));
-                self.update(id, |held| {
-                    if let Some(end) = held.ends.iter_mut().find(|end| end.of.key() == key) {
-                        end.noticing
-                            .retain(|claim| !(claim.recipient == recipient && claim.at == now));
-                    }
-                    Step::Write(())
-                });
+                take_back();
             }
         }
     }
