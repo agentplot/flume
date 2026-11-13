@@ -185,14 +185,17 @@ impl Engine {
     /// session. The notice is claimed on the place before the send, so two
     /// settles at once send one, and the host's deliveries read again once
     /// it is claimed, a hand-over by any other way to the recipient taking
-    /// the claim back unsent; on the terminal's answer sent its
-    /// hand-over is recorded through weir's `hand`, by `notice`, and the
-    /// claim kept; a send not made takes the claim back; and a claim whose
-    /// hand-over the host's deliveries lack is recorded at the next settle
-    /// at the claim's time, once, where that settle reads the claim while
-    /// the send is in flight. No one agent asking no question found claims
-    /// nothing (43, 75, 132, 190, C.7; weir 103; core.11, core.28; design
-    /// 5).
+    /// the claim back unsent. The claim is written sending; on the
+    /// terminal's answer sent it is marked answered and kept, and then its
+    /// hand-over is recorded through weir's `hand`, by `notice`; a send not
+    /// made takes the claim back, so the next settle sends the notice; and
+    /// a claim answered whose hand-over the host's deliveries lack is
+    /// recorded by the next settle at the claim's time, once, where that
+    /// settle reads it before the sender's record. A claim still sending is
+    /// recorded by no other settle, since its send may yet be refused and
+    /// a notice never sent would read as handed over. No one agent asking
+    /// no question found claims nothing (43, 75, 132, 190, C.7; weir 103;
+    /// core.11, core.28; design 5).
     pub(crate) fn deliver_ends(&self, id: &PlaceId) {
         let Some(held) = self.with_token(id) else {
             return;
@@ -243,6 +246,7 @@ impl Engine {
                         end.noticing.push(NoticeClaim {
                             recipient: recipient.clone(),
                             at: now,
+                            sending: true,
                         });
                         Step::Write(true)
                     })
@@ -280,6 +284,24 @@ impl Engine {
                 let sent = notice_to(&delivery.message, &delivery.key, &recipient);
                 let why = match terminal.send_to(&at, &sent) {
                     ToSession::Sent => {
+                        self.update(id, |held| {
+                            let claim = held
+                                .ends
+                                .iter_mut()
+                                .find(|end| end.of.key() == key)
+                                .and_then(|end| {
+                                    end.noticing.iter_mut().find(|claim| {
+                                        claim.recipient == recipient && claim.at == now
+                                    })
+                                });
+                            match claim {
+                                Some(claim) if claim.sending => {
+                                    claim.sending = false;
+                                    Step::Write(())
+                                }
+                                _ => Step::Keep(()),
+                            }
+                        });
                         let handed = self.hand_over(
                             std::slice::from_ref(&delivery.key),
                             &recipient,
@@ -308,15 +330,17 @@ impl Engine {
 
     /// Records, at its time, the hand-over of each notice claimed on the
     /// place whose hand-over the host's deliveries lack, its send answered
-    /// and its record never written, so it is sent no second time; true
-    /// where it recorded any (43, 75; weir 103; design 5).
+    /// sent and its record never written, so it is sent no second time;
+    /// a claim still sending it leaves to its sender, which records it
+    /// once answered sent or takes it back; true where it recorded any
+    /// (43, 75; weir 103; design 5).
     fn record_claims(&self, held: &HeldState, owing: &Owing) -> bool {
         let mut recorded = false;
         for end in &held.ends {
             let Some(delivery) = end.delivery(&held.place, owing) else {
                 continue;
             };
-            for claim in &end.noticing {
+            for claim in end.noticing.iter().filter(|claim| !claim.sending) {
                 let handed = delivery
                     .handovers
                     .iter()

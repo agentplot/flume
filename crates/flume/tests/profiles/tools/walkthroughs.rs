@@ -3886,7 +3886,10 @@ fn s94_a_restarted_session_is_given_its_place_and_the_stall_reaches_the_door() {
 
     let person = host.walk.repository.scratch.path("person");
     std::fs::create_dir_all(&person).expect("the person's folder");
-    let (launched, log) = (person.join("launched.json"), person.join("person.log"));
+    let (launched, log) = (
+        person.join("launched.json"),
+        host.scripts().join("person.log"),
+    );
     let script = person.join("script.json");
     std::fs::write(
         &script,

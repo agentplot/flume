@@ -293,9 +293,14 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_notice_claimed_and_not_recorded,
         },
         Scenario {
-            name: "end delivery: a notice whose send is in flight while another settle records its claim is recorded handed over to ops once, at the claim's time",
+            name: "end delivery: a notice answered sent whose claim another settle records before the sender's own record is recorded handed over to ops once, at the claim's time",
             cites: &["43", "75"],
             run: a_notice_recorded_by_two_settles,
+        },
+        Scenario {
+            name: "end delivery: a notice whose send is refused while another settle reads its claim has its claim taken back, the hand-over recorded by neither, and the settle's later delivery sends it to ops once",
+            cites: &["43", "75"],
+            run: a_notice_refused_while_another_settle_reads_its_claim,
         },
         Scenario {
             name: "end delivery: an inbox that hands ops a code end between a settle's reading and its claim of the notice is followed by no notice, the claim taken back",
@@ -2659,8 +2664,8 @@ fn a_notice_claimed_and_not_recorded(_: &()) -> Outcome {
 
 /// A notice's hand-over met by another settle's record of its claim, as
 /// two settles at once meet on a host: the one sending it records it on
-/// the terminal's answer, the other read the claim while the send was in
-/// flight (43, 75; weir 103).
+/// the terminal's answer, the other read the claim once the terminal
+/// answered it sent, before the sender's record (43, 75; weir 103).
 fn a_notice_recorded_by_two_settles(_: &()) -> Outcome {
     let world = World::new();
     world.terminal.add_session("ops", AgentState::Asking);
@@ -2707,6 +2712,75 @@ fn a_notice_recorded_by_two_settles(_: &()) -> Outcome {
         vec![("ops", claimed_at, DeliveredBy::Notice)],
         "the hand-over recorded once at the claim's time"
     );
+    Ok(())
+}
+
+/// A notice's send refused while another settle reads its claim, as a
+/// terminal's call fails under a host's load while a caller's watch
+/// settles: the other settle records no hand-over of a notice the
+/// terminal never typed, the claim is taken back, and the settle's own
+/// later delivery sends the notice, its one hand-over recorded by that
+/// send (43, 75; weir 103).
+fn a_notice_refused_while_another_settle_reads_its_claim(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Asking);
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = fix_for_ops(&world, "one")?;
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    ensure!(
+        world.terminal.notices("ops").is_empty(),
+        "a notice sent into a question"
+    );
+    world.terminal.set_session_state("ops", AgentState::Waiting);
+    // The settle's first send is refused, nothing typed, and another
+    // settle runs while it is in flight, reading the claim with no
+    // hand-over recorded.
+    let engine = world.engine();
+    let other = id.clone();
+    let ran = Arc::new(Mutex::new(false));
+    let other_ran = ran.clone();
+    world
+        .terminal
+        .refuse_next_send("the terminal did not answer within its bound", move || {
+            drop(engine.settle(Some(&other)));
+            *other_ran
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = true;
+        });
+    world.host.advance(30);
+    let sent_at = world.host.now();
+    world.settle(&id);
+    ensure!(
+        *ran.lock().unwrap_or_else(|poisoned| poisoned.into_inner()),
+        "the other settle did not run while the send was in flight"
+    );
+    ensure_eq!(
+        world.terminal.notices("ops").len(),
+        1,
+        "notices sent once the refused send's claim was taken back"
+    );
+    let end = end_keyed(&world, &id, "stage/code/1/delivered")?;
+    ensure_eq!(
+        end.end
+            .deliveries
+            .iter()
+            .map(|delivery| (delivery.recipient.as_str(), delivery.at, delivery.by))
+            .collect::<Vec<_>>(),
+        vec![("ops", sent_at, DeliveredBy::Notice)],
+        "the hand-over recorded once, by the notice sent"
+    );
+    let held = world.held(&id).ok_or("no place")?;
+    ensure!(
+        held.ends
+            .iter()
+            .flat_map(|end| &end.noticing)
+            .all(|claim| !claim.sending),
+        "a claim answered sent left sending"
+    );
+    world.host.advance(30);
+    world.settle(&id);
+    ensure_eq!(world.terminal.notices("ops").len(), 1, "notices sent again");
     Ok(())
 }
 

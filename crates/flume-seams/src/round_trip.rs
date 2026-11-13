@@ -5064,19 +5064,33 @@ fn a_token_and_a_notice_claim_round_trip() {
     let mut state = held();
     state.place.token = Some("0a1b2c3d".into());
     let mut end = ends().remove(0);
-    end.noticing = vec![NoticeClaim {
-        recipient: "operator".into(),
-        at: 141,
-    }];
+    end.noticing = vec![
+        NoticeClaim {
+            recipient: "operator".into(),
+            at: 141,
+            sending: false,
+        },
+        NoticeClaim {
+            recipient: "ops".into(),
+            at: 142,
+            sending: true,
+        },
+    ];
     state.ends = vec![end.clone()];
     round_trips(end.noticing[0].clone());
+    round_trips(end.noticing[1].clone());
     round_trips(end.clone());
     round_trips(state.clone());
     let json = serde_json::to_value(&state).unwrap();
     assert_eq!(json["place"]["token"], "0a1b2c3d");
+    // A claim answered sent is written as one written before reads, and
+    // one still sending says so (43, 75).
     assert_eq!(
         json["ends"][0]["noticing"],
-        serde_json::json!([{"recipient": "operator", "at": 141}])
+        serde_json::json!([
+            {"recipient": "operator", "at": 141},
+            {"recipient": "ops", "at": 142, "sending": true}
+        ])
     );
     round_trips(DeliveredBy::SessionStart);
     assert_eq!(

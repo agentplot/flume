@@ -1015,3 +1015,14 @@ and its old `deliveries` as written (43, 61, C.7; weir C.8; core.4).
 
 - **WHEN** held state written before this change, an end holding deliveries by notice and by the inbox, is read and written back
 - **THEN** it reads with no token and no claim, and its deliveries read and write back as they were (61, 75)
+
+### Requirement: A notice's claim says whether its send is unanswered
+
+`NoticeClaim` SHALL hold `sending`, true from the claim until the
+terminal answers its send sent and written only while true, so a claim
+written before, which has none, reads answered (43, 61, 75).
+
+#### Scenario: A claim sending and a claim answered
+
+- **WHEN** `round_trip.rs` writes an end with a notice claimed answered and one claimed sending, and reads each back
+- **THEN** each reads as written, and the answered claim is written with no `sending`, as a claim written before

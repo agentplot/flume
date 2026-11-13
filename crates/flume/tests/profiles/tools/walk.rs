@@ -1136,9 +1136,11 @@ impl UnderHerdr {
             .unwrap_or_default()
     }
 
-    /// Every start's stand-in log, each under its `<stage>-<n>.log`, in
-    /// the order of their names, so a walkthrough that never came to what
-    /// it waited on says what each agent took and did.
+    /// Every start's stand-in log, each under its `<stage>-<n>.log`, and
+    /// every other log in the scripts' folder, a person's session's among
+    /// them, in the order of their names, then the host's own log, so a
+    /// walkthrough that never came to what it waited on says what each
+    /// agent took and did and what flume's settles could not do.
     pub fn logs(&self) -> String {
         let mut logs: Vec<PathBuf> = std::fs::read_dir(self.scripts())
             .into_iter()
@@ -1148,7 +1150,9 @@ impl UnderHerdr {
             .filter(|path| path.extension().is_some_and(|ext| ext == "log"))
             .collect();
         logs.sort();
+        logs.push(self.home().join("state/flume/flume.log"));
         logs.iter()
+            .filter(|path| path.exists())
             .map(|path| {
                 let name = path.file_name().unwrap_or_default().to_string_lossy();
                 let log = std::fs::read_to_string(path).unwrap_or_default();
@@ -1157,7 +1161,8 @@ impl UnderHerdr {
             .collect()
     }
 
-    fn scripts(&self) -> &Path {
+    /// The folder the stand-in's scripts and logs are kept in.
+    pub fn scripts(&self) -> &Path {
         self.walk.scripts.as_deref().expect("a host under herdr")
     }
 

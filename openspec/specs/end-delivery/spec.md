@@ -470,3 +470,16 @@ be sent with that taken off and the recipient's in its stead (43; weir
 
 - **WHEN** a fix for `madswan/planner`, which the host gives the standing agent `madswan-planner` in the session `madswan`, delivers, and the settle hands its end to that agent
 - **THEN** the notice names `flume confirm --recipient madswan/planner` with the end's delivery key; a confirm of that key as the agent's own name in its pane is refused, and the command the notice names delivers the end (43, 132; weir 102)
+
+### Requirement: A notice's hand-over waits on its send's answer
+
+A notice's hand-over SHALL be recorded only once the terminal answered
+its send sent. A settle that reads another's claim of a notice whose
+send is still unanswered SHALL record nothing of it, and a send refused
+SHALL take its claim back, leaving the end to the next delivery's
+notice (43, 75; weir 103; core.25).
+
+#### Scenario: A notice refused while another settle reads its claim
+
+- **WHEN** a settle claims a notice to `ops`, another settle runs while its send is in flight, and the terminal then refuses the send, nothing typed
+- **THEN** neither settle records a hand-over of the refused send, the claim is taken back, and the delivery that follows, the settle's own later pass or the next settle, sends the notice to `ops` once, its one hand-over recorded by that send (43, 75)

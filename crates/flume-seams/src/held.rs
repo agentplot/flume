@@ -386,9 +386,9 @@ pub struct EndHeld {
     #[serde(default)]
     pub deliveries: Vec<Delivery>,
     /// Each notice of it claimed before its send, to whom and when, so
-    /// two settles at once send one notice; kept once its hand-over is
-    /// recorded, taken back where it was not sent, and none in an end
-    /// written before (43, 75).
+    /// two settles at once send one notice; kept once the terminal
+    /// answered it sent, taken back where it was not sent, and none in an
+    /// end written before (43, 75).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub noticing: Vec<NoticeClaim>,
     /// For a stop-short needing an answer, the answer that answered it,
@@ -452,12 +452,22 @@ pub struct ConfirmedBy {
     pub at: Seconds,
 }
 
-/// A notice of an end claimed for a recipient before its send, and when
-/// (43, 75).
+/// A notice of an end claimed for a recipient before its send, and when,
+/// and whether its send is still unanswered (43, 75).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NoticeClaim {
     pub recipient: String,
     pub at: Seconds,
+    /// True from the claim until the terminal answers the notice sent, so
+    /// a settle that reads the claim meanwhile records no hand-over of a
+    /// notice its send may yet fail to make; false, written by no field,
+    /// once answered sent, and in a claim written before, which was read
+    /// as answered. A claim a settle ended mid-send leaves sending still
+    /// holds the recipient's notice, since the terminal may have typed it,
+    /// and is recorded by no settle: the end waits for the recipient's
+    /// inbox, a wait or its session's start (43, 75; weir 103).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sending: bool,
 }
 
 /// An answer being taken for a stop-short: who gives it and the key it
