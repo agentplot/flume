@@ -3065,8 +3065,8 @@ fn a_standing_agent_under_herdr_takes_a_fixs_end_through_the_binary() {
             !took().is_empty()
         });
     // The submission is held, so the place waits on its caller's move and
-    // the notice points at the inbox, and names the key that confirms the
-    // end's delivery (43; design 4, 9).
+    // the notice points at the inbox, and names the recipient and the key
+    // that confirm the end's delivery (43; design 4, 9).
     let delivery = host.walk.everything()["places"][0]["ends"]
         .as_array()
         .into_iter()
@@ -3075,7 +3075,7 @@ fn a_standing_agent_under_herdr_takes_a_fixs_end_through_the_binary() {
         .and_then(|end| end["delivery"].as_str().map(str::to_string))
         .unwrap_or_else(|| panic!("code's end gives no delivery key"));
     let notice = format!(
-        "flume: fix--one (fix the parser) code delivered [stage/code/1/delivered]; read: flume inbox; confirm: flume confirm {delivery}"
+        "flume: fix--one (fix the parser) code delivered [stage/code/1/delivered]; read: flume inbox; confirm: flume confirm --recipient w/planner {delivery}"
     );
     assert_eq!(took(), vec![notice.clone()], "what the standing agent took");
     host.walk.settle(&place);
@@ -3886,7 +3886,10 @@ fn s94_a_restarted_session_is_given_its_place_and_the_stall_reaches_the_door() {
 
     let person = host.walk.repository.scratch.path("person");
     std::fs::create_dir_all(&person).expect("the person's folder");
-    let (launched, log) = (person.join("launched.json"), person.join("person.log"));
+    let (launched, log) = (
+        person.join("launched.json"),
+        host.scripts().join("person.log"),
+    );
     let script = person.join("script.json");
     std::fs::write(
         &script,

@@ -198,12 +198,12 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_held_question_in_the_inbox,
         },
         Scenario {
-            name: "end delivery: a stop-short's notice is one line naming the place, its brief's first line cut at 60 characters, construct needing an answer, its key and flume inbox",
+            name: "end delivery: a stop-short's notice is one line naming the place, its brief's first line cut at 60 characters, construct needing an answer, its key, flume inbox and flume confirm as ops with its delivery's key",
             cites: &["43", "S94", "95"],
             run: a_stop_shorts_notice,
         },
         Scenario {
-            name: "end delivery: a delivery's notice names its key and flume status",
+            name: "end delivery: a delivery's notice names its key, flume status and flume confirm as ops with its delivery's key",
             cites: &["43", "95"],
             run: a_deliverys_notice,
         },
@@ -226,6 +226,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "end delivery: an end for a standing address goes as one notice into the agent of the entry's name waiting in the entry's session, recorded delivered to the address, and no place is made",
             cites: &["43", "132"],
             run: a_standing_agent_waiting,
+        },
+        Scenario {
+            name: "end delivery: a notice into a standing agent confirms as the address it was owed under, which the agent's own name in its pane is not: the command it names delivers the end, and a confirm as the pane's name is refused",
+            cites: &["43", "132"],
+            run: a_notice_names_its_recipient,
         },
         Scenario {
             name: "end delivery: no notice goes into a standing agent asking, and the first settle that reads it waiting delivers the end once",
@@ -288,9 +293,14 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_notice_claimed_and_not_recorded,
         },
         Scenario {
-            name: "end delivery: a notice whose send is in flight while another settle records its claim is recorded handed over to ops once, at the claim's time",
+            name: "end delivery: a notice answered sent whose claim another settle records before the sender's own record is recorded handed over to ops once, at the claim's time",
             cites: &["43", "75"],
             run: a_notice_recorded_by_two_settles,
+        },
+        Scenario {
+            name: "end delivery: a notice whose send is refused while another settle reads its claim has its claim taken back, the hand-over recorded by neither, and the settle's later delivery sends it to ops once",
+            cites: &["43", "75"],
+            run: a_notice_refused_while_another_settle_reads_its_claim,
         },
         Scenario {
             name: "end delivery: an inbox that hands ops a code end between a settle's reading and its claim of the notice is followed by no notice, the claim taken back",
@@ -393,7 +403,7 @@ fn a_delivery_and_its_record(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![world.confirming(&delivered("one"))],
+        vec![world.confirming(&delivered("one"), "ops")],
         "the notices to ops"
     );
     let ends = ends(&world, &id)?;
@@ -446,12 +456,10 @@ fn an_agent_killed(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![world.confirming(&notice(
-            "one",
-            "code lost",
-            "stage/code/1/lost",
-            "flume inbox"
-        ))],
+        vec![world.confirming(
+            &notice("one", "code lost", "stage/code/1/lost", "flume inbox"),
+            "ops"
+        )],
         "the notices to ops"
     );
     let ends = ends(&world, &id)?;
@@ -545,7 +553,7 @@ fn a_recipient_asking(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![world.confirming(&delivered("one"))],
+        vec![world.confirming(&delivered("one"), "ops")],
         "the notices once ops asks nothing"
     );
     Ok(())
@@ -588,7 +596,7 @@ fn a_recipient_away_and_back(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![world.confirming(&delivered("one"))],
+        vec![world.confirming(&delivered("one"), "ops")],
         "the notices once ops is back"
     );
     Ok(())
@@ -1341,7 +1349,7 @@ fn a_standing_agent_waiting(_: &()) -> Outcome {
     let id = delivered_for_planner(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![world.confirming(&delivered("one"))],
+        vec![world.confirming(&delivered("one"), PLANNER)],
         "the notices to the standing agent"
     );
     ensure_eq!(
@@ -1370,6 +1378,50 @@ fn a_standing_agent_waiting(_: &()) -> Outcome {
     Ok(())
 }
 
+/// The end-delivery spec's "A notice into a standing agent" (43, 132;
+/// weir 102).
+fn a_notice_names_its_recipient(_: &()) -> Outcome {
+    let world = World::new();
+    planner_stands(&world);
+    let at = world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-planner", AgentState::Waiting);
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = delivered_for_planner(&world, "one")?;
+    let notices = world.terminal.notices(&at);
+    let [notice] = notices.as_slice() else {
+        return Err(format!("the notices to the standing agent: {notices:?}"));
+    };
+    let (recipient, key) = notice
+        .rsplit_once("; confirm: flume confirm --recipient ")
+        .and_then(|(_, command)| command.split_once(' '))
+        .ok_or(format!(
+            "the notice names no recipient to confirm as: {notice}"
+        ))?;
+    ensure_eq!(recipient, PLANNER, "the recipient the notice names");
+    let key = vec![key.to_string()];
+    ensure!(
+        matches!(world.engine().confirm(&at, &key), Answer::Refused { .. }),
+        "a confirm as the pane's own name {at} was taken"
+    );
+    ensure!(
+        matches!(
+            world.engine().confirm(recipient, &key),
+            Answer::Confirmed { .. }
+        ),
+        "the command the notice names was refused"
+    );
+    ensure_eq!(
+        ends(&world, &id)?
+            .into_iter()
+            .map(|end| end.pending_for)
+            .collect::<Vec<_>>(),
+        vec![Vec::<String>::new()],
+        "pending once the notice's command ran"
+    );
+    Ok(())
+}
+
 fn a_standing_agent_asking(_: &()) -> Outcome {
     let world = World::new();
     planner_stands(&world);
@@ -1392,7 +1444,7 @@ fn a_standing_agent_asking(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![world.confirming(&delivered("one"))],
+        vec![world.confirming(&delivered("one"), PLANNER)],
         "the notices once it waits"
     );
     Ok(())
@@ -1459,7 +1511,7 @@ fn an_agent_revived_under_its_name(_: &()) -> Outcome {
     let one = delivered_for_planner(&world, "one")?;
     ensure_eq!(
         world.terminal.notices(&first),
-        vec![world.confirming(&delivered("one"))],
+        vec![world.confirming(&delivered("one"), PLANNER)],
         "the first agent's notices"
     );
     world.terminal.remove_agent(&first);
@@ -1471,7 +1523,7 @@ fn an_agent_revived_under_its_name(_: &()) -> Outcome {
     world.settle(&one);
     ensure_eq!(
         world.terminal.notices(&revived),
-        vec![world.confirming(&delivered("two"))],
+        vec![world.confirming(&delivered("two"), PLANNER)],
         "the revived agent's notices"
     );
     ensure_eq!(
@@ -1504,7 +1556,7 @@ fn the_session_from_the_addresss_stream(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         other.notices(&at),
-        vec![world.confirming(&delivered("one"))],
+        vec![world.confirming(&delivered("one"), "w/planner")],
         "the notices in w's terminal"
     );
     ensure!(
@@ -1539,7 +1591,7 @@ fn the_default_streams_own_session(_: &()) -> Outcome {
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices(&at),
-        vec![world.confirming(&delivered("one"))],
+        vec![world.confirming(&delivered("one"), "default/planner")],
         "the notices in the terminal's own part"
     );
     ensure!(
@@ -1649,7 +1701,7 @@ fn a_lost_talk_with_a_bare_agent(_: &()) -> Outcome {
     ensure_eq!(
         notices,
         vec![world.confirming(
-            "flume: research--one (weigh the options) talk lost, and flume left the agent the terminal brought back in its pane [stage/talk/1/lost]; read: flume inbox"
+            "flume: research--one (weigh the options) talk lost, and flume left the agent the terminal brought back in its pane [stage/talk/1/lost]; read: flume inbox", "ops"
         )],
         "the notices to ops"
     );
@@ -1666,7 +1718,7 @@ fn a_lost_talk_with_no_agent(_: &()) -> Outcome {
     ensure_eq!(
         notices,
         vec![world.confirming(
-            "flume: research--one (weigh the options) talk lost [stage/talk/1/lost]; read: flume inbox"
+            "flume: research--one (weigh the options) talk lost [stage/talk/1/lost]; read: flume inbox", "ops"
         )],
         "the notices to ops"
     );
@@ -1905,7 +1957,7 @@ fn a_stop_shorts_notice(_: &()) -> Outcome {
     ensure_eq!(
         notices,
         vec![format!(
-            "flume: change--every-question ({CUT_BRIEF}) construct needs an answer, its agent kept open for the answer until {} [stage/construct/1/ended-short]; read: flume inbox; confirm: flume confirm change--every-question/{token}/stage/construct/1/ended-short",
+            "flume: change--every-question ({CUT_BRIEF}) construct needs an answer, its agent kept open for the answer until {} [stage/construct/1/ended-short]; read: flume inbox; confirm: flume confirm --recipient ops change--every-question/{token}/stage/construct/1/ended-short",
             asked + flume_core::KEEP_OPEN
         )],
         "the notices to ops"
@@ -1930,7 +1982,7 @@ fn a_deliverys_notice(_: &()) -> Outcome {
     ensure_eq!(
         world.terminal.notices("ops"),
         vec![format!(
-            "flume: change--every-question ({CUT_BRIEF}) construct delivered [stage/construct/1/delivered]; read: flume status change--every-question; confirm: flume confirm change--every-question/{token}/stage/construct/1/delivered"
+            "flume: change--every-question ({CUT_BRIEF}) construct delivered [stage/construct/1/delivered]; read: flume status change--every-question; confirm: flume confirm --recipient ops change--every-question/{token}/stage/construct/1/delivered"
         )],
         "the notices to ops"
     );
@@ -2441,7 +2493,9 @@ fn a_place_launched_twice(_: &()) -> Outcome {
             .terminal
             .notices("ops")
             .iter()
-            .any(|notice| notice.ends_with(&format!("; confirm: flume confirm {first_key}"))),
+            .any(|notice| notice.ends_with(&format!(
+                "; confirm: flume confirm --recipient ops {first_key}"
+            ))),
         "no notice of the first code end names {first_key}: {:?}",
         world.terminal.notices("ops")
     );
@@ -2610,8 +2664,8 @@ fn a_notice_claimed_and_not_recorded(_: &()) -> Outcome {
 
 /// A notice's hand-over met by another settle's record of its claim, as
 /// two settles at once meet on a host: the one sending it records it on
-/// the terminal's answer, the other read the claim while the send was in
-/// flight (43, 75; weir 103).
+/// the terminal's answer, the other read the claim once the terminal
+/// answered it sent, before the sender's record (43, 75; weir 103).
 fn a_notice_recorded_by_two_settles(_: &()) -> Outcome {
     let world = World::new();
     world.terminal.add_session("ops", AgentState::Asking);
@@ -2658,6 +2712,75 @@ fn a_notice_recorded_by_two_settles(_: &()) -> Outcome {
         vec![("ops", claimed_at, DeliveredBy::Notice)],
         "the hand-over recorded once at the claim's time"
     );
+    Ok(())
+}
+
+/// A notice's send refused while another settle reads its claim, as a
+/// terminal's call fails under a host's load while a caller's watch
+/// settles: the other settle records no hand-over of a notice the
+/// terminal never typed, the claim is taken back, and the settle's own
+/// later delivery sends the notice, its one hand-over recorded by that
+/// send (43, 75; weir 103).
+fn a_notice_refused_while_another_settle_reads_its_claim(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Asking);
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = fix_for_ops(&world, "one")?;
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    ensure!(
+        world.terminal.notices("ops").is_empty(),
+        "a notice sent into a question"
+    );
+    world.terminal.set_session_state("ops", AgentState::Waiting);
+    // The settle's first send is refused, nothing typed, and another
+    // settle runs while it is in flight, reading the claim with no
+    // hand-over recorded.
+    let engine = world.engine();
+    let other = id.clone();
+    let ran = Arc::new(Mutex::new(false));
+    let other_ran = ran.clone();
+    world
+        .terminal
+        .refuse_next_send("the terminal did not answer within its bound", move || {
+            drop(engine.settle(Some(&other)));
+            *other_ran
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = true;
+        });
+    world.host.advance(30);
+    let sent_at = world.host.now();
+    world.settle(&id);
+    ensure!(
+        *ran.lock().unwrap_or_else(|poisoned| poisoned.into_inner()),
+        "the other settle did not run while the send was in flight"
+    );
+    ensure_eq!(
+        world.terminal.notices("ops").len(),
+        1,
+        "notices sent once the refused send's claim was taken back"
+    );
+    let end = end_keyed(&world, &id, "stage/code/1/delivered")?;
+    ensure_eq!(
+        end.end
+            .deliveries
+            .iter()
+            .map(|delivery| (delivery.recipient.as_str(), delivery.at, delivery.by))
+            .collect::<Vec<_>>(),
+        vec![("ops", sent_at, DeliveredBy::Notice)],
+        "the hand-over recorded once, by the notice sent"
+    );
+    let held = world.held(&id).ok_or("no place")?;
+    ensure!(
+        held.ends
+            .iter()
+            .flat_map(|end| &end.noticing)
+            .all(|claim| !claim.sending),
+        "a claim answered sent left sending"
+    );
+    world.host.advance(30);
+    world.settle(&id);
+    ensure_eq!(world.terminal.notices("ops").len(), 1, "notices sent again");
     Ok(())
 }
 

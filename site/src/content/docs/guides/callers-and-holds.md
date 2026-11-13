@@ -90,11 +90,16 @@ as a one-line notice through the terminal into the recipient's own
 pane, and again by a wait or the inbox whenever asked. A hand-over
 delivers nothing. A recipient that was handed an end and stopped before
 it acted on it is handed it again by its next inbox, and the end stays
-pending until it confirms it. The notice reads, for example,
-`flume: fix--the-parser-reads-tabs (The parser drops a tab after a quote.) code delivered [stage/code/1/delivered]; read: flume status fix--the-parser-reads-tabs; confirm: flume confirm fix--the-parser-reads-tabs/0a1b2c3d/stage/code/1/delivered`.
+pending until it confirms it. The notice to the recipient `me` reads,
+for example,
+`flume: fix--the-parser-reads-tabs (The parser drops a tab after a quote.) code delivered [stage/code/1/delivered]; read: flume status fix--the-parser-reads-tabs; confirm: flume confirm --recipient me fix--the-parser-reads-tabs/0a1b2c3d/stage/code/1/delivered`.
 It names the place, the first line of its brief cut at 60 characters,
 what ended, the end's key, the command that reads it whole, and how to
-confirm it by its delivery's key. The command that reads it is
+confirm it: as the recipient it was sent to, by name, and by its
+delivery's key. The agent in a pane runs under its pane's own name,
+which is not the recipient's name when the end was owed to a role's
+address or to a session by its name, so the command names the
+recipient. The command that reads it is
 `flume inbox` where the place now waits on a move of its caller's,
 which gives the question and how to answer it, and
 `flume status <place>` otherwise. flume records each hand-over, to whom,
@@ -111,7 +116,8 @@ and whom it is pending for, each recipient under it:
 ```
 
 A recipient confirms an end by its delivery's key, which the notice,
-the inbox, a wait and status each give:
+the inbox, a wait and status each give with the command that confirms
+it as that recipient:
 
 ```console
 $ flume confirm fix--the-parser-reads-tabs/0a1b2c3d/stage/code/1/delivered --recipient me

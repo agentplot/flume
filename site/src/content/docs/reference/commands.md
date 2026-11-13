@@ -569,7 +569,8 @@ flume confirm <key>… [--recipient <name>]
 
 Confirms, as the recipient, each end's delivery by its key,
 `<kind>--<name>/<token>/<end key>`, as the inbox, a wait, status and
-the notice give it. A notice, a wait, the inbox and a session's start
+the notice give it, each in the command that confirms it as its
+recipient, `flume confirm --recipient <recipient> <key>`. A notice, a wait, the inbox and a session's start
 hand an end over, and a hand-over delivers nothing: the end stays
 pending for its recipient until the recipient confirms it, so a
 recipient that stopped before it acted on what it was handed is handed

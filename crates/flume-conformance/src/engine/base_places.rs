@@ -724,11 +724,14 @@ fn s110_a_base_place_and_two_changes_land(_: &()) -> Outcome {
     };
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![world.confirming(&notice(
-            "spring",
-            &format!("submission landed {landed}"),
-            "submission/1/landed"
-        ))],
+        vec![world.confirming(
+            &notice(
+                "spring",
+                &format!("submission landed {landed}"),
+                "submission/1/landed"
+            ),
+            "ops"
+        )],
         "the notices to ops"
     );
     ensure!(world.held(&spring).is_none(), "the base place stays");
@@ -857,11 +860,14 @@ fn landed_with_no_inbox(_: &()) -> Outcome {
         .ok_or("the submission did not land")?;
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![world.confirming(&notice(
-            "spring",
-            &format!("submission landed {landed}"),
-            "submission/1/landed"
-        ))],
+        vec![world.confirming(
+            &notice(
+                "spring",
+                &format!("submission landed {landed}"),
+                "submission/1/landed"
+            ),
+            "ops"
+        )],
         "the notices to ops, once"
     );
     ensure!(world.held(&spring).is_none(), "the landed base place stays");
@@ -933,11 +939,10 @@ fn s112_a_failed_base_place_takes_a_fix(_: &()) -> Outcome {
             .iter()
             .filter(|text| {
                 **text
-                    == world.confirming(&notice_waiting(
-                        "spring",
-                        "submission failed",
-                        "submission/1/failed",
-                    ))
+                    == world.confirming(
+                        &notice_waiting("spring", "submission failed", "submission/1/failed"),
+                        "ops",
+                    )
             })
             .count(),
         1,
@@ -1204,11 +1209,14 @@ fn waiting_on_its_caller(_: &()) -> Outcome {
     ensure_eq!(status.line.short, "stalled", "its line");
     ensure_eq!(
         world.terminal.notices("ops"),
-        vec![world.confirming(&notice_waiting(
-            "spring",
-            "stalled: a retry of the submission",
-            &format!("stall/{read_none}")
-        ))],
+        vec![world.confirming(
+            &notice_waiting(
+                "spring",
+                "stalled: a retry of the submission",
+                &format!("stall/{read_none}")
+            ),
+            "ops"
+        )],
         "the notices to ops"
     );
     Ok(())

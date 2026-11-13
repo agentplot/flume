@@ -279,21 +279,22 @@ nothing for them (43, 130, 193; core.25).
 ### Requirement: A notice names the place's brief and the end's key
 
 A notice SHALL stay one line, the end's message as its delivery
-recorded it, and SHALL name the place, the first line of its brief cut
-at 60 characters, the end, its key, the command that reads it whole,
-`flume inbox` for an end the place waits on a move for and `flume
-status <place>` for any other, and `flume confirm` with the delivery's
-key (43; core.11, core.25).
+recorded it followed by the way its recipient confirms it, and SHALL
+name the place, the first line of its brief cut at 60 characters, the
+end, its key, the command that reads it whole, `flume inbox` for an end
+the place waits on a move for and `flume status <place>` for any other,
+and `flume confirm --recipient <recipient>` with the delivery's key (43;
+core.11, core.25).
 
 #### Scenario: A stop-short's notice
 
 - **WHEN** a change whose brief begins "Every question a place asks reaches someone who answers it" ends short needing an answer at construct, and the settle hands it to a pane
-- **THEN** the fake terminal records one line naming the place, "Every question a place asks reaches someone who answers it" cut at 60 characters, "construct needs an answer", `stage/construct/1/ended-short`, `flume inbox` and `flume confirm` with the end's delivery key (S94)
+- **THEN** the fake terminal records one line naming the place, "Every question a place asks reaches someone who answers it" cut at 60 characters, "construct needs an answer", `stage/construct/1/ended-short`, `flume inbox` and `flume confirm --recipient ops` with the end's delivery key (S94)
 
 #### Scenario: A delivery's notice
 
 - **WHEN** the same place's construct delivers instead
-- **THEN** the notice names `flume status`, the delivery's key and `flume confirm` with its delivery key
+- **THEN** the notice names `flume status`, the delivery's key and `flume confirm --recipient ops` with its delivery key
 
 ### Requirement: An inbox naming a place
 
@@ -454,3 +455,31 @@ recipient it was delivered to (43, 61; core.17).
 
 - **WHEN** a live place's document holds code's end delivered to `ops` by notice and pending for `boomdrive`, written in the old form, and the place is settled
 - **THEN** code's end reads delivered to `ops` at its old time and pending for `boomdrive`, no notice goes to `ops`, and settling again writes nothing more
+
+### Requirement: A notice confirms as its recipient
+
+A notice's `flume confirm` SHALL name the recipient it is sent to,
+since a caller confirms as its own name where it names none, and an
+agent in a pane runs under the pane's. The delivery's message, every
+reader's, SHALL hold all of the notice but its way to confirm, and a
+message an earlier flume recorded with `flume confirm <key>` in it SHALL
+be sent with that taken off and the recipient's in its stead (43; weir
+100, 102; core.25).
+
+#### Scenario: A notice into a standing agent
+
+- **WHEN** a fix for `madswan/planner`, which the host gives the standing agent `madswan-planner` in the session `madswan`, delivers, and the settle hands its end to that agent
+- **THEN** the notice names `flume confirm --recipient madswan/planner` with the end's delivery key; a confirm of that key as the agent's own name in its pane is refused, and the command the notice names delivers the end (43, 132; weir 102)
+
+### Requirement: A notice's hand-over waits on its send's answer
+
+A notice's hand-over SHALL be recorded only once the terminal answered
+its send sent. A settle that reads another's claim of a notice whose
+send is still unanswered SHALL record nothing of it, and a send refused
+SHALL take its claim back, leaving the end to the next delivery's
+notice (43, 75; weir 103; core.25).
+
+#### Scenario: A notice refused while another settle reads its claim
+
+- **WHEN** a settle claims a notice to `ops`, another settle runs while its send is in flight, and the terminal then refuses the send, nothing typed
+- **THEN** neither settle records a hand-over of the refused send, the claim is taken back, and the delivery that follows, the settle's own later pass or the next settle, sends the notice to `ops` once, its one hand-over recorded by that send (43, 75)

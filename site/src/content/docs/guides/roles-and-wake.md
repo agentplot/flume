@@ -183,8 +183,9 @@ flume inbox --json
 
 which collects every end pending for its address, on every place of
 the host, each handed to the address, with its delivery's key. Once
-the run has acted on one, it confirms it,
-`flume confirm <key> --json`, or it collects with `--confirm` where
+the run has acted on one, it confirms it as the address,
+`flume confirm --recipient <address> <key> --json`, as the notice and
+the inbox print it, or it collects with `--confirm` where
 taking an end is acting on it. An end the run leaves unconfirmed stays
 pending for the address, shown expired in status once the host's span
 passes. Its `waiting` gives every place that waits on the address,

@@ -50,7 +50,7 @@ pub use accounts::{FRESH, THRESHOLD};
 pub use acts::{Answering, Retry};
 pub use agent_acts::ANSWER_RECORDED_WITHIN;
 pub use answer::*;
-pub use ends::{end_words, notice, what_ended};
+pub use ends::{confirm_command, end_words, notice, notice_to, what_ended};
 pub use fixes::cause_words;
 pub use held::Step;
 pub use kinds_lock::{KindsLock, LockOf};

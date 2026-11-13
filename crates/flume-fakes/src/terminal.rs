@@ -42,10 +42,17 @@ pub struct FakeTerminal {
 
 type BeforeOpen = Box<dyn FnOnce() + Send>;
 
+/// What runs while the next send to a session is in flight, before it is
+/// refused.
+type DuringSend = Box<dyn FnOnce() + Send>;
+
 struct TerminalState {
     agents: BTreeMap<String, Running>,
     comes_up: AgentState,
     sends: bool,
+    /// The next send to a session refused with these words, once what
+    /// runs while it is in flight has run.
+    send_refused: Option<(DuringSend, String)>,
     open_refusal: Option<String>,
     close_refused: BTreeSet<String>,
     sent: Vec<(String, String)>,
@@ -213,6 +220,7 @@ impl FakeTerminal {
                 agents: BTreeMap::new(),
                 comes_up: AgentState::Waiting,
                 sends: true,
+                send_refused: None,
                 open_refusal: None,
                 close_refused: BTreeSet::new(),
                 sent: vec![],
@@ -280,6 +288,13 @@ impl FakeTerminal {
             agent.to_string(),
             Running::new(AgentState::Waiting, AgentCommand::default()),
         );
+    }
+
+    /// The next send to a session runs `during`, as what happens while
+    /// it is in flight, and is then refused with `reason`, nothing typed,
+    /// as a terminal whose call fails before it types (43, 75).
+    pub fn refuse_next_send(&self, reason: &str, during: impl FnOnce() + Send + 'static) {
+        lock(&self.state).send_refused = Some((Box::new(during), reason.into()));
     }
 
     /// The terminal cannot send to a running agent: it says it sends
@@ -672,6 +687,11 @@ impl Terminal for FakeTerminal {
 
     fn send_to(&self, session: &str, text: &str) -> ToSession {
         self.log.push(format!("send_to {session}"));
+        let refused = lock(&self.state).send_refused.take();
+        if let Some((during, reason)) = refused {
+            during();
+            return ToSession::Refused { reason };
+        }
         let agent = lock(&self.state).agent_sessions.get(session).cloned();
         if let Some(key) = agent.filter(|key| self.read(key) != AgentState::Stopped) {
             let mut state = lock(&self.state);

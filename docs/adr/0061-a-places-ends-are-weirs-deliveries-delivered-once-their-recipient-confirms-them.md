@@ -62,3 +62,25 @@ The first option of each.
 - Bad: one host document takes every delivery's write, under compare-and-set beside the places'.
 - Neutral: the statement is amended for it on `design/flume-ends-are-weirs-deliveries` at 01b637a, not yet on blueprints' main. Rules core.11 and core.25 carry it.
 - Neutral: flume's merge-queue profile reads sluice's inbox as today. sluice moving onto the form is sluice's own change, `sluices-inbox-is-weirs-delivery-form`, after which the profile confirms what it collects.
+
+## Amendment, 2026-11-12: a notice names its recipient in its confirm
+
+Status: the direction is the design's ruling, carried by the fix `a-notice-names-its-recipient-in-its-confirm`: "A notice to a recipient must say 'flume confirm --recipient <recipient> <key>' … as status' expired line already does" (signal 2026-11-13-agentplot-ops-4b4a402a/02). How the message and the notice divide, and that the inbox, a wait and the drop's refusal say it the same way, are the fix's code stage's own, each cheap to change.
+
+Deciders: the design, on the signal; the fix's code stage.
+
+Sources: `boomdrivedev/blueprints:design/flume/requirements.md` on main at b2a6ed0, clauses 7, 43 and 132; `design/weir/requirements.md`, 100 and 102; `crates/flume-core/src/ends.rs` and `crates/flume/src/commands/print.rs` on main at 5d36f76.
+
+### Context and problem statement
+
+A notice ended `; confirm: flume confirm <key>`. `flume confirm` confirms as the recipient the command names, its default `$FLUME_RECIPIENT`, a role's run's address, or the terminal's session (7, 132), and an agent in a pane reads as its pane's own name. An end owed to a role's address that a standing agent holds, or to a session by its name, is owed under another name, so the command the notice gave was refused: the pane's name "is not a reader of" the delivery. Clause 43 has a notice name "the delivery's key by which to confirm it", and a command its recipient cannot run confirms nothing. A delivery has one message for all its readers (weir 100), so the message cannot name one of them.
+
+### Considered options
+
+1. **The delivery's message is the notice but its way to confirm, and each notice adds its recipient's, `flume confirm --recipient <recipient> <key>`** (chosen). One delivery, one key and one message per end stay as this record decided. A message an earlier flume recorded with `; confirm: flume confirm <key>` in it is sent with that taken off and the recipient's in its stead, so a notice not yet sent reads right.
+2. **One delivery per recipient, each message naming its reader.** An end would have as many keys as recipients, and the inbox, status and the runner's report would carry one key per recipient where weir keeps one delivery owed to several readers.
+3. **`flume confirm <key>` finds the reader from the key.** A caller would confirm for a reader it did not name, which this record rules out: flume takes a recipient's confirmation from the caller naming it.
+
+### Decision outcome
+
+Option 1. The person's form of the inbox and of a wait gives the same command with the recipient it collected as, and a tidied place's drop refused while ends stand pending gives `--recipient <recipient>` in its commands, since a caller there collects or confirms as a name it may not run under. One function words the command for the notice, the inbox, a wait and status' expired line, the recipient's name quoted for a shell where it holds anything but letters, digits and `_@%+=:,./-`. Clause 43's "its notice its message" is read as the notice's part every reader shares; where the design would word the statement so, it is the statement's to say.

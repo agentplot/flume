@@ -29,17 +29,17 @@ use std::collections::BTreeMap;
 /// How much of a brief's first line a notice gives (43; design 9).
 pub const NOTICE_BRIEF: usize = 60;
 
-/// The one line a notice is: the place, its brief's first line cut at
-/// [`NOTICE_BRIEF`] characters, what ended, until when a stop-short's
-/// agent is kept open for its answer, the end's key, and the command that
-/// reads it whole: `flume inbox` where the place, as `held` gives it when
-/// the end's delivery is recorded, waits on a move of its caller's, which
-/// gives the question and how to answer it, and `flume status <place>`
-/// otherwise; and `flume confirm` with the delivery's key. It is the
-/// delivery's message, fixed when the delivery is recorded and sent as
-/// recorded. It names no fact to act on blindly, and no question's words,
-/// which are many lines (43, 198; weir 100; core.11, core.25; design 4,
-/// 9).
+/// The end's delivery's message, one line every recipient shares: the
+/// place, its brief's first line cut at [`NOTICE_BRIEF`] characters, what
+/// ended, until when a stop-short's agent is kept open for its answer,
+/// the end's key, and the command that reads it whole: `flume inbox`
+/// where the place, as `held` gives it when the end's delivery is
+/// recorded, waits on a move of its caller's, which gives the question
+/// and how to answer it, and `flume status <place>` otherwise. It is
+/// fixed when the delivery is recorded, and a notice is it with the way
+/// its recipient confirms it after it ([`notice_to`]). It names no fact
+/// to act on blindly, and no question's words, which are many lines (43,
+/// 198; weir 100; core.11, core.25; design 4, 9).
 pub fn notice(held: &HeldState, of: &EndOf) -> String {
     let place = &held.place;
     let short = place.short();
@@ -52,15 +52,51 @@ pub fn notice(held: &HeldState, of: &EndOf) -> String {
     } else {
         format!("flume status {short}")
     };
-    let confirm = place
-        .delivery_key(of)
-        .map(|key| format!("; confirm: flume confirm {key}"))
-        .unwrap_or_default();
     format!(
-        "flume: {short}{brief} {} [{}]; read: {read}{confirm}",
+        "flume: {short}{brief} {} [{}]; read: {read}",
         end_words(of),
         of.end_key()
     )
+}
+
+/// The one line of notice sent to `recipient`: the delivery's `message`
+/// as recorded and then `; confirm: ` with the command that confirms it
+/// as that recipient ([`confirm_command`]), since a caller's own name, its
+/// session's in a pane, is often not the name the end is owed under. A
+/// message an earlier flume recorded with the way to confirm already in
+/// it, `; confirm: flume confirm <key>`, is sent with that taken off and
+/// the recipient's put in its stead (43; weir 100, 102; core.11, core.25).
+pub fn notice_to(message: &str, key: &str, recipient: &str) -> String {
+    let message = message
+        .strip_suffix(&format!("; confirm: flume confirm {key}"))
+        .unwrap_or(message);
+    format!(
+        "{message}; confirm: {}",
+        confirm_command(recipient, std::slice::from_ref(&key))
+    )
+}
+
+/// The command by which `recipient` confirms each delivery of `keys`,
+/// `flume confirm --recipient <recipient> <key>…`, the recipient's name
+/// quoted for a shell where it holds anything but letters, digits and
+/// `_@%+=:,./-`; the one way a notice, a wait, the inbox and status say
+/// how a recipient confirms (43; weir 102).
+pub fn confirm_command(recipient: &str, keys: &[&str]) -> String {
+    let plain = !recipient.is_empty()
+        && recipient
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "_@%+=:,./-".contains(c));
+    let recipient = if plain {
+        recipient.to_string()
+    } else {
+        format!("'{}'", recipient.replace('\'', r"'\''"))
+    };
+    let mut command = format!("flume confirm --recipient {recipient}");
+    for key in keys {
+        command.push(' ');
+        command.push_str(key);
+    }
+    command
 }
 
 /// `line` cut at `at` characters, an ellipsis saying where it was cut.
@@ -141,21 +177,25 @@ pub fn what_ended(of: &EndOf) -> String {
 impl Engine {
     /// Sends each end of the place a notice carries, pending for a
     /// recipient whose session asks no question and to which nothing has
-    /// handed it, once, as the message its delivery was recorded with,
-    /// through the first terminal the host binds that holds the session,
+    /// handed it, once, as the message its delivery was recorded with and
+    /// the way that recipient confirms it ([`notice_to`]), through the
+    /// first terminal the host binds that holds the session,
     /// or, for a recipient the host's standing entries name, read once,
     /// into the one agent of the entry's name in its stream's terminal and
     /// session. The notice is claimed on the place before the send, so two
     /// settles at once send one, and the host's deliveries read again once
     /// it is claimed, a hand-over by any other way to the recipient taking
-    /// the claim back unsent; on the terminal's answer sent its
-    /// hand-over is recorded through weir's `hand`, by `notice`, and the
-    /// claim kept; a send not made takes the claim back; and a claim whose
-    /// hand-over the host's deliveries lack is recorded at the next settle
-    /// at the claim's time, once, where that settle reads the claim while
-    /// the send is in flight. No one agent asking no question found claims
-    /// nothing (43, 75, 132, 190, C.7; weir 103; core.11, core.28; design
-    /// 5).
+    /// the claim back unsent. The claim is written sending; on the
+    /// terminal's answer sent it is marked answered and kept, and then its
+    /// hand-over is recorded through weir's `hand`, by `notice`; a send not
+    /// made takes the claim back, so the next settle sends the notice; and
+    /// a claim answered whose hand-over the host's deliveries lack is
+    /// recorded by the next settle at the claim's time, once, where that
+    /// settle reads it before the sender's record. A claim still sending is
+    /// recorded by no other settle, since its send may yet be refused and
+    /// a notice never sent would read as handed over. No one agent asking
+    /// no question found claims nothing (43, 75, 132, 190, C.7; weir 103;
+    /// core.11, core.28; design 5).
     pub(crate) fn deliver_ends(&self, id: &PlaceId) {
         let Some(held) = self.with_token(id) else {
             return;
@@ -206,6 +246,7 @@ impl Engine {
                         end.noticing.push(NoticeClaim {
                             recipient: recipient.clone(),
                             at: now,
+                            sending: true,
                         });
                         Step::Write(true)
                     })
@@ -240,8 +281,27 @@ impl Engine {
                     take_back();
                     continue;
                 }
-                let why = match terminal.send_to(&at, &delivery.message) {
+                let sent = notice_to(&delivery.message, &delivery.key, &recipient);
+                let why = match terminal.send_to(&at, &sent) {
                     ToSession::Sent => {
+                        self.update(id, |held| {
+                            let claim = held
+                                .ends
+                                .iter_mut()
+                                .find(|end| end.of.key() == key)
+                                .and_then(|end| {
+                                    end.noticing.iter_mut().find(|claim| {
+                                        claim.recipient == recipient && claim.at == now
+                                    })
+                                });
+                            match claim {
+                                Some(claim) if claim.sending => {
+                                    claim.sending = false;
+                                    Step::Write(())
+                                }
+                                _ => Step::Keep(()),
+                            }
+                        });
                         let handed = self.hand_over(
                             std::slice::from_ref(&delivery.key),
                             &recipient,
@@ -270,15 +330,17 @@ impl Engine {
 
     /// Records, at its time, the hand-over of each notice claimed on the
     /// place whose hand-over the host's deliveries lack, its send answered
-    /// and its record never written, so it is sent no second time; true
-    /// where it recorded any (43, 75; weir 103; design 5).
+    /// sent and its record never written, so it is sent no second time;
+    /// a claim still sending it leaves to its sender, which records it
+    /// once answered sent or takes it back; true where it recorded any
+    /// (43, 75; weir 103; design 5).
     fn record_claims(&self, held: &HeldState, owing: &Owing) -> bool {
         let mut recorded = false;
         for end in &held.ends {
             let Some(delivery) = end.delivery(&held.place, owing) else {
                 continue;
             };
-            for claim in &end.noticing {
+            for claim in end.noticing.iter().filter(|claim| !claim.sending) {
                 let handed = delivery
                     .handovers
                     .iter()
@@ -401,5 +463,46 @@ impl Engine {
             .filter(|read| read.state.place.id == *id || read.state.place.location == id.0)
             .map(|read| read.state.place.id)
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const KEY: &str = "fix--one/0a1b2c3d/stage/code/1/delivered";
+
+    #[test]
+    fn a_notice_confirms_as_its_recipient() {
+        let message = "flume: fix--one (x) code delivered [stage/code/1/delivered]; read: flume status fix--one";
+        assert_eq!(
+            notice_to(message, KEY, "agentplot/ops"),
+            format!("{message}; confirm: flume confirm --recipient agentplot/ops {KEY}")
+        );
+    }
+
+    #[test]
+    fn an_earlier_messages_confirm_gives_way_to_the_recipients() {
+        let read = "flume: fix--one (x) code delivered [stage/code/1/delivered]; read: flume status fix--one";
+        assert_eq!(
+            notice_to(
+                &format!("{read}; confirm: flume confirm {KEY}"),
+                KEY,
+                "pane:w3:p3@/run/term.sock"
+            ),
+            format!("{read}; confirm: flume confirm --recipient pane:w3:p3@/run/term.sock {KEY}")
+        );
+    }
+
+    #[test]
+    fn a_recipient_a_shell_would_split_is_quoted() {
+        assert_eq!(
+            confirm_command("the ops' desk", &[KEY, "b"]),
+            format!(r"flume confirm --recipient 'the ops'\'' desk' {KEY} b")
+        );
+        assert_eq!(
+            confirm_command("", &[KEY]),
+            format!("flume confirm --recipient '' {KEY}")
+        );
     }
 }

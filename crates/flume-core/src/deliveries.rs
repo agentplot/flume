@@ -265,7 +265,8 @@ impl Engine {
     /// Records, through weir's `record`, the delivery of each end of
     /// `documents` that has a recipient and no record: under its key, its
     /// readers the end's recipients, its message the end's notice as the
-    /// document stands, at the time the end was read, expiring the host's
+    /// document stands but the way to confirm it, which each notice adds
+    /// for its recipient ([`crate::ends::notice_to`]), at the time the end was read, expiring the host's
     /// span after it. An end with no recipient records none, and an end
     /// whose key is held records nothing again, so recording again is the
     /// same act (43; weir 100, 101, 104; core.17; design 3, 4). An end the

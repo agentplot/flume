@@ -90,7 +90,7 @@ pub fn person(answer: &Answer) -> String {
                     (true, true) => "handed over and confirmed by this wait".to_string(),
                     (true, false) => format!(
                         "handed over by this wait; pending until {recipient} confirms it{}",
-                        confirm_words(end)
+                        confirm_words(end, recipient)
                     ),
                     (false, _) => "read; confirmed before".to_string(),
                 };
@@ -111,8 +111,10 @@ pub fn person(answer: &Answer) -> String {
             for collected in ends {
                 let state = match (collected.confirmed, collected.expired) {
                     (true, _) => "; confirmed".to_string(),
-                    (false, true) => format!("; expired{}", confirm_words(&collected.end)),
-                    (false, false) => confirm_words(&collected.end),
+                    (false, true) => {
+                        format!("; expired{}", confirm_words(&collected.end, recipient))
+                    }
+                    (false, false) => confirm_words(&collected.end, recipient),
                 };
                 lines.push(format!(
                     "{}--{} {} [{}]; read: flume status {}{state}",
@@ -1584,8 +1586,12 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
     for end in &host.expired {
         let never = if end.known { "" } else { ", never confirmed" };
         lines.push(format!(
-            "  expired: {} {} for {} since {}{never}; confirm: flume confirm --recipient {} {}",
-            end.place, end.key, end.recipient, end.expires_at, end.recipient, end.delivery
+            "  expired: {} {} for {} since {}{never}; confirm: {}",
+            end.place,
+            end.key,
+            end.recipient,
+            end.expires_at,
+            flume_core::confirm_command(&end.recipient, &[end.delivery.as_str()])
         ));
     }
     lines
@@ -1614,12 +1620,18 @@ fn recipient_lines(end: &flume_core::EndStatus) -> Vec<String> {
     lines
 }
 
-/// How a recipient confirms the end: `; confirm: flume confirm <key>`,
-/// none where the end has no delivery (43).
-fn confirm_words(end: &flume_core::EndStatus) -> String {
+/// How `recipient` confirms the end: `; confirm: flume confirm
+/// --recipient <recipient> <key>`, none where the end has no delivery
+/// (43).
+fn confirm_words(end: &flume_core::EndStatus, recipient: &str) -> String {
     end.delivery
         .as_ref()
-        .map(|key| format!("; confirm: flume confirm {key}"))
+        .map(|key| {
+            format!(
+                "; confirm: {}",
+                flume_core::confirm_command(recipient, &[key.as_str()])
+            )
+        })
         .unwrap_or_default()
 }
 
@@ -3131,6 +3143,67 @@ mod tests {
             );
             assert!(lines.contains(&line), "{line} not in {lines:#?}");
         }
+    }
+
+    #[test]
+    fn the_inbox_and_a_wait_confirm_as_their_recipient() {
+        // 43; weir 102: an end the inbox or a wait hands to `east/ops`
+        // says how `east/ops` confirms it, by its name, since the caller's
+        // own name, its session's in a pane, is not the one it is owed
+        // under.
+        let end = EndStatus {
+            delivery: Some("fix--one/0a1b2c3d/submission/1/landed".into()),
+            ..end_status(
+                &EndHeld {
+                    of: EndOf::Submission {
+                        submit: 1,
+                        verdict: flume_seams::Verdict::Landed {
+                            commit: flume_seams::Revision::new("c9"),
+                            place_removed: false,
+                            branch_removed: false,
+                        },
+                    },
+                    read_at: 130,
+                    deliveries: vec![],
+                    answer: None,
+                    claim: None,
+                    noticing: vec![],
+                },
+                &["east/ops"],
+            )
+        };
+        let confirm =
+            "confirm: flume confirm --recipient east/ops fix--one/0a1b2c3d/submission/1/landed";
+        let inbox = Answer::Inbox {
+            recipient: "east/ops".into(),
+            ends: vec![flume_core::Collected {
+                place: PlaceId::new("/d/places/1/fix--one"),
+                kind: "fix".into(),
+                name: "one".into(),
+                end: end.clone(),
+                confirmed: false,
+                expired: false,
+            }],
+            waiting: vec![],
+        };
+        assert_eq!(
+            person(&inbox),
+            format!(
+                "fix--one submission landed c9 [submission/1/landed]; read: flume status /d/places/1/fix--one; {confirm}"
+            )
+        );
+        let wait = Answer::Waited {
+            place: PlaceId::new("/d/places/1/fix--one"),
+            recipient: "east/ops".into(),
+            end: Some(end),
+            delivered: true,
+        };
+        assert_eq!(
+            person(&wait),
+            format!(
+                "/d/places/1/fix--one submission landed c9 for east/ops: handed over by this wait; pending until east/ops confirms it; {confirm}"
+            )
+        );
     }
 
     /// The end `end` as status gives it to a place whose recipients are
