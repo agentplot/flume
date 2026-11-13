@@ -64,7 +64,7 @@
       # services.flume once (design 4).
       moduleOf = platform: file: {
         _file = file;
-        key = "github:agentplot/flume#${platform}Modules.flume";
+        key = "github:boomdrivedev/flume#${platform}Modules.flume";
         imports = [ (import file { inherit packages; }) ];
       };
     in

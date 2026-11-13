@@ -15,11 +15,11 @@ with OpenSpec or no change tool.
 ## The statement
 
 The design is a statement of invariants in
-[agentplot/blueprints](https://github.com/agentplot/blueprints),
+[boomdrivedev/blueprints](https://github.com/boomdrivedev/blueprints),
 `design/flume/requirements.md`: what is always true of flume and what
 it never does, as numbered clauses, written so that any program
 satisfying them is flume. The
-[design book](https://agentplot.github.io/blueprints/flume/) explains
+[design book](https://boomdrivedev.github.io/blueprints/flume/) explains
 it chapter by chapter. This repository cites its clauses by number,
 keeps the [rules](/flume/architecture/rules/) a change must respect,
 and records each decision the statement left open in `docs/adr/`, one

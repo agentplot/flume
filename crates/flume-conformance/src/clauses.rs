@@ -2,7 +2,7 @@
 //! them at the statement's revision. A clause the statement adds or
 //! removes changes this list in the commit that adopts it.
 
-/// The revision of `design/flume/requirements.md` in agentplot/blueprints
+/// The revision of `design/flume/requirements.md` in boomdrivedev/blueprints
 /// the list was read at.
 pub const REVISION: &str = "31f9f1c";
 

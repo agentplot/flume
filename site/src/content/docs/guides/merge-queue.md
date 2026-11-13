@@ -8,7 +8,7 @@ sidebar:
 flume lands nothing itself. Once a landing kind's last stage delivers,
 flume submits the place to the merge queue, reads the outcome at the
 settles that follow, and tidies the place once the work lands. The
-merge queue flume works with is [sluice](https://agentplot.github.io/sluice/),
+merge queue flume works with is [sluice](https://boomdrivedev.github.io/sluice/),
 which tests each submission merged with everything queued ahead of it
 and lands it only when that passes.
 

@@ -1,6 +1,6 @@
 # The site
 
-flume's site at https://agentplot.github.io/flume, an
+flume's site at https://boomdrivedev.github.io/flume, an
 [Astro](https://astro.build) site with
 [Starlight](https://starlight.astro.build), published by
 `.github/workflows/pages.yml` on every push to `main` that touches it.

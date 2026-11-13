@@ -6,10 +6,10 @@ sidebar:
 ---
 
 A mirror of the rules in
-[docs/architecture/core.md](https://github.com/agentplot/flume/blob/main/docs/architecture/core.md),
+[docs/architecture/core.md](https://github.com/boomdrivedev/flume/blob/main/docs/architecture/core.md),
 which is the binding copy. The rules are written so a reviewer can point
 at a diff and say which rule it breaks. The narrative is the statement
-in agentplot/blueprints, `design/flume/requirements.md`; a rule names
+in boomdrivedev/blueprints, `design/flume/requirements.md`; a rule names
 the clause it enforces and never restates it. The binding copy gives
 each rule's details: what it rules out, what it leaves open, and its
 sources. The [roadmap](/flume/roadmap/) names what is decided and not

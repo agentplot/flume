@@ -11,7 +11,7 @@ stage's command for you to run.
 ## Install from the releases
 
 Each release on
-[GitHub](https://github.com/agentplot/flume/releases) is tagged
+[GitHub](https://github.com/boomdrivedev/flume/releases) is tagged
 `v<version>` and carries one archive per platform, each holding the
 `flume` binary:
 
@@ -26,7 +26,7 @@ the archive into a folder on your `PATH`:
 
 ```sh
 version=v0.1.0
-curl -fsSL "https://github.com/agentplot/flume/releases/download/$version/flume-aarch64-darwin.tar.gz" |
+curl -fsSL "https://github.com/boomdrivedev/flume/releases/download/$version/flume-aarch64-darwin.tar.gz" |
   tar -xz -C ~/.local/bin flume
 flume --version
 ```
@@ -46,7 +46,7 @@ your Nix configuration. Take the flake at a release's tag:
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flume = {
-      url = "github:agentplot/flume/v<version>";
+      url = "github:boomdrivedev/flume/v<version>";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -162,7 +162,7 @@ Install it at the tag of the flume you run, so the plugin and the binary
 are one version:
 
 ```sh
-herdr plugin install agentplot/flume/plugins/herdr --ref v<version>
+herdr plugin install boomdrivedev/flume/plugins/herdr --ref v<version>
 ```
 
 It needs `flume` and `jq` on the `PATH` herdr's server runs with, and
@@ -221,7 +221,7 @@ For `/launch` and status in your own sessions, add flume's marketplace
 and install the plugin from it:
 
 ```text
-/plugin marketplace add agentplot/flume#release
+/plugin marketplace add boomdrivedev/flume#release
 /plugin install flume@flume
 ```
 

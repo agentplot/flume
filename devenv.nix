@@ -353,7 +353,7 @@ let
     pname = "sluice";
     version = sluiceVersion;
     src = pkgs.fetchurl {
-      url = "https://github.com/agentplot/sluice/releases/download/v${sluiceVersion}/sluice-${sluiceSystem}.tar.gz";
+      url = "https://github.com/boomdrivedev/sluice/releases/download/v${sluiceVersion}/sluice-${sluiceSystem}.tar.gz";
       sha256 =
         sluiceHashes.${sluiceSystem}
           or (throw "sluice ${sluiceVersion}: no release build for ${sluiceSystem}");

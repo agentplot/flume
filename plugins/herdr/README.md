@@ -5,7 +5,7 @@ a popup, with keys that act through flume's commands, and the rows flume
 shows in herdr's sidebar. It keeps no process and runs no settle.
 
 ```sh
-herdr plugin install agentplot/flume/plugins/herdr --ref v<version>
+herdr plugin install boomdrivedev/flume/plugins/herdr --ref v<version>
 ```
 
 Install it at the tag of the flume you run, so the plugin and the

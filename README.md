@@ -3,7 +3,7 @@
 flume runs: a fix and a change are carried from their launch to their
 landing through sluice, and their place tidied, by the walkthroughs its
 checks run. The design is in
-[agentplot/blueprints](https://github.com/agentplot/blueprints).
+[boomdrivedev/blueprints](https://github.com/boomdrivedev/blueprints).
 
 flume carries one piece of work into one worktree and follows it until
 it lands. A launch names a repository, a kind, a brief, a name and a
@@ -14,11 +14,11 @@ tidies the place.
 
 <p align="center"><img src="docs/diagrams/flume.svg" alt="Five launches, each naming its kind, its points and its stream, wait for room in one host's streams: work, priority 10, under its bounds on agents and points in flight, and personal, priority 0, under its pace of 8 points a day, each on a pool of accounts. Each launch with room starts in a place of its own, its stages lit in turn with a fresh agent each; its last delivery submits it, sluice lands it on main and flume tidies the place." width="900"></p>
 
-- **The site:** https://agentplot.github.io/flume
-- **The design book:** https://agentplot.github.io/blueprints/flume/
+- **The site:** https://boomdrivedev.github.io/flume
+- **The design book:** https://boomdrivedev.github.io/blueprints/flume/
 - **The statement**, flume's invariants as numbered clauses, is
-  `design/flume/requirements.md` in agentplot/blueprints.
-- **The Claude Code plugin:** `/plugin marketplace add agentplot/flume#release`,
+  `design/flume/requirements.md` in boomdrivedev/blueprints.
+- **The Claude Code plugin:** `/plugin marketplace add boomdrivedev/flume#release`,
   then `/plugin install flume@flume`.
 
 ## What it does
