@@ -13,7 +13,7 @@ Status: accepted on 2026-11-08 by agentplot-design. Written by the code stage of
 
 Deciders: the code stage, on the brief: "Flume's tidy of a finished place removes the place's folder, its .devenv and .moon state with it, and the place's group folder once it holds no place".
 
-Sources: `agentplot/blueprints:design/flume/requirements.md` at 00d90e9, clauses 62, 64 to 66, 74, 81 and C.1, and C.1 as this record amends it on blueprints' branch `design/flume-a-tidied-place-leaves-no-folder` at 723ab51, proposed; rules core.17 and core.18; record 0027, which put every place under flume's own data directory; git 2.54.0's `git worktree remove`, which drops a worktree's entry and its git directory even where deleting the worktree's folder failed, "there's no going back from here" (`builtin/worktree.c`); the places of deneb on 2026-11-07.
+Sources: `boomdrivedev/blueprints:design/flume/requirements.md` at 00d90e9, clauses 62, 64 to 66, 74, 81 and C.1, and C.1 as this record amends it on blueprints' branch `design/flume-a-tidied-place-leaves-no-folder` at 723ab51, proposed; rules core.17 and core.18; record 0027, which put every place under flume's own data directory; git 2.54.0's `git worktree remove`, which drops a worktree's entry and its git directory even where deleting the worktree's folder failed, "there's no going back from here" (`builtin/worktree.c`); the places of deneb on 2026-11-07.
 
 ## Context and problem statement
 

@@ -20,7 +20,7 @@ The construct stage of `a-roles-address-may-be-held-by-a-standing-agent` read it
 Amended 2026-11-06 by record 0039, its design approved by the user the same day: an address is `<stream>/<role>`, a role of a stream the host declares, where this record wrote `<partition>/<role>`; a role is declared by a source of the host in the roles file its declaration names, never by the host's `[roles]`, and so is the standing agent the amendment below names (record 0039's own amendment); a run is named per address, by its entry's name or `<stream>-<role>`, runs in its address's stream, carries its entry's settings and intent, and is over at its delivery, flume declaring it done with no caller's word; and a stop-short may name the role it is for, of any stream.
 
 Deciders: the user, accepting recommendation R1 of the design review of 2026-10-28; the shape is the reviewing agent's.
-Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 3, 43, 69, 70, 72, 132, C.7 and S38, as amended with this record, and the callers table's crew row; records 0005, 0009, 0010, 0011; `afterthought/crew:docs/adr/0047` move 6 (no crew role stands; each is a kind Flume launches on a nudge naming a record) and `0048` patterns 3 and 4; rules core.13, core.25, core.26, core.27.
+Sources: `boomdrivedev/blueprints:design/flume/requirements.md` clauses 3, 43, 69, 70, 72, 132, C.7 and S38, as amended with this record, and the callers table's crew row; records 0005, 0009, 0010, 0011; `afterthought/crew:docs/adr/0047` move 6 (no crew role stands; each is a kind Flume launches on a nudge naming a record) and `0048` patterns 3 and 4; rules core.13, core.25, core.26, core.27.
 
 ## Context and problem statement
 
@@ -56,7 +56,7 @@ Option 1.
 Status: decided on 2026-11-06 by madswan-design, the design agent, on swancloud-design's ask relayed by madswan-operator. Nothing in it is the user's alone: it holds to clauses 3, 43 and 132 and rule core.28 as they stand, and each choice in it is cheap to change.
 
 Deciders: madswan-design.
-Sources: `agentplot/blueprints:design/flume/requirements.md` on main at 6d322be, clauses 3, 43, 132, 143 and C.7 and the vocabulary's recipient; `crates/flume/src/profiles/terminal/herdr/mod.rs` `reach` on main at 78ea62ea, read 2026-11-06; `herdr --session madswan agent list` on deneb, read 2026-11-06, which names madswan's standing agents `madswan-planner`, `madswan-ops` and the rest in that session; `afterthought/swancloud:docs/adr/` record 0042 as amended at f424dd86; crew's runner, which names every place's recipient by a role's address (`afterthought/crew:plugin/lib/runner.py` on `teamless/deneb`, as swancloud's record reads it); `afterthought/crew:docs/adr/0047` move 6.
+Sources: `boomdrivedev/blueprints:design/flume/requirements.md` on main at 6d322be, clauses 3, 43, 132, 143 and C.7 and the vocabulary's recipient; `crates/flume/src/profiles/terminal/herdr/mod.rs` `reach` on main at 78ea62ea, read 2026-11-06; `herdr --session madswan agent list` on deneb, read 2026-11-06, which names madswan's standing agents `madswan-planner`, `madswan-ops` and the rest in that session; `afterthought/swancloud:docs/adr/` record 0042 as amended at f424dd86; crew's runner, which names every place's recipient by a role's address (`afterthought/crew:plugin/lib/runner.py` on `teamless/deneb`, as swancloud's record reads it); `afterthought/crew:docs/adr/0047` move 6.
 
 ### Context and problem statement
 
@@ -101,7 +101,7 @@ Deciders: the construct stage of `a-roles-address-may-be-held-by-a-standing-agen
 Sources: the amendment above; `herdr --session madswan agent list` under
 herdr 0.9.5 on deneb, read 2026-11-06, answering `result.agents[]` with
 `name`, `pane_id` and `agent_status`; the statement's amendment on
-agentplot/blueprints main at 1c89abc, its C.5 approved by the user on
+boomdrivedev/blueprints main at 1c89abc, its C.5 approved by the user on
 2026-11-06 (C.5, C.7); rules core.11, core.15, core.28, core.44 and core.49; the change
 `every-question-a-place-asks-reaches-someone-who-answers-it`, held for
 the user's read.

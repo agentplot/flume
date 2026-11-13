@@ -11,14 +11,14 @@ decision-makers:
 
 Status: accepted by the user on 2026-10-28, in their design session ("i agree with these changes"), on the recommendations drawn from reading crew records 0045 to 0048, sluice records 0056, 0065 and 0068, and flume records 0002 to 0011 together.
 
-Amended in part by sluice record 0093, accepted on 2026-11-06: a settle drives no round of the base's queue. sluice's host process moves it, and a settle's read of the submission starts that process where work waits and none runs (flume C.6's step row, agentplot/blueprints 7c2fbf0).
+Amended in part by sluice record 0093, accepted on 2026-11-06: a settle drives no round of the base's queue. sluice's host process moves it, and a settle's read of the submission starts that process where work waits and none runs (flume C.6's step row, boomdrivedev/blueprints 7c2fbf0).
 
 Amended 2026-10-28 by record 0014, accepted by the user: the settle's `untold` is `inbox`, collecting the place's pending outcomes by `sluice inbox`; and there is no worktrunk place profile.
 
 Amended 2026-11-02, following clauses 117 and 101 as blueprints 4074bf9 amended them with this record: its consequences name B.6's submit, which holds no wait and removes nothing, by 117, and B.6's guarantee, that submit removes no place and a pending outcome is delivered once, by 101; rule core.6 cites both.
 
 Deciders: the user, accepting recommendations R2 and R4 of the design review of 2026-10-28; the shape is the reviewing agent's.
-Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 43, 46, 66, 111, 113, 120, 124, 125, 133, I8, C.6 and S34, as amended with this record; records 0002, 0005, 0009; `agentplot/sluice:docs/adr/0065` (the driver's wait removes a landed worktree) and `0068` (an outcome pushed to its submitter and kept until told; an entry submitted outside a multiplexer stands untold until asked); sluice clauses 51 and 135; `afterthought/crew:docs/adr/0048`, pattern 5; rules core.6, core.13, core.18, core.25.
+Sources: `boomdrivedev/blueprints:design/flume/requirements.md` clauses 43, 46, 66, 111, 113, 120, 124, 125, 133, I8, C.6 and S34, as amended with this record; records 0002, 0005, 0009; `boomdrivedev/sluice:docs/adr/0065` (the driver's wait removes a landed worktree) and `0068` (an outcome pushed to its submitter and kept until told; an entry submitted outside a multiplexer stands untold until asked); sluice clauses 51 and 135; `afterthought/crew:docs/adr/0048`, pattern 5; rules core.6, core.13, core.18, core.25.
 
 ## Context and problem statement
 

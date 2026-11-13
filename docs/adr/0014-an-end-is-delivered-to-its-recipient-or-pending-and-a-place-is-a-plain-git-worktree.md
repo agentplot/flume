@@ -14,7 +14,7 @@ Status: accepted by the user on 2026-10-28, in their design session ("words: tab
 Amended 2026-11-06 by record 0039, its design approved by the user the same day: the answerer behind a place's stream, a role a source declares to stand behind it, is a recipient of every stall of the place, besides its recipients and the role the stop-short it waits on named.
 
 Deciders: the user, choosing the words of a table put to them in the design review of crew, flume and sluice of 2026-10-28, and dropping the worktrunk place profile on the same review's question; the shape is the reviewing agent's.
-Sources: `agentplot/blueprints:design/flume/requirements.md` section 3, clauses 41 to 43, 56, 111, 124, 130 to 133, C.1, C.2, C.4, C.6, S5, S34, S35, S38, as amended at 9ae2125; records 0008, 0009, 0012, 0013; `agentplot/sluice` records 0013 (a place is a plain git worktree) and 0070 (the same words for sluice); rules core.3, core.24, core.25, core.27, core.28.
+Sources: `boomdrivedev/blueprints:design/flume/requirements.md` section 3, clauses 41 to 43, 56, 111, 124, 130 to 133, C.1, C.2, C.4, C.6, S5, S34, S35, S38, as amended at 9ae2125; records 0008, 0009, 0012, 0013; `boomdrivedev/sluice` records 0013 (a place is a plain git worktree) and 0070 (the same words for sluice); rules core.3, core.24, core.25, core.27, core.28.
 
 ## Context and problem statement
 

@@ -12,7 +12,7 @@ decision-makers:
 Status: accepted by the user on 2026-10-26, on their card.
 
 Deciders: the user, in the family's storage ruling (`design/capture/plan.md`, D4) and in flume's statement (a committed report; a `{{state}}` report only where the caller keeps it lasting).
-Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 24, 58, 62, 73 to 77, 102 to 104, 123, C.7; `agentplot/blueprints:design/capture/design.md`, "Where state lives".
+Sources: `boomdrivedev/blueprints:design/flume/requirements.md` clauses 24, 58, 62, 73 to 77, 102 to 104, 123, C.7; `boomdrivedev/blueprints:design/capture/design.md`, "Where state lives".
 
 ## Context and problem statement
 

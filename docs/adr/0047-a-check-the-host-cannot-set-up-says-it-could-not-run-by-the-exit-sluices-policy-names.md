@@ -14,7 +14,7 @@ Status: accepted on 2026-11-06 by madswan-design, the design agent, as written b
 Amended 2026-11-05, below: sluice 0.68.1 gives every place a short scratch, one an older sluice made among them, so the exit leaves the tests and `[tests] not_run` leaves `.config/sluice.toml`, and a test that finds no room for its socket fails in its own words.
 
 Deciders: madswan-design, taking the code stage's choices on sluice's clauses 19, 35 and 114 and its record 0074.
-Sources: `agentplot/blueprints:design/sluice/requirements.md` on main at cd8fd73, clauses 19, 35, 114, 115 and 116; sluice's records 0031 and 0074, and its `profiles/checks.rs` and `profiles/moon.rs` at v0.67.0; sluice's record of submission #108 and the results it keeps under flume:tools' key 9b568c1; this change's design and tasks; the user's rulings of 2026-11-03 and 2026-11-05 on the named-session tests, quoted in `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`'s design 2; rules core.21 and core.22; `crates/flume/tests/profiles/tools/main.rs`, `terminal_herdr.rs` (`SessionHome::new`) and `open.rs` (`Host::new`).
+Sources: `boomdrivedev/blueprints:design/sluice/requirements.md` on main at cd8fd73, clauses 19, 35, 114, 115 and 116; sluice's records 0031 and 0074, and its `profiles/checks.rs` and `profiles/moon.rs` at v0.67.0; sluice's record of submission #108 and the results it keeps under flume:tools' key 9b568c1; this change's design and tasks; the user's rulings of 2026-11-03 and 2026-11-05 on the named-session tests, quoted in `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`'s design 2; rules core.21 and core.22; `crates/flume/tests/profiles/tools/main.rs`, `terminal_herdr.rs` (`SessionHome::new`) and `open.rs` (`Host::new`).
 
 ## Context and problem statement
 
@@ -48,7 +48,7 @@ Exiting from one test ends the whole binary. sluice ends a run's process group w
 Status: accepted on 2026-11-06 by madswan-design, with the record. Written on 2026-11-05 by the code stage of the fix `herdr-session-tests-run-at-every-landing`. The direction is the user's, in sluice's record 0063 as amended and accepted the same day: "send sluice the short scratch folder as a fix so the tests run again". The exit was a stopgap, allowed until sluice gave a place a short scratch. Failing in the test's own words, removing `[tests] not_run` and keeping the link in `/tmp` are the stage's choices.
 
 Deciders: the user, whose words above ask that the tests run again; madswan-design, taking the code stage's choices within them.
-Sources: `agentplot/blueprints:design/sluice/requirements.md` on main at fa40c94, clauses 19, 35, 114 and 115; sluice's record 0063 as amended and accepted on 2026-11-05, on sluice's main at 3e0ae764; sluice 0.68.1, landed as #381 at 0a77608b, which deneb runs; sluice's record 0074; rules core.21, core.22 and core.51; `.config/sluice.toml`; `crates/flume/tests/profiles/tools/terminal_herdr.rs` (`TestServer::start`, `SessionHome::new`) and `open.rs` (`Host::new`).
+Sources: `boomdrivedev/blueprints:design/sluice/requirements.md` on main at fa40c94, clauses 19, 35, 114 and 115; sluice's record 0063 as amended and accepted on 2026-11-05, on sluice's main at 3e0ae764; sluice 0.68.1, landed as #381 at 0a77608b, which deneb runs; sluice's record 0074; rules core.21, core.22 and core.51; `.config/sluice.toml`; `crates/flume/tests/profiles/tools/terminal_herdr.rs` (`TestServer::start`, `SessionHome::new`) and `open.rs` (`Host::new`).
 
 ### Context and problem statement
 
