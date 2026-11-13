@@ -150,7 +150,8 @@ impl Engine {
     /// hand-over is recorded through weir's `hand`, by `notice`, and the
     /// claim kept; a send not made takes the claim back; and a claim whose
     /// hand-over the host's deliveries lack is recorded at the next settle
-    /// at the claim's time. No one agent asking no question found claims
+    /// at the claim's time, once, where that settle reads the claim while
+    /// the send is in flight. No one agent asking no question found claims
     /// nothing (43, 75, 132, 190, C.7; weir 103; core.11, core.28; design
     /// 5).
     pub(crate) fn deliver_ends(&self, id: &PlaceId) {
@@ -275,7 +276,8 @@ impl Engine {
                 );
                 for answer in answers {
                     match answer {
-                        Ok(_) => recorded = true,
+                        Ok(true) => recorded = true,
+                        Ok(false) => {}
                         Err(why) => self.host.log(&format!(
                             "the notice claimed of {}'s end to {} was not recorded: {why}",
                             held.place.id, claim.recipient
