@@ -9,6 +9,7 @@
 //! `2026-11-08T15:02:00Z`, and read back to seconds by its instant, so
 //! status gives every time in seconds as it gives every other (56).
 
+use crate::answer::and_list;
 use crate::ends::notice;
 use crate::{Answer, Engine, KeyConfirmed, Step};
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -274,9 +275,11 @@ impl Engine {
     /// delivery's way at its time, confirmed on receipt, since the old form
     /// counted it delivered; once those records stand, its document's next
     /// write empties its old list. True where it emptied one (43, 61;
-    /// core.17; design 11).
+    /// core.17; design 11). flume's log names each delivery this write
+    /// recorded, its place, its readers and its expiry.
     pub(crate) fn record_deliveries(&self, documents: &[HeldState]) -> bool {
         struct Wanted {
+            place: PlaceId,
             key: String,
             message: String,
             readers: Vec<String>,
@@ -303,6 +306,7 @@ impl Engine {
                         return None;
                     }
                     Some(Wanted {
+                        place: held.place.id.clone(),
                         key: held.place.delivery_key(&end.of)?,
                         message: notice(held, &end.of),
                         readers,
@@ -317,8 +321,10 @@ impl Engine {
         }
         let span = self.host.ends_expire();
         let mut refused: Vec<String> = vec![];
+        let mut newly: Vec<String> = vec![];
         let written = update(&*self.store, |records| {
             refused.clear();
+            newly.clear();
             let mut all = records.to_vec();
             let mut added = vec![];
             let mut add = |records: Vec<Record>, all: &mut Vec<Record>| {
@@ -335,7 +341,22 @@ impl Engine {
                     &wanted.at,
                     span,
                 ) {
-                    Ok(Recorded::Add(records)) => add(records, &mut all),
+                    Ok(Recorded::Add(records)) => {
+                        let expires = records.iter().find_map(|record| match record {
+                            Record::Delivery(delivery) => {
+                                Some(delivery.expires_at().as_str().to_string())
+                            }
+                            _ => None,
+                        });
+                        newly.push(format!(
+                            "recorded the delivery {} of {}, owed to {}, expiring at {}",
+                            wanted.key,
+                            wanted.place,
+                            and_list(&wanted.readers),
+                            expires.unwrap_or_default()
+                        ));
+                        add(records, &mut all);
+                    }
                     Ok(Recorded::Held(_)) => {}
                     Err(refusal) => {
                         refused.push(format!("{}: {refusal}", wanted.key));
@@ -370,6 +391,9 @@ impl Engine {
                 return false;
             }
         };
+        for line in newly {
+            self.host.log(&line);
+        }
         let recorded: Vec<&str> = records
             .iter()
             .filter_map(|record| match record {
@@ -449,9 +473,13 @@ impl Engine {
     /// `of` names: the delivery with its hand-overs and its confirmations,
     /// every reader having confirmed it, its `weir-known/1` records staying;
     /// a delivery not done is never let go of (62; weir 106, 107, I9).
-    pub(crate) fn let_go_where(&self, of: impl Fn(&str) -> bool) {
+    /// flume's log names each delivery let go of, the readers that
+    /// confirmed it, and `why`.
+    pub(crate) fn let_go_where(&self, mut of: impl FnMut(&str) -> bool, why: &str) {
         let now = time(self.host.now());
+        let mut let_go: Vec<String> = vec![];
         let written = rewrite(&*self.store, |records| {
+            let_go.clear();
             let done: Vec<String> = weir_delivery::owed(records, &now)
                 .ok()?
                 .done
@@ -461,6 +489,19 @@ impl Engine {
                 .collect();
             if done.is_empty() {
                 return None;
+            }
+            for record in records {
+                if let Record::Delivery(delivery) = record {
+                    let key = delivery.key().as_str();
+                    if done.iter().any(|done| done == key) {
+                        let readers: Vec<String> =
+                            delivery.readers().iter().map(ToString::to_string).collect();
+                        let_go.push(format!(
+                            "let go of the delivery {key}, confirmed by {}: {why}",
+                            and_list(&readers)
+                        ));
+                    }
+                }
             }
             let kept = |key: &weir_delivery::Key| !done.iter().any(|done| done == key.as_str());
             Some(
@@ -476,8 +517,13 @@ impl Engine {
                     .collect(),
             )
         });
-        if let Err(why) = written {
-            self.host.log(&why);
+        match written {
+            Ok(_) => {
+                for line in let_go {
+                    self.host.log(&line);
+                }
+            }
+            Err(why) => self.host.log(&why),
         }
     }
 
@@ -490,23 +536,45 @@ impl Engine {
             .filter_map(|end| held.place.delivery_key(&end.of))
             .collect();
         if !keys.is_empty() {
-            self.let_go_where(|key| keys.iter().any(|held| held == key));
+            let why = format!("the document {} was removed", held.place.id);
+            self.let_go_where(|key| keys.iter().any(|held| held == key), &why);
         }
     }
 
     /// Lets go of every done delivery whose place has no document on the
     /// host, as after a removal whose let-go did not land (62; weir 107).
+    /// A place's document is gone only where two reads of every place,
+    /// the second begun once the first ended, both lack it: a tidy writes
+    /// the document it keeps before it removes the place's own, so a read
+    /// that listed the documents before the one kept was written and read
+    /// the place's own once it was removed lacks the place, and the read
+    /// after it holds the one kept. So no delivery of a place whose
+    /// document stands is let go of, and status never falls back to
+    /// reading one of its ends owed again (43, 62; weir 107, I9).
     pub(crate) fn let_go_of_the_gone(&self) {
-        let prefixes: Vec<String> = self
-            .store
-            .read_every()
-            .into_iter()
-            .filter_map(|read| {
-                let place = read.state.place;
-                Some(format!("{}/{}/", place.short(), place.token?))
-            })
-            .collect();
-        self.let_go_where(|key| !prefixes.iter().any(|prefix| key.starts_with(prefix)));
+        let standing = || -> Vec<String> {
+            self.store
+                .read_every()
+                .into_iter()
+                .filter_map(|read| {
+                    let place = read.state.place;
+                    Some(format!("{}/{}/", place.short(), place.token?))
+                })
+                .collect()
+        };
+        let first = standing();
+        let mut second: Option<Vec<String>> = None;
+        self.let_go_where(
+            |key| {
+                let stands = |prefixes: &[String]| {
+                    prefixes
+                        .iter()
+                        .any(|prefix| key.starts_with(prefix.as_str()))
+                };
+                !stands(&first) && !stands(second.get_or_insert_with(standing))
+            },
+            "no document of its place stands",
+        );
     }
 
     /// Confirms each of `keys` as `recipient`, through weir's `confirm`, in
@@ -636,6 +704,145 @@ fn noticed(records: &[Record], key: &str, recipient: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Defaults;
+    use flume_fakes::*;
+    use flume_seams::{Binding, Host, Over, Phase, Readiness, Settings, SubmissionHeld};
+    use serde_json::{json, to_value};
+    use std::sync::Arc;
+
+    /// An engine over fresh fakes, with its store and host.
+    fn engine() -> (Engine, Arc<FakeStore>, Arc<FakeHost>) {
+        let git = FakeGit::new();
+        let host = Arc::new(FakeHost::default());
+        let store = Arc::new(FakeStore::default());
+        let engine = Engine::new(
+            Arc::new(FakeResolver::new(Arc::new(FakeKinds::default()))),
+            Arc::new(FakeTerminal::new(host.clone())),
+            store.clone(),
+            Arc::new(FakeHistory::new(git)),
+            host.clone(),
+            Defaults {
+                settings: Settings::default(),
+                send_backs: 2,
+            },
+        );
+        (engine, store, host)
+    }
+
+    /// The place `fix--one`, token `0a1b2c3d`, for `ops`, under `id` in
+    /// the phase `phase`.
+    fn document(id: &str, phase: Phase) -> HeldState {
+        let mut place = crate::tests::record(Binding::default());
+        place.id = PlaceId::new(id);
+        place.recipients = vec!["ops".into()];
+        place.token = Some("0a1b2c3d".into());
+        serde_json::from_value(json!({
+            "place": to_value(place).unwrap(),
+            "phase": to_value(phase).unwrap(),
+            "readiness": to_value(Readiness::default()).unwrap(),
+            "stages": [],
+            "current": null,
+            "submission": to_value(SubmissionHeld::default()).unwrap(),
+            "failures": [],
+            "moves": [],
+            "unsettled": [],
+        }))
+        .unwrap()
+    }
+
+    const KEY: &str = "fix--one/0a1b2c3d/stage/code/1/delivered";
+
+    /// The host's deliveries holding `KEY`'s delivery, owed to `ops` and
+    /// confirmed by it, so done.
+    fn done(store: &dyn Store, host: &FakeHost) {
+        let at = time(host.now());
+        let Ok(Recorded::Add(mut records)) =
+            weir_delivery::record(&[], KEY, "code delivered", &["ops"], &at, 604_800)
+        else {
+            panic!("the delivery was not recorded");
+        };
+        let Ok(Confirmed::Add(confirmed)) = weir_delivery::confirm(&records, KEY, "ops", &at)
+        else {
+            panic!("the delivery was not confirmed");
+        };
+        records.extend(confirmed);
+        rewrite(store, |_| Some(records.clone())).unwrap();
+    }
+
+    fn holds_the_delivery(store: &dyn Store) -> bool {
+        read(store).unwrap().1.iter().any(
+            |record| matches!(record, Record::Delivery(delivery) if delivery.key().as_str() == KEY),
+        )
+    }
+
+    fn let_go_lines(host: &FakeHost) -> Vec<String> {
+        host.logged
+            .calls()
+            .into_iter()
+            .filter(|line| line.starts_with("let go of the delivery"))
+            .collect()
+    }
+
+    #[test]
+    fn a_done_delivery_of_a_document_a_tidy_moves_during_the_read_is_kept() {
+        // 62; weir 107, I9: a host's let-go of the gone whose read of
+        // every place lists the place's own document, and then reads it
+        // once a tidy wrote the document it keeps and removed the place's
+        // own, lets go of nothing of the place's while that document
+        // stands; once no document of it stands, it lets go, and its log
+        // says so.
+        let (engine, store, host) = engine();
+        let own = PlaceId::new("/r/places/fix--one");
+        let kept = PlaceId::new("/r/places/fix--one@5");
+        store.put(
+            &own,
+            document(
+                &own.0,
+                Phase::Over {
+                    over: Over::Done,
+                    kept: None,
+                },
+            ),
+        );
+        done(&*store, &host);
+        let moving = store.clone();
+        let (from, to) = (own.clone(), kept.clone());
+        store.during_next_read_every(move || {
+            moving.put(
+                &to,
+                document(
+                    &to.0,
+                    Phase::Tidied {
+                        over: Over::Done,
+                        at: 5,
+                        pending_for: vec!["boomdrive".into()],
+                    },
+                ),
+            );
+            let version = moving.read(&from).unwrap().version;
+            moving.write(&from, Some(version), None);
+        });
+        engine.let_go_of_the_gone();
+        assert!(store.read(&own).is_none() && store.read(&kept).is_some());
+        assert!(
+            holds_the_delivery(&*store),
+            "the delivery of a place whose document stands was let go of"
+        );
+        assert!(let_go_lines(&host).is_empty());
+        let version = store.read(&kept).unwrap().version;
+        store.write(&kept, Some(version), None);
+        engine.let_go_of_the_gone();
+        assert!(
+            !holds_the_delivery(&*store),
+            "the gone place's delivery kept"
+        );
+        assert_eq!(
+            let_go_lines(&host),
+            vec![format!(
+                "let go of the delivery {KEY}, confirmed by ops: no document of its place stands"
+            )]
+        );
+    }
 
     #[test]
     fn a_hosts_second_is_written_in_utc_and_read_back() {

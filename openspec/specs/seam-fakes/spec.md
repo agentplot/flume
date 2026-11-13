@@ -369,3 +369,21 @@ add no submission to its record (106, 210).
 
 - **WHEN** a test asks the fake merge queue to forecast `train/x` onto `main`, then scripts it in conflict on `README.md` with `#7` ahead and asks twice, then scripts it clear and asks again
 - **THEN** the answers are clear at `main`'s revision, in conflict on `README.md` with `#7` twice, then clear; the log names four forecasts; and the record holds no submission of `train/x` (210)
+
+### Requirement: The fake store moves a document while it reads every place, and refuses one place's write
+
+The fake store SHALL run an act once inside its next read of every
+place, after it lists the documents standing and before it reads each,
+so a document the act writes is not listed and one it removes reads as
+none; and SHALL refuse the next write of a place it is told, once, as
+moved, writing nothing (75, 102, 103).
+
+#### Scenario: A document moved inside a read of every place
+
+- **WHEN** the act armed for the next read of every place writes a place's kept document and removes the place's own
+- **THEN** that read holds neither, and the next read holds the kept one
+
+#### Scenario: A place's write refused
+
+- **WHEN** the next write of a place's kept document is refused and a tidy writes it
+- **THEN** the write is refused as moved, nothing is written, and the next write of it lands

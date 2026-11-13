@@ -25,6 +25,11 @@ pub struct FakeStore {
     /// whose version moves at each write would refuse it.
     refuses_host_writes: Mutex<bool>,
     after_read: Mutex<Vec<(Holds, Interleaved)>>,
+    /// Acts run once, inside the next read of every place, between its
+    /// listing of the documents and its read of each.
+    during_read_every: Mutex<Vec<Interleaved>>,
+    /// The places whose next write is refused, each once.
+    refused: Mutex<Vec<PlaceId>>,
     root: String,
     pub log: Log,
 }
@@ -57,6 +62,8 @@ impl FakeStore {
             before_host_write: Mutex::default(),
             refuses_host_writes: Mutex::default(),
             after_read: Mutex::default(),
+            during_read_every: Mutex::default(),
+            refused: Mutex::default(),
             root: root.into(),
             log: Log::default(),
         }
@@ -88,6 +95,22 @@ impl FakeStore {
         act: impl FnOnce() + Send + 'static,
     ) {
         lock(&self.after_read).push((Box::new(when), Box::new(act)));
+    }
+
+    /// `act` runs once, inside the next read of every place, after it
+    /// listed the documents standing and before it reads each: a document
+    /// `act` writes is not listed, and one it removes is read as none, so
+    /// a document `act` moves to another name is read under neither, as a
+    /// read of a directory misses a file another process renames while it
+    /// reads.
+    pub fn during_next_read_every(&self, act: impl FnOnce() + Send + 'static) {
+        lock(&self.during_read_every).push(Box::new(act));
+    }
+
+    /// The next write of `place` refused as moved, once, nothing written,
+    /// as a store refuses one whose file it could not write.
+    pub fn refuse_next_write_of(&self, place: &PlaceId) {
+        lock(&self.refused).push(place.clone());
     }
 
     /// Takes out and runs the first hook whose test holds of `held`.
@@ -188,7 +211,19 @@ impl Store for FakeStore {
 
     fn read_every(&self) -> Vec<Versioned> {
         self.log.push("read_every");
-        lock(&self.state).documents.values().cloned().collect()
+        let hooks: Vec<Interleaved> = std::mem::take(&mut *lock(&self.during_read_every));
+        if hooks.is_empty() {
+            return lock(&self.state).documents.values().cloned().collect();
+        }
+        let listed: Vec<PlaceId> = lock(&self.state).documents.keys().cloned().collect();
+        for hook in hooks {
+            hook();
+        }
+        let state = lock(&self.state);
+        listed
+            .iter()
+            .filter_map(|place| state.documents.get(place).cloned())
+            .collect()
     }
 
     fn write(&self, place: &PlaceId, at: Option<u64>, next: Option<&HeldState>) -> Written {
@@ -203,6 +238,16 @@ impl Store for FakeStore {
             .map(|versioned| versioned.version);
         let what = if next.is_some() { "write" } else { "remove" };
         let at_text = at.map_or("new".to_string(), |version| version.to_string());
+        let refused = {
+            let mut refused = lock(&self.refused);
+            let at = refused.iter().position(|refused| refused == place);
+            at.map(|at| refused.remove(at)).is_some()
+        };
+        if refused {
+            self.log
+                .push(format!("{what} {place} at {at_text} refused"));
+            return Written::Moved;
+        }
         if current != at {
             self.log.push(format!("{what} {place} at {at_text} moved"));
             return Written::Moved;
