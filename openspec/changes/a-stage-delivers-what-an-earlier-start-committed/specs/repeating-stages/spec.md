@@ -1,30 +1,12 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
-### Requirement: A repetition delivers its group and the stage delivers every task
+### Requirement: A repetition counts from the first start given its group
 
-A repetition with a group SHALL have delivered once the change at the
-branch's head holds that group, by number and title, with no task
-unticked, and the newest commit touching the change was made since it
-started, read at one head. flume SHALL then end its agent once quiet
-and, while a task stays unticked, start the next repetition as a next
-stage starts; the stage SHALL deliver once every task is ticked (24, 25,
-40, 140).
-
-A repetition with a group SHALL have started, for this, at the first
-start given its group since its stage last delivered, so a start given
-the group its stage's last start was given counts what that start made;
-a start with no group SHALL deliver as its stage does, counting from
-the first of the stage's starts since it last delivered (25, 140).
-
-#### Scenario: Three groups, three agents
-
-- **WHEN** a repeating code stage's change holds three groups and each repetition ticks its group, commits and goes quiet
-- **THEN** three agents are opened in turn, never two live at once, and only after the third does the stage deliver and verify start (30, 40, S50)
-
-#### Scenario: More than its group ticked
-
-- **WHEN** a repetition given group 1 ticks groups 1 and 2 and commits
-- **THEN** the next repetition is given group 3
+A repetition with a group SHALL have started, for its delivery, at the
+first start given its group since its stage last delivered, so a start
+given the group its stage's last start was given counts what that start
+made; a start with no group SHALL deliver as its stage does, counting
+from the first of the stage's starts since it last delivered (25, 140).
 
 #### Scenario: The last group ticked before a stop-short
 
@@ -35,6 +17,8 @@ the first of the stage's starts since it last delivered (25, 140).
 
 - **WHEN** a repetition on group 2 of a stage that declares `preview` writes the line for `preview`, then stops short needing an answer, and the retry's agent, given group 2, ticks group 2 and commits without writing a line
 - **THEN** the repetition delivers, the line the first start given group 2 wrote counting for it (25, 129, 140)
+
+## MODIFIED Requirements
 
 ### Requirement: A retry starts the unticked group again
 
