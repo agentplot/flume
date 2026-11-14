@@ -12,7 +12,7 @@ decision-makers:
 Status: accepted, agentplot-design's own choice, made on the rules written and cheap to change.
 
 Deciders: agentplot-design, on its challenges of 2026-11-11 and 2026-11-12 to clause 25 from signals `2026-11-11-agentplot-planner-3ce5d093/01` and `2026-11-12-agentplot-ops-af264c2f/01`.
-Sources: `boomdrivedev/blueprints:design/flume/requirements.md` 24, 25, 49, 112, 131, 140, S52 and S124, on branch `design/flume-a-retry-counts-its-stages-earlier-commits`; boomdrive's `worktrunk-comes-with-the-flake`, whose retried code stage could not deliver on 2026-11-11; sluice's `fix--main--a-passed-candidate-lands-within-the-hold` (head 69b144b3), dropped and launched again on 2026-11-12 because its answered code stage could not deliver.
+Sources: `boomdrivedev/blueprints:design/flume/requirements.md` 24, 25, 49, 112, 131, 140, S52 and S131, on boomdrivedev/blueprints' main since `41bd0a2`; boomdrive's `worktrunk-comes-with-the-flake`, whose retried code stage could not deliver on 2026-11-11; sluice's `fix--main--a-passed-candidate-lands-within-the-hold` (head 69b144b3), dropped and launched again on 2026-11-12 because its answered code stage could not deliver.
 
 ## Context and problem statement
 
@@ -26,7 +26,7 @@ A deliverable counts only when made since its stage started (25), and flume read
 
 ## Decision outcome
 
-Option 1, written as clause 25 and scenario S124. An agent that finds its stage's work already committed ends its turn, and the stage delivers. A fix round still needs its own commit, since it starts afresh. Where a submission failed for a reason that isn't the branch's, the caller retries the submission (49), and flume never submits an unchanged head by itself.
+Option 1, written as clause 25 and scenario S131. An agent that finds its stage's work already committed ends its turn, and the stage delivers. A fix round still needs its own commit, since it starts afresh. Where a submission failed for a reason that isn't the branch's, the caller retries the submission (49), and flume never submits an unchanged head by itself.
 
 ### Consequences
 
