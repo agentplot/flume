@@ -377,6 +377,15 @@ impl Agent for Claude {
         }
     }
 
+    /// The session its started ack names, none before it said it started
+    /// (128, 217).
+    fn conversation(&self, folder: &str, agent: &Identity) -> Option<String> {
+        Record::at(folder, agent)
+            .started()
+            .map(|started| started.session_id)
+            .filter(|session| !session.is_empty())
+    }
+
     /// The start's received ack, the prompt's digest matched; where none
     /// came, the transcript's user turn or queued record holding the
     /// prompt, a slash command by its name and arguments; each compared
