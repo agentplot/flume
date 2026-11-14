@@ -2,8 +2,6 @@
 
 - FROM: `### Requirement: An end pending for an address with no run wakes the role`
 - TO: `### Requirement: A delivery pending for an address with no run wakes the role`
-- FROM: `### Requirement: A role's run takes no notice before its prompt`
-- TO: `### Requirement: A role's run's first prompt carries its batch`
 
 ## MODIFIED Requirements
 
@@ -42,34 +40,19 @@ run was handed and did not confirm SHALL wake no run again (43, 132,
 - **WHEN** a caller messages `madswan/planner` while no planner run is live or waiting
 - **THEN** the message's own act launches one planner run, and a settle that follows launches none (132, 214)
 
-### Requirement: A role's run's first prompt carries its batch
+### Requirement: A role's run takes no notice before its prompt
 
-Each start of an address's run SHALL fill its prompt with the batch
-pending at its address when the prompt is filled, after the kind's
-template and before the way to stop short, claiming those deliveries
-for the address under the start's identity and recording them handed
-once its prompt is read received; a start read never begun, or ended
-before its prompt was received, SHALL let its claims go and record
-nothing. While the current start is starting, or started with its
-prompt not yet received, a settle SHALL hand nothing into the run's
-session, and what came after the prompt was filled SHALL wait for the
-run's next wait. A standing agent of the address SHALL be delivered to
-as before (28, 37, 38, 43, 132, 214).
+While the current start of an address's run is starting, or started
+with its prompt not yet received, a settle SHALL hand nothing into the
+run's session, which its agent would take as its prompt, and what came
+after the prompt was filled SHALL wait for the run's next wait. A
+standing agent of the address SHALL be delivered to as before (37, 38,
+43, 132, 214).
 
 #### Scenario: A run not yet given its prompt
 
 - **WHEN** a fix's end wakes `east/planner`'s run, whose agent waits in the session `east/planner` before it says it started, and the fix is settled again
 - **THEN** no notice goes into the run's session, and once the agent says it started and its prompt is received the end is recorded handed to `east/planner`, carried in that prompt, and no settle sends it again (37, 38, 43)
-
-#### Scenario: The first prompt carries the batch
-
-- **WHEN** a message and a fix's end are pending for `east/planner` when its run's start fills its prompt
-- **THEN** the prompt holds the kind's template, then the message and the end, each with its confirm, then the way to stop short (28, 214)
-
-#### Scenario: A start that never began
-
-- **WHEN** the run's start carrying a batch is read never begun
-- **THEN** its claims are let go, nothing is recorded handed, and the next start's prompt carries the same batch
 
 #### Scenario: What came after the prompt
 
@@ -88,6 +71,26 @@ nothing else of what the run does (43, 69, 72, 132, 214).
 - **THEN** it collects every end and every message pending for `madswan/planner`, each handed to that address by the inbox and confirmed by it
 
 ## ADDED Requirements
+
+### Requirement: A role's run's first prompt carries its batch
+
+Each start of an address's run SHALL fill its prompt with the batch
+pending at its address when the prompt is filled, after the kind's
+template and before the way to stop short, claiming those deliveries
+for the address under the start's identity and recording them handed
+once its prompt is read received; a start read never begun, or ended
+before its prompt was received, SHALL let its claims go and record
+nothing (28, 37, 43, 214).
+
+#### Scenario: The first prompt carries the batch
+
+- **WHEN** a message and a fix's end are pending for `east/planner` when its run's start fills its prompt
+- **THEN** the prompt holds the kind's template, then the message and the end, each with its confirm, then the way to stop short (28, 214)
+
+#### Scenario: A start that never began
+
+- **WHEN** the run's start carrying a batch is read never begun
+- **THEN** its claims are let go, nothing is recorded handed, and the next start's prompt carries the same batch
 
 ### Requirement: A role's run takes nothing while it waits on an answer
 

@@ -10,25 +10,15 @@
 The plugin SHALL give every session `/launch <brief>`, which launches
 through `flume launch --json` and reports the place, and SHALL serve
 over MCP by `flume mcp` the tools `status`, answering what `flume status
---json` answers and settling nothing; `message`, with `target`, `words`,
-`within` and `answers`; `launch`, with `kind`, `name`, `brief` and the
-command's other words and switches by their long names, `base`,
-`recipient`, `hold`, `hold_submission`, `mark`, `priority`,
-`stall_after`, `agent`, `stream` and `intent`, arrays where the flag
-repeats; and `wake`, with `address`; each of the last three
-turned into the command line's arguments and run by its parser and
-act, its result the act's JSON and a refusal marked an error (7, 53,
-57, 60, 132, section 9).
+--json` answers and settling nothing, and `message`, `launch` and
+`wake`, each of the last three turned into the command line's arguments
+and run by its parser and act, its result the act's JSON and a refusal
+marked an error (7, 53, 57, 60, 132, section 9).
 
 #### Scenario: status over MCP
 
 - **WHEN** a scripted MCP session initializes `flume mcp`, lists its tools and calls `status`
 - **THEN** the tool's result is the JSON `flume status --json` gives over the same state, and nothing is written
-
-#### Scenario: The tools listed
-
-- **WHEN** a scripted MCP session lists `flume mcp`'s tools
-- **THEN** it lists `status`, `message`, `launch` and `wake`, each with its input schema, `status` alone read-only
 
 #### Scenario: message over MCP
 
@@ -55,6 +45,21 @@ at the agent's start and a started session's mode is its own (161,
 - **THEN** the later prompt is acked received, the started ack is written again with the session's transcript, and nothing is recorded as unsettled (161, 162)
 
 ## ADDED Requirements
+
+### Requirement: The MCP tools take the command line's words
+
+`flume mcp`'s `message` SHALL take `target`, `words`, `within` and
+`answers`; its `launch` SHALL take `kind`, `name`, `brief` and the
+command's other words and switches by their long names, `base`,
+`recipient`, `hold`, `hold_submission`, `mark`, `priority`,
+`stall_after`, `agent`, `stream` and `intent`, arrays where the flag
+repeats; its `wake` SHALL take `address`; and `status` alone SHALL be
+marked read-only (7, 53, 60, 132, section 9).
+
+#### Scenario: The tools listed
+
+- **WHEN** a scripted MCP session lists `flume mcp`'s tools
+- **THEN** it lists `status`, `message`, `launch` and `wake`, each with its input schema, `status` alone read-only
 
 ### Requirement: The deliver mod runs the hook at the session's wait
 

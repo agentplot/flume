@@ -151,11 +151,11 @@ ending no agent and counting no start (42, 47 to 50, 53 to 55, 198).
 A retry, or a message that answers an agent kept open (198), naming a
 stop-short's key by `--answers <key>` SHALL be taken only while the
 place waits on that stop-short, and SHALL record on its end the
-answer's words, who gave them, as the answering command's recipient
-names it, and when. Otherwise it SHALL be refused, naming the answer
-taken, who gave it and when, or the move the place waits on now, and
-SHALL end, start and type nothing. An answer with no key SHALL be taken
-as before (42, 49, 53).
+answer's words, who gave them, as the command's recipient names it,
+and when. Otherwise it SHALL be refused, naming the answer taken, who
+gave it and when, or the move the place waits on now, and SHALL end,
+start and type nothing. An answer with no key SHALL be taken as before
+(42, 49, 53).
 
 #### Scenario: One answer taken by a fresh agent
 

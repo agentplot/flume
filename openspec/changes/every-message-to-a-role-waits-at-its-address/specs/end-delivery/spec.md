@@ -7,11 +7,8 @@ stuck, a submission's outcome or a stall SHALL record it on the place
 as an end, with what flume read, and record its delivery to each of its
 recipients, as "An end's recipients" gives them; and SHALL hand it to
 each recipient once, as a notice into the recipient's own session at
-its next wait, with every other delivery pending for it in one prompt,
-by the recipient agent's deliver part where its profile offers one and
-otherwise through the terminal into its pane, recorded as a hand-over
-with to whom and when, the end pending until the recipient confirms it
-(7, 43, 46, 95, 214, 215).
+its next wait, recorded as a hand-over with to whom and when, the end
+pending until the recipient confirms it (7, 43, 46, 95, 214, 215).
 
 #### Scenario: A delivery and its record
 
