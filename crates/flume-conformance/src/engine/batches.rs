@@ -10,12 +10,13 @@
 //! while the inbox still gives it.
 
 use super::messages::from;
+use super::open_sessions::stops_short;
 use super::role_waking::{configure_at, fix_for, planner_run};
 use super::settling::deliver_fix;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::deliveries::{self, rewrite_whole};
-use flume_core::{notice_to, Answer};
+use flume_core::{notice_to, Answer, Retry};
 use flume_fakes::Plan;
 use flume_seams::*;
 use std::sync::{Arc, Mutex};
@@ -56,6 +57,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "batch: a message to madswan/planner, whose standing agent works, is typed into it never while it works, and the host's watch's settle once it waits hands it the message once, recorded handed by message, a role's messages taken at its wait",
             cites: &["43", "53", "132"],
             run: a_message_to_a_standing_agent_at_the_watchs_settle,
+        },
+        Scenario {
+            name: "batch: a message for east/ops while its run's plan ended short needing an answer, its agent kept open, is typed into its session never and handed to none; once a retry answers the stop-short and the agent goes quiet again, the next settle hands it the message, a delivery never taken for the answer",
+            cites: &["42", "53", "132", "198"],
+            run: a_message_while_the_run_waits_on_its_answer,
         },
     ]
 }
@@ -383,6 +389,68 @@ fn a_message_to_a_standing_agent_at_the_watchs_settle(_: &()) -> Outcome {
         handovers(&world, &key),
         vec![(planner.to_string(), DeliveredBy::Message)],
         "the hand-overs"
+    );
+    Ok(())
+}
+
+fn a_message_while_the_run_waits_on_its_answer(_: &()) -> Outcome {
+    let world = World::new();
+    let ops = "east/ops";
+    configure_at(
+        &world,
+        ops,
+        "Read what is pending for you.",
+        planner_run(None, None),
+    );
+    ensure!(world.engine.wake(ops).refusal().is_none(), "the wake");
+    let run = World::id("turn", "east-ops");
+    world.settle(&run);
+    let agent = World::identity("turn", "east-ops", "plan", 1);
+    stops_short(
+        &world,
+        &run,
+        0,
+        &agent,
+        "Which queue?",
+        StopKind::NeedsAnswer,
+    )?;
+    world.settle(&run);
+    ensure_eq!(
+        world.stage_state(&run, "plan"),
+        Some(StageState::EndedShort),
+        "the run's plan"
+    );
+    world.terminal.set_state(&agent, AgentState::Waiting);
+    let key = message_key(&world.engine.message_address(
+        ops,
+        "the nightly job failed",
+        None,
+        &from(Some("operator")),
+    ))?;
+    world.settle(&run);
+    ensure!(
+        world.terminal.notices(ops).is_empty(),
+        "something typed while the run waits on its answer"
+    );
+    ensure_eq!(handovers(&world, &key), vec![], "the message's hand-overs");
+    let retried = world.engine.retry(
+        &run,
+        Retry::Stage("plan".into()),
+        Some("the main queue".into()),
+        false,
+    );
+    ensure!(retried.refusal().is_none(), "the retry: {retried:?}");
+    ensure_eq!(
+        world.stage_state(&run, "plan"),
+        Some(StageState::Begun),
+        "the run's plan once answered"
+    );
+    world.terminal.set_state(&agent, AgentState::Waiting);
+    world.settle(&run);
+    ensure_eq!(
+        world.terminal.notices(ops),
+        vec![batch_of(&world, std::slice::from_ref(&key), ops)?],
+        "the message handed once the run took its answer"
     );
     Ok(())
 }
