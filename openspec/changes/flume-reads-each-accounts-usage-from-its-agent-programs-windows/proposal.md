@@ -81,8 +81,9 @@ None.
 
 ## Impact
 
-- `plugins/claude`: `hooks/usage.ts` and its tests, `hooks/hooks.json`
-  naming it.
+- `plugins/claude`: `hooks/usage.ts` and its tests, and `hooks/flume.ts`,
+  the plugin's one hooks module, which `hooks/hooks.json` names and which
+  registers `line.ts` and `usage.ts`.
 - `crates/flume-seams`: `Agent::windows` and `Agent::reports_windows`,
   `Windows`, `AccountReading`, the account's document of spent time and
   reading; `Account::usage`, `Usage` and `Host::usage` go; the workspace's

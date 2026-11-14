@@ -47,9 +47,15 @@ host's documents only through `windows` (core.2).
 
 ## 2. The module that passes the windows (C.4 at bd79555)
 
-`plugins/claude/hooks/usage.ts`, a hooks module beside `line.ts`, listed
-in `hooks/hooks.json`'s `modules`, typed against the vendored engine
-types:
+`plugins/claude/hooks/usage.ts`, a module of its own beside `line.ts`,
+typed against the vendored engine types. The pinned engine loads one
+hooks module per plugin, refusing a second entry in `hooks/hooks.json`'s
+`modules`, so the one listed is `hooks/flume.ts`, which registers
+`line.ts`'s hooks and then `usage.ts`'s and hooks nothing itself; the
+path not taken, the handler written into `line.ts`, gives the place's
+line a second job.
+
+
 
 - Whether flume started the session is read once from its environment,
   `FLUME_PLACE` and `FLUME_AGENT` both set, as `line.ts` reads it.

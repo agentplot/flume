@@ -1,6 +1,6 @@
 {
-  "description": "flume's agent hooks: the started and received acks, the asking mark, the guard on submitting and pushing, the stop check and the settle once the agent is quiet, the last words a failed turn leaves, and the session's end; and the module that pins the place's line under the prompt. In a session flume did not start each does nothing but SessionStart, which runs flume inbox as the session the terminal names, confirming on receipt each end it is handed, and gives the agent each end and each place waiting on that session with its key and the ways on, or nothing. Each hook exits 0 and holds up no start.",
-  "modules": ["./line.ts"],
+  "description": "flume's agent hooks: the started and received acks, the asking mark, the guard on submitting and pushing, the stop check and the settle once the agent is quiet, the last words a failed turn leaves, and the session's end; and the one hooks module, which pins the place's line under the prompt and passes each report of the account's usage windows to flume hook usage, which keeps them as the account's reading. In a session flume did not start each does nothing but SessionStart, which runs flume inbox as the session the terminal names, confirming on receipt each end it is handed, and gives the agent each end and each place waiting on that session with its key and the ways on, or nothing. Each hook exits 0 and holds up no start.",
+  "modules": ["./flume.ts"],
   "hooks": {
     "SessionStart": [
       {

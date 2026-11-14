@@ -1469,13 +1469,18 @@ fn the_plugin_an_agent_loads() {
         "{hooks}"
     );
     assert!(!hooks.contains("\"command\": \"flume\""), "{hooks}");
-    // The module runs the same binary by its path (design 4).
-    let module = std::fs::read_to_string(dir.join("hooks/line.ts")).expect("the module");
-    assert!(
-        module.contains("const FLUME = \"/opt/flume/bin/flume\";"),
-        "{module}"
-    );
-    assert!(!module.contains("const FLUME = \"flume\";"), "{module}");
+    // Each module runs the same binary by its path (design 4, 211).
+    for module in ["hooks/line.ts", "hooks/usage.ts"] {
+        let text = std::fs::read_to_string(dir.join(module)).expect(module);
+        assert!(
+            text.contains("const FLUME = \"/opt/flume/bin/flume\";"),
+            "{module}: {text}"
+        );
+        assert!(
+            !text.contains("const FLUME = \"flume\";"),
+            "{module}: {text}"
+        );
+    }
     // The manifest carries the binary's version, a release's where the
     // repository's says the workspace's, which the started ack reports
     // back (135).

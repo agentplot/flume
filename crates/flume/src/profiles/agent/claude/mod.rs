@@ -84,9 +84,11 @@ pub const PLACE: &str = "FLUME_PLACE";
 pub const STAGE: &str = "FLUME_STAGE";
 
 /// The plugin's files, as `plugins/claude` holds them, by their path in
-/// the plugin: its manifests, its hooks, the module that pins the place's
-/// line under the prompt (design 4) and the /launch command.
-pub const PLUGIN: [(&str, &str); 5] = [
+/// the plugin: its manifests, its hooks, its one hooks module and the two
+/// it registers, the one that pins the place's line under the prompt
+/// (design 4) and the one that passes the account's usage windows to
+/// `flume hook usage` (211), and the /launch command.
+pub const PLUGIN: [(&str, &str); 7] = [
     (
         ".claude-plugin/plugin.json",
         include_str!("../../../../../../plugins/claude/.claude-plugin/plugin.json"),
@@ -96,8 +98,16 @@ pub const PLUGIN: [(&str, &str); 5] = [
         include_str!("../../../../../../plugins/claude/hooks/hooks.json"),
     ),
     (
+        "hooks/flume.ts",
+        include_str!("../../../../../../plugins/claude/hooks/flume.ts"),
+    ),
+    (
         "hooks/line.ts",
         include_str!("../../../../../../plugins/claude/hooks/line.ts"),
+    ),
+    (
+        "hooks/usage.ts",
+        include_str!("../../../../../../plugins/claude/hooks/usage.ts"),
     ),
     (
         ".mcp.json",
@@ -110,8 +120,8 @@ pub const PLUGIN: [(&str, &str); 5] = [
 ];
 
 /// A file of the plugin as the binary writes it for the agents it
-/// starts: each command naming `flume`, a hook's or the module's, names
-/// the binary by its absolute path instead (C.4; design 4). The manifest
+/// starts: each command naming `flume`, a hook's or a module's, names the
+/// binary by its absolute path instead (C.4; design 4). The manifest
 /// carries the binary's version as `plugins/claude` holds it, the
 /// workspace's (135).
 pub fn written(text: &str, binary: &Path) -> String {
