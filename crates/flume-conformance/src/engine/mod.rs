@@ -36,6 +36,7 @@ pub mod start_integrity;
 pub mod starts;
 pub mod stream_terminals;
 pub mod streams;
+pub mod telemetry;
 pub mod tidying;
 pub mod world;
 
@@ -80,5 +81,6 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(own_settings::scenarios());
     every.extend(base_places::scenarios());
     every.extend(open_sessions::scenarios());
+    every.extend(telemetry::scenarios());
     every
 }

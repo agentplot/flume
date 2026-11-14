@@ -367,6 +367,9 @@ fn s6_a_tell_into_a_question_then_into_work(_: &()) -> Outcome {
     world
         .terminal
         .schedule(&work, world.host.now() + 120, AgentState::Waiting);
+    // A settle reads the agent no longer asking, which ends the place's
+    // wait on a person (90, 217), before the tell, which changes no stage.
+    world.settle(&id);
     let before = world.held(&id).ok_or("no place")?.stages;
     taken(&world.engine.tell(&id, "use the second", None))?;
     ensure_eq!(
