@@ -1,5 +1,5 @@
 //! The caller's acts (47 to 55, 109, 114): retry, stop, drop, done,
-//! finish and tell, none ending an agent that is not quiet unless forced.
+//! finish and message, none ending an agent that is not quiet unless forced.
 
 use super::carried_conversations::{by_hand, retry_talk, talk, talking};
 use super::world::*;
@@ -41,14 +41,14 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s9_a_drop_that_keeps_the_branch,
         },
         Scenario {
-            name: "tell: refused into a question with nothing typed; given once the agent waits",
+            name: "message: refused into a question with nothing typed; given once the agent waits",
             cites: &["S6", "53", "54", "55", "I5"],
-            run: s6_a_tell_into_a_question_then_into_work,
+            run: s6_a_message_into_a_question_then_into_work,
         },
         Scenario {
-            name: "tell: one not delivered within its bound is refused",
+            name: "message: one not delivered within its bound is refused",
             cites: &["54", "53"],
-            run: a_tell_past_its_bound,
+            run: a_message_past_its_bound,
         },
         Scenario {
             name: "retry: naming the submission submits the head and starts no agent",
@@ -121,9 +121,9 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_second_answer_to_the_same_question,
         },
         Scenario {
-            name: "answer: a tell from the pane ops naming the same key while the agent is still kept open is refused naming east/ops, its words and when, and nothing is typed",
+            name: "answer: a message from the pane ops naming the same key while the agent is still kept open is refused naming east/ops, its words and when, and nothing is typed",
             cites: &["42", "53", "54"],
-            run: a_tell_naming_an_answered_key,
+            run: a_message_naming_an_answered_key,
         },
         Scenario {
             name: "answer: a second retry naming the same key, checked while the first answer is being handed to the agent kept open, is refused naming the answer being taken by east/ops, nothing of it typed, and the first is recorded with no claim left",
@@ -348,12 +348,12 @@ fn s9_a_drop_that_keeps_the_branch(_: &()) -> Outcome {
     Ok(())
 }
 
-fn s6_a_tell_into_a_question_then_into_work(_: &()) -> Outcome {
+fn s6_a_message_into_a_question_then_into_work(_: &()) -> Outcome {
     let world = World::new();
     let id = world.begun("build", Some(Deliverable::Commits), "one")?;
     let work = World::identity("build", "one", "work", 1);
     world.agent.set_asking(&work, Reading::Yes);
-    refused(&world.engine.tell(&id, "use the second", None))?;
+    refused(&world.engine.message(&id, "use the second", None))?;
     ensure!(
         world
             .terminal
@@ -368,7 +368,7 @@ fn s6_a_tell_into_a_question_then_into_work(_: &()) -> Outcome {
         .terminal
         .schedule(&work, world.host.now() + 120, AgentState::Waiting);
     let before = world.held(&id).ok_or("no place")?.stages;
-    taken(&world.engine.tell(&id, "use the second", None))?;
+    taken(&world.engine.message(&id, "use the second", None))?;
     ensure_eq!(
         world.terminal.sent_to(&work).last().cloned(),
         Some("use the second".to_string()),
@@ -377,23 +377,23 @@ fn s6_a_tell_into_a_question_then_into_work(_: &()) -> Outcome {
     ensure_eq!(
         world.held(&id).ok_or("no place")?.stages,
         before,
-        "the stages after a tell"
+        "the stages after a message"
     );
     Ok(())
 }
 
-fn a_tell_past_its_bound(_: &()) -> Outcome {
+fn a_message_past_its_bound(_: &()) -> Outcome {
     let world = World::new();
     let id = world.begun("build", Some(Deliverable::Commits), "one")?;
     let work = World::identity("build", "one", "work", 1);
     world.terminal.set_state(&work, AgentState::Working);
     let at = world.host.now();
-    refused(&world.engine.tell(&id, "later", None))?;
+    refused(&world.engine.message(&id, "later", None))?;
     ensure!(
         world.host.now() - at >= 600,
-        "the tell gave up before ten minutes"
+        "the message gave up before ten minutes"
     );
-    refused(&world.engine.tell(&id, "sooner", Some(60)))?;
+    refused(&world.engine.message(&id, "sooner", Some(60)))?;
     ensure!(
         world
             .terminal
@@ -407,7 +407,7 @@ fn a_tell_past_its_bound(_: &()) -> Outcome {
     none.terminal
         .kill(&World::identity("build", "two", "work", 1));
     none.settle(&other);
-    refused(&none.engine.tell(&other, "anyone?", None))?;
+    refused(&none.engine.message(&other, "anyone?", None))?;
     Ok(())
 }
 
@@ -1002,12 +1002,12 @@ fn a_second_answer_to_the_same_question(_: &()) -> Outcome {
     Ok(())
 }
 
-fn a_tell_naming_an_answered_key(_: &()) -> Outcome {
+fn a_message_naming_an_answered_key(_: &()) -> Outcome {
     let world = World::new();
     let (id, at) = answered_by_ops(&world)?;
     world.host.advance(60);
     let sent = world.terminal.sent_to(&construct(1)).len();
-    let reason = refused(&world.engine.tell_answering(
+    let reason = refused(&world.engine.message_answering(
         &id,
         "2.3",
         None,

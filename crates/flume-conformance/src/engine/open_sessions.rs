@@ -110,9 +110,9 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_retrys_answer,
         },
         Scenario {
-            name: "answer: a tell of notes.md to a place whose code waits on an answer, its agent kept open, hands the same agent the question then the answer, code begun again under its first start, and the stop-short's end holds the answer by tell",
+            name: "answer: a message of notes.md to a place whose code waits on an answer, its agent kept open, hands the same agent the question then the answer, code begun again under its first start, and the stop-short's end holds the answer by message",
             cites: &["42", "53", "55", "198"],
-            run: a_tells_answer,
+            run: a_messages_answer,
         },
         Scenario {
             name: "answer: the third repetition of a repeating code, kept open for its answer, takes a retry's question and answer in its session and carries on its third group under the same start, never its first",
@@ -120,12 +120,12 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_repeating_stages_answer,
         },
         Scenario {
-            name: "answer: a code agent kept open that takes a tell's answer, commits and ends its session, a settle its quiet started reading it let go, agent_ended, before the tell reads the answer received, has the answer recorded with tell, and code, carried on under its first start, read delivered from its commit",
+            name: "answer: a code agent kept open that takes a message's answer, commits and ends its session, a settle its quiet started reading it let go, agent_ended, before the message reads the answer received, has the answer recorded with message, and code, carried on under its first start, read delivered from its commit",
             cites: &["42", "96", "121", "198"],
             run: an_answer_taken_before_its_session_ended,
         },
         Scenario {
-            name: "answer: one given while the asking agent asks a person in its pane, and one past the tell's bound while it works, are each refused with nothing typed and nothing recorded, and code still waits on its answer",
+            name: "answer: one given while the asking agent asks a person in its pane, and one past the message's bound while it works, are each refused with nothing typed and nothing recorded, and code still waits on its answer",
             cites: &["53", "54", "42", "198"],
             run: an_answer_the_agent_does_not_take,
         },
@@ -140,9 +140,9 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_retry_with_no_words_while_kept_open,
         },
         Scenario {
-            name: "answer: a tell to a place whose code waits on an answer once its agent was let go is refused with nothing typed, naming the retry that answers it",
+            name: "answer: a message to a place whose code waits on an answer once its agent was let go is refused with nothing typed, naming the retry that answers it",
             cites: &["42", "53", "198", "S104"],
-            run: a_tell_once_the_agent_is_let_go,
+            run: a_message_once_the_agent_is_let_go,
         },
         Scenario {
             name: "answer: a second stop-short from code's asking agent kept open while code still reads ended short, no act having handed it an answer, waits ten seconds for one to be recorded and is refused, code still waiting on its first answer",
@@ -1022,11 +1022,11 @@ fn a_retrys_answer(_: &()) -> Outcome {
     answered_in_session(&world, &id, &code("one", 1), Act::Retry, at)
 }
 
-fn a_tells_answer(_: &()) -> Outcome {
+fn a_messages_answer(_: &()) -> Outcome {
     let world = World::new();
     let (id, _) = asking(&world, "one")?;
     let at = world.host.now();
-    taken(&world.engine.tell(&id, "notes.md", None))?;
+    taken(&world.engine.message(&id, "notes.md", None))?;
     answered_in_session(&world, &id, &code("one", 1), Act::Message, at)
 }
 
@@ -1049,7 +1049,7 @@ fn an_answer_taken_before_its_session_ended(_: &()) -> Outcome {
     );
     let (settler, place, taker, seen) = (world.engine(), id.clone(), who.clone(), read.clone());
     world.host.at_next_sleep(move || {
-        // While the tell waits to read the answer received, the agent
+        // While the message waits to read the answer received, the agent
         // takes it, commits, and its session ends; the settle its quiet
         // started reads it let go.
         agent.receives_at(&taker, Some(1));
@@ -1067,7 +1067,7 @@ fn an_answer_taken_before_its_session_ended(_: &()) -> Outcome {
         });
     });
     let at = world.host.now();
-    taken(&world.engine.tell(&id, "notes.md", None))?;
+    taken(&world.engine.message(&id, "notes.md", None))?;
     ensure_eq!(
         read.lock().map_err(|_| "the settle's reading")?.clone(),
         Some((
@@ -1079,7 +1079,7 @@ fn an_answer_taken_before_its_session_ended(_: &()) -> Outcome {
             }),
             false
         )),
-        "the settle's letting go of code's agent before the tell recorded its answer, and whether code's start was live"
+        "the settle's letting go of code's agent before the message recorded its answer, and whether code's start was live"
     );
     ensure_eq!(
         short_end(&world, &id, "code", 1)?.answer,
@@ -1171,10 +1171,10 @@ fn an_answer_the_agent_does_not_take(_: &()) -> Outcome {
     world.agent.set_asking(&who, Reading::No);
     world.terminal.set_state(&who, AgentState::Working);
     let told = world.host.now();
-    refused(&world.engine.tell(&id, "notes.md", Some(60)))?;
+    refused(&world.engine.message(&id, "notes.md", Some(60)))?;
     ensure!(
         world.host.now() - told >= 60,
-        "the tell gave up before its bound"
+        "the message gave up before its bound"
     );
     let start = world.held(&id).ok_or("no held state")?.stages[0]
         .start
@@ -1239,13 +1239,13 @@ fn a_retry_with_no_words_while_kept_open(_: &()) -> Outcome {
     Ok(())
 }
 
-fn a_tell_once_the_agent_is_let_go(_: &()) -> Outcome {
+fn a_message_once_the_agent_is_let_go(_: &()) -> Outcome {
     let world = World::new();
     let (id, at) = asking(&world, "one")?;
     world.host.advance(KEEP_OPEN);
     world.settle(&id);
     let sendings = world.terminal.log.count("send");
-    let reason = refused(&world.engine.tell(&id, "notes.md", None))?;
+    let reason = refused(&world.engine.message(&id, "notes.md", None))?;
     ensure!(
         reason.contains(&format!("flume retry {id} --words")),
         "the refusal names not the retry: {reason}"
@@ -1253,7 +1253,7 @@ fn a_tell_once_the_agent_is_let_go(_: &()) -> Outcome {
     ensure_eq!(
         world.terminal.log.count("send"),
         sendings,
-        "the sendings after the tell"
+        "the sendings after the message"
     );
     waits_on_answer(&world, &id, "code", at)
 }

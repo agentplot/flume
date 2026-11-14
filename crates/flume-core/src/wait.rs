@@ -299,7 +299,7 @@ impl Engine {
 /// collected, and each place that waits on the session with the
 /// question, its key, its agent kept open and until when, and the three
 /// ways on: answer it with the key, by a retry or, while its agent is kept
-/// open, a tell; hold the move with words; or leave it to the answerer
+/// open, a message; hold the move with words; or leave it to the answerer
 /// behind its stream at its stall. None where the inbox gives nothing (43,
 /// 130, 193, 198, C.4; design 9).
 pub fn session_words(answer: &Answer) -> Option<String> {
@@ -414,7 +414,7 @@ fn waiting_words(place: &WaitingPlace) -> Vec<String> {
             ));
             if on.open_until.is_some() {
                 lines.push(format!(
-                    "  or, while its agent is kept open: flume tell {short} --answers {} \"<answer>\"",
+                    "  or, while its agent is kept open: flume message {short} --answers {} \"<answer>\"",
                     stop_short.key
                 ));
             }

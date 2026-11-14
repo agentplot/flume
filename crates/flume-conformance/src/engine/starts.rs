@@ -594,8 +594,11 @@ fn blocked_without_a_mark(_: &()) -> Outcome {
     let agent = agent_status(&world, &id)?;
     ensure_eq!(agent.state, AgentState::Unknown, "the agent's state");
     ensure_eq!(agent.asking, Reading::No, "the agent's mark");
-    let told = world.engine().tell(&id, "go on", Some(30));
-    ensure!(told.refusal().is_some(), "a tell into a dialog was taken");
+    let told = world.engine().message(&id, "go on", Some(30));
+    ensure!(
+        told.refusal().is_some(),
+        "a message into a dialog was taken"
+    );
     ensure!(
         world.terminal.sent_to(&code).is_empty(),
         "flume typed into a dialog it cannot name"

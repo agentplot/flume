@@ -27,7 +27,7 @@ use flume_seams::*;
 pub fn scenarios() -> Vec<Scenario<()>> {
     vec![
         Scenario {
-            name: "status: asked three times of one place, it answers the same and starts or tells nothing",
+            name: "status: asked three times of one place, it answers the same and starts or messages nothing",
             cites: &["S14", "57", "60", "69", "72"],
             run: s14_asked_three_times,
         },
@@ -82,7 +82,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: its_agent_let_go,
         },
         Scenario {
-            name: "status: a fix whose code took one answer by a retry and one by a tell in its first start's session gives both under code in order, each with its question, its answer, retry or tell, and when it was sent and received, in the JSON form",
+            name: "status: a fix whose code took one answer by a retry and one by a message in its first start's session gives both under code in order, each with its question, its answer, retry or message, and when it was sent and received, in the JSON form",
             cites: &["42", "56", "198"],
             run: two_answers_in_one_session,
         },
@@ -1030,7 +1030,7 @@ fn two_answers_in_one_session(_: &()) -> Outcome {
     world.settle(&id);
     world.host.advance(60);
     let second = world.host.now();
-    taken(&world.engine.tell(&id, "the first line", None))?;
+    taken(&world.engine.message(&id, "the first line", None))?;
     let handed = |at| {
         Some(Handed {
             sent_at: at,
@@ -1080,7 +1080,7 @@ fn two_answers_in_one_session(_: &()) -> Outcome {
             {
                 "question": again,
                 "words": "the first line",
-                "act": "tell",
+                "act": "message",
                 "at": second,
                 "session": { "sent_at": second, "received_at": second },
             },
@@ -1142,7 +1142,7 @@ fn places(answer: Answer) -> Result<Vec<PlaceStatus>, String> {
     }
 }
 
-/// The calls that would start, tell or write.
+/// The calls that would start, message or write.
 fn acting_calls(world: &World) -> (usize, usize, usize, usize) {
     (
         world.terminal.log.count("open"),
@@ -1165,7 +1165,7 @@ fn s14_asked_three_times(_: &()) -> Outcome {
     ensure_eq!(
         acting_calls(&world),
         before,
-        "calls that start, tell or write"
+        "calls that start, message or write"
     );
     Ok(())
 }
@@ -1195,7 +1195,7 @@ fn a_change_ticked_between_asks(_: &()) -> Outcome {
     ensure_eq!(
         acting_calls(&world),
         before,
-        "calls that start, tell or write"
+        "calls that start, message or write"
     );
     Ok(())
 }

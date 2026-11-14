@@ -605,7 +605,7 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             let key = key_of(answers)?;
             let core = build()?;
             let answering = answering(&core, key);
-            core.tell_answering(&place, words, within, &answering)
+            core.message_answering(&place, words, within, &answering)
         }
         Command::Stop(forced) => build_for(forced, &named, build, Engine::stop)?,
         Command::Finish(forced) => build_for(forced, &named, build, Engine::finish)?,

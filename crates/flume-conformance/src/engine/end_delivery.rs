@@ -2056,7 +2056,7 @@ fn a_restarted_sessions_words(_: &()) -> Outcome {
         "  Which design does the brief mean?".to_string(),
         format!("Its agent is kept open for the answer until {until}."),
         "- answer it, naming its key: flume retry change--plan --stage construct --answers stage/construct/1/ended-short --words \"<answer>\"".to_string(),
-        "  or, while its agent is kept open: flume tell change--plan --answers stage/construct/1/ended-short \"<answer>\"".to_string(),
+        "  or, while its agent is kept open: flume message change--plan --answers stage/construct/1/ended-short \"<answer>\"".to_string(),
         "- hold the move with your words, saying who has it: flume hold change--plan \"<words>\" --waiting --for <time>".to_string(),
         "- leave it: once it stalls, the answerer behind its stream has it.".to_string(),
     ] {

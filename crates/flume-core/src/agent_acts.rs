@@ -171,7 +171,7 @@ impl Engine {
     }
 
     /// Whether the terminal the start opened its agent in hands a running
-    /// agent words, as a tell's send does; not where no profile answers
+    /// agent words, as a message's send does; not where no profile answers
     /// for that terminal now (95, 190, 198).
     fn sends(&self, start: &StartHeld) -> bool {
         self.terminal_of(start)

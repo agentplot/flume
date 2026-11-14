@@ -273,13 +273,13 @@ fn a_multiplexer_changed_while_a_change_runs(_: &()) -> Outcome {
     world.host.set_display("trial", Some("fake"), None, None);
     other.log.clear();
     world.terminal.log.clear();
-    if let Some(reason) = world.engine().tell(&id, "keep it short", None).refusal() {
-        return Err(format!("the tell was refused: {reason}"));
+    if let Some(reason) = world.engine().message(&id, "keep it short", None).refusal() {
+        return Err(format!("the message was refused: {reason}"));
     }
     ensure_eq!(
         other.sent_to(&construct).last().cloned(),
         Some("keep it short".to_string()),
-        "the tell's words through other"
+        "the message's words through other"
     );
     write_change(&world, "one");
     world.settle(&id);

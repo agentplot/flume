@@ -11,7 +11,7 @@ use crate::launch::and_list;
 use crate::open_sessions::waits_on_answer;
 use crate::start::{Start, Starts};
 use crate::status::waiting_on;
-use crate::{Act, Answer, Engine, Step, Tidied, POLL, RECEIVED_WITHIN, TELL_BOUND};
+use crate::{Act, Answer, Engine, Step, Tidied, MESSAGE_BOUND, POLL, RECEIVED_WITHIN};
 use flume_seams::*;
 
 /// What a retry names (49).
@@ -248,7 +248,7 @@ impl Engine {
         // answer at once is refused, and let go where it is not recorded
         // (42, 49, 75).
         let _claimed = match &answering.key {
-            Some(key) => match self.claim_answer(place, key, answering, TELL_BOUND) {
+            Some(key) => match self.claim_answer(place, key, answering, MESSAGE_BOUND) {
                 Ok(claimed) => Some(claimed),
                 Err(reason) => return Answer::refused(reason),
             },
@@ -689,23 +689,23 @@ impl Engine {
     /// once it said it started and waits, received or sent once more;
     /// refused with nothing typed when the place has no live agent, its
     /// agent is asking, or the words are not delivered within the bound.
-    /// A tell to a place whose stage ended short needing an answer is that
+    /// A message to a place whose stage ended short needing an answer is that
     /// answer while its agent is kept open for it, carrying the stage on
     /// in its session, and is refused, naming the retry that answers it,
     /// once its agent is not (42, 53 to 55, 198). It names no key and no
-    /// one who gives it: [`Engine::tell_answering`] with neither.
-    pub fn tell(&self, place: &PlaceId, words: &str, bound: Option<Seconds>) -> Answer {
-        self.tell_answering(place, words, bound, &Answering::default())
+    /// one who gives it: [`Engine::message_answering`] with neither.
+    pub fn message(&self, place: &PlaceId, words: &str, bound: Option<Seconds>) -> Answer {
+        self.message_answering(place, words, bound, &Answering::default())
     }
 
-    /// A tell, as [`Engine::tell`] takes one, whose words, where they
+    /// A message, as [`Engine::message`] takes one, whose words, where they
     /// answer the agent kept open, record who gave them and the key they
     /// named, none where they named none, on the stop-short they answer.
     /// One naming a key is taken only while the place waits on the
     /// stop-short the key names, and is otherwise refused with nothing
     /// typed, naming the answer that stop-short took, who gave it and
     /// when, or the move the place waits on now (42, 53, 198).
-    pub fn tell_answering(
+    pub fn message_answering(
         &self,
         place: &PlaceId,
         words: &str,
@@ -739,12 +739,12 @@ impl Engine {
         }
     }
 
-    /// Hands the agent of `start` `words` as a prompt, as a tell hands
+    /// Hands the agent of `start` `words` as a prompt, as a message hands
     /// them: once it said it started, waits and asks nothing, within the
     /// bound, ten minutes where none is given, its input cleared by the
     /// terminal's send, and read received within 60 seconds of each
     /// sending or sent once more. When it was last sent and read
-    /// received, or the tell's words saying why nothing more was typed
+    /// received, or the message's words saying why nothing more was typed
     /// (37, 38, 53, 54; core.11).
     pub(crate) fn hand(
         &self,
@@ -761,7 +761,7 @@ impl Engine {
             ));
         };
         let folder = self.store.folder(place);
-        let deadline = self.host.now() + bound.unwrap_or(TELL_BOUND);
+        let deadline = self.host.now() + bound.unwrap_or(MESSAGE_BOUND);
         loop {
             let state = self.state_of(Some(agent.as_ref()), &folder, start);
             let asking = agent.asking(&folder, identity);

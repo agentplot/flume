@@ -484,7 +484,7 @@ fn a_tell_under_the_printed_command_is_refused_with_nothing_typed() {
     world.agent.set_started(&code, Reading::Yes);
     launched(&printed(&world, &scratch).launch(&launch("fix", "one", Some("x"))))
         .expect("the launch");
-    let told = printed(&world, &scratch).tell(&id, "go on", Some(30));
+    let told = printed(&world, &scratch).message(&id, "go on", Some(30));
     assert!(
         told.refusal().is_some(),
         "a tell under the printed command was taken: {told:?}"

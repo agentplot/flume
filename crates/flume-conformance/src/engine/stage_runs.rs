@@ -603,8 +603,11 @@ fn s17_stuck(_: &()) -> Outcome {
         "the agent status names"
     );
     ensure_eq!(closes(&world.terminal.log), 0, "agents ended");
-    let told = world.engine.tell(&id, "the last task is the docs", None);
-    ensure!(told.refusal().is_none(), "the tell was refused: {told:?}");
+    let told = world.engine.message(&id, "the last task is the docs", None);
+    ensure!(
+        told.refusal().is_none(),
+        "the message was refused: {told:?}"
+    );
     world.terminal.set_state(&work, AgentState::Working);
     world.settle(&id);
     ensure_eq!(
