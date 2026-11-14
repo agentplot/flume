@@ -88,8 +88,8 @@ names no profile flume carries, which asks no terminal; and
 
 #### Scenario: A multiplexer flume carries no profile for
 
-- **WHEN** the fake host's `trial` names the multiplexer `rex`, which the resolver carries no terminal for
-- **THEN** `trial`'s line is `trial · session trial · no profile for rex`, the other streams' lines stand, the list is not refused, and no terminal is asked of `trial` (190, 200)
+- **WHEN** the fake host's `trial` names the multiplexer `cmux`, which the resolver carries no terminal for
+- **THEN** `trial`'s line is `trial · session trial · no profile for cmux`, the other streams' lines stand, the list is not refused, and no terminal is asked of `trial` (190, 200)
 
 ### Requirement: The list reads only what flume keeps
 
