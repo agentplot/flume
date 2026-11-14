@@ -141,8 +141,36 @@ the command's pane in its `agents_in`'s form.
   `reference/state.md` say design 8; the lines the site gains name none
   of core.35's words.
 
+## The archive
+
+Archiving the change breaks the gate. `openspec archive
+a-standing-agents-command-acts-as-its-address --yes` applies the deltas,
+and `openspec validate --specs --strict --no-interactive`, `root:specs`
+of `check-fast`, then fails `launching`:
+
+```
+⚠ [WARNING] requirements[1]: Requirement text is very long (>500 characters). Move examples and edge cases into scenarios, or split it into separate requirements that each state one behavior.
+```
+
+The MODIFIED "A launch's recipients" of `specs/launching/spec.md` is 705
+characters, 390 in `openspec/specs/launching/spec.md` on the base, and
+`--strict` fails a warning. `openspec validate --changes --strict`,
+`root:changes`, does not apply the limit to a delta, so the gate passed
+with the change open. The archive was undone and nothing archived: the
+specs pass as the branch stands (49 passed, 0 failed).
+
+The change's launching delta must keep "A launch's recipients" within
+500 characters, for one the refusal of a launch from the pane of an
+agent standing for several addresses as a requirement of its own,
+ADDED, with the scenario "A launch from the pane of an agent standing
+for two addresses" beneath it; and an archive of the change into a
+scratch copy then passing `openspec validate --specs --strict`.
+
 ## Verdict
 
-The whole checks pass and the work holds: every requirement and
-scenario of the five delta specs is met and every task is done. The
-change is archived.
+The whole checks pass and the code holds: every requirement and
+scenario of the five delta specs is met by the code and its tests, and
+every task is done. The change falls short of archiving: its launching
+delta's modified requirement is over the 500 characters `root:specs`
+allows once it is archived. Nothing is archived, and the change goes
+back to its code stage.
