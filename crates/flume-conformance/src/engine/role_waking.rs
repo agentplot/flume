@@ -206,6 +206,51 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["130", "132", "193", "56"],
             run: the_doors_own_run,
         },
+        Scenario {
+            name: "role waking: a confirm naming no recipient, with $FLUME_RECIPIENT unset, in the pane of east-planner, which acme gives east/planner and to which the fix's end was handed by notice, confirms as east/planner, the end delivered and pending for no one",
+            cites: &["7", "43", "132"],
+            run: a_confirm_from_the_standing_agents_pane,
+        },
+        Scenario {
+            name: "role waking: an inbox and then a wait on the fix's code stage, each naming no recipient, in east-planner's pane, collect east/planner's end, handed to it by the inbox, and the wait answers it as east/planner's",
+            cites: &["7", "43", "132"],
+            run: an_inbox_and_a_wait_from_the_standing_agents_pane,
+        },
+        Scenario {
+            name: "role waking: in east-planner's pane a confirm with $FLUME_RECIPIENT set to ops confirms as ops, and an inbox with $FLUME_PLACE naming the run of east/ops collects as east/ops",
+            cites: &["7", "132"],
+            run: what_the_command_names_comes_first,
+        },
+        Scenario {
+            name: "role waking: an inbox naming no recipient in the pane of east-helper, which no source gives an address, collects as that pane's session, and nothing pending for east/planner is handed over",
+            cites: &["7", "132"],
+            run: a_pane_no_standing_agent_holds,
+        },
+        Scenario {
+            name: "role waking: an inbox naming no recipient in the pane of one of two agents named east-planner in east collects as that pane's session, and nothing pending for east/planner is handed over",
+            cites: &["132"],
+            run: two_agents_of_the_standing_agents_name,
+        },
+        Scenario {
+            name: "role waking: where no source gives an address a standing agent, an inbox naming no recipient collects as its pane's session and the terminal is asked for no part's agents",
+            cites: &["7", "132"],
+            run: nothing_asked_where_no_standing_agent_is_declared,
+        },
+        Scenario {
+            name: "role waking: where east's agents cannot be read, an inbox naming no recipient in east-planner's pane collects as that pane's session, and status names east/planner with why its part was not read",
+            cites: &["132", "56"],
+            run: a_part_that_cannot_be_read,
+        },
+        Scenario {
+            name: "role waking: an inbox naming no recipient in the pane of east-planner, which acme gives east/planner and east/ops, is refused naming the agent, each address and --recipient, and both ends stay handed to none",
+            cites: &["132"],
+            run: one_agent_for_two_addresses,
+        },
+        Scenario {
+            name: "role waking: in the pane of an agent standing for east/planner and east/ops, flume inbox --recipient east/ops collects east/ops's end alone, handed to east/ops by the inbox",
+            cites: &["43", "132"],
+            run: the_address_named,
+        },
     ]
 }
 
@@ -660,7 +705,7 @@ fn three_ends_one_run(_: &()) -> Outcome {
     world.host.set_recipient(None);
     let run = world.engine();
     let recipient = run
-        .recipient(Some(&planner_id()))
+        .recipient(Some(&planner_id()))?
         .ok_or("the run names no recipient")?;
     ensure_eq!(recipient, PLANNER, "the run's recipient");
     let collected = match run.inbox(&recipient, None, true) {
@@ -741,7 +786,7 @@ fn the_run_starts(_: &()) -> Outcome {
     world.host.set_recipient(None);
     let run = world.engine();
     let recipient = run
-        .recipient(Some(&planner_id()))
+        .recipient(Some(&planner_id()))?
         .ok_or("the run names no recipient")?;
     let ends = match run.inbox(&recipient, None, true) {
         Answer::Inbox { ends, .. } => ends,
@@ -1273,7 +1318,7 @@ fn s99_one_declaration_two_streams(_: &()) -> Outcome {
     for (run, address, fix) in [(&east, PLANNER, &one), (&west, "west/planner", &two)] {
         let engine = world.engine();
         let recipient = engine
-            .recipient(Some(run))
+            .recipient(Some(run))?
             .ok_or_else(|| format!("{run} names no recipient"))?;
         ensure_eq!(recipient, address, format!("{run}'s recipient"));
         let places = match engine.inbox(&recipient, None, true) {
@@ -2032,5 +2077,402 @@ fn the_next_run_is_handed_it(_: &()) -> Outcome {
             end.pending_for
         );
     }
+    Ok(())
+}
+
+/// acme gives the planner the standing agent `east-planner` in the
+/// session `east`, the fake terminal holds it there in `state`, and the
+/// calling command runs in its pane, its environment naming no recipient:
+/// where the agent is (7, 132).
+fn in_the_planners_pane(world: &World, state: AgentState) -> String {
+    planner_stands(world);
+    let at = world
+        .terminal
+        .add_agent(Some("east"), "east-planner", state);
+    world.terminal.set_session(Some(&at));
+    world.host.set_recipient(None);
+    at
+}
+
+/// The code end of the place `id` as status gives it.
+fn code_end(world: &World, id: &PlaceId, key: &str) -> Result<flume_core::EndStatus, String> {
+    world
+        .status(id)?
+        .ends
+        .into_iter()
+        .find(|end| end.key.to_string() == key)
+        .ok_or(format!("{id} has no end {key}"))
+}
+
+/// Whether the end was handed to `recipient` by an inbox.
+fn handed_by_inbox(end: &flume_core::EndStatus, recipient: &str) -> bool {
+    end.end
+        .deliveries
+        .iter()
+        .any(|delivery| delivery.recipient == recipient && delivery.by == DeliveredBy::Inbox)
+}
+
+/// What the calling command's inbox collects, confirming nothing: the
+/// recipient it collected as and each end's place and key.
+fn collected(engine: &Engine, recipient: &str) -> Result<(String, Vec<String>), String> {
+    match engine.inbox(recipient, None, false) {
+        Answer::Inbox {
+            recipient, ends, ..
+        } => Ok((
+            recipient,
+            ends.iter()
+                .map(|collected| {
+                    format!(
+                        "{}--{} {}",
+                        collected.kind, collected.name, collected.end.key
+                    )
+                })
+                .collect(),
+        )),
+        other => Err(format!("the inbox answered {other:?}")),
+    }
+}
+
+const CODE_DELIVERED: &str = "stage/code/1/delivered";
+
+/// The role-waking spec's "A confirm from the standing agent's pane" (7,
+/// 43, 132; weir 102).
+fn a_confirm_from_the_standing_agents_pane(_: &()) -> Outcome {
+    let world = World::new();
+    let at = in_the_planners_pane(&world, AgentState::Waiting);
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    let id = delivered_for_planner(&world, "one")?;
+    ensure_eq!(
+        world.terminal.notices(&at),
+        vec![world.confirming(&code_delivered("one"), PLANNER)],
+        "the notice into east-planner's pane"
+    );
+    let key = code_end(&world, &id, CODE_DELIVERED)?
+        .delivery
+        .ok_or("no delivery recorded")?;
+    let engine = world.engine();
+    let recipient = engine
+        .recipient(None)?
+        .ok_or("the pane's command names no recipient")?;
+    ensure_eq!(recipient.as_str(), PLANNER, "the pane's recipient");
+    match engine.confirm(&recipient, &[key]) {
+        Answer::Confirmed { recipient, .. } => {
+            ensure_eq!(recipient.as_str(), PLANNER, "who confirmed")
+        }
+        other => return Err(format!("the confirm answered {other:?}")),
+    }
+    let end = code_end(&world, &id, CODE_DELIVERED)?;
+    ensure_eq!(end.pending_for, Vec::<String>::new(), "pending for");
+    ensure!(
+        end.confirmed.iter().any(|by| by.recipient == PLANNER),
+        "the end's confirmations: {:?}",
+        end.confirmed
+    );
+    Ok(())
+}
+
+/// The role-waking spec's "An inbox and a wait from the standing agent's
+/// pane" (7, 43, 132).
+fn an_inbox_and_a_wait_from_the_standing_agents_pane(_: &()) -> Outcome {
+    let world = World::new();
+    in_the_planners_pane(&world, AgentState::Waiting);
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    let id = delivered_for_planner(&world, "one")?;
+    let engine = world.engine();
+    let recipient = engine
+        .recipient(None)?
+        .ok_or("the inbox names no recipient")?;
+    ensure_eq!(
+        collected(&engine, &recipient)?,
+        (
+            PLANNER.to_string(),
+            vec![format!("fix--one {CODE_DELIVERED}")]
+        ),
+        "what the inbox collected"
+    );
+    ensure!(
+        handed_by_inbox(&code_end(&world, &id, CODE_DELIVERED)?, PLANNER),
+        "the end was not handed to {PLANNER} by the inbox"
+    );
+    let engine = world.engine();
+    let recipient = engine
+        .recipient(None)?
+        .ok_or("the wait names no recipient")?;
+    match engine.wait(
+        &id,
+        &flume_core::WaitFor::Stage("code".into()),
+        &recipient,
+        Some(0),
+        false,
+    ) {
+        Answer::Waited {
+            recipient,
+            end: Some(end),
+            ..
+        } => {
+            ensure_eq!(recipient.as_str(), PLANNER, "whom the wait answered");
+            ensure_eq!(end.key.to_string(), CODE_DELIVERED, "the end it answered");
+        }
+        other => return Err(format!("the wait answered {other:?}")),
+    }
+    Ok(())
+}
+
+/// The role-waking spec's "What the command names comes first" (7, 132;
+/// core.28).
+fn what_the_command_names_comes_first(_: &()) -> Outcome {
+    let world = World::new();
+    in_the_planners_pane(&world, AgentState::Waiting);
+    configure_at(
+        &world,
+        "east/ops",
+        "Read what is pending for you.",
+        planner_run(None, None),
+    );
+    let (_, run) = woken(&world.engine.wake("east/ops"))?;
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    let id = fix_for(&world, "one", &[PLANNER, "ops"])?;
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    let key = code_end(&world, &id, CODE_DELIVERED)?
+        .delivery
+        .ok_or("no delivery recorded")?;
+    world.host.set_recipient(Some("ops"));
+    let engine = world.engine();
+    let recipient = engine
+        .recipient(None)?
+        .ok_or("the confirm names no recipient")?;
+    ensure_eq!(recipient.as_str(), "ops", "the confirm's recipient");
+    match engine.confirm(&recipient, &[key]) {
+        Answer::Confirmed { recipient, .. } => {
+            ensure_eq!(recipient.as_str(), "ops", "who confirmed")
+        }
+        other => return Err(format!("the confirm answered {other:?}")),
+    }
+    ensure_eq!(
+        code_end(&world, &id, CODE_DELIVERED)?.pending_for,
+        vec![PLANNER.to_string()],
+        "pending once ops confirmed"
+    );
+    world.host.set_recipient(None);
+    let engine = world.engine();
+    let recipient = engine
+        .recipient(Some(&run.place))?
+        .ok_or("the inbox names no recipient")?;
+    ensure_eq!(
+        collected(&engine, &recipient)?.0,
+        "east/ops",
+        "whom the inbox collected as"
+    );
+    Ok(())
+}
+
+/// The role-waking spec's "A pane no standing agent holds" (7, 132).
+fn a_pane_no_standing_agent_holds(_: &()) -> Outcome {
+    let world = World::new();
+    in_the_planners_pane(&world, AgentState::Waiting);
+    let helper = world
+        .terminal
+        .add_agent(Some("east"), "east-helper", AgentState::Waiting);
+    world.terminal.set_session(Some(&helper));
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    let id = delivered_for_planner(&world, "one")?;
+    let engine = world.engine();
+    let recipient = engine
+        .recipient(None)?
+        .ok_or("the inbox names no recipient")?;
+    ensure_eq!(recipient, helper, "the inbox's recipient");
+    ensure_eq!(
+        collected(&engine, &recipient)?,
+        (helper.clone(), vec![]),
+        "what the inbox collected"
+    );
+    let end = code_end(&world, &id, CODE_DELIVERED)?;
+    ensure!(
+        !handed_by_inbox(&end, PLANNER),
+        "the planner's end was handed over by the helper's inbox"
+    );
+    ensure_eq!(
+        end.pending_for,
+        vec![PLANNER.to_string()],
+        "pending for the planner"
+    );
+    Ok(())
+}
+
+/// The role-waking spec's "Two agents of the standing agent's name"
+/// (132).
+fn two_agents_of_the_standing_agents_name(_: &()) -> Outcome {
+    let world = World::new();
+    let one = in_the_planners_pane(&world, AgentState::Waiting);
+    world
+        .terminal
+        .add_agent(Some("east"), "east-planner", AgentState::Waiting);
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    let id = delivered_for_planner(&world, "one")?;
+    ensure!(
+        world.terminal.every_notice().is_empty(),
+        "a notice reached an agent of two"
+    );
+    let engine = world.engine();
+    let recipient = engine
+        .recipient(None)?
+        .ok_or("the inbox names no recipient")?;
+    ensure_eq!(recipient, one, "the inbox's recipient");
+    ensure_eq!(
+        collected(&engine, &recipient)?,
+        (one.clone(), vec![]),
+        "what the inbox collected"
+    );
+    let end = code_end(&world, &id, CODE_DELIVERED)?;
+    ensure!(
+        end.end.deliveries.is_empty(),
+        "the planner's end was handed over: {:?}",
+        end.end.deliveries
+    );
+    ensure_eq!(
+        end.pending_for,
+        vec![PLANNER.to_string()],
+        "pending for the planner"
+    );
+    Ok(())
+}
+
+/// The role-waking spec's "Nothing asked where no standing agent is
+/// declared" (7; core.15).
+fn nothing_asked_where_no_standing_agent_is_declared(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_stream("east", Some(Stream::default()));
+    let pane = world
+        .terminal
+        .add_agent(Some("east"), "east-helper", AgentState::Waiting);
+    world.terminal.set_session(Some(&pane));
+    world.host.set_recipient(None);
+    let asked = world.terminal.log.count("agents_in");
+    let engine = world.engine();
+    let recipient = engine
+        .recipient(None)?
+        .ok_or("the inbox names no recipient")?;
+    ensure_eq!(recipient, pane, "the inbox's recipient");
+    ensure_eq!(
+        collected(&engine, &recipient)?,
+        (pane.clone(), vec![]),
+        "what the inbox collected"
+    );
+    ensure_eq!(
+        world.terminal.log.count("agents_in"),
+        asked,
+        "parts asked for their agents"
+    );
+    Ok(())
+}
+
+/// The role-waking spec's "A part that cannot be read" (132).
+fn a_part_that_cannot_be_read(_: &()) -> Outcome {
+    let world = World::new();
+    let at = in_the_planners_pane(&world, AgentState::Waiting);
+    world
+        .terminal
+        .refuse_agents_in(Some("east"), "the server did not answer");
+    let engine = world.engine();
+    let recipient = engine
+        .recipient(None)?
+        .ok_or("the inbox names no recipient")?;
+    ensure_eq!(recipient, at, "the inbox's recipient");
+    ensure_eq!(
+        collected(&engine, &recipient)?.0,
+        at,
+        "whom the inbox collected as"
+    );
+    let planner = address_of(&world, PLANNER)?;
+    match planner.standing.map(|standing| standing.found) {
+        Some(StandingFound::Unread { reason }) => ensure!(
+            reason.contains("the server did not answer"),
+            "why east was not read: {reason}"
+        ),
+        other => return Err(format!("status found the planner {other:?}")),
+    }
+    Ok(())
+}
+
+/// acme gives `east/planner` and `east/ops` each the standing agent
+/// `east-planner` in `east`, the fake terminal holds it there asking a
+/// question, so no notice is typed into it, and the calling command runs
+/// in its pane, its environment naming no recipient; a fix for each is
+/// delivered, its submission held: the two fixes (132).
+fn two_addresses_stand(world: &World) -> Result<(PlaceId, PlaceId), String> {
+    in_the_planners_pane(world, AgentState::Asking);
+    world.host.set_standing(
+        "east/ops",
+        Some(StandingAgent {
+            source: ACME.into(),
+            agent: "east-planner".into(),
+            session: Some("east".into()),
+            answers: None,
+            answerer: false,
+        }),
+    );
+    world
+        .queue
+        .plan_submits(vec![flume_fakes::Plan::Hold, flume_fakes::Plan::Hold]);
+    let one = delivered_for_planner(world, "one")?;
+    let two = fix_for(world, "two", &["east/ops"])?;
+    deliver_fix(world, &two);
+    world.settle(&two);
+    Ok((one, two))
+}
+
+/// The role-waking spec's "One agent for two addresses" (132).
+fn one_agent_for_two_addresses(_: &()) -> Outcome {
+    let world = World::new();
+    let (one, two) = two_addresses_stand(&world)?;
+    match world.engine().recipient(None) {
+        Err(refusal) => ensure_eq!(
+            refusal.as_str(),
+            "the agent east-planner this command runs in stands for east/ops and \
+             east/planner: name which with --recipient",
+            "the refusal"
+        ),
+        other => return Err(format!("the pane's recipient read {other:?}")),
+    }
+    for (id, address) in [(&one, PLANNER), (&two, "east/ops")] {
+        let end = code_end(&world, id, CODE_DELIVERED)?;
+        ensure!(
+            end.end.deliveries.is_empty(),
+            "{id}'s end was handed over: {:?}",
+            end.end.deliveries
+        );
+        ensure_eq!(
+            end.pending_for,
+            vec![address.to_string()],
+            format!("{id} pending for")
+        );
+    }
+    Ok(())
+}
+
+/// The role-waking spec's "The address named" (43, 132).
+fn the_address_named(_: &()) -> Outcome {
+    let world = World::new();
+    let (one, two) = two_addresses_stand(&world)?;
+    ensure_eq!(
+        collected(&world.engine(), "east/ops")?,
+        (
+            "east/ops".to_string(),
+            vec![format!("fix--two {CODE_DELIVERED}")]
+        ),
+        "what the inbox collected"
+    );
+    ensure!(
+        handed_by_inbox(&code_end(&world, &two, CODE_DELIVERED)?, "east/ops"),
+        "east/ops's end was not handed to it by the inbox"
+    );
+    ensure!(
+        code_end(&world, &one, CODE_DELIVERED)?
+            .end
+            .deliveries
+            .is_empty(),
+        "the planner's end was handed over"
+    );
     Ok(())
 }

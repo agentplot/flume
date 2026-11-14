@@ -758,7 +758,10 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
 
 /// The recipient named, else the one the core reads for a command that
 /// names none: `$FLUME_RECIPIENT`, the address of the role's run
-/// `$FLUME_PLACE` names, or the terminal's session (7, 132; design 7).
+/// `$FLUME_PLACE` names, the address the standing agent the command runs
+/// in holds, or the terminal's session; the core's refusal, where the
+/// agent stands for several addresses, is the command's (7, 132;
+/// core.28).
 fn recipient_of(core: &Engine, named: &Option<String>) -> Result<String, String> {
     if let Some(named) = named {
         return Ok(named.clone());
@@ -767,7 +770,7 @@ fn recipient_of(core: &Engine, named: &Option<String>) -> Result<String, String>
         .ok()
         .filter(|place| !place.is_empty())
         .map(PlaceId::new);
-    core.recipient(here.as_ref()).ok_or_else(|| {
+    core.recipient(here.as_ref())?.ok_or_else(|| {
         format!("no recipient is named: name one with --recipient or ${}, or run in a terminal's session or a role's run", crate::host::RECIPIENT)
     })
 }
@@ -775,7 +778,9 @@ fn recipient_of(core: &Engine, named: &Option<String>) -> Result<String, String>
 /// What a retry's or a tell's answer names beside its words: the key of
 /// the stop-short it answers, where `--answers` gives one, and who gives
 /// it, the recipient the command acts as where it names none, recorded on
-/// the stop-short it answers; none where no recipient is read (42).
+/// the stop-short it answers; none where no recipient is read or the
+/// reading is refused, so a retry or a tell is never refused for its
+/// giver (42, 49, 132).
 fn answering(core: &Engine, key: Option<EndKey>) -> Answering {
     Answering {
         key,

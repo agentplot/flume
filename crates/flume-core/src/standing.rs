@@ -11,6 +11,14 @@
 //! where the agent was is kept, so an agent revived under its name is
 //! found where it is. flume opens, starts, wakes and watches nothing for
 //! the address (core.13).
+//!
+//! A command that names no recipient, run in a standing agent's pane,
+//! acts as the address the agent holds (7, 132; core.28): the agent is
+//! the one its address's delivery reaches, at the session name its
+//! stream's terminal gives it, and the command runs in its pane where
+//! that terminal names the command's session so. An agent its sources
+//! give several addresses holds none by itself, and its command names
+//! which.
 
 use crate::room::StreamRoom;
 use crate::{Engine, StandingFound, StandingStatus};
@@ -116,6 +124,51 @@ impl Standing {
     }
 }
 
+/// What the standing agent a command runs in holds: nothing, where the
+/// command runs in no pane a standing agent of a declared address is
+/// found at; the one address, with the agent and the source that
+/// declares it; or, where the sources give the agent several addresses,
+/// each of them, sorted (7, 132; core.28).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum StandingHere {
+    None,
+    One {
+        address: String,
+        agent: String,
+        source: String,
+    },
+    Several {
+        agent: String,
+        addresses: Vec<String>,
+    },
+}
+
+impl StandingHere {
+    /// The address held, none where none is; or the refusal of a command
+    /// in the pane of an agent standing for several, naming the agent and
+    /// each address and asking for `--recipient` (132; core.28).
+    pub(crate) fn address(self) -> Result<Option<String>, String> {
+        match self {
+            StandingHere::None => Ok(None),
+            StandingHere::One { address, .. } => Ok(Some(address)),
+            StandingHere::Several { agent, addresses } => Err(several_words(&agent, &addresses)),
+        }
+    }
+}
+
+/// The refusal of a command naming no recipient in the pane of `agent`,
+/// which stands for each of `addresses` (132; core.28).
+pub(crate) fn several_words(agent: &str, addresses: &[String]) -> String {
+    let named = match addresses {
+        [] => String::new(),
+        [one] => one.clone(),
+        [before @ .., last] => format!("{} and {last}", before.join(", ")),
+    };
+    format!(
+        "the agent {agent} this command runs in stands for {named}: name which with --recipient"
+    )
+}
+
 impl Engine {
     /// The host's standing entries as its sources stand now, for one
     /// delivery or one status (132, 193).
@@ -182,6 +235,67 @@ impl Engine {
             status: status(Some(named.profile), found),
             terminal,
         })
+    }
+
+    /// What the standing agent the calling command runs in holds, read
+    /// from the entries `standing` gives (7, 132; core.15, core.28; design
+    /// 1, 4, 5). Nothing is asked where the entries give no address a
+    /// standing agent. For each address that does, in a stream the host
+    /// declares, its stream's terminal is asked the session it names for
+    /// the command, and an address whose terminal names none is passed
+    /// over unasked; else its agent is reached as a delivery reaches it,
+    /// each part of a terminal asked once, and the command's pane holds
+    /// the address where that one agent is found at the session the
+    /// terminal names for the command. An address none or several of
+    /// whose agents are found, or whose part is not read, holds nothing,
+    /// and nothing is kept.
+    pub(crate) fn standing_here(&self, mut standing: Standing) -> StandingHere {
+        if standing.entries.is_empty() {
+            return StandingHere::None;
+        }
+        let mut held: Vec<(String, StandingAgent)> = vec![];
+        for (address, entry) in standing.entries.clone() {
+            let stream = stream_of(&address);
+            if !standing
+                .streams
+                .get_or_insert_with(|| self.host.streams())
+                .contains_key(stream)
+            {
+                continue;
+            }
+            let Some(session) = self
+                .stream_terminal(stream)
+                .ok()
+                .and_then(|(terminal, _)| terminal.session())
+            else {
+                continue;
+            };
+            if let Some(Reach {
+                terminal: Some(_),
+                status:
+                    StandingStatus {
+                        found: StandingFound::One { at, .. },
+                        ..
+                    },
+            }) = self.reach(&mut standing, &address)
+            {
+                if at == session {
+                    held.push((address, entry));
+                }
+            }
+        }
+        match held.as_slice() {
+            [] => StandingHere::None,
+            [(address, entry)] => StandingHere::One {
+                address: address.clone(),
+                agent: entry.agent.clone(),
+                source: entry.source.clone(),
+            },
+            [(_, entry), ..] => StandingHere::Several {
+                agent: entry.agent.clone(),
+                addresses: held.iter().map(|(address, _)| address.clone()).collect(),
+            },
+        }
     }
 
     /// Where a notice for `recipient` goes: the one standing agent the
