@@ -856,6 +856,12 @@ impl TerminalHarness for Harness {
         standing(&self.server, &self.home, session, Some(name));
         true
     }
+
+    /// herdr relays a pane's screen and a person's keys (221, 222, C.5's
+    /// relay row).
+    fn relays(&self) -> bool {
+        true
+    }
 }
 
 impl Harness {
