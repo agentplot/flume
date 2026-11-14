@@ -11,6 +11,8 @@ use flume::host::RealHost;
 use flume::profiles::store::state_dir::StateDir;
 use flume::profiles::terminal::rex::{rex_name, Block, Rex, NAME, PIECE};
 use flume_conformance::engine::world::{kind, stage, World};
+use flume_conformance::scenario::pass_all;
+use flume_conformance::seams::terminal::{self, TerminalHarness};
 use flume_core::{Answer, Engine};
 use flume_seams::*;
 use serde_json::{json, Value};
@@ -1901,4 +1903,244 @@ fn a_done_agent_with_nothing_delivered_waits_and_no_settle_ends_it() {
         "the quiet agent's block was closed"
     );
     assert_eq!(profile.state(&code), AgentState::Waiting, "the agent");
+}
+
+/// The terminal seam's scenarios against the profile, over a fixture of
+/// their own: the caller a block of its own server's, a stubborn agent held
+/// from ending by stopping its server's process, no view offered and no
+/// start held, a block moved beside a person's in another window as the
+/// pinned Rex's `move` moves one, a person's block and a recipient's block
+/// opened by the test, and runs' parts started or not (98, C.5).
+struct Harness {
+    fixture: Fixture,
+    seam: Rex,
+    caller: Block,
+    /// Each server the harness stopped, to wake once it is dropped.
+    frozen: std::cell::RefCell<Vec<i32>>,
+}
+
+impl Harness {
+    fn new() -> Harness {
+        let fixture = Fixture::new();
+        let caller = Block {
+            id: "block:01a1d7f4-0000-7000-8000-00000000ca11".into(),
+            socket: fixture.state.socket("w"),
+        };
+        let seam = fixture
+            .profile()
+            .with_start_timeout(Duration::from_secs(8))
+            .with_caller(Some(caller.clone()));
+        Harness {
+            fixture,
+            seam,
+            caller,
+            frozen: std::cell::RefCell::default(),
+        }
+    }
+}
+
+impl Drop for Harness {
+    fn drop(&mut self) {
+        for pid in self.frozen.borrow().iter() {
+            self.fixture.thaw(*pid);
+        }
+    }
+}
+
+impl TerminalHarness for Harness {
+    type Seam = Rex;
+
+    fn seam(&self) -> &Rex {
+        &self.seam
+    }
+
+    fn shared(&self) -> Arc<dyn Terminal> {
+        Arc::new(self.seam.clone())
+    }
+
+    fn place(&self) -> PlaceRef {
+        self.fixture.place("fix--one")
+    }
+
+    fn folder(&self) -> String {
+        self.fixture.folder("fix--one")
+    }
+
+    fn command(&self) -> AgentCommand {
+        self.fixture.command(&[])
+    }
+
+    fn sends(&self) -> bool {
+        true
+    }
+
+    fn closes(&self) -> bool {
+        true
+    }
+
+    fn stubborn(&self, identity: &Identity) {
+        let block = self.seam.block(identity).expect("the block recorded");
+        let name = block
+            .socket
+            .file_stem()
+            .expect("the socket's name")
+            .to_string_lossy()
+            .into_owned();
+        let pid = self.fixture.freeze(&name);
+        self.frozen.borrow_mut().push(pid);
+    }
+
+    fn session(&self) -> Option<String> {
+        Some(self.caller.session())
+    }
+
+    fn shows(&self) -> bool {
+        true
+    }
+
+    fn leave_typed(&self, identity: &Identity, text: &str) {
+        within("the stand-in did not come up waiting", || {
+            self.seam.state(identity) == AgentState::Waiting
+        });
+        let block = self.seam.block(identity).expect("the block recorded");
+        rex(&block.socket, &["send", "-b", &block.id, "--", text]);
+        std::thread::sleep(Duration::from_millis(300));
+    }
+
+    fn submitted(&self, identity: &Identity) -> Vec<String> {
+        let block = self.seam.block(identity).expect("the block recorded");
+        self.fixture.got(&block.id)
+    }
+
+    /// Rex holds no start at a question it can read (35, C.5).
+    fn held(&self) -> Option<AgentCommand> {
+        None
+    }
+
+    fn never_up(&self) -> Option<AgentCommand> {
+        Some(self.fixture.command(&[("STAND_IN_SILENT", "1")]))
+    }
+
+    fn makes(&self) -> bool {
+        true
+    }
+
+    fn person_pane(&self, place: &PlaceRef) {
+        let (session, socket) = self
+            .seam
+            .base_session(place)
+            .expect("the base's Rex session");
+        rex(
+            &socket,
+            &[
+                "api",
+                "call",
+                "-s",
+                &session,
+                "session.new_window",
+                &json!({
+                    "window_label": "mine",
+                    "focus": false,
+                    "layout": {"block": {
+                        "flavor": "com.superlogical.terminal.shell",
+                        "options": {
+                            "shell": "none",
+                            "command": ["/bin/sleep", "600"],
+                            "exit": {"on_completion": false},
+                        },
+                    }},
+                })
+                .to_string(),
+            ],
+        );
+    }
+
+    /// The agent's block moved beside a person's block in another window
+    /// of its Rex session, by the pinned Rex's `move`, which keeps a
+    /// block's id.
+    fn move_pane(&self, identity: &Identity) {
+        let place = self.place();
+        self.person_pane(&place);
+        let (session, socket) = self
+            .seam
+            .base_session(&place)
+            .expect("the base's Rex session");
+        let block = self.seam.block(identity).expect("the block recorded");
+        let view = rex(&socket, &["api", "call", "-s", &session, "session.view"]);
+        let mine = view["windows"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|window| window["label"] == "mine")
+            .and_then(|window| window["layers"][0]["blocks"][0]["block_id"].as_str())
+            .expect("the person's block")
+            .to_string();
+        rex(
+            &socket,
+            &["move", "-s", &session, &block.id, "right", &mine],
+        );
+    }
+
+    fn shows_clues(&self) -> bool {
+        false
+    }
+
+    fn recipient(&self) -> Option<String> {
+        Some(self.fixture.stand_in_block("w", "recipient", &[]).session())
+    }
+
+    fn received(&self, session: &str) -> Vec<String> {
+        let block = Block::named(session).expect("a session the profile named");
+        self.fixture.got(&block.id)
+    }
+
+    fn no_session(&self) -> String {
+        Block {
+            id: "block:01a1d7f4-0000-7000-8000-000000000000".into(),
+            socket: self.fixture.state.socket("flume"),
+        }
+        .session()
+    }
+
+    /// The pinned Rex has no terminal client, and the app's view is the
+    /// bolt's next unit (187, C.5).
+    fn views(&self) -> Vec<View> {
+        vec![]
+    }
+
+    fn parts(&self) -> Vec<Option<String>> {
+        vec![None, Some("w".into())]
+    }
+
+    fn refuse_attach(&self, _view: View) -> bool {
+        false
+    }
+
+    /// The session `w`, whose server does not run, and the terminal's own,
+    /// whose server the harness starts (201).
+    fn runs_parts(&self) -> Vec<(Option<String>, SessionRuns)> {
+        self.fixture.server("flume");
+        vec![
+            (
+                Some("w".into()),
+                SessionRuns::NotRunning { name: "w".into() },
+            ),
+            (
+                None,
+                SessionRuns::Runs {
+                    name: "flume".into(),
+                },
+            ),
+        ]
+    }
+
+    fn named_agent(&self, session: &str, name: &str) -> bool {
+        self.fixture.stand_in_block(session, name, &[]);
+        true
+    }
+}
+
+#[test]
+fn the_rex_profile_passes_the_terminal_scenarios() {
+    pass_all("terminal", &terminal::scenarios(), Harness::new);
 }
