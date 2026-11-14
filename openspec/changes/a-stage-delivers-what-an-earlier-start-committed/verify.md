@@ -2,9 +2,13 @@
 
 The verify stage read `change/a-stage-delivers-what-an-earlier-start-committed`
 at `1bb4d2c8` on 2026-11-14, against its base
-`bolt/flumes-places-need-no-hand`. The work holds: the whole checks
-pass, every task is ticked, and every requirement and scenario of the
-three delta specs is met.
+`bolt/flumes-places-need-no-hand`. The work falls short, and the change
+is not archived. The whole checks pass, every task is ticked, and the
+code meets every requirement and scenario of the three delta specs. But
+archiving the change would fail the gate's `root:specs`: two of the
+requirements the change writes are too long for `openspec validate
+--specs --strict` once they are merged into `openspec/specs/`. See
+Findings.
 
 ## The whole checks
 
@@ -84,6 +88,42 @@ counts from start 2.
 
 ## Findings
 
-None for the code stage. The host's sluice configuration and the tree's
-sluice pin stand apart, as the checks section says; that is outside this
-change.
+**The archived specs fail `root:specs`.** `openspec archive
+a-stage-delivers-what-an-earlier-start-committed` applies the deltas.
+After that, `openspec validate --specs --strict`, the command of the
+check-fast task `root:specs` in `moon.yml`, fails two specs and passes
+47:
+
+- `stage-runs`, requirement 3, "A stage ends at its deliverable, read
+  at one head": 1014 characters.
+- `repeating-stages`, requirement 1, "A repetition delivers its group and
+  the stage delivers every task": 775 characters.
+
+On each, the pinned OpenSpec warns "Requirement text is very long (>500
+characters). Move examples and edge cases into scenarios, or split it
+into separate requirements that each state one behavior.", and
+`--strict` fails a warning as an error. `made-things`' modified
+requirement comes to 414 characters and passes.
+
+The whole checks did not catch it. `root:specs` reads `openspec/specs/`,
+which the branch has not changed, so it did not run. `root:changes`
+validates the change's deltas, and passed: the delta validation does not
+apply the length rule.
+
+The fix is the code stage's. Split each requirement so every one states
+one behavior in at most 500 characters, keeping its scenarios under the
+requirement whose behavior they walk. For `stage-runs`, the second
+paragraph (a stage started at the first of its starts since it last
+delivered, a fix round and a delivered stage's retry afresh, a going-back
+leaving the count, a document written before) can stand as a requirement
+of its own, ADDED beside the MODIFIED one, or as more than one. For
+`repeating-stages`, the same goes for the second paragraph (a repetition
+started at the first start given its group). Then confirm, with the
+change archived in a scratch copy, that `openspec validate --specs
+--strict` passes.
+
+**Outside this change: the tree's sluice cannot read the host's
+configuration.** The devenv sluice, 0.71.0, refuses the host's
+`~/.config/sluice/config.toml` because of its `[forge] credential` key,
+so `devenv shell -- sluice exec <base>` runs no check on this host. The
+checks section above gives the run that stood in for it.
