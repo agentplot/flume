@@ -87,7 +87,13 @@ impl Engine {
             Ok(claimed) => claimed,
             Err(reason) => return Answer::refused(reason),
         };
-        let handed = match self.hand(id, &kept.start, &asked(&question, words), bound) {
+        let handed = match self.hand(
+            id,
+            &kept.start,
+            &asked(&question, words),
+            bound,
+            answering.by.as_deref(),
+        ) {
             Ok(handed) => handed,
             Err(reason) => return Answer::refused(reason),
         };

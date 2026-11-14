@@ -107,6 +107,9 @@ struct Record {
     session: Option<String>,
     /// Its session ends once it stops short, as scripted (96, 134).
     ends_after_stop_short: bool,
+    /// Each text its program's own channel submitted, as a deliver part
+    /// submits what the take gave it, each counted as a sending (215).
+    submitted: Vec<String>,
 }
 
 impl Default for Record {
@@ -127,6 +130,7 @@ impl Default for Record {
             began_in: None,
             session: None,
             ends_after_stop_short: false,
+            submitted: vec![],
         }
     }
 }
@@ -189,6 +193,14 @@ impl FakeAgent {
     }
 
     /// The agent receives a prompt at its `sending`th sending, or never.
+    /// The agent's program submits `text` by its own channel, as a
+    /// deliver part submits what its take gave it: a sending it may read
+    /// received (215).
+    pub fn submits(&self, agent: &Identity, text: &str) {
+        let text = text.to_string();
+        self.with(agent, |record| record.submitted.push(text));
+    }
+
     pub fn receives_at(&self, agent: &Identity, sending: Option<usize>) {
         self.with(agent, |record| record.receives_at = sending);
     }
@@ -675,6 +687,7 @@ impl Agent for FakeAgent {
         if carried && command.prompt_args.iter().any(|arg| arg == text) {
             sendings += 1;
         }
+        sendings += model.submitted.iter().filter(|sent| *sent == text).count();
         if model.receives_at.is_some_and(|needed| sendings >= needed) {
             Received::Received { record }
         } else {

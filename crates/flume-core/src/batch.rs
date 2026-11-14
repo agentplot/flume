@@ -646,11 +646,14 @@ impl Engine {
         }
         let folder = self.store.folder(place);
         if start.prompt.received_at.is_none()
-            || crate::open_sessions::waits_on_answer(&held).is_some()
             || agent.asking(&folder, &start.identity) == Reading::Yes
         {
             return none;
         }
+        // While the stage waits on an answer, the one message its start
+        // holds is that answer, handed to the agent kept open; nothing
+        // else is taken for it (42, 198).
+        let waits = crate::open_sessions::waits_on_answer(&held).is_some();
         let at = self.host.now();
         let start_identity = start.identity.clone();
         let taken = self
@@ -678,7 +681,7 @@ impl Engine {
         if let Some(words) = taken {
             return Answer::Taken { words: Some(words) };
         }
-        let Some(address) = held.role.as_deref() else {
+        let Some(address) = held.role.as_deref().filter(|_| !waits) else {
             return none;
         };
         let items = self.take_batch(address, &held_back(&self.documents()), at);

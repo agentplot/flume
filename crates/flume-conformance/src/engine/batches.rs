@@ -17,8 +17,9 @@ use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::deliveries::{self, rewrite_whole};
 use flume_core::message::message_words;
-use flume_core::{notice_to, way_to_stop_short, Answer, Retry};
+use flume_core::{notice_to, way_to_stop_short, Answer, Engine, Retry};
 use flume_fakes::Plan;
+use flume_fakes::{FakeAgent, FakeHost};
 use flume_seams::*;
 use std::sync::{Arc, Mutex};
 
@@ -83,6 +84,21 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "batch: the fake agent of east/ops's run offers deliver; an end for the address comes while it works, and once it goes quiet a settle sends nothing through the terminal and its take answers the end's notice with its confirm, recorded handed to the address by notice, its deliver part taking the place of the terminal",
             cites: &["43", "54", "121", "132"],
             run: a_run_whose_agent_takes_its_batch,
+        },
+        Scenario {
+            name: "message: the fake agent's profile offers deliver and a caller messages its place while it works: nothing goes through the fake terminal, the message waits on the start untaken, and once the agent waits and takes it, it is read received and the message answers acted, the deliver part taking the place of the terminal",
+            cites: &["53", "54", "38"],
+            run: a_message_taken_by_the_deliver_part,
+        },
+        Scenario {
+            name: "message: the fake agent's profile offers deliver, a caller messages its place with a bound of a minute and the agent works past it: the message is refused with nothing typed, the start holds no message waiting, and a take after the bound gets nothing",
+            cites: &["53", "54"],
+            run: a_message_the_deliver_part_never_takes,
+        },
+        Scenario {
+            name: "message: the fake agent's profile offers deliver, takes a message and reads it not received within 60 seconds, then takes it again and reads it not received again: the message is refused naming that the agent did not receive the words, taken twice",
+            cites: &["38", "53", "54"],
+            run: a_message_taken_and_not_received,
         },
     ]
 }
@@ -679,5 +695,180 @@ fn a_run_whose_agent_takes_its_batch(_: &()) -> Outcome {
         Answer::Taken { words: None },
         "a second take"
     );
+    Ok(())
+}
+
+/// The fix `one` of a one-stage kind begun, its agent's profile offering
+/// deliver: the place, its agent and its start's secret.
+fn begun_delivering(world: &World) -> Result<(PlaceId, Identity, String), String> {
+    world.agent.offer_deliver();
+    let id = world.begun("build", Some(Deliverable::Commits), "one")?;
+    let work = World::identity("build", "one", "work", 1);
+    let secret = world
+        .held(&id)
+        .and_then(|held| held.stages[0].start.clone())
+        .map(|start| start.secret.0)
+        .ok_or("no start")?;
+    Ok((id, work, secret))
+}
+
+/// The messages waiting on the place's first start.
+fn waiting_on(world: &World, id: &PlaceId) -> Vec<MessageHeld> {
+    world
+        .held(id)
+        .and_then(|held| held.stages[0].start.clone())
+        .map(|start| start.messages)
+        .unwrap_or_default()
+}
+
+/// A take at each of the host's sleeps from now, as a deliver part asks
+/// at each turn's end and idle tick, each words it took kept in `took`
+/// and, where `submits`, submitted by the agent's program (215).
+fn take_at_each_sleep(
+    host: Arc<FakeHost>,
+    engine: Arc<Engine>,
+    taker: (PlaceId, Identity, String),
+    took: Arc<Mutex<Vec<String>>>,
+    submits: Option<Arc<FakeAgent>>,
+) {
+    let next = host.clone();
+    host.at_next_sleep(move || {
+        let (place, agent, secret) = &taker;
+        if let Answer::Taken { words: Some(words) } = engine.take(place, &agent.to_string(), secret)
+        {
+            if let Some(fake) = &submits {
+                fake.submits(agent, &words);
+            }
+            took.lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .push(words);
+        }
+        take_at_each_sleep(next, engine, taker, took, submits);
+    });
+}
+
+/// What the take read while the agent worked: the messages waiting on
+/// its start, and what went through the terminal.
+type Seen = (Vec<MessageHeld>, Vec<String>);
+
+fn a_message_taken_by_the_deliver_part(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, work, secret) = begun_delivering(&world)?;
+    world.terminal.set_state(&work, AgentState::Working);
+    let seen: Arc<Mutex<Option<Seen>>> = Arc::default();
+    let (store, terminal, agent, into) = (
+        world.store.clone(),
+        world.terminal.clone(),
+        world.agent.clone(),
+        seen.clone(),
+    );
+    let (place, who, engine) = (id.clone(), work.clone(), world.engine());
+    world.host.at_next_sleep(move || {
+        let waiting = store
+            .held(&place)
+            .and_then(|held| held.stages[0].start.clone())
+            .map(|start| start.messages)
+            .unwrap_or_default();
+        *into.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) =
+            Some((waiting, terminal.sent_to(&who)));
+        terminal.set_state(&who, AgentState::Waiting);
+        if let Answer::Taken { words: Some(words) } = engine.take(&place, &who.to_string(), &secret)
+        {
+            agent.submits(&who, &words);
+        }
+    });
+    let answer = world.engine.message(&id, "use the second", None);
+    ensure!(answer.refusal().is_none(), "the message: {answer:?}");
+    let (waiting, sent) = seen
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take()
+        .ok_or("the take did not run")?;
+    ensure_eq!(
+        waiting
+            .iter()
+            .map(|message| (message.words.as_str(), message.taken_at))
+            .collect::<Vec<_>>(),
+        vec![("use the second", None)],
+        "the messages waiting on the start while the agent worked"
+    );
+    ensure!(
+        !sent.iter().any(|text| text == "use the second"),
+        "the words went through the terminal"
+    );
+    ensure!(
+        !world
+            .terminal
+            .sent_to(&work)
+            .iter()
+            .any(|text| text == "use the second"),
+        "the words went through the terminal"
+    );
+    ensure_eq!(
+        waiting_on(&world, &id),
+        vec![],
+        "the messages once received"
+    );
+    Ok(())
+}
+
+fn a_message_the_deliver_part_never_takes(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, work, secret) = begun_delivering(&world)?;
+    world.terminal.set_state(&work, AgentState::Working);
+    let at = world.host.now();
+    let answer = world.engine.message(&id, "later", Some(60));
+    let reason = answer.refusal().ok_or("the message was taken")?;
+    ensure!(
+        reason.contains("within the bound") && reason.contains("nothing was typed"),
+        "the refusal: {reason}"
+    );
+    ensure!(
+        world.host.now() - at >= 60,
+        "the message gave up before its bound"
+    );
+    ensure_eq!(waiting_on(&world, &id), vec![], "the messages waiting");
+    ensure!(
+        world
+            .terminal
+            .sent_to(&work)
+            .iter()
+            .all(|text| text != "later"),
+        "the words went through the terminal"
+    );
+    world.terminal.set_state(&work, AgentState::Waiting);
+    ensure_eq!(
+        world.engine.take(&id, &work.to_string(), &secret),
+        Answer::Taken { words: None },
+        "a take after the bound"
+    );
+    Ok(())
+}
+
+fn a_message_taken_and_not_received(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, work, secret) = begun_delivering(&world)?;
+    let took: Arc<Mutex<Vec<String>>> = Arc::default();
+    take_at_each_sleep(
+        world.host.clone(),
+        Arc::new(world.engine()),
+        (id.clone(), work.clone(), secret),
+        took.clone(),
+        None,
+    );
+    let answer = world.engine.message(&id, "use the second", None);
+    let reason = answer.refusal().ok_or("the message was taken")?;
+    ensure!(
+        reason.contains("did not receive the words"),
+        "the refusal: {reason}"
+    );
+    ensure_eq!(
+        took.lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone(),
+        vec!["use the second".to_string(), "use the second".to_string()],
+        "the takes"
+    );
+    ensure_eq!(waiting_on(&world, &id), vec![], "the messages waiting");
     Ok(())
 }
