@@ -398,7 +398,9 @@ fn relays_help_names_its_lines_and_no_caller() {
     ] {
         assert!(words.contains(named), "the help names no {named}: {text}");
     }
-    for caller in ["Boomdrive", "boomdrive", "runner", "herdr", "crew"] {
+    // A terminal's name in the help's source is core.1's own check's to
+    // find (conformance:test), so this test names no terminal.
+    for caller in ["Boomdrive", "boomdrive", "runner", "crew"] {
         assert!(!words.contains(caller), "the help names {caller}: {text}");
     }
 }
