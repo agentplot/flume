@@ -2835,7 +2835,7 @@ fn terminal_setup(server: &TestServer, flume: &Path) -> Value {
     let mut command = Command::new(flume);
     for (name, _) in std::env::vars_os() {
         let name = name.to_string_lossy().into_owned();
-        if name.starts_with("FLUME_") || name.starts_with("HERDR_") {
+        if name.starts_with("FLUME_") || name.starts_with("HERDR_") || name.starts_with("REX_") {
             command.env_remove(name);
         }
     }
@@ -2890,7 +2890,7 @@ fn a_startups_setup_is_given_by_status_while_its_server_runs() {
     let mut command = Command::new("sh");
     for (name, _) in std::env::vars_os() {
         let name = name.to_string_lossy().into_owned();
-        if name.starts_with("FLUME_") || name.starts_with("HERDR_") {
+        if name.starts_with("FLUME_") || name.starts_with("HERDR_") || name.starts_with("REX_") {
             command.env_remove(name);
         }
     }

@@ -1229,15 +1229,15 @@ pub fn list() -> Answer {
                     from: SessionFrom::StreamName,
                 },
                 multiplexer: ProfileHeld {
-                    profile: "rex".into(),
+                    profile: "cmux".into(),
                     from: NamedBy::Stream,
                 },
                 runs: None,
                 uncarried: Some(
-                    "the stream trial names the multiplexer rex, and no terminal profile is named rex; the terminal profiles there are: fake".into(),
+                    "the stream trial names the multiplexer cmux, and no terminal profile is named cmux; the terminal profiles there are: fake".into(),
                 ),
                 sessions: vec![],
-                line: "trial · session trial · no profile for rex".into(),
+                line: "trial · session trial · no profile for cmux".into(),
             },
         ],
     }

@@ -23,7 +23,7 @@ scratch=$(cd "$scratch" && pwd -P)
 
 # Nothing of the caller's flume, terminal or Claude Code session, and git
 # with no configuration but the scratch's.
-for name in $(env | grep -Eo '^(FLUME_|HERDR_|CLAUDE)[A-Za-z0-9_]*=' | tr -d =); do
+for name in $(env | grep -Eo '^(FLUME_|HERDR_|REX_|CLAUDE)[A-Za-z0-9_]*=' | tr -d =); do
   unset "$name"
 done
 export XDG_STATE_HOME=$scratch/state XDG_CONFIG_HOME=$scratch/config \

@@ -70,7 +70,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_streams_sessions_for_its_kinds_and_stages,
         },
         Scenario {
-            name: "list: a stream whose multiplexer is rex reads `no profile for rex`, no terminal asked of it, the other streams' lines standing and the list not refused",
+            name: "list: a stream whose multiplexer is cmux reads `no profile for cmux`, no terminal asked of it, the other streams' lines standing and the list not refused",
             cites: &["190", "200"],
             run: a_multiplexer_flume_carries_no_profile_for,
         },
@@ -666,7 +666,7 @@ fn a_streams_sessions_for_its_kinds_and_stages(_: &()) -> Outcome {
 fn a_multiplexer_flume_carries_no_profile_for(_: &()) -> Outcome {
     let world = World::new();
     world.host.set_stream("work", Some(Stream::default()));
-    world.host.set_display("trial", Some("rex"), None, None);
+    world.host.set_display("trial", Some("cmux"), None, None);
     let answer = world.engine().list(false);
     ensure!(
         answer.refusal().is_none(),
@@ -680,7 +680,7 @@ fn a_multiplexer_flume_carries_no_profile_for(_: &()) -> Outcome {
             .collect::<Vec<_>>(),
         vec![
             "default · session own · not running",
-            "trial · session trial · no profile for rex",
+            "trial · session trial · no profile for cmux",
             "work · session work · not running",
         ],
         "the streams' lines"
@@ -689,8 +689,8 @@ fn a_multiplexer_flume_carries_no_profile_for(_: &()) -> Outcome {
     ensure_eq!(trial.runs, None, "trial's runs");
     let uncarried = trial.uncarried.as_deref().ok_or("trial names no reason")?;
     ensure!(
-        uncarried.contains("rex") && uncarried.contains("fake"),
-        "trial's reason names not rex and the profiles carried: {uncarried}"
+        uncarried.contains("cmux") && uncarried.contains("fake"),
+        "trial's reason names not cmux and the profiles carried: {uncarried}"
     );
     ensure!(
         !world
@@ -931,7 +931,7 @@ fn the_list_round_trips_and_holds_its_fields(_: &()) -> Outcome {
     );
     let world = World::new();
     begun_fix(&world, "one")?;
-    world.host.set_display("trial", Some("rex"), None, None);
+    world.host.set_display("trial", Some("cmux"), None, None);
     let listed = world.engine().list(false);
     let back: Answer =
         serde_json::from_str(&listed.to_json()).map_err(|error| error.to_string())?;

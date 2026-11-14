@@ -4048,3 +4048,174 @@ fn s94_a_restarted_session_is_given_its_place_and_the_stall_reaches_the_door() {
         })
     });
 }
+
+#[test]
+fn a_fix_on_a_stream_under_rex_lands_through_the_binary() {
+    // 190, S91, C.5: the stream-terminals scenario "A fix on a stream under
+    // Rex": the host's `[streams.trial]` names `multiplexer = "rex"`, and a
+    // fix launched on `trial` through the binary, with the stand-in for
+    // Claude Code: its agent opens in a block of the Rex server at
+    // <state>/terminal/rex/trial.sock, in its base's Rex session and the
+    // window made for `fix--one`; while it works, a settle labels the
+    // window `fix--one · ` and the place's short line, and the Rex session
+    // `<repository> main · 1 running · 0 asking · 0 waiting on caller · 0
+    // stalled` (139); it takes its prompt, delivers, and the fix lands;
+    // status gives the agent's terminal `rex` from `stream`, and once the
+    // place is tidied its window and its Rex session are gone and the
+    // server still runs.
+    let host = Walk::under_rex("walk-rex");
+    let signal = host.signal("commit");
+    host.script(
+        "code",
+        1,
+        json!([[
+            { "wait_for": signal.to_string_lossy() },
+            { "write": { "path": "parser.rs", "text": "fn parse() {}\n" } },
+            { "bash": "git add -A && git commit --quiet -m 'fix the parser'" },
+        ]]),
+    );
+    let place = host.walk.launch(
+        "fix",
+        "one",
+        &["--brief", "fix the parser", "--stream", "trial"],
+    );
+    let status = host
+        .walk
+        .until(&place, "its agent working under Rex", |status| {
+            status["agent"]["terminal"]["profile"] == "rex" && !host.prompts("code", 1).is_empty()
+        });
+    assert_eq!(
+        status["agent"]["terminal"],
+        json!({"profile": "rex", "from": "stream"}),
+        "{status}"
+    );
+    assert!(
+        host.socket("trial").exists(),
+        "no Rex server at trial's socket"
+    );
+    let repository = host
+        .walk
+        .repository
+        .dir
+        .file_name()
+        .expect("the repository's folder")
+        .to_string_lossy()
+        .into_owned();
+    let counted =
+        format!("{repository} main · 1 running · 0 asking · 0 waiting on caller · 0 stalled");
+    let sessions = || -> Vec<(String, String)> {
+        host.rex("trial", &["api", "call", "session.list"])["sessions"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|session| {
+                Some((
+                    session["session_id"].as_str()?.to_string(),
+                    session["label"].as_str()?.to_string(),
+                ))
+            })
+            .collect()
+    };
+    let window_labels = |session: &str| -> Vec<String> {
+        host.rex("trial", &["api", "call", "-s", session, "session.view"])["windows"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|window| window["label"].as_str().map(str::to_string))
+            .collect()
+    };
+    let labelled = host
+        .walk
+        .until(&place, "its window and Rex session labelled", |status| {
+            let short = status["line"]["short"].as_str().unwrap_or_default();
+            let listed = sessions();
+            !short.is_empty()
+                && listed.len() == 1
+                && listed[0].1 == counted
+                && window_labels(&listed[0].0) == vec![format!("fix--one · {short}")]
+        });
+    let short = labelled["line"]["short"]
+        .as_str()
+        .expect("the place's short line");
+    let listed = sessions();
+    let [(session, label)] = &listed[..] else {
+        panic!("the trial server's Rex sessions: {listed:?}");
+    };
+    assert_eq!(label, &counted);
+    let view = host.rex("trial", &["api", "call", "-s", session, "session.view"]);
+    let windows: Vec<(&str, Vec<&str>)> = view["windows"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|window| {
+            (
+                window["label"].as_str().unwrap_or_default(),
+                window["layers"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .flat_map(|layer| layer["blocks"].as_array().into_iter().flatten())
+                    .filter_map(|block| block["label"].as_str())
+                    .collect(),
+            )
+        })
+        .collect();
+    assert_eq!(windows.len(), 1, "{view}");
+    assert_eq!(windows[0].0, format!("fix--one · {short}"), "{view}");
+    assert!(
+        windows[0].1.len() == 1 && windows[0].1[0].starts_with("f-fix--one-code-1-"),
+        "{view}"
+    );
+    std::fs::write(&signal, "").expect("the signal");
+    until_landed(&host.walk, &place);
+    assert_eq!(
+        host.walk.on_remote("parser.rs").as_deref(),
+        Some("fn parse() {}\n")
+    );
+    let status = host.rex("trial", &["api", "call", "server.status"]);
+    assert!(status["pid"].is_i64(), "the trial server no longer runs");
+    assert_eq!(
+        host.rex("trial", &["api", "call", "session.list"])["sessions"],
+        json!([]),
+        "the place's Rex session was left"
+    );
+}
+
+#[test]
+fn flume_open_of_a_rex_streams_session_names_the_socket_to_add() {
+    // 186, 187, C.5: the stream-terminals scenario "A Rex stream's session
+    // with no app added": the host's `[streams.trial]` names `multiplexer
+    // = "rex"` and `view = "app"`, and `flume open trial` through the
+    // binary, with no app a client of trial's server, is refused naming
+    // <state>/terminal/rex/trial.sock and the Rex app's Remote Hosts;
+    // trial's server runs after, and no place's held state is written.
+    let host = Walk::under_rex("walk-rex-open");
+    host.walk
+        .configure("[streams.trial]\nmultiplexer = \"rex\"\npool = \"stand-in\"\nview = \"app\"\n");
+    let socket = host.socket("trial");
+    assert!(
+        host.try_rex("trial", &["api", "call", "server.status"])
+            .is_err(),
+        "trial's server ran before the open"
+    );
+    let (answer, refused) = host.walk.flume_ran(&["open", "trial"]);
+    assert!(refused, "the open was taken: {answer}");
+    let words = answer.to_string();
+    assert!(
+        words.contains(&socket.display().to_string()) && words.contains("Remote Hosts"),
+        "{answer}"
+    );
+    let status = host.rex("trial", &["api", "call", "server.status"]);
+    assert!(
+        status["pid"].is_i64(),
+        "trial's server does not run: {status}"
+    );
+    let places = host.home().join("state/flume/places");
+    assert!(
+        std::fs::read_dir(&places)
+            .map(|mut entries| entries.next().is_none())
+            .unwrap_or(true),
+        "a place's held state was written under {}",
+        places.display()
+    );
+}

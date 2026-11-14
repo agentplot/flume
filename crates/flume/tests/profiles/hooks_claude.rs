@@ -127,7 +127,7 @@ impl Host {
         let mut command = Command::new(env!("CARGO_BIN_EXE_flume"));
         command.current_dir(&self.repository.dir);
         for (name, _) in std::env::vars() {
-            if ["FLUME_", "HERDR_", "CLAUDE"]
+            if ["FLUME_", "HERDR_", "REX_", "CLAUDE"]
                 .iter()
                 .any(|prefix| name.starts_with(prefix))
             {
@@ -299,7 +299,7 @@ impl Host {
         let mut command = Command::new(env!("CARGO_BIN_EXE_flume"));
         command.current_dir(&self.repository.dir);
         for (name, _) in std::env::vars() {
-            if ["FLUME_", "HERDR_", "CLAUDE"]
+            if ["FLUME_", "HERDR_", "REX_", "CLAUDE"]
                 .iter()
                 .any(|prefix| name.starts_with(prefix))
             {

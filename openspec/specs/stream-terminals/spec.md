@@ -74,24 +74,6 @@ name, and none holding it SHALL be not found (7, 43, 95, 190).
 - **WHEN** the host's own fake terminal names no calling session, `trial`'s names `caller-1`, and a fix is launched naming no recipient
 - **THEN** the fix's recipient is `caller-1`, and its end is sent to `caller-1` through `trial`'s terminal (7, 43, 190)
 
-### Requirement: A stream whose multiplexer names no profile is refused alone
-
-A stream whose `multiplexer` names a terminal profile the resolver does
-not carry SHALL refuse a launch on it whole and each start of a place
-on it, naming the stream, the name and the profiles carried, and
-nothing else on the host; status SHALL give its refusal with the stream
-(4, 190; core.8).
-
-#### Scenario: A stream naming rex
-
-- **WHEN** the fake host's `trial` names the multiplexer `rex`, and a fix is launched on `trial` and one on `work`
-- **THEN** the trial fix is refused naming `trial`, `rex` and the profiles carried, nothing made, the work fix opens its agent, and status gives `trial`'s refusal (4, 190, S91)
-
-#### Scenario: A stream changed to rex while it waits
-
-- **WHEN** a place on `trial` waits for room, and `trial` is then set to the multiplexer `rex`
-- **THEN** its start is refused naming `rex` as a setting is, and nothing opens (4, 190)
-
 ### Requirement: Status gives each stream's terminal and each agent's
 
 Status SHALL give each stream's multiplexer with where it came from,
@@ -121,3 +103,47 @@ its settles, under every terminal alike (119, 122, 190, 208).
 
 - **WHEN** no caller keeps watch, the host's terminal is `fake` and `trial`'s is `other`
 - **THEN** a caller's drop settles every place first, under either terminal (119, 208)
+
+### Requirement: A stream naming Rex runs its places in Rex
+
+A stream whose `multiplexer` is `rex` SHALL have its agents opened, sent
+prompts, read and closed in the Rex server of its session, a server of
+flume's own, its places' clues shown on their windows and their bases'
+Rex sessions, its places tidied there, and its launches and starts taken
+as any stream's are (94 to 98, 137, 139, 190, C.5).
+
+#### Scenario: A fix on a stream under Rex
+
+- **WHEN** the host's `[streams.trial]` gives `multiplexer = "rex"`, and a fix is launched on `trial` through the binary with the stand-in for Claude Code
+- **THEN** its agent opens in a block of the Rex server at `<state>/terminal/rex/trial.sock`, in its base's Rex session and the window made for `fix--<name>`; while it works, the window is labelled `fix--<name> · ` and the place's short line, and the Rex session `<repository> main · 1 running · 0 asking · 0 waiting on caller · 0 stalled`; it takes its prompt, delivers, and the fix lands; status gives the agent's terminal `rex` from `stream`, and once the place is tidied its window and its Rex session are gone and the server still runs (139, 190, S91)
+
+### Requirement: A stream whose multiplexer flume carries no profile for is refused alone
+
+A stream whose `multiplexer` names a terminal profile the resolver does
+not carry SHALL refuse a launch on it whole and each start of a place
+on it, naming the stream, the name and the profiles carried, and
+nothing else on the host; status SHALL give its refusal with the stream
+(4, 190; core.8).
+
+#### Scenario: A stream naming cmux
+
+- **WHEN** the fake host's `trial` names the multiplexer `cmux`, and a fix is launched on `trial` and one on `work`
+- **THEN** the trial fix is refused naming `trial`, `cmux` and the profiles carried, nothing made, the work fix opens its agent, and status gives `trial`'s refusal (4, 190, S91)
+
+#### Scenario: A stream changed to cmux while it waits
+
+- **WHEN** a place on `trial` waits for room, and `trial` is then set to the multiplexer `cmux`
+- **THEN** its start is refused naming `cmux` as a setting is, and nothing opens (4, 190)
+
+### Requirement: A Rex stream's session is shown in the Rex app
+
+`flume open` of a session of a stream whose `multiplexer` is `rex` and
+whose view is `app` SHALL show it through the Rex profile's attach for
+the app, and SHALL be refused in the profile's words where it refuses,
+naming the socket a person adds under the Rex app's Remote Hosts where
+the app is no client of the session's server (186, 187, C.5).
+
+#### Scenario: A Rex stream's session with no app added
+
+- **WHEN** the host's `[streams.trial]` gives `multiplexer = "rex"` and `view = "app"`, and `flume open trial` is run through the binary with no app a client of trial's server
+- **THEN** it is refused naming `<state>/terminal/rex/trial.sock` and the Rex app's Remote Hosts, trial's server runs, and no place's held state is written (186, 187, C.5)

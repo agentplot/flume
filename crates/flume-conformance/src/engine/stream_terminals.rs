@@ -46,14 +46,14 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_start_written_before,
         },
         Scenario {
-            name: "stream terminals: a stream naming rex refuses its launch naming the stream, rex and the terminal profiles carried, nothing made, while a launch on another stream opens its agent",
+            name: "stream terminals: a stream naming cmux refuses its launch naming the stream, cmux and the terminal profiles carried, nothing made, while a launch on another stream opens its agent",
             cites: &["4", "190", "S91"],
-            run: a_stream_naming_rex,
+            run: a_stream_naming_cmux,
         },
         Scenario {
-            name: "stream terminals: a stream set to rex while its place waits for room refuses the start as a setting is refused, whatever room the host has, and nothing opens",
+            name: "stream terminals: a stream set to cmux while its place waits for room refuses the start as a setting is refused, whatever room the host has, and nothing opens",
             cites: &["4", "190"],
-            run: a_stream_changed_to_rex_while_it_waits,
+            run: a_stream_changed_to_cmux_while_it_waits,
         },
         Scenario {
             name: "stream terminals: a place whose stages ran in two terminals is tidied in each once, and the tidy's answer names each terminal with what it closed",
@@ -81,7 +81,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: two_terminals_and_no_watch,
         },
         Scenario {
-            name: "stream terminals: S91, a stream under a terminal of its own beside the host's, which decides nothing of whether flume runs attended, its next stage in the terminal it is set to while its agent stays, and a stream naming rex refused while every other runs",
+            name: "stream terminals: S91, a stream under a terminal of its own beside the host's, which decides nothing of whether flume runs attended, its next stage in the terminal it is set to while its agent stays, and a stream naming cmux refused while every other runs",
             cites: &["S91", "4", "119", "143", "190", "208"],
             run: s91_a_stream_under_its_own_terminal,
         },
@@ -119,7 +119,7 @@ fn named_terminals_and_windows(_: &()) -> Outcome {
             .is_some_and(|terminal| is(&terminal, &other)),
         "other is not the terminal given"
     );
-    ensure!(resolver.terminal("rex").is_none(), "a terminal named rex");
+    ensure!(resolver.terminal("cmux").is_none(), "a terminal named cmux");
     ensure!(
         resolver
             .window("fake-window")
@@ -351,16 +351,16 @@ fn a_start_written_before(_: &()) -> Outcome {
     Ok(())
 }
 
-fn a_stream_naming_rex(_: &()) -> Outcome {
+fn a_stream_naming_cmux(_: &()) -> Outcome {
     let world = World::new();
     world.host.set_stream("work", Some(Stream::default()));
-    world.host.set_display("trial", Some("rex"), None, None);
+    world.host.set_display("trial", Some("cmux"), None, None);
     let reason = refused(&world.engine.launch(&Launch {
         stream: Some("trial".into()),
         ..launch("fix", "one", Some("x"))
     }))?;
     ensure!(
-        ["trial", "rex", "terminal profiles there are: fake"]
+        ["trial", "cmux", "terminal profiles there are: fake"]
             .iter()
             .all(|word| reason.contains(word)),
         "the refusal: {reason}"
@@ -379,7 +379,7 @@ fn a_stream_naming_rex(_: &()) -> Outcome {
     ensure!(
         refused
             .as_deref()
-            .is_some_and(|words| words.contains("trial") && words.contains("rex")),
+            .is_some_and(|words| words.contains("trial") && words.contains("cmux")),
         "status's refusal of trial: {refused:?}"
     );
     ensure_eq!(
@@ -390,7 +390,7 @@ fn a_stream_naming_rex(_: &()) -> Outcome {
     Ok(())
 }
 
-fn a_stream_changed_to_rex_while_it_waits(_: &()) -> Outcome {
+fn a_stream_changed_to_cmux_while_it_waits(_: &()) -> Outcome {
     let world = World::new();
     world.host.set_bound(Some(1));
     world.host.set_stream("work", Some(Stream::default()));
@@ -403,7 +403,7 @@ fn a_stream_changed_to_rex_while_it_waits(_: &()) -> Outcome {
         Some(StageState::WaitingForRoom),
         "the trial fix's code stage"
     );
-    world.host.set_display("trial", Some("rex"), None, None);
+    world.host.set_display("trial", Some("cmux"), None, None);
     world.settle(&trial);
     ensure_eq!(
         world.stage_state(&trial, "code"),
@@ -414,7 +414,7 @@ fn a_stream_changed_to_rex_while_it_waits(_: &()) -> Outcome {
     ensure!(
         setting
             .as_deref()
-            .is_some_and(|words| words.contains("trial") && words.contains("rex")),
+            .is_some_and(|words| words.contains("trial") && words.contains("cmux")),
         "the refused setting: {setting:?}"
     );
     ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
@@ -646,12 +646,12 @@ fn s91_a_stream_under_its_own_terminal(_: &()) -> Outcome {
         profile("fake", NamedBy::Stream),
         "status's terminal of the trial change's code agent"
     );
-    world.host.set_display("lab", Some("rex"), None, None);
+    world.host.set_display("lab", Some("cmux"), None, None);
     let reason = refused(&world.engine.launch(&Launch {
         stream: Some("lab".into()),
         ..launch("fix", "three", Some("x"))
     }))?;
-    ensure!(reason.contains("rex"), "the refusal: {reason}");
+    ensure!(reason.contains("cmux"), "the refusal: {reason}");
     fix_on(&world, "work", "four")?;
     fix_on(&world, "trial", "five")?;
     for name in ["four", "five"] {

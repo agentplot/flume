@@ -149,6 +149,19 @@ pub fn listed() -> Option<Vec<Listed>> {
 
 #[cfg(target_os = "macos")]
 mod macos {
+    /// The parent of the process `pid`, from its BSD information.
+    pub fn parent(pid: libc::pid_t) -> Option<u32> {
+        // SAFETY: proc_bsdinfo is plain data, for which all zeroes is a value.
+        let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
+        let size = libc::c_int::try_from(std::mem::size_of::<libc::proc_bsdinfo>()).ok()?;
+        // SAFETY: the buffer is one proc_bsdinfo, `size` bytes, as the call
+        // is told.
+        let read = unsafe {
+            libc::proc_pidinfo(pid, libc::PROC_PIDTBSDINFO, 0, (&raw mut info).cast(), size)
+        };
+        (read == size).then_some(info.pbi_ppid)
+    }
+
     /// When the process `pid` started, from its BSD information.
     pub fn started(pid: libc::pid_t) -> Option<u64> {
         // SAFETY: proc_bsdinfo is plain data, for which all zeroes is a value.
@@ -265,6 +278,43 @@ pub fn listed() -> Option<Vec<Listed>> {
     None
 }
 
+/// The processes of the host whose parent is `pid`, as the process table
+/// gives them, a terminal's own process among them where it starts the
+/// program under it (32, C.5); none where the table cannot be read.
+pub fn children(pid: u32) -> Vec<Listed> {
+    listed()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|process| parent(process.pid) == Some(pid))
+        .collect()
+}
+
+/// The parent of the process `pid`, from the host's process table; none
+/// where it cannot be read.
+#[cfg(target_os = "macos")]
+pub fn parent(pid: u32) -> Option<u32> {
+    macos::parent(libc::pid_t::try_from(pid).ok()?)
+}
+
+/// The parent of the process `pid`, from its `stat`, the field after its
+/// state; none where it cannot be read.
+#[cfg(target_os = "linux")]
+pub fn parent(pid: u32) -> Option<u32> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    stat[stat.rfind(')')? + 1..]
+        .split_whitespace()
+        .nth(1)?
+        .parse()
+        .ok()
+}
+
+/// The parent of a process, on a system whose process table flume does
+/// not read: none.
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub fn parent(_pid: u32) -> Option<u32> {
+    None
+}
+
 /// The file this process's parent runs; none where it cannot be read.
 pub fn parent_executable() -> Option<PathBuf> {
     executable(std::os::unix::process::parent_id())
@@ -346,6 +396,24 @@ mod tests {
             .expect("the child listed");
         assert_eq!(sleeping.args, ["sleep", "600"]);
         assert!(sleeping.started + 60 > now && sleeping.started <= now + 1);
+    }
+
+    #[test]
+    fn a_childs_parent_and_a_parents_children_are_read() {
+        let mut child = Command::new("sleep")
+            .arg("600")
+            .stdin(Stdio::null())
+            .spawn()
+            .expect("sleep");
+        let parent_of_child = parent(child.id());
+        let mine = children(std::process::id());
+        let _ = child.kill();
+        let _ = child.wait();
+        assert_eq!(parent_of_child, Some(std::process::id()));
+        assert!(
+            mine.iter().any(|process| process.pid == child.id()),
+            "the child among this process's children: {mine:?}"
+        );
     }
 
     #[test]

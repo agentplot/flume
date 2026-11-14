@@ -180,17 +180,24 @@ fn a_terminal_the_host_names_is_bound_or_refused() {
 
 #[test]
 fn terminals_and_windows_are_given_by_name() {
-    // 105, 188, 190; design 2: the host's own terminal the engine's very
-    // one, each window profile by its name, and none for a name no
-    // profile holds.
+    // 105, 188, 190; design 2; the seam-contracts scenario "The
+    // terminals built in": the host's own terminal the engine's very one,
+    // the Rex profile by its name, built without starting a server, each
+    // window profile by its name, and none for a name no profile holds.
     let scratch = Scratch::new("by-name");
     let state = scratch.path("state");
     let resolver = built_in(&scratch).over(&state);
     let herdr = resolver.terminal("herdr").expect("herdr by its name");
     let again = resolver.terminal("herdr").expect("herdr again");
     assert!(Arc::ptr_eq(&herdr, &again), "one herdr for the command");
-    assert!(resolver.terminal("rex").is_none());
-    assert_eq!(resolver.terminal_profiles(), ["printed", "herdr"]);
+    let rex = resolver.terminal("rex").expect("Rex by its name");
+    assert!(rex.sends(), "the Rex profile types into a running agent");
+    assert!(
+        !state.join("terminal/rex").exists(),
+        "building the Rex profile made something under the state"
+    );
+    assert!(resolver.terminal("cmux").is_none());
+    assert_eq!(resolver.terminal_profiles(), ["printed", "herdr", "rex"]);
     assert_eq!(
         resolver.window_profiles(),
         ["ghostty", "terminal", "printed"]
@@ -312,7 +319,7 @@ fn a_recipient_unnamed_is_the_herdr_pane_the_command_runs_in() {
     let socket = scratch.path("no-herdr.sock");
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_flume"));
     for (name, _) in std::env::vars() {
-        if name.starts_with("FLUME_") || name.starts_with("HERDR_") {
+        if name.starts_with("FLUME_") || name.starts_with("HERDR_") || name.starts_with("REX_") {
             command.env_remove(name);
         }
     }

@@ -97,6 +97,7 @@ pub const POLICY: &str = ".config/sluice.toml";
 /// into its pane (C.6, core.6).
 fn a_session(name: &str) -> bool {
     name.starts_with("HERDR_")
+        || name.starts_with("REX_")
         || name.starts_with("ZELLIJ")
         || name == "TMUX"
         || name == "TMUX_PANE"

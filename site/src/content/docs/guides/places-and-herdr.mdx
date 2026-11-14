@@ -1,6 +1,6 @@
 ---
 title: Places and herdr
-description: The worktree flume makes for each launch, how it is made ready and removed, and how flume runs its agents in herdr, one workspace per base, a tab per place and a pane per agent, with the herdr plugin's popup and sidebar rows.
+description: The worktree flume makes for each launch, how it is made ready and removed, and how flume runs its agents in herdr, one workspace per base, a tab per place and a pane per agent, with the herdr plugin's popup and sidebar rows, or in Rex servers of its own.
 sidebar:
   order: 2
 ---
@@ -10,7 +10,8 @@ import Diagram from '../../../components/Diagram.astro';
 A place is the worktree flume makes for one launch. Every stage of the
 work runs there, one agent at a time, and flume removes it once the
 work lands or is dropped. Where the agents run is the host's choice,
-and each stream's: in herdr panes, or as commands flume prints.
+and each stream's: in herdr panes, in Rex blocks, or as commands flume
+prints.
 `flume open` shows a stream's agents in a window.
 
 ## The place
@@ -139,7 +140,8 @@ on at each command of flume's that acts, or at a caller's watch
 
 Under herdr 0.9.5 or later, flume opens each agent in a pane itself,
 sends its prompts, reads its state, and delivers ends to the panes of
-the recipients.
+the recipients. Under Rex 0.1.0-preview.14 or later it does the same in
+blocks of Rex servers of its own ([places under Rex](#places-under-rex)).
 
 ### Trying a multiplexer on one stream
 
@@ -284,6 +286,84 @@ their label's share. [A stream's sessions](/flume/guides/agent-settings/#a-strea
 gives the order an agent's session is read in, and what refuses a
 start.
 
+## Places under Rex
+
+A stream whose `multiplexer` is `rex` runs its agents in Rex, as one
+under herdr runs them in herdr:
+
+```toml
+[streams.trial]
+multiplexer = "rex"
+```
+
+flume runs Rex servers of its own, one for each of the stream's
+sessions, and never the server the Rex app runs for you. The server of
+the session `work` listens at `<state>/terminal/rex/work.sock`, by
+default `~/.local/state/flume/terminal/rex/work.sock`, and keeps its
+state in `work.state` beside it; flume's own session is `flume`. flume
+starts a session's server the first time an agent opens in it, with
+none of the sessions it saved, and never stops one. flume refuses a
+session's name that would make its socket's path longer than the 104
+bytes macOS allows a socket, or that holds a `/`, naming it. In each
+server:
+
+- **A Rex session per repository and base**, labelled
+  `<repository> <base>`, as herdr's workspace is, then
+  `<repository> <base> · <count>` with the count of the base's places,
+  `1 running · 0 asking · 0 waiting on caller · 0 stalled`.
+- **A window per place**, `<kind>--<name>`, in its base's Rex session,
+  then `<kind>--<name> · <line>` with the place's short line,
+  `code 1/2 · run 1 · tasks 2/5 · working`. A second agent of the place
+  splits its window.
+- **A block per agent**, labelled with a name made from its identity.
+  A script of the start's own starts the program and removes itself,
+  so none of the agent's variables stands in any process's arguments.
+  A block keeps that name.
+
+flume labels a window and a Rex session again at each settle that
+changes the place's line or its base's count, each label cut to the 128
+characters Rex holds. A label is for you to read: flume finds a window
+and a Rex session by its id, whatever its label says.
+
+Rex reads an agent's state from the program's own reports, Program
+Status, which Claude Code gives it. A program that reports none can't
+run under Rex, and flume refuses its start, naming the program. A start
+whose program reports nothing within two minutes, or exits first, ends
+never begun, with the block's screen in `flume status`. flume answers
+the folder-trust question from the screen as it does under herdr, and
+checks that the block runs the program the settings name.
+
+A prompt or a notice clears what the agent holds typed with ctrl+c
+only while the agent waits, so a working agent takes a tell as its next
+input. A recipient in a Rex block is named `rex:<block>@<socket>`, the
+name a command run in that block gives its own session, from Rex's
+`REX_BLOCK` and `REX_SERVER`.
+
+Every Rex call flume makes runs under a bound, ten seconds where the
+call states none, with your session's `REX_*` variables stripped. It
+passes `--autostart=false` and the session's socket, so no call starts
+a server of Rex's choosing. flume closes a place's window once the place
+goes, and its base's Rex session once nothing of a live place and
+nothing you opened is in it.
+
+Rex has no terminal client, so a Rex stream's session is shown in the
+Rex app. Give the stream `view = "app"`:
+
+```toml
+[streams.trial]
+multiplexer = "rex"
+view = "app"
+```
+
+`flume open trial` then brings the newest Rex session flume made in
+trial's server to the front of the Rex app. The app shows a server only
+once you add its socket under the app's Remote Hosts, which flume can't
+do for you, and takes flume's word only while its Remote Control
+setting is on. Until you add the socket, `flume open` refuses, naming
+it; while Remote Control is off, it refuses in Rex's words. A Rex
+stream whose view is `terminal` refuses its open, saying Rex has no
+terminal client.
+
 ## Seeing a stream's agents
 
 `flume open <session>` shows a stream's agents one session at a time,
@@ -341,7 +421,8 @@ multiplexer's attach. The view `app` is the multiplexer's own app,
 which titles its own window and needs no terminal app. herdr has no app
 of its own: the app of the same name runs on herdr-core, a backend with
 sessions of its own. So a stream under herdr whose view is `app`
-refuses its open, saying so.
+refuses its open, saying so. Rex has no terminal client, so a stream
+under Rex is opened in the Rex app ([places under Rex](#places-under-rex)).
 
 ### The terminal apps
 

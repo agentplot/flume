@@ -5358,7 +5358,7 @@ mod tests {
                 }),
                 "office · session office · not read",
             ),
-            stream_listed("trial", None, "trial · session trial · no profile for rex"),
+            stream_listed("trial", None, "trial · session trial · no profile for cmux"),
         ]
     }
 
@@ -5396,7 +5396,7 @@ mod tests {
              release\n/code/boomdrive\n  change--records · construct · held · waits on its \
              caller\nstreams\n  madswan · session madswan · runs\n  swancloud · session swancloud \
              · not running\n  work · no session\n  office · session office · not read\n  trial · \
-             session trial · no profile for rex"
+             session trial · no profile for cmux"
         );
     }
 

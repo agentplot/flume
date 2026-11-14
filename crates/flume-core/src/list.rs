@@ -575,8 +575,8 @@ mod tests {
                 "work · no session",
             ),
             (
-                stream_line("trial", &work, None, &[], "rex"),
-                "trial · session work · no profile for rex",
+                stream_line("trial", &work, None, &[], "cmux"),
+                "trial · session work · no profile for cmux",
             ),
         ];
         for (got, want) in rows {
@@ -613,8 +613,8 @@ mod tests {
                 "work · session work · runs · session work-design · not running",
             ),
             (
-                stream_line("work", &work, None, &design(None), "rex"),
-                "work · session work · session work-design · no profile for rex",
+                stream_line("work", &work, None, &design(None), "cmux"),
+                "work · session work · session work-design · no profile for cmux",
             ),
             (
                 stream_line(
