@@ -5,9 +5,52 @@ Verified at `3d233282` on
 against its base `bolt/flumes-settings-read-as-its-records-say` at
 `2d180f0b`, which the branch holds.
 
-**Verdict: holds. Archived.** The whole checks pass, every task is
-ticked done, and every requirement and scenario of the change's nine
-specs has code and a test that the run passed.
+**Verdict: falls short. Not archived.** The whole checks pass, every
+task is ticked done, and every requirement and scenario of the change's
+nine specs has code and a test that the run passed. But the change
+cannot be archived as it stands: three of its MODIFIED requirements are
+longer than strict validation lets a spec's requirement be, so the
+archive writes specs that fail `root:specs`. The change goes back to its
+code stage.
+
+## The shortfall
+
+`openspec archive` applied the change, and `openspec validate --specs
+--strict`, the command `root:specs` runs, then failed three of the 49
+specs, each on one requirement whose text, before its first scenario,
+is over 500 characters:
+
+```
+✗ spec/place-status
+  ⚠ [WARNING] requirements[9]: Requirement text is very long (>500 characters). …
+✗ spec/seam-contracts
+  ⚠ [WARNING] requirements[22]: Requirement text is very long (>500 characters). …
+✗ spec/store-profile
+  ⚠ [WARNING] requirements[2]: Requirement text is very long (>500 characters). …
+```
+
+| spec | requirement the change modifies | its text |
+|---|---|---|
+| place-status | "Status gives the host's pools" | 602 characters |
+| seam-contracts | "The types of a reading and a move past a threshold" | 631 characters |
+| store-profile | "The host's own documents" | 530 characters |
+
+Each is the text of the change's own MODIFIED block, in
+`specs/<spec>/spec.md` of this change. The archive was taken back off
+the branch, unpushed, and the specs on the branch pass again (49
+passed).
+
+`root:changes` passed the change because `openspec validate --changes
+--strict` does not hold a delta's requirement to the length a spec's
+requirement is held to; its comment in `moon.yml` says it is there so a
+requirement archive would refuse fails the change's own checks, which
+this one did not catch.
+
+What the code stage must do: shorten each of the three requirements'
+text to 500 characters or fewer, moving its detail into its scenarios or
+splitting it into requirements that each state one behaviour, so that
+`openspec archive` followed by `openspec validate --specs --strict`
+passes.
 
 ## The whole checks
 
@@ -114,4 +157,5 @@ each requirement.
   spent time" and "An account's document an earlier release wrote".
   `host/usage.rs` is gone.
 
-Nothing the specs ask for is missing.
+Nothing the specs ask for is missing in the code. The one shortfall is
+the three requirements' length above.
