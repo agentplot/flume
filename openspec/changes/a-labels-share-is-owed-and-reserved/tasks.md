@@ -23,7 +23,7 @@ the design's sections 3 to 6, as written there.
 
 ## 4. The host's bound
 
-- [ ] 4.1 Read `[host] agents` in `crates/flume/src/host/config.rs` by `bound_of`, as a stream's and an account's `agents` are, so `[host] agents = 0` refuses the configuration; and word `bound_of`'s refusal `[<table>] <key> is not a whole number from 1`, its doc comment saying a bound is a whole number from 1 (70, 143, 144, C.7). Add `a_hosts_bound_of_zero_is_refused`, `[host] agents = 0` refused naming `[host] agents` and `from 1`, and `[host] agents = 1` read as a bound of one. True when `devenv shell -- cargo test -p flume --lib host::config::tests::a_hosts_bound_of_zero_is_refused` passes.
+- [x] 4.1 Read `[host] agents` in `crates/flume/src/host/config.rs` by `bound_of`, as a stream's and an account's `agents` are, so `[host] agents = 0` refuses the configuration; and word `bound_of`'s refusal `[<table>] <key> is not a whole number from 1`, its doc comment saying a bound is a whole number from 1 (70, 143, 144, C.7). Add `a_hosts_bound_of_zero_is_refused`, `[host] agents = 0` refused naming `[host] agents` and `from 1`, and `[host] agents = 1` read as a bound of one. True when `devenv shell -- cargo test -p flume --lib host::config::tests::a_hosts_bound_of_zero_is_refused` passes.
 
 ## 5. The module
 

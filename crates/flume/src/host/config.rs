@@ -490,17 +490,7 @@ impl HostConfig {
         }
         if let Some(host) = table.get("host") {
             let host = host.as_table().ok_or("[host] is not a table".to_string())?;
-            config.agents = match host.get("agents") {
-                None => None,
-                Some(value) => {
-                    let agents = value
-                        .as_integer()
-                        .ok_or("[host] agents is not a whole number".to_string())?;
-                    Some(u32::try_from(agents).map_err(|_| {
-                        format!("[host] agents is {agents}, where a bound is a count from zero")
-                    })?)
-                }
-            };
+            config.agents = bound_of(host, "agents", "host")?;
             config.terminal = host_multiplexer(host)?;
             config.view = view_of(host, "host")?;
             config.terminal_app = text_of(host, "terminal_app", "host")
@@ -1167,8 +1157,9 @@ fn view_of(table: &Table, at: &str) -> Result<Option<View>, String> {
     }
 }
 
-/// A bound of `table`, a whole number above zero, none where it is left
-/// out (143, 144).
+/// A bound of `table`, the host's, a stream's or an account's `agents`:
+/// a whole number from 1, none where it is left out (70, 143, 144, C.7;
+/// record 0063).
 fn bound_of(table: &Table, name: &str, at: &str) -> Result<Option<u32>, String> {
     let Some(value) = table.get(name) else {
         return Ok(None);
@@ -1178,7 +1169,7 @@ fn bound_of(table: &Table, name: &str, at: &str) -> Result<Option<u32>, String> 
         .and_then(|bound| u32::try_from(bound).ok())
         .filter(|bound| *bound > 0)
         .map(Some)
-        .ok_or(format!("[{at}] {name} is not a whole number above zero"))
+        .ok_or(format!("[{at}] {name} is not a whole number from 1"))
 }
 
 /// Refuses a key of `table` that is none of `words`, naming it.
@@ -2929,6 +2920,21 @@ label = "inception"
     fn a_bound_that_is_no_count_is_refused() {
         assert!(HostConfig::parse("[host]\nagents = -1\n").is_err());
         assert!(HostConfig::parse("[host]\nagents = \"two\"\n").is_err());
+    }
+
+    #[test]
+    fn a_hosts_bound_of_zero_is_refused() {
+        // 70, C.7; record 0063: the host's bound is a whole number from 1,
+        // as a stream's and an account's are.
+        let refused = HostConfig::parse("[host]\nagents = 0\n").unwrap_err();
+        assert!(
+            refused.contains("[host] agents") && refused.contains("from 1"),
+            "{refused}"
+        );
+        assert_eq!(
+            HostConfig::parse("[host]\nagents = 1\n").unwrap().agents,
+            Some(1)
+        );
     }
 
     /// A managed layer giving `work` six agents and the pool `work`.
