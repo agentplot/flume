@@ -54,11 +54,11 @@ its end (core.51).
 
 - [x] 5.1 Have `a_session` in `crates/flume/src/profiles/merge_queue/sluice/mod.rs` take `REX_*` (C.6; core.6), and the tools tests' lists of variables they strip take `REX_` beside `HERDR_` (`merge_queue_sluice.rs`, `walk.rs`, `terminal_herdr.rs`). True when `devenv shell -- cargo test -p flume --features tools --test tools merge_queue_sluice::a_submission_from_a_rex_block_names_no_session` passes and `sluice exec bolt/rex-is-flumes-second-terminal -- moon run flume:lint` passes.
 - [x] 5.2 Have the lists of variables the binary's and the profiles' tests strip take `REX_` beside `HERDR_` (`crates/flume/tests/commands.rs`, `profiles/built_in.rs`, `profiles/hooks_claude.rs`). True when `sluice exec bolt/rex-is-flumes-second-terminal -- moon run flume:test` passes.
-- [ ] 5.3 Have `plugins/claude/tests/hooks.sh` strip `REX_*` beside `FLUME_`, `HERDR_` and `CLAUDE`. True when `sluice exec bolt/rex-is-flumes-second-terminal -- moon run plugin-claude:test` passes.
+- [x] 5.3 Have `plugins/claude/tests/hooks.sh` strip `REX_*` beside `FLUME_`, `HERDR_` and `CLAUDE`. True when `sluice exec bolt/rex-is-flumes-second-terminal -- moon run plugin-claude:test` passes.
 
 ## 6. The uncarried multiplexer is `cmux`
 
-- [ ] 6.1 Have `crates/flume/tests/commands.rs`'s `a_streams_multiplexer_flume_does_not_carry` name `cmux` as the launching scenario "A stream's multiplexer flume does not carry" says (4, 190). True when `devenv shell -- cargo test -p flume --test commands a_streams_multiplexer_flume_does_not_carry` passes.
+- [x] 6.1 Have `crates/flume/tests/commands.rs`'s `a_streams_multiplexer_flume_does_not_carry` name `cmux` as the launching scenario "A stream's multiplexer flume does not carry" says (4, 190). True when `devenv shell -- cargo test -p flume --test commands a_streams_multiplexer_flume_does_not_carry` passes.
 - [ ] 6.2 Have `crates/flume-core/src/list.rs`'s tests name `cmux` where they held `rex` uncarried (190, 200). True when `devenv shell -- cargo test -p flume-core --lib list::tests` passes.
 - [ ] 6.3 Have `crates/flume/src/commands/print.rs`'s `every_stream` and `the_list_by_repository_then_the_streams` name `cmux` (190, 200). True when `devenv shell -- cargo test -p flume --lib commands::print::tests::the_list_by_repository_then_the_streams` passes.
 - [ ] 6.4 Have `crates/flume-fakes/tests/fakes.rs`'s `the_resolver_holds_terminals_and_windows_by_name` ask for `cmux` (105, 190). True when `devenv shell -- cargo test -p flume-fakes --test fakes the_resolver_holds_terminals_and_windows_by_name` passes.
