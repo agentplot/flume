@@ -1562,10 +1562,11 @@ fn s48_a_persons_block_keeps_the_rex_session_named() {
 
 #[test]
 fn a_recipient_block_is_sent_to_and_read_by_its_name() {
-    // 43, 95, C.5: a block the test opened, no agent of flume's, sent to
-    // and read by rex:<block>@<socket>: waiting, it takes a notice, its
-    // held input cleared; working, it is typed into with no ctrl+c;
-    // asking, it is refused with nothing typed; gone, it is not found.
+    // 43, 54, 95, 214, C.5: a block the test opened, no agent of
+    // flume's, sent to and read by rex:<block>@<socket>: waiting, it takes
+    // a notice, its held input cleared; working, it is refused with
+    // nothing typed, and takes the notice once it waits again; asking, it
+    // is refused with nothing typed; gone, it is not found.
     let fixture = Fixture::new();
     let profile = fixture.profile();
     let block = fixture.stand_in_block("w", "recipient", &[("STAND_IN_WORK", "3")]);
@@ -1578,6 +1579,22 @@ fn a_recipient_block_is_sent_to_and_read_by_its_name() {
     within("the recipient did not work", || {
         profile.session_state(&name) == Some(AgentState::Working)
     });
+    assert!(matches!(
+        profile.send_to(&name, "a second"),
+        ToSession::Refused { reason } if reason.contains("works")
+    ));
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(
+        (
+            fixture.kept(&block.id, "got").len(),
+            fixture.kept(&block.id, "events")
+        ),
+        (1, vec!["cleared".to_string()]),
+        "something was typed at work"
+    );
+    within("the recipient did not wait again", || {
+        profile.session_state(&name) == Some(AgentState::Waiting)
+    });
     assert_eq!(profile.send_to(&name, "a second"), ToSession::Sent);
     let deadline = Instant::now() + Duration::from_secs(20);
     while fixture.kept(&block.id, "got").len() < 2 {
@@ -1587,10 +1604,6 @@ fn a_recipient_block_is_sent_to_and_read_by_its_name() {
         );
         std::thread::sleep(Duration::from_millis(200));
     }
-    assert_eq!(
-        fixture.kept(&block.id, "events"),
-        vec!["cleared".to_string()]
-    );
     within("the recipient did not wait again", || {
         profile.session_state(&name) == Some(AgentState::Waiting)
     });
@@ -1611,6 +1624,34 @@ fn a_recipient_block_is_sent_to_and_read_by_its_name() {
     rex(&block.socket, &["block", "close", &block.id]);
     assert_eq!(profile.session_state(&name), None);
     assert_eq!(profile.send_to(&name, "to nobody"), ToSession::NotFound);
+}
+
+#[test]
+fn a_recipient_block_at_work_is_typed_nothing() {
+    // The terminal-profiles spec's "A recipient's block at work" (54, 214,
+    // C.5): a block the test opened that reports working is refused,
+    // naming that the session works, and nothing is typed into it, no
+    // ctrl+c among it.
+    let fixture = Fixture::new();
+    let profile = fixture.profile();
+    let block = fixture.stand_in_block("w", "recipient", &[("STAND_IN_WORK", "30")]);
+    let name = block.session();
+    assert_eq!(profile.send_to(&name, "begin"), ToSession::Sent);
+    within("the recipient did not work", || {
+        profile.session_state(&name) == Some(AgentState::Working)
+    });
+    let events = fixture.kept(&block.id, "events");
+    match profile.send_to(&name, "a notice") {
+        ToSession::Refused { reason } => assert!(reason.contains("works"), "{reason}"),
+        other => panic!("a send to a block at work gave {other:?}"),
+    }
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(fixture.kept(&block.id, "got"), vec!["begin".to_string()]);
+    assert_eq!(
+        fixture.kept(&block.id, "events"),
+        events,
+        "a ctrl+c at work"
+    );
 }
 
 #[test]
@@ -2323,6 +2364,21 @@ impl TerminalHarness for Harness {
 
     fn recipient(&self) -> Option<String> {
         Some(self.fixture.stand_in_block("w", "recipient", &[]).session())
+    }
+
+    /// A stand-in block given a first input, at which it works for a
+    /// minute, as a session that began a turn does (54, 214).
+    fn working_recipient(&self) -> Option<String> {
+        let block = self
+            .fixture
+            .stand_in_block("w", "busy", &[("STAND_IN_WORK", "60")]);
+        let name = block.session();
+        let profile = self.fixture.profile();
+        assert_eq!(profile.send_to(&name, "begin"), ToSession::Sent);
+        within("the busy recipient did not work", || {
+            profile.session_state(&name) == Some(AgentState::Working)
+        });
+        Some(name)
     }
 
     fn received(&self, session: &str) -> Vec<String> {
