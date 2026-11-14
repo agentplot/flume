@@ -55,3 +55,22 @@ Not taken:
 - Bad: a reading needs the engine's event, from the Claude Code release flume's profile pins (C.4).
 - The statement gains 211, and its 153, 171, 184, 185, C.4, C.7 and the vocabulary's reading say it, at boomdrivedev/blueprints. core.32 says it here.
 - deneb's `packages/swancloud-usage` stops writing readings for flume, and the Boomdrive set names no `usage`. That is swancloud's and Boomdrive's to follow.
+
+## Amendment, 2026-11-14: how the construct reads the windows
+
+Status: accepted, the direction unchanged. The choices below are the construct stage's of the change `flume-reads-each-accounts-usage-from-its-agent-programs-windows`, within the form this record leaves to agentplot-design as cheap to change, each written with the path not taken.
+
+Deciders: the change's construct stage.
+
+Sources: `plugins/claude/engine-types/claude-code/index.d.ts` as the pinned 2.1.296 writes it (`SessionMeasureInput`, `SessionRateLimit`, `UsageUnit`, `$.process.run`'s `stdin`); `crates/flume/src/profiles/agent/claude/record.rs` and `hook.rs`; `crates/flume-core/src/spent.rs` and `accounts.rs`; `crates/flume-seams/src/store.rs` (`AccountSpent`); `boomdrivedev/blueprints:design/flume/requirements.md` C.4's `windows` row on `design/flume-claude-codes-windows-row` at bd79555.
+
+### Decision outcome
+
+- **The module is a file of its own, `hooks/usage.ts`,** beside `hooks/line.ts`, each reading once whether flume started its session. Not taken: the handler in `line.ts`, whose one job is the place's line.
+- **A report goes only where `changed` names `rateLimits` and `rateLimits` holds a window.** The engine's first measurement names every unit it has a figure for, so the first report is among them. An empty list is the engine having no reading, off a subscription or before the first response, and passes nothing, so it never replaces a reading kept with none. Not taken: passing an empty list as a reading of no windows.
+- **The module does not wait on the hook.** It runs it and goes on, as `line.ts` runs its line, so the engine's measuring is never held. Two reports run at once are ordered by when each hook took its windows. Not taken: awaiting each run, which would serialise them behind the engine's event.
+- **The hook keeps the windows beside the start's record, and the core takes them through the seam's `windows`.** `flume hook usage` writes them, with the time it ran, to `windows.json` in the start's record's folder, keeping a newer one it finds there, and then asks the core to take the start's windows with `FLUME_AGENT` and `FLUME_SECRET`. The core reads them by the agent seam (211), as it reads `spent`, and records them on the account a live current start with that secret runs under. So the profile builds a part of the seam and the core alone writes the host's documents (core.2). A start under no account records nothing. Not taken: the hook writing the account's document itself, which puts the host's state in a profile.
+- **A window's use past 100, an exceeded spend limit's, is read as 100**, the reading's form holding 0 to 100 (C.7). A report with a window that names no `kind`, gives no number of 0 or more as `percentUsed`, or a `resetsAt` RFC 3339 cannot read, keeps nothing, and the reading kept stands: a report with one window left out could read an account as under its threshold. Not taken: keeping the windows that read.
+- **The account's document keeps its spent keys at its top, as an earlier release wrote them, and its reading under `reading`.** A document an earlier release wrote reads as spent with no reading; writing the spent time keeps the reading, and taking a reading keeps the spent time. A reading taken at the same second as the one kept, or earlier, changes nothing (core.17).
+- **Status's JSON keeps `read_at` for when flume took the reading**, and gains `agent` and `session`; where an account has none, `unread` gives why. The form only gains fields (core.14). Not taken: renaming `read_at`.
+- **The clause list adopts 211 by moving its revision to blueprints 55b89a4,** the commit that adds it, and names S121 to S123, which that revision also holds, as built before the list held them, as it named S92. Not taken: 211 alone at a revision that does not hold it.
