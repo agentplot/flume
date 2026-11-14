@@ -21,6 +21,8 @@ Amended 2026-11-06 by record 0039, its design approved by the user the same day:
 
 Amended 2026-11-14 by boomdrive-design, below: a command that names no recipient, run in a standing agent's pane, acts as the address its source declares the agent holds.
 
+The construct stage of `a-standing-agents-command-acts-as-its-address` read that amendment into the code's terms on 2026-11-14, below it.
+
 Deciders: the user, accepting recommendation R1 of the design review of 2026-10-28; the shape is the reviewing agent's.
 Sources: `boomdrivedev/blueprints:design/flume/requirements.md` clauses 3, 43, 69, 70, 72, 132, C.7 and S38, as amended with this record, and the callers table's crew row; records 0005, 0009, 0010, 0011; `afterthought/crew:docs/adr/0047` move 6 (no crew role stands; each is a kind Flume launches on a nudge naming a record) and `0048` patterns 3 and 4; rules core.13, core.25, core.26, core.27.
 
@@ -179,3 +181,56 @@ Not taken: option 2, which keeps a second record of which agent holds an address
 - Bad: as for delivery, flume trusts the name, so an agent that takes a standing agent's name in that session acts as its address.
 - Rule core.28 says so. Clause 132 says so on boomdrivedev/blueprints' branch `design/a-standing-agent-acts-as-its-address`.
 - Unit: a command that names no recipient, run in a standing agent's pane, acts as the address its source declares the agent holds.
+
+### The construct's reading, 2026-11-14
+
+Status: decided on 2026-11-14 by the construct stage of flume's change
+`a-standing-agents-command-acts-as-its-address`. Each choice is cheap to
+change and none is the user's alone: the amendment above and the rules
+decide it or leave it open, and the change's design gives each in full.
+
+Deciders: the construct stage of `a-standing-agents-command-acts-as-its-address`.
+Sources: the amendment above; boomdrivedev/blueprints d008a1d on
+`design/a-standing-agent-acts-as-its-address`, clause 132; on the bolt
+`bolt/flumes-places-need-no-hand`, `crates/flume-core/src/standing.rs`
+`reach`, `crates/flume-core/src/wait.rs` `Engine::recipient`,
+`crates/flume-core/src/launch.rs` `recipients_of`, and the herdr and Rex
+profiles' `session` and `agents_in`, read 2026-11-14; rules core.8,
+core.15, core.28 and core.54.
+
+- **The agent a command runs in is the one its address's delivery
+  reaches.** Each standing entry is reached as a delivery reaches it, in
+  its stream's terminal and session, and holds the command's pane where
+  it finds one agent of its name at the session name that terminal
+  gives the command. Not taken: matching by the name alone where the
+  session lists two of it, which would act as an address whose ends the
+  delivery hands neither and have two panes confirm as one; and a
+  terminal operation naming the agent a command runs in, since
+  `agents_in` already lists each pane by name.
+- **The order.** `$FLUME_RECIPIENT`, then the role's run `$FLUME_PLACE`
+  names, then the standing agent's one address, then the terminal's
+  session. A launch takes its own recipients, then `$FLUME_RECIPIENT`,
+  then the standing agent's address, then the session, then the
+  stream's answerer, and records the standing agent and its source as
+  where its recipients came from. A launch from a role's run takes what
+  it takes now.
+- **Several addresses refuse what takes a recipient.** `flume confirm`,
+  `flume inbox`, `flume wait` and a launch are refused, naming the agent
+  and each address and asking for `--recipient`. A retry or a tell, which
+  takes no `--recipient`, is taken with no giver recorded on its answer.
+  Not taken: refusing it, which would leave the agent no way to answer
+  but `$FLUME_RECIPIENT`.
+- **Read only where something could match.** The terminal is asked only
+  where the sources declare a standing agent and the entry's terminal
+  names a session for the command, each part once per command.
+- **A part not read holds no pane.** The command acts as the other
+  entries or its session give. Not taken: refusing every command that
+  names no recipient while a standing entry's part cannot be read,
+  which would stop a person's commands in an unrelated pane.
+- **The terminals.** herdr and Rex each name a command's pane in the
+  form their `agents_in` gives the agent in it, each checked against the
+  pinned release; no clause changes, since 7 and 132 already say what
+  each gives.
+- **Unchanged.** The notice's `flume confirm --recipient <address>`;
+  SessionStart in a session flume did not start, which collects as the
+  session and never as an address (C.4).
