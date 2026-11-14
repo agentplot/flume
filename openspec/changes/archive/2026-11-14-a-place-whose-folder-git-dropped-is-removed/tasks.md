@@ -25,4 +25,4 @@ the tree touched, citing record 0057's amendment and the clauses.
 
 ## 4. The spec
 
-- [ ] 4.1 Archive the change with `openspec archive a-place-whose-folder-git-dropped-is-removed --yes`. True when `sluice exec bolt/flumes-places-need-no-hand -- moon run root:specs` passes.
+- [x] 4.1 Archive the change with `openspec archive a-place-whose-folder-git-dropped-is-removed --yes`. True when `sluice exec bolt/flumes-places-need-no-hand -- moon run root:specs` passes.
