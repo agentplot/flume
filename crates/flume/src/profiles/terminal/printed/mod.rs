@@ -11,7 +11,9 @@
 //! no session a person can be shown (187), and runs answers it holds no
 //! part, in the same words (201); agents_in keeps the seam's default, not
 //! read, since it holds no agent a name finds, so a standing agent is
-//! never found under it and nothing is run (132, C.5). A command printed
+//! never found under it and nothing is run (132, C.5); and relay refuses,
+//! since it holds no part of a terminal a person can be shown, running
+//! nothing (222, C.5). A command printed
 //! once for an identity is printed for it never again, kept as a mark in
 //! the place's own folder (98, 128). The command's environment is kept beside the
 //! mark in a file the host's user alone may read, which the line names,
@@ -19,8 +21,8 @@
 
 use crate::shell;
 use flume_seams::{
-    AgentCommand, AgentState, Attached, Closed, Clues, Identity, OpenIn, Opened, PlaceRef, Sent,
-    SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
+    AgentCommand, AgentState, Attached, Closed, Clues, Identity, OpenIn, Opened, PlaceRef, Relay,
+    Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
 };
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
@@ -34,6 +36,10 @@ pub const NAME: &str = "printed";
 /// Why attach refuses and runs holds no part: its agents run in the
 /// commands it printed (187, 201).
 const NO_SESSION: &str = "the printed command holds no session a person can be shown; its agents run in the commands it printed";
+
+/// Why relay refuses: no part of the printed command's is a terminal a
+/// person can be shown (222, C.5).
+pub const NO_RELAY: &str = "the printed command holds no part of a terminal a person can be shown; its agents run in the commands it printed";
 
 /// The terminal that prints each agent's command for a person to run.
 #[derive(Clone, Copy, Debug, Default)]
@@ -219,5 +225,11 @@ impl Terminal for Printed {
                 reason: NO_SESSION.into(),
             })
             .collect()
+    }
+
+    /// Refused: it holds no part of a terminal a person can be shown,
+    /// and runs nothing (222, C.5).
+    fn relay(&self, _agent: &Identity) -> Result<Box<dyn Relay + '_>, String> {
+        Err(NO_RELAY.into())
     }
 }
