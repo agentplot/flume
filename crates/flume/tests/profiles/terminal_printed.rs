@@ -135,6 +135,11 @@ impl TerminalHarness for Harness {
         false
     }
 
+    /// The printed command offers no relay (222, C.5).
+    fn relays(&self) -> bool {
+        false
+    }
+
     /// The printed command holds no part, `work` or its own (201).
     fn runs_parts(&self) -> Vec<(Option<String>, SessionRuns)> {
         [Some("work".to_string()), None]
@@ -162,6 +167,42 @@ fn the_printed_command_passes_the_terminal_scenarios() {
         scratch: Scratch::new("printed"),
         seam: Printed,
     });
+}
+
+#[test]
+fn relay_under_the_printed_command_is_refused_and_runs_nothing() {
+    // 222, C.5: it holds no part of a terminal a person can be shown; the
+    // agent's command printed first, relay writes nothing beside it.
+    let scratch = Scratch::new("printed-relay");
+    let harness = Harness {
+        scratch,
+        seam: Printed,
+    };
+    let agent = Identity {
+        repository: "0123456789ab".into(),
+        place: "fix--one".into(),
+        stage: "code".into(),
+        start: 1,
+    };
+    let opened = Printed.open(
+        &harness.place(),
+        &harness.folder(),
+        &harness.command(),
+        &agent,
+        &OpenIn::Own,
+        None,
+    );
+    assert!(matches!(opened, Opened::Opened { .. }), "{opened:?}");
+    let folder = std::path::PathBuf::from(harness.folder());
+    let before = files_under(&folder);
+    match Printed.relay(&agent) {
+        Err(refused) => assert_eq!(
+            refused,
+            "the printed command holds no part of a terminal a person can be shown; its agents run in the commands it printed"
+        ),
+        Ok(_) => panic!("the printed command relayed"),
+    }
+    assert_eq!(files_under(&folder), before, "relay wrote into the folder");
 }
 
 #[test]

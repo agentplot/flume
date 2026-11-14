@@ -243,3 +243,164 @@ fn a_bound_on_a_stage_hold() {
     assert!(reason.contains("a bound is given only"), "{reason}");
     assert!(world.held(&id).expect("the place").holds.is_empty());
 }
+
+/// What `flume relay` wrote, line by line as JSON, serving the place
+/// `place` over `world` with `input`, and its exit.
+fn relay(world: &World, place: &str, input: &str) -> (Vec<Value>, u8) {
+    let mut output = vec![];
+    let code = commands::relay::serve(
+        place,
+        std::io::Cursor::new(input.as_bytes().to_vec()),
+        &mut output,
+        &|| Ok(world.engine()),
+        None,
+    );
+    let text = String::from_utf8(output).expect("the relay writes text");
+    let lines = text
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap_or_else(|error| panic!("{error}: {line}")))
+        .collect();
+    (lines, code)
+}
+
+/// A fix named one launched over `world`, its code agent live and
+/// showing `ready`; its place's location.
+fn a_live_fix(world: &World) -> String {
+    let answer = world
+        .engine
+        .launch(&flume_conformance::engine::world::launch(
+            "fix",
+            "one",
+            Some("x"),
+        ));
+    assert!(matches!(answer, Answer::Launched { .. }), "{answer:?}");
+    world
+        .terminal
+        .set_screen(&World::identity("fix", "one", "code", 1), Some("ready"));
+    World::id("fix", "one").to_string()
+}
+
+#[test]
+fn relay_writes_screens_and_types_each_line_of_input() {
+    // The spec's "Lines out and in" (221, 222): the agent's screen first,
+    // the text and the keys typed through the fake's relay, and the
+    // relayed answer last, ended by the caller.
+    let world = World::new();
+    let place = a_live_fix(&world);
+    world.terminal.log.clear();
+    let (lines, code) = relay(
+        &world,
+        &place,
+        "{\"text\":\"yes\"}\n{\"keys\":[\"ctrl+c\",\"enter\"]}\n",
+    );
+    assert_eq!(code, 0, "{lines:?}");
+    assert_eq!(lines.first(), Some(&serde_json::json!({"screen": "ready"})));
+    let agent = World::identity("fix", "one", "code", 1).to_string();
+    assert_eq!(
+        lines.last(),
+        Some(&serde_json::json!({"relayed": {
+            "place": place,
+            "agent": agent,
+            "ended": "caller",
+        }})),
+        "{lines:?}"
+    );
+    let typed: Vec<String> = world
+        .terminal
+        .log
+        .of("relay")
+        .into_iter()
+        .filter(|call| call.starts_with("relay text") || call.starts_with("relay keys"))
+        .collect();
+    assert_eq!(typed, vec!["relay text", "relay keys ctrl+c enter"]);
+    assert_eq!(
+        world
+            .terminal
+            .sent_to(&World::identity("fix", "one", "code", 1))
+            .last()
+            .map(String::as_str),
+        Some("yes"),
+        "enter submitted what was typed"
+    );
+}
+
+#[test]
+fn relay_gives_back_what_it_cannot_type_and_a_refusal_alone() {
+    // The spec's "Input flume cannot read" (222): an untyped line for each
+    // line flume cannot read, the key's naming it and flume's names,
+    // nothing for an empty line, and the text after typed.
+    let world = World::new();
+    let place = a_live_fix(&world);
+    let (lines, code) = relay(
+        &world,
+        &place,
+        "hello\n{\"keys\":[\"hyper+x\"]}\n\n{\"text\":\"ok\"}\n",
+    );
+    assert_eq!(code, 0, "{lines:?}");
+    let untyped: Vec<&str> = lines
+        .iter()
+        .filter_map(|line| line["untyped"].as_str())
+        .collect();
+    assert_eq!(untyped.len(), 2, "{lines:?}");
+    assert!(!untyped[0].contains("hello"), "{}", untyped[0]);
+    assert!(
+        untyped[1].contains("hyper+x") && untyped[1].contains("pageup, pagedown"),
+        "{}",
+        untyped[1]
+    );
+    assert_eq!(
+        world
+            .terminal
+            .typed(&World::identity("fix", "one", "code", 1))
+            .map(|(typed, _)| typed),
+        Some("ok".to_string())
+    );
+    // The spec's "A refusal is the only line" (4, 221): a place whose
+    // first stage waits for room.
+    let world = World::new();
+    world.host.set_bound(Some(1));
+    a_live_fix(&world);
+    let answer = world
+        .engine
+        .launch(&flume_conformance::engine::world::launch(
+            "fix",
+            "two",
+            Some("x"),
+        ));
+    assert!(matches!(answer, Answer::Launched { .. }), "{answer:?}");
+    let two = World::id("fix", "two").to_string();
+    let (lines, code) = relay(&world, &two, "{\"text\":\"never\"}\n");
+    assert_eq!(code, 1, "{lines:?}");
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    let reason = lines[0]["refused"]["refusal"]["reason"]
+        .as_str()
+        .unwrap_or_else(|| panic!("no refusal: {lines:?}"));
+    assert!(
+        reason.contains(&two) && reason.contains("no live agent"),
+        "{reason}"
+    );
+}
+
+#[test]
+fn relays_help_names_its_lines_and_no_caller() {
+    // The spec's "The help" (221; core.35).
+    let world = World::new();
+    let (text, code) = run(&world, &["relay", "--help"]);
+    assert_eq!(code, 0, "{text}");
+    let words = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    for named in [
+        "a person's screen and keys",
+        "JSON line",
+        "{\"text\":",
+        "{\"keys\":",
+        "ends when its input closes",
+        "the agent's terminal goes",
+    ] {
+        assert!(words.contains(named), "the help names no {named}: {text}");
+    }
+    // A terminal's name in the help's source is core.1's own check's to
+    // find (conformance:test), so this test names no terminal.
+    for caller in ["Boomdrive", "boomdrive", "runner", "crew"] {
+        assert!(!words.contains(caller), "the help names {caller}: {text}");
+    }
+}

@@ -266,6 +266,236 @@ pub enum AgentsIn {
 /// agent a name finds (132, C.5).
 pub const NO_NAMED_AGENTS: &str = "the terminal holds no agent a name finds";
 
+/// What the seam's default `relay` answers: the terminal offers no relay
+/// (222).
+pub const NO_RELAY: &str = "the terminal offers no relay";
+
+/// A key flume names, as a person's input gives it to a relay (222): a
+/// key by flume's own name, never a terminal's, so no caller names a
+/// multiplexer's keys and a profile maps it to its terminal's own
+/// (core.1). It is read from and written as its name: any of `ctrl+`,
+/// `alt+` and `shift+`, in that order, before the key's own name.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct Key {
+    pub ctrl: bool,
+    pub alt: bool,
+    pub shift: bool,
+    pub name: KeyName,
+}
+
+/// A key's own name, without its leading `ctrl+`, `alt+` and `shift+`
+/// (222): one flume names, a function key by its number, or one
+/// printable character.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum KeyName {
+    Enter,
+    Tab,
+    Esc,
+    Backspace,
+    Delete,
+    Insert,
+    Home,
+    End,
+    PageUp,
+    PageDown,
+    Up,
+    Down,
+    Left,
+    Right,
+    Space,
+    /// `f1` to `f12`.
+    F(u8),
+    /// One printable character, neither a control nor a space.
+    Char(char),
+}
+
+/// flume's key names, as a refusal of any other gives them (222).
+pub const KEY_NAMES: &str = "enter, tab, esc, backspace, delete, insert, home, end, pageup, pagedown, up, down, left, right, space, f1 to f12, or any one printable character, each led by any of ctrl+, alt+ and shift+ in that order";
+
+impl KeyName {
+    const NAMED: [(KeyName, &'static str); 15] = [
+        (KeyName::Enter, "enter"),
+        (KeyName::Tab, "tab"),
+        (KeyName::Esc, "esc"),
+        (KeyName::Backspace, "backspace"),
+        (KeyName::Delete, "delete"),
+        (KeyName::Insert, "insert"),
+        (KeyName::Home, "home"),
+        (KeyName::End, "end"),
+        (KeyName::PageUp, "pageup"),
+        (KeyName::PageDown, "pagedown"),
+        (KeyName::Up, "up"),
+        (KeyName::Down, "down"),
+        (KeyName::Left, "left"),
+        (KeyName::Right, "right"),
+        (KeyName::Space, "space"),
+    ];
+
+    /// Every key name flume gives, bare: the named keys, then `f1` to
+    /// `f12`; a printable character is any one (222).
+    pub fn named() -> Vec<KeyName> {
+        let mut named: Vec<KeyName> = Self::NAMED.iter().map(|(name, _)| *name).collect();
+        named.extend((1..=12).map(KeyName::F));
+        named
+    }
+
+    fn read(given: &str) -> Option<KeyName> {
+        if given == "escape" {
+            return Some(KeyName::Esc);
+        }
+        if let Some((name, _)) = Self::NAMED.iter().find(|(_, word)| *word == given) {
+            return Some(*name);
+        }
+        if let Some(number) = given
+            .strip_prefix('f')
+            .and_then(|number| number.parse::<u8>().ok())
+            .filter(|number| (1..=12).contains(number) && format!("f{number}") == given)
+        {
+            return Some(KeyName::F(number));
+        }
+        let mut chars = given.chars();
+        match (chars.next(), chars.next()) {
+            (Some(one), None) if !one.is_control() && !one.is_whitespace() => {
+                Some(KeyName::Char(one))
+            }
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for KeyName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            KeyName::F(number) => write!(f, "f{number}"),
+            KeyName::Char(one) => write!(f, "{one}"),
+            named => {
+                let word = Self::NAMED
+                    .iter()
+                    .find(|(name, _)| name == named)
+                    .map(|(_, word)| *word)
+                    .unwrap_or_default();
+                f.write_str(word)
+            }
+        }
+    }
+}
+
+impl Key {
+    /// A key by its own name alone, led by no `ctrl+`, `alt+` or `shift+`.
+    pub fn bare(name: KeyName) -> Key {
+        Key {
+            ctrl: false,
+            alt: false,
+            shift: false,
+            name,
+        }
+    }
+}
+
+impl std::fmt::Display for Key {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.ctrl {
+            f.write_str("ctrl+")?;
+        }
+        if self.alt {
+            f.write_str("alt+")?;
+        }
+        if self.shift {
+            f.write_str("shift+")?;
+        }
+        write!(f, "{}", self.name)
+    }
+}
+
+impl std::str::FromStr for Key {
+    type Err = String;
+
+    /// Reads a key from flume's name for it, `escape` read as `esc`, and
+    /// refuses any other name, naming it and flume's names (222).
+    fn from_str(given: &str) -> Result<Key, String> {
+        let mut rest = given;
+        let mut lead = |word: &str| match rest.strip_prefix(word) {
+            Some(after) if !after.is_empty() => {
+                rest = after;
+                true
+            }
+            _ => false,
+        };
+        let ctrl = lead("ctrl+");
+        let alt = lead("alt+");
+        let shift = lead("shift+");
+        KeyName::read(rest)
+            .map(|name| Key {
+                ctrl,
+                alt,
+                shift,
+                name,
+            })
+            .ok_or_else(|| format!("{given} is no key flume names: flume names {KEY_NAMES}"))
+    }
+}
+
+impl TryFrom<String> for Key {
+    type Error = String;
+
+    fn try_from(given: String) -> Result<Key, String> {
+        given.parse()
+    }
+}
+
+impl From<Key> for String {
+    fn from(key: Key) -> String {
+        key.to_string()
+    }
+}
+
+/// A person's input to a relay, as the person typed it: text, or keys by
+/// flume's names typed in order (222). It is written `{"text": …}` or
+/// `{"keys": [ … ]}`, the lines a relay's caller writes.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Typed {
+    Text(String),
+    Keys(Vec<Key>),
+}
+
+/// A relay's read: what the terminal shows of the agent now, as a
+/// person's view of it would show it; that the terminal holds the agent
+/// no more; or the terminal's words where it did not answer (96, 136,
+/// 222).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RelayScreen {
+    Shows { screen: String },
+    Gone,
+    Unread { reason: String },
+}
+
+/// A terminal's relay of one agent, the handle `Terminal::relay` gives
+/// (222). It holds what the profile found at the ask, so each read is one
+/// call. It makes and keeps nothing in the terminal, and dropping it ends
+/// nothing there: the relay closes nothing it did not open, which is
+/// nothing (221, 222).
+pub trait Relay: Send {
+    /// The bound the profile states within which a change of what the
+    /// terminal shows is given again: the least time between two reads
+    /// (222).
+    fn every(&self) -> std::time::Duration;
+
+    /// What the terminal shows of the agent now, as a person's view of it
+    /// would; gone where the terminal holds the agent no more; or the
+    /// terminal's words where it did not answer (96, 136, 222).
+    fn screen(&mut self) -> RelayScreen;
+
+    /// The person's input given to the agent as the person typed it:
+    /// nothing typed cleared first and no receipt read, which no send of
+    /// flume's is (95); or the terminal's refusal in its words. A key the
+    /// terminal cannot type is refused, named, with nothing typed for it,
+    /// and the keys after it are still typed (107, 222).
+    fn typed(&mut self, input: &Typed) -> Result<(), String>;
+}
+
 /// The terminal seam (B.5), kept once for the host. The guarantee: open
 /// never runs a second agent under an identity already live, and close
 /// never reports an end that did not happen (98). It offers no operation
@@ -387,4 +617,167 @@ pub trait Terminal: Send + Sync {
     /// terminal, one answer for each in the order asked, starting
     /// nothing, within a bound the profile states (98, 200, 201).
     fn runs(&self, sessions: &[Option<&str>]) -> Vec<SessionRuns>;
+
+    /// A relay of `agent`: a handle that reads what the terminal shows of
+    /// it, as a person's view would, within the bound the handle states,
+    /// and types a person's input into it with nothing cleared first and
+    /// no wait for receipt; or a refusal in the terminal's words where it
+    /// holds no such agent or offers no relay (221, 222). The default
+    /// refuses with `NO_RELAY`, so a profile offers a relay only by
+    /// building one. The handle makes nothing in the terminal, and
+    /// dropping it ends nothing there (221).
+    fn relay(&self, _agent: &crate::Identity) -> Result<Box<dyn Relay + '_>, String> {
+        Err(NO_RELAY.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The seam-contracts scenario "Key names" (222).
+    #[test]
+    fn key_names_are_read_and_written_as_flume_names_them() {
+        for (given, written) in [
+            ("ctrl+c", "ctrl+c"),
+            ("shift+tab", "shift+tab"),
+            ("escape", "esc"),
+            ("f12", "f12"),
+            ("ctrl+alt+x", "ctrl+alt+x"),
+            ("é", "é"),
+            ("space", "space"),
+        ] {
+            let key: Key = given.parse().unwrap_or_else(|refused| panic!("{refused}"));
+            assert_eq!(key.to_string(), written, "{given}");
+            assert_eq!(
+                serde_json::to_string(&key).unwrap(),
+                format!("\"{written}\""),
+                "serde writes {given} by its name"
+            );
+            let read: Key = serde_json::from_str(&format!("\"{given}\"")).unwrap();
+            assert_eq!(read, key, "serde reads {given} as FromStr does");
+        }
+        for given in ["alt+ctrl+x", "f13", "hyper+x"] {
+            let refused = given.parse::<Key>().expect_err(given);
+            assert!(refused.starts_with(given), "{refused}");
+            for name in [
+                "enter",
+                "esc",
+                "pagedown",
+                "f1 to f12",
+                "printable",
+                "ctrl+, alt+ and shift+",
+            ] {
+                assert!(refused.contains(name), "{given}: {refused} names {name}");
+            }
+            assert!(
+                serde_json::from_str::<Key>(&format!("\"{given}\"")).is_err(),
+                "serde refuses {given}"
+            );
+        }
+        for named in KeyName::named() {
+            let key = Key::bare(named);
+            assert_eq!(key.to_string().parse::<Key>(), Ok(key.clone()), "{key}");
+        }
+        for refused in ["", "ctrl+", "f0", "f01", " ", "\t", "ab", "Enter"] {
+            assert!(refused.parse::<Key>().is_err(), "{refused:?}");
+        }
+        assert_eq!(
+            "ctrl++".parse::<Key>().map(|key| key.to_string()),
+            Ok("ctrl++".into()),
+            "a printable `+` led by ctrl+"
+        );
+    }
+
+    /// A terminal of the test's own that builds every operation of the
+    /// seam but relay.
+    struct NoRelay;
+
+    impl Terminal for NoRelay {
+        fn open(
+            &self,
+            _: &crate::PlaceRef,
+            _: &str,
+            _: &crate::AgentCommand,
+            _: &crate::Identity,
+            _: &OpenIn,
+            _: Option<&str>,
+        ) -> Opened {
+            Opened::Opened {
+                carried: false,
+                printed: None,
+            }
+        }
+        fn send(&self, _: &crate::Identity, _: &str) -> Sent {
+            Sent::Sent
+        }
+        fn sends(&self) -> bool {
+            true
+        }
+        fn state(&self, _: &crate::Identity) -> AgentState {
+            AgentState::Waiting
+        }
+        fn send_to(&self, _: &str, _: &str) -> ToSession {
+            ToSession::Sent
+        }
+        fn session_state(&self, _: &str) -> Option<AgentState> {
+            Some(AgentState::Waiting)
+        }
+        fn agents_in(&self, _: Option<&str>) -> AgentsIn {
+            AgentsIn::Read { agents: vec![] }
+        }
+        fn screen(&self, _: &crate::Identity) -> Option<String> {
+            Some("ready".into())
+        }
+        fn answer_trust(&self, _: &crate::Identity) -> bool {
+            true
+        }
+        fn close(&self, _: &crate::Identity) -> Closed {
+            Closed::Closed
+        }
+        fn tidy(&self, _: &crate::PlaceRef) -> TerminalTidy {
+            TerminalTidy::default()
+        }
+        fn kept(&self) -> Vec<String> {
+            vec![]
+        }
+        fn show(&self, _: &crate::PlaceRef, _: &Clues) -> Shown {
+            Shown::Shown
+        }
+        fn shown_at(&self, _: &crate::PlaceRef, _: Option<&crate::Identity>) -> ShownAt {
+            ShownAt::default()
+        }
+        fn setup(&self) -> Vec<String> {
+            vec![]
+        }
+        fn session(&self) -> Option<String> {
+            None
+        }
+        fn attach(&self, _: Option<&str>, _: crate::View) -> Attached {
+            Attached::Shown
+        }
+        fn runs(&self, sessions: &[Option<&str>]) -> Vec<SessionRuns> {
+            sessions
+                .iter()
+                .map(|_| SessionRuns::Runs { name: "own".into() })
+                .collect()
+        }
+    }
+
+    /// The seam-contracts scenario "A terminal that builds no relay"
+    /// (222).
+    #[test]
+    fn a_terminal_that_builds_no_relay_refuses_it() {
+        let agent = crate::Identity {
+            repository: "r1".into(),
+            place: "fix--one".into(),
+            stage: "code".into(),
+            start: 1,
+        };
+        match NoRelay.relay(&agent) {
+            Err(refused) => assert_eq!(refused, "the terminal offers no relay"),
+            Ok(_) => panic!("a terminal that builds no relay relayed"),
+        }
+        assert_eq!(NO_RELAY, "the terminal offers no relay");
+    }
 }

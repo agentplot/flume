@@ -61,6 +61,10 @@
 //! characters, a block keeping its agent's Rex name; shown_at names them
 //! from the records alone (139).
 //!
+//! relay is refused before any call, saying flume's Rex profile offers
+//! none: C.5 gives Rex no relay row, and a relay of Rex is the
+//! statement's to add first (222; core.19).
+//!
 //! Every call is `rex --autostart=false -S unix://<socket> <words>`, the
 //! calling process's `REX_*` stripped, under a bound, ten seconds where
 //! the call states none: one that does not answer within it is killed and
@@ -73,8 +77,8 @@ use super::common::{
 use crate::host::process::{listed, program_path};
 use flume_seams::{
     AgentCommand, AgentState, AgentsIn, Attached, Closed, Clues, FolderTrust, Identity, NamedAgent,
-    OpenIn, Opened, PlaceRef, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession,
-    View,
+    OpenIn, Opened, PlaceRef, Relay, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy,
+    ToSession, View,
 };
 use serde_json::{json, Value};
 #[cfg(test)]
@@ -91,6 +95,9 @@ use std::time::{Duration, Instant};
 /// The profile's name in the host's configuration, `[host] multiplexer`
 /// and a stream's `multiplexer` (105, 190).
 pub const NAME: &str = "rex";
+
+/// Why relay is refused: C.5 gives Rex no relay row (222; core.19).
+pub const NO_RELAY: &str = "flume's Rex profile offers no relay";
 
 /// The bound on a Rex call that states none (98, C.5).
 pub const BOUND: Duration = Duration::from_secs(10);
@@ -2018,6 +2025,12 @@ impl Terminal for Rex {
                 .collect()
         })
     }
+
+    /// Refused before any call: C.5 gives Rex no relay row, so flume's
+    /// Rex profile offers none (222; core.19).
+    fn relay(&self, _agent: &Identity) -> Result<Box<dyn Relay + '_>, String> {
+        Err(NO_RELAY.into())
+    }
 }
 
 impl Rex {
@@ -2373,6 +2386,23 @@ mod tests {
             kind: Some(kind.into()),
             files: BTreeMap::new(),
         }
+    }
+
+    #[test]
+    fn relay_is_refused_and_calls_nothing() {
+        // 222, C.5: no relay row for Rex, so its relay is refused saying
+        // so, before any call of the stand-in rex, which logs each.
+        let (rex, scratch, ran) = over_records("relay");
+        match rex.relay(&identity()) {
+            Err(refused) => assert_eq!(refused, "flume's Rex profile offers no relay"),
+            Ok(_) => panic!("the Rex profile relayed"),
+        }
+        assert!(
+            !ran.exists(),
+            "rex was called: {:?}",
+            fs::read_to_string(&ran)
+        );
+        let _ = fs::remove_dir_all(scratch);
     }
 
     #[test]

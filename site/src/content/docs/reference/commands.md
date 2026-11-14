@@ -27,6 +27,7 @@ sidebar:
 | `flume wake <address>` | Wake a role's address, `<stream>/<role>`: launch its run where none stands, and nothing where an agent already holds it. |
 | `flume kinds lock <identity>…` | Record each kind at its content's hash in a lock of kinds, or take it out. |
 | `flume open [<session>]` | Show a session of a stream's, by the session's name, in its stream's view: a window its terminal app opens, its multiplexer's own app, or the line to run. |
+| `flume relay <place>` | Relay the place's live agent's terminal to a program that carries a person's screen and keys: the screen out and the person's input in, as JSON lines. |
 | `flume mcp` | Serve flume's status over MCP on standard input and output. |
 | `flume needs <words>` | From an agent flume started: its stage cannot deliver without an answer, or found work; `--to` names the role the words are for. |
 | `flume ack started`, `flume ack received` | From an agent flume started: it started, or it received a prompt. |
@@ -65,8 +66,8 @@ error. `flume wait` has exits of its own.
 unless a caller keeps watch over the host with `flume settle --every`.
 `flume status`, `flume list`, `flume prompt` and `flume mcp`
 only read, `flume status --line` and `flume hook status-line` among
-them. `flume open` settles nothing, and `flume kinds lock` writes its
-lock and settles nothing.
+them. `flume open` and `flume relay` settle nothing, and `flume kinds
+lock` writes its lock and settles nothing.
 
 ## `flume launch`
 
@@ -769,6 +770,68 @@ writes nothing it holds. It is refused, opening nothing, when:
 - the terminal app refuses, in its own words: Ghostty not installed,
   Terminal.app not allowed to be controlled, or Terminal.app on a host
   that is not macOS.
+
+## `flume relay`
+
+```sh
+flume relay <place>
+```
+
+Relays the place's live agent's terminal to a program that carries a
+person's screen and keys, such as a terminal in a web page: what the
+terminal shows of the agent goes out each time it changes, and the
+person's input goes in as typed. The place is named as `flume status`
+names one. The agent is the one the place's current stage runs, reached
+through the terminal it opened in.
+
+It speaks JSON lines whatever `--json` says, one object a line. Out,
+on standard output:
+
+| Line | |
+|---|---|
+| `{"screen": "<text>"}` | What the terminal shows of the agent, as a person's view of it shows it, colours as the terminal gives them. The first comes at once, then one each time it differs from the last. |
+| `{"unread": "<why>"}` | A read the terminal did not answer, in its words, given once until a read answers again. |
+| `{"untyped": "<why>"}` | An input not typed: a line of neither form below, a key flume does not name, or the terminal's refusal, in its words. |
+| `{"relayed": {"place": …, "agent": …, "ended": …}}` | The last line, its answer: the place, the agent by its identity, and `caller` or `gone` for what ended it. |
+
+In, on standard input, one object a line, an empty line passed over:
+
+| Line | |
+|---|---|
+| `{"text": "<text>"}` | Typed as it is. |
+| `{"keys": ["<key>", …]}` | Each key typed in order, named by flume's key names. |
+
+**Key names.** `enter`, `tab`, `esc`, `backspace`, `delete`, `insert`,
+`home`, `end`, `pageup`, `pagedown`, `up`, `down`, `left`, `right`,
+`space`, `f1` to `f12`, and any one printable character, each led by
+any of `ctrl+`, `alt+` and `shift+` in that order: `ctrl+c`,
+`shift+tab`, `ctrl+alt+x`. `escape` is read as `esc`. herdr 0.9.5
+cannot type `delete`, `insert`, `home`, `end`, `pageup` or `pagedown`:
+under it each is given back as untyped, named, and the keys around it
+still go in.
+
+**A person's keys.** Nothing the agent holds typed is cleared first,
+and no receipt is waited on: the input is a person's at the keyboard,
+not a prompt of flume's. Text typed and not submitted stays typed.
+
+**Ends and exits.** The relay ends when its input closes or its output
+is no longer read, its answer ended by its caller, or once the agent's
+terminal goes, ended `gone`; either way it exits `0`. A place with no
+live agent, such as one whose stage waits for room, and a terminal that
+offers no relay, the printed command's and Rex's, are refused: the
+refusal's JSON is the only line, and it exits `1`.
+
+**Nothing kept.** The relay settles nothing, writes nothing and keeps
+nothing it carried, and status and the list name no relay. Under herdr,
+the screen is read again at most every 250 milliseconds, and each read
+and each input is one call bounded at a second.
+
+```console
+$ printf '%s\n' '{"text":"yes"}' '{"keys":["enter"]}' | flume relay fix--the-parser-reads-tabs
+{"screen":"> "}
+{"screen":"> yes"}
+{"relayed":{"place":"~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs","agent":"flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:1","ended":"caller"}}
+```
 
 ## `flume mcp`
 

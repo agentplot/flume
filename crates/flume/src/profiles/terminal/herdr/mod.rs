@@ -102,6 +102,25 @@
 //! never lists on one server, would both be. A listing or a list refused
 //! or unanswered is not read, in herdr's words; nothing is kept.
 //!
+//! relay finds the agent's pane as every operation does, refused where
+//! herdr holds none of the agent or answers unknown, in herdr's words; its
+//! handle states 250 milliseconds, reads what a person's view of the pane
+//! shows by `pane read <pane> --source visible --format ansi`, and types a
+//! person's input as typed, text by `pane send-text <pane> <text>` and
+//! keys by `pane send-keys <pane> <key>…`, each key herdr 0.9.5 types
+//! spelled as flume spells it, clearing nothing and reading no receipt;
+//! herdr 0.9.5 names no `delete`, `insert`, `home`, `end`, `pageup` or
+//! `pagedown`, so each of those, bare or led, is refused, named as a key
+//! herdr 0.9.5 cannot type, nothing sent for it, and the keys around it
+//! are typed, one call for each run of them. A
+//! call herdr answers `pane_not_found` finds the pane again by the agent's
+//! herdr name and reads or types there, herdr refusing before it writes a
+//! byte; a pane not found again, or `server_not_running`, reads gone. Each
+//! relay call is bounded at one second, a read past it unread and an input
+//! past it refused, naming the bound; the relay makes, keeps and closes
+//! nothing in herdr, and no words of its repeat what was typed (107, 221,
+//! 222, C.5's relay row).
+//!
 //! Every herdr call runs under a bound, ten seconds where the call states
 //! none, and one that does not answer within it is unknown or a refusal
 //! naming the bound; each runs with the caller's `HERDR_*` stripped and
@@ -112,9 +131,9 @@ use super::common::{
 };
 use crate::host::process::program_path;
 use flume_seams::{
-    AgentCommand, AgentState, AgentsIn, Attached, Closed, Clues, FolderTrust, Identity, NamedAgent,
-    OpenIn, Opened, PlaceRef, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession,
-    View, ViewCommand,
+    AgentCommand, AgentState, AgentsIn, Attached, Closed, Clues, FolderTrust, Identity, Key,
+    KeyName, NamedAgent, OpenIn, Opened, PlaceRef, Relay, RelayScreen, Sent, SessionRuns, Shown,
+    ShownAt, Terminal, TerminalTidy, ToSession, Typed, View, ViewCommand,
 };
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
@@ -136,6 +155,16 @@ pub const BOUND: Duration = Duration::from_secs(10);
 /// The bound on runs' one session listing, which herdr answers in
 /// milliseconds (201, C.5).
 pub const RUNS_BOUND: Duration = Duration::from_secs(1);
+
+/// The bound within which a relay gives a change of what the pane shows
+/// again, the least time between two of its reads (222, C.5's relay
+/// row).
+pub const RELAY_EVERY: Duration = Duration::from_millis(250);
+
+/// The bound on each call of a relay, which herdr answers in
+/// milliseconds: a read that waits holds the person's screen (98, 222;
+/// core.29).
+pub const RELAY_BOUND: Duration = Duration::from_secs(1);
 
 /// How long a start waits for the pane's shell to come to its prompt and
 /// the program to be ready: room for a shell and SessionStart hooks slow
@@ -1579,20 +1608,190 @@ fn field(value: &Value, name: &str) -> String {
 }
 
 /// `args` as words a refusal may carry: each `--env NAME=value` given as
-/// `NAME=<set>`, since a value may be a secret (32, 56).
+/// `NAME=<set>`, since a value may be a secret (32, 56), and the text a
+/// relay types by `pane send-text` as `<typed>`, so no words of flume's
+/// repeat what a person typed (221).
 fn unvalued(args: &[&str]) -> String {
     let mut words = Vec::with_capacity(args.len());
     let mut env = false;
-    for arg in args {
+    let typed = matches!(args, ["pane", "send-text", _, _]);
+    for (at, arg) in args.iter().enumerate() {
         if env {
             let name = arg.split_once('=').map_or(*arg, |(name, _)| name);
             words.push(format!("{name}={}", flume_seams::SET));
+        } else if typed && at == 3 {
+            words.push("<typed>".to_string());
         } else {
             words.push((*arg).to_string());
         }
         env = *arg == "--env";
     }
     words.join(" ")
+}
+
+/// A key as herdr 0.9.5's `pane send-keys` takes it, which spells every
+/// key it types as flume spells it: its `ctrl+`, `alt+` and `shift+` as
+/// flume leads it, then its own name; or, for a key herdr 0.9.5 names
+/// none of, bare or led, why it cannot be typed, naming it (222, C.5's
+/// relay row; core.29).
+pub fn herdr_key(key: &Key) -> Result<String, String> {
+    if CANNOT_TYPE.contains(&key.name) {
+        return Err(format!("{key} is a key herdr 0.9.5 cannot type"));
+    }
+    Ok(key.to_string())
+}
+
+/// flume's key names herdr 0.9.5's `pane send-keys` names none of, bare
+/// or led, as C.5's relay row lists them and the tools layer reads them
+/// from the pinned herdr (222; core.29).
+pub const CANNOT_TYPE: [KeyName; 6] = [
+    KeyName::Delete,
+    KeyName::Insert,
+    KeyName::Home,
+    KeyName::End,
+    KeyName::PageUp,
+    KeyName::PageDown,
+];
+
+/// The relay of one agent's pane: its pane as found at the ask, found
+/// again by the agent's herdr name where it moved, each call under the
+/// profile's environment and socket and bounded at one second (222, C.5's
+/// relay row; core.29).
+struct HerdrRelay {
+    herdr: Herdr,
+    identity: Identity,
+    pane: Pane,
+}
+
+impl HerdrRelay {
+    /// The pane found again by the agent's herdr name, where a call
+    /// answered that its id holds none: there, gone, or unread in
+    /// herdr's words (98; record 0018).
+    fn found_again(&mut self) -> Found {
+        let found = self.herdr.found(&self.identity);
+        if let Found::At(pane) = &found {
+            self.pane = pane.clone();
+        }
+        found
+    }
+
+    /// `args` with the pane's id after their first two words, asked of
+    /// the pane's server within the relay's bound.
+    fn on_pane(&self, verb: &[&str], rest: &[&str]) -> Call {
+        let mut args: Vec<&str> = verb.to_vec();
+        args.push(&self.pane.id);
+        args.extend_from_slice(rest);
+        self.herdr.call(&self.pane.socket, &args, RELAY_BOUND)
+    }
+}
+
+impl Relay for HerdrRelay {
+    fn every(&self) -> Duration {
+        RELAY_EVERY
+    }
+
+    /// `pane read <pane> --source visible --format ansi`; gone where the
+    /// server does not run or the pane is not found again (136, 222).
+    fn screen(&mut self) -> RelayScreen {
+        let read = ["--source", "visible", "--format", "ansi"];
+        for again in [false, true] {
+            match self.on_pane(&["pane", "read"], &read) {
+                Call::Answered(Value::String(screen)) => return RelayScreen::Shows { screen },
+                Call::Answered(other) => {
+                    return RelayScreen::Shows {
+                        screen: other.to_string(),
+                    }
+                }
+                Call::Refused { code, .. } if code == "server_not_running" => {
+                    return RelayScreen::Gone
+                }
+                Call::Refused { code, .. } if code == "pane_not_found" && !again => {
+                    match self.found_again() {
+                        Found::At(_) => continue,
+                        Found::Gone => return RelayScreen::Gone,
+                        Found::Unknown(reason) => return RelayScreen::Unread { reason },
+                    }
+                }
+                Call::Refused { code, .. } if code == "pane_not_found" => return RelayScreen::Gone,
+                Call::Refused { code, words } => {
+                    return RelayScreen::Unread {
+                        reason: format!("herdr refused ({code}): {words}"),
+                    }
+                }
+                Call::Unanswered(reason) => return RelayScreen::Unread { reason },
+            }
+        }
+        RelayScreen::Gone
+    }
+
+    /// Text by `pane send-text <pane> <text>`; keys by `pane send-keys
+    /// <pane> <key>…`, a key herdr 0.9.5 cannot type refused, named,
+    /// nothing sent for it, and each run of keys around it typed in order,
+    /// one call each, the input then refused naming each key not typed
+    /// (95, 107, 222, C.5's relay row).
+    fn typed(&mut self, input: &Typed) -> Result<(), String> {
+        let keys = match input {
+            Typed::Text(text) => return self.on_pane_again(&["pane", "send-text"], &[text]),
+            Typed::Keys(keys) => keys,
+        };
+        let mut runs: Vec<Vec<String>> = vec![vec![]];
+        let mut untyped = vec![];
+        for key in keys {
+            match herdr_key(key) {
+                Ok(name) => runs.last_mut().expect("a run").push(name),
+                Err(why) => {
+                    untyped.push(why);
+                    runs.push(vec![]);
+                }
+            }
+        }
+        for run in runs.iter().filter(|run| !run.is_empty()) {
+            let run: Vec<&str> = run.iter().map(String::as_str).collect();
+            self.on_pane_again(&["pane", "send-keys"], &run)?;
+        }
+        if untyped.is_empty() {
+            Ok(())
+        } else {
+            let (them, were) = if untyped.len() == 1 {
+                ("it", "it")
+            } else {
+                ("them", "them")
+            };
+            Err(format!(
+                "{}; nothing was sent for {them}, and the keys around {were} were typed",
+                untyped.join("; ")
+            ))
+        }
+    }
+}
+
+impl HerdrRelay {
+    /// `verb` with the pane's id and `rest`, found again once and asked
+    /// there where herdr finds no pane by its id, which it answers before
+    /// it writes a byte; a refusal in herdr's words (95, 222; record
+    /// 0018).
+    fn on_pane_again(&mut self, verb: &[&str], rest: &[&str]) -> Result<(), String> {
+        for again in [false, true] {
+            match self.on_pane(verb, rest) {
+                Call::Answered(_) => return Ok(()),
+                Call::Refused { code, .. } if code == "pane_not_found" && !again => {
+                    match self.found_again() {
+                        Found::At(_) => continue,
+                        Found::Gone => break,
+                        Found::Unknown(reason) => return Err(reason),
+                    }
+                }
+                Call::Refused { code, words } => {
+                    return Err(format!("herdr refused ({code}): {words}"))
+                }
+                Call::Unanswered(reason) => return Err(reason),
+            }
+        }
+        Err(format!(
+            "herdr holds no pane of the agent {}",
+            self.identity
+        ))
+    }
 }
 
 /// What came of the folder-trust question at a start.
@@ -2344,6 +2543,23 @@ impl Terminal for Herdr {
                 .collect(),
         }
     }
+
+    /// A relay of the agent's pane, found as every operation finds it,
+    /// refused where herdr holds none of the agent or answers unknown, in
+    /// herdr's words; its handle's calls bounded at one second (221, 222,
+    /// C.5's relay row; core.29).
+    fn relay(&self, agent: &Identity) -> Result<Box<dyn Relay + '_>, String> {
+        let herdr = self.clone().with_bound(RELAY_BOUND);
+        match herdr.found(agent) {
+            Found::At(pane) => Ok(Box::new(HerdrRelay {
+                herdr,
+                identity: agent.clone(),
+                pane,
+            })),
+            Found::Gone => Err(format!("herdr holds no pane of the agent {agent}")),
+            Found::Unknown(reason) => Err(reason),
+        }
+    }
 }
 
 impl Herdr {
@@ -2455,6 +2671,245 @@ mod tests {
             stage: "code".into(),
             start: 1,
         }
+    }
+
+    /// The profile over records in a scratch directory of its own, its
+    /// herdr a stand-in script whose body is `body`, run by `/bin/sh` with
+    /// `$LOG` the file it logs to, each call logged first as its words
+    /// and the socket it was passed; the agent `identity()` recorded in
+    /// the pane `w1:p2` at `/run/h.sock`. The profile, the scratch and the
+    /// log.
+    fn over_stand_in(name: &str, body: &str) -> (Herdr, PathBuf, PathBuf) {
+        let scratch =
+            std::env::temp_dir().join(format!("flume-herdr-relay-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&scratch);
+        fs::create_dir_all(&scratch).expect("a scratch folder");
+        let log = scratch.join("log");
+        let program = scratch.join("herdr");
+        fs::write(
+            &program,
+            format!(
+                "#!/bin/sh\nLOG='{}'\nMARK='{}'\necho \"$* HERDR_SOCKET_PATH=$HERDR_SOCKET_PATH\" >> \"$LOG\"\n{body}\n",
+                log.display(),
+                scratch.join("mark").display()
+            ),
+        )
+        .expect("the stand-in herdr");
+        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).expect("executable");
+        let herdr = Herdr::new(
+            Server::Socket("/run/h.sock".into()),
+            scratch.join("records"),
+        )
+        .with_program(&program);
+        keep_pane(&herdr, "w1:p2", "/run/h.sock");
+        (herdr, scratch, log)
+    }
+
+    /// Each call the stand-in logged, but its `pane get`s and `agent
+    /// get`s, which find the pane.
+    fn relay_calls(log: &Path) -> Vec<String> {
+        fs::read_to_string(log)
+            .unwrap_or_default()
+            .lines()
+            .filter(|line| !line.starts_with("pane get") && !line.starts_with("agent get"))
+            .map(str::to_string)
+            .collect()
+    }
+
+    const PANE_GET: &str = r#"pane\ get) echo "{\"result\":{\"pane\":{\"pane_id\":\"$3\"}}}" ;;"#;
+
+    #[test]
+    fn relay_reads_the_pane_as_ansi_and_types_by_send_text_and_send_keys() {
+        // The terminal-profiles scenario "Reads and types over a stand-in
+        // herdr" (222, C.5's relay row).
+        let body = format!(
+            "case \"$1 $2\" in\n{PANE_GET}\npane\\ read) printf 'the screen of %s' \"$3\" ;;\n*) echo '{{\"result\":{{}}}}' ;;\nesac"
+        );
+        let (herdr, scratch, log) = over_stand_in("reads", &body);
+        let mut relay = herdr.relay(&identity()).expect("the pane is found");
+        assert_eq!(relay.every(), Duration::from_millis(250));
+        for _ in 0..2 {
+            assert_eq!(
+                relay.screen(),
+                RelayScreen::Shows {
+                    screen: "the screen of w1:p2".into()
+                }
+            );
+        }
+        assert_eq!(relay.typed(&Typed::Text("yes".into())), Ok(()));
+        let keys = Typed::Keys(vec!["ctrl+c".parse().unwrap(), "enter".parse().unwrap()]);
+        assert_eq!(relay.typed(&keys), Ok(()));
+        let read = "pane read w1:p2 --source visible --format ansi HERDR_SOCKET_PATH=/run/h.sock";
+        assert_eq!(
+            relay_calls(&log),
+            vec![
+                read.to_string(),
+                read.to_string(),
+                "pane send-text w1:p2 yes HERDR_SOCKET_PATH=/run/h.sock".into(),
+                "pane send-keys w1:p2 ctrl+c enter HERDR_SOCKET_PATH=/run/h.sock".into(),
+            ]
+        );
+        drop(relay);
+        assert!(
+            relay_calls(&log).len() == 4,
+            "dropping the relay called herdr: {:?}",
+            relay_calls(&log)
+        );
+        let _ = fs::remove_dir_all(scratch);
+    }
+
+    #[test]
+    fn relay_finds_a_moved_pane_again_and_reads_a_gone_one_gone() {
+        // The terminal-profiles scenarios "A pane moved, then gone" and "A
+        // server not running" (222; record 0018).
+        let not_found = r#"echo '{"error":{"code":"pane_not_found","message":"no such pane"}}'"#;
+        let body = format!(
+            "case \"$1 $2 $3\" in\n\
+             'pane get w1:p2') if [ -e \"$MARK.moved\" ]; then {not_found}; else echo '{{\"result\":{{\"pane\":{{\"pane_id\":\"w1:p2\"}}}}}}'; fi ;;\n\
+             'pane get '*) {not_found} ;;\n\
+             'pane read w1:p2') touch \"$MARK.moved\"; {not_found} ;;\n\
+             'pane read w3:p1') if [ -e \"$MARK\" ]; then {not_found}; else touch \"$MARK\"; printf 'moved'; fi ;;\n\
+             'agent get '*) if [ -e \"$MARK\" ]; then echo '{{\"error\":{{\"code\":\"agent_not_found\",\"message\":\"none\"}}}}'; else echo \"{{\\\"result\\\":{{\\\"agent\\\":{{\\\"name\\\":\\\"$3\\\",\\\"pane_id\\\":\\\"w3:p1\\\"}}}}}}\"; fi ;;\n\
+             esac"
+        );
+        let (herdr, scratch, log) = over_stand_in("moved", &body);
+        let mut relay = herdr
+            .relay(&identity())
+            .expect("the pane is found at the ask");
+        assert_eq!(
+            relay.screen(),
+            RelayScreen::Shows {
+                screen: "moved".into()
+            },
+            "{:?}",
+            fs::read_to_string(&log)
+        );
+        assert_eq!(
+            herdr.pane(&identity()).map(|pane| pane.id),
+            Some("w3:p1".to_string()),
+            "the new id recorded"
+        );
+        assert_eq!(
+            relay.screen(),
+            RelayScreen::Gone,
+            "{:?}",
+            fs::read_to_string(&log)
+        );
+        let _ = fs::remove_dir_all(scratch);
+        let body = format!(
+            "case \"$1 $2\" in\n{PANE_GET}\n*) echo '{{\"error\":{{\"code\":\"server_not_running\",\"message\":\"no server\"}}}}' ;;\nesac"
+        );
+        let (herdr, scratch, _) = over_stand_in("server", &body);
+        let mut relay = herdr
+            .relay(&identity())
+            .expect("the pane is found at the ask");
+        assert_eq!(relay.screen(), RelayScreen::Gone);
+        let _ = fs::remove_dir_all(scratch);
+    }
+
+    #[test]
+    fn a_relay_read_that_does_not_answer_is_unread_naming_one_second() {
+        // 98, core.29: a read past one second unread, an input past it
+        // refused, each naming the bound, within two seconds of the ask.
+        let body = format!("case \"$1 $2\" in\n{PANE_GET}\n*) exec sleep 5 ;;\nesac");
+        let (herdr, scratch, _) = over_stand_in("slow", &body);
+        let mut relay = herdr.relay(&identity()).expect("the pane is found");
+        let asked = Instant::now();
+        match relay.screen() {
+            RelayScreen::Unread { reason } => {
+                assert!(reason.contains("within 1 second"), "{reason}")
+            }
+            other => panic!("a read past its bound gave {other:?}"),
+        }
+        assert!(
+            asked.elapsed() < Duration::from_secs(2),
+            "{:?}",
+            asked.elapsed()
+        );
+        let asked = Instant::now();
+        match relay.typed(&Typed::Text("secret-typed".into())) {
+            Err(reason) => {
+                assert!(reason.contains("within 1 second"), "{reason}");
+                assert!(!reason.contains("secret-typed"), "{reason}");
+            }
+            Ok(()) => panic!("an input past its bound was typed"),
+        }
+        assert!(
+            asked.elapsed() < Duration::from_secs(2),
+            "{:?}",
+            asked.elapsed()
+        );
+        let _ = fs::remove_dir_all(scratch);
+    }
+
+    #[test]
+    fn relay_refuses_a_key_herdr_cannot_type_and_types_the_keys_after_it() {
+        // The terminal-profiles scenario "A key herdr cannot type among
+        // keys it can" (222, C.5's relay row at blueprints b54a9b4).
+        let body = format!("case \"$1 $2\" in\n{PANE_GET}\n*) echo '{{\"result\":{{}}}}' ;;\nesac");
+        let (herdr, scratch, log) = over_stand_in("cannot", &body);
+        let mut relay = herdr.relay(&identity()).expect("the pane is found");
+        let keys =
+            |names: &[&str]| Typed::Keys(names.iter().map(|name| name.parse().unwrap()).collect());
+        let refused = relay
+            .typed(&keys(&["ctrl+c", "home", "enter"]))
+            .expect_err("home is refused");
+        assert_eq!(
+            refused,
+            "home is a key herdr 0.9.5 cannot type; nothing was sent for it, and the keys around it were typed"
+        );
+        assert_eq!(
+            relay_calls(&log),
+            vec![
+                "pane send-keys w1:p2 ctrl+c HERDR_SOCKET_PATH=/run/h.sock".to_string(),
+                "pane send-keys w1:p2 enter HERDR_SOCKET_PATH=/run/h.sock".to_string(),
+            ]
+        );
+        let six = [
+            "delete",
+            "ctrl+insert",
+            "alt+home",
+            "shift+end",
+            "ctrl+alt+pageup",
+            "pagedown",
+        ];
+        let refused = relay.typed(&keys(&six)).expect_err("each of the six");
+        for name in six {
+            assert!(
+                refused.contains(&format!("{name} is a key herdr 0.9.5 cannot type")),
+                "{refused}"
+            );
+        }
+        assert!(refused.ends_with("nothing was sent for them, and the keys around them were typed"));
+        assert_eq!(relay_calls(&log).len(), 2, "a herdr call for the six");
+        for name in ["delete", "insert", "home", "end", "pageup", "pagedown"] {
+            assert!(herdr_key(&name.parse().unwrap()).is_err(), "{name}");
+        }
+        for name in [
+            "enter",
+            "esc",
+            "backspace",
+            "f12",
+            "ctrl+c",
+            "shift+tab",
+            "é",
+        ] {
+            assert_eq!(herdr_key(&name.parse().unwrap()), Ok(name.to_string()));
+        }
+        let _ = fs::remove_dir_all(scratch);
+    }
+
+    #[test]
+    fn a_refusal_of_typed_text_holds_no_word_of_it() {
+        // 221: the text a relay types never stands in a refusal's words.
+        assert_eq!(
+            unvalued(&["pane", "send-text", "w1:p2", "secret-typed"]),
+            "pane send-text w1:p2 <typed>"
+        );
+        assert_eq!(
+            unvalued(&["pane", "send-keys", "w1:p2", "ctrl+c"]),
+            "pane send-keys w1:p2 ctrl+c"
+        );
     }
 
     #[test]

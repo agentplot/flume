@@ -868,6 +868,12 @@ impl TerminalHarness for FakeTerminalHarness {
             .add_agent(Some(session), name, AgentState::Waiting);
         true
     }
+
+    /// The fake relays while it sends, and, as the printed command, not
+    /// where it cannot (221, 222).
+    fn relays(&self) -> bool {
+        self.sends
+    }
 }
 
 /// The fake window, its shows answered as each scenario scripts them.

@@ -5,9 +5,9 @@
 
 use flume_core::{
     group_name, percentage, AgentStatus, Answer, HostStatus, OwnStatus, PlaceStatus, PoolStatus,
-    Queued, ReadingStatus, Reserves, SessionAnswer, SessionWait, SourceStatus, StageStatus,
-    StandingFound, StandingStatus, StreamOpened, StreamStatus, Tidied, TitleFrom, WaitingPlace,
-    WindowOutcome, Woke,
+    Queued, ReadingStatus, RelayEnded, Reserves, SessionAnswer, SessionWait, SourceStatus,
+    StageStatus, StandingFound, StandingStatus, StreamOpened, StreamStatus, Tidied, TitleFrom,
+    WaitingPlace, WindowOutcome, Woke,
 };
 use flume_seams::{
     AccountFrom, Act, AnswerHeld, BaseFrom, CarryCause, ClosedBy, ConfigLayer, ConfigValue,
@@ -74,6 +74,16 @@ pub fn person(answer: &Answer) -> String {
             None => "the agent may go quiet".to_string(),
         }),
         Answer::Refused { refusal } => lines.push(format!("refused: {}", refusal.reason)),
+        Answer::Relayed {
+            place,
+            agent,
+            ended,
+        } => lines.push(match ended {
+            RelayEnded::Caller => {
+                format!("relayed {place}'s agent {agent} until its caller closed it")
+            }
+            RelayEnded::Gone => format!("relayed {place}'s agent {agent} until its terminal went"),
+        }),
         Answer::Waited {
             place,
             recipient,

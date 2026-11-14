@@ -1,11 +1,12 @@
 use crate::{lock, FakeHost, Log};
 use flume_seams::{
-    AgentCommand, AgentState, AgentsIn, Attached, Closed, Clues, Host, Identity, NamedAgent,
-    OpenIn, Opened, PlaceRef, Seconds, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy,
-    ToSession, View, ViewCommand,
+    AgentCommand, AgentState, AgentsIn, Attached, Closed, Clues, Host, Identity, KeyName,
+    NamedAgent, OpenIn, Opened, PlaceRef, Relay, RelayScreen, Seconds, Sent, SessionRuns, Shown,
+    ShownAt, Terminal, TerminalTidy, ToSession, Typed, View, ViewCommand,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 /// The terminal seam: the agents it runs by identity, each one's state
 /// as set or as scheduled by the fake clock, what each shows and holds
@@ -32,7 +33,19 @@ use std::sync::{Arc, Mutex};
 /// reach, two of one name in a part among them, which the core reads
 /// as no one agent; agents in gives a part's in the order added, or the
 /// words a test refused the part with, logging each asking as
-/// `agents_in <part>` and starting nothing (132, C.5).
+/// `agents_in <part>` and starting nothing (132, C.5). It relays an open
+/// agent every 250 milliseconds, while it sends: its screen what
+/// `set_screen` gives followed, on a line of its own, by what the agent
+/// holds typed; text added to what it holds typed with nothing cleared;
+/// `enter` submitting what it holds typed, as a send's text is taken;
+/// every other key typed and taken as nothing; and an agent closed or
+/// killed, or never opened, read gone, while one its schedule alone
+/// reads stopped still shows its screen, as a pane outlives its program.
+/// It scripts a refusal of relay, the reads a relay gives before its
+/// own, unread among them, and the next input refused; and logs each
+/// relay as `relay <agent>`, each read as `relay read`, each text as
+/// `relay text` and each keys as `relay keys <key> <key>…`, never what
+/// was typed (106, 221, 222).
 pub struct FakeTerminal {
     host: Arc<FakeHost>,
     state: Mutex<TerminalState>,
@@ -90,6 +103,12 @@ struct TerminalState {
     /// What the terminal's configuration lacks for flume's plugin, as
     /// scripted.
     setup: Vec<String>,
+    /// Every relay refused with these words, as scripted.
+    relay_refused: Option<String>,
+    /// The reads a relay gives before its own, in order, as scripted.
+    relay_reads: VecDeque<RelayScreen>,
+    /// The next input a relay is given refused with these words.
+    typed_refused: Option<String>,
 }
 
 /// A named agent in a part, its own named `own`, by its name and the
@@ -241,6 +260,9 @@ impl FakeTerminal {
                 attaches_app: None,
                 runs: BTreeMap::new(),
                 setup: vec![],
+                relay_refused: None,
+                relay_reads: VecDeque::new(),
+                typed_refused: None,
             }),
             before_open: Mutex::default(),
             log: Log::default(),
@@ -556,6 +578,38 @@ impl FakeTerminal {
             .map(|running| running.at.clone())
     }
 
+    /// Every relay from now is refused with `reason`, or, with none,
+    /// answered (222).
+    pub fn refuse_relay(&self, reason: Option<&str>) {
+        lock(&self.state).relay_refused = reason.map(str::to_string);
+    }
+
+    /// The next reads of a relay give `screens`, in turn, before what the
+    /// agent shows (222).
+    pub fn relay_screens(&self, screens: &[&str]) {
+        lock(&self.state)
+            .relay_reads
+            .extend(screens.iter().map(|screen| RelayScreen::Shows {
+                screen: screen.to_string(),
+            }));
+    }
+
+    /// The next read of a relay, after those scripted before it, is
+    /// unread with `reason` (222).
+    pub fn relay_unread(&self, reason: &str) {
+        lock(&self.state)
+            .relay_reads
+            .push_back(RelayScreen::Unread {
+                reason: reason.into(),
+            });
+    }
+
+    /// The next input a relay is given is refused with `reason`, nothing
+    /// typed (222).
+    pub fn refuse_next_typed(&self, reason: &str) {
+        lock(&self.state).typed_refused = Some(reason.into());
+    }
+
     fn read(&self, key: &str) -> AgentState {
         let now = self.host.now();
         let state = lock(&self.state);
@@ -569,6 +623,83 @@ impl FakeTerminal {
             .max_by_key(|(at, _)| *at)
             .map(|(_, scheduled)| *scheduled)
             .unwrap_or(running.state)
+    }
+}
+
+/// The fake's relay of one agent, by its identity (222).
+struct FakeRelay<'a> {
+    terminal: &'a FakeTerminal,
+    key: String,
+}
+
+impl Relay for FakeRelay<'_> {
+    fn every(&self) -> Duration {
+        Duration::from_millis(250)
+    }
+
+    /// Gone where the agent was closed or killed, or never opened; else
+    /// the next read scripted; else its screen and, on a line of its own,
+    /// what it holds typed.
+    fn screen(&mut self) -> RelayScreen {
+        self.terminal.log.push("relay read");
+        let mut state = lock(&self.terminal.state);
+        let Some(running) = state
+            .agents
+            .get(&self.key)
+            .filter(|running| running.state != AgentState::Stopped)
+        else {
+            return RelayScreen::Gone;
+        };
+        let shown = running.screen.clone().unwrap_or_default();
+        let screen = match (shown.is_empty(), running.typed.is_empty()) {
+            (_, true) => shown,
+            (true, false) => running.typed.clone(),
+            (false, false) => format!("{shown}\n{}", running.typed),
+        };
+        state
+            .relay_reads
+            .pop_front()
+            .unwrap_or(RelayScreen::Shows { screen })
+    }
+
+    fn typed(&mut self, input: &Typed) -> Result<(), String> {
+        self.terminal.log.push(match input {
+            Typed::Text(_) => "relay text".to_string(),
+            Typed::Keys(keys) => format!(
+                "relay keys {}",
+                keys.iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+        });
+        let mut state = lock(&self.terminal.state);
+        if let Some(reason) = state.typed_refused.take() {
+            return Err(reason);
+        }
+        let Some(running) = state
+            .agents
+            .get_mut(&self.key)
+            .filter(|running| running.state != AgentState::Stopped)
+        else {
+            return Err(format!("no agent runs under {}", self.key));
+        };
+        let mut submitted = vec![];
+        match input {
+            Typed::Text(text) => running.typed.push_str(text),
+            Typed::Keys(keys) => {
+                for key in keys {
+                    if key.name == KeyName::Enter && !key.ctrl && !key.alt && !key.shift {
+                        submitted.push(std::mem::take(&mut running.typed));
+                    }
+                }
+            }
+        }
+        let key = self.key.clone();
+        state
+            .sent
+            .extend(submitted.into_iter().map(|text| (key.clone(), text)));
+        Ok(())
     }
 }
 
@@ -957,5 +1088,28 @@ impl Terminal for FakeTerminal {
                     .unwrap_or_else(|| SessionRuns::NotRunning { name: part.into() })
             })
             .collect()
+    }
+
+    /// A relay of an open agent, logged as `relay <agent>`; refused as
+    /// scripted, where the terminal cannot send, as the printed command
+    /// cannot, or where no agent runs under the identity (222).
+    fn relay(&self, agent: &Identity) -> Result<Box<dyn Relay + '_>, String> {
+        self.log.push(format!("relay {agent}"));
+        let key = agent.to_string();
+        let live = self.read(&key) != AgentState::Stopped;
+        let state = lock(&self.state);
+        if let Some(reason) = &state.relay_refused {
+            return Err(reason.clone());
+        }
+        if !state.sends {
+            return Err("this terminal holds no agent a person can be shown".into());
+        }
+        if !live {
+            return Err(format!("no agent runs under {key}"));
+        }
+        Ok(Box::new(FakeRelay {
+            terminal: self,
+            key,
+        }))
     }
 }

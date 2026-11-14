@@ -30,6 +30,7 @@ mod open_sessions;
 mod own;
 mod prompt;
 mod reading;
+mod relay;
 mod room;
 mod settings;
 mod settle;
@@ -57,6 +58,7 @@ pub use kinds_lock::{KindsLock, LockOf};
 pub use line::NOT_ITS_AGENT;
 pub use own::shaped_as_credential;
 pub use prompt::{group_name, way_to_stop_short, ONE_WAY_TO_ASK};
+pub use relay::{RelayEnded, RelayLine, RelayLink, RelayNext};
 pub use start_record::{
     variable_digest, AGENT_VARIABLE, PLACE_VARIABLE, STAGE_VARIABLE, TERMINALS_OWN,
 };
