@@ -118,6 +118,44 @@ impl Engine {
         }
     }
 
+    /// The settle's wake for messages: each role's address a message is
+    /// pending for, handed to it by nothing, is woken where its source
+    /// gives it a run and none is live or waiting for room, as an end's
+    /// address is; one its source gives a standing agent or declares
+    /// carried, or no source declares, is passed over (43, 132, 214;
+    /// core.28).
+    pub(crate) fn wake_for_messages(&self) {
+        let owing = self.owing();
+        let mut addresses: Vec<String> = vec![];
+        for delivery in owing.deliveries.values() {
+            if !is_message_key(&delivery.key) {
+                continue;
+            }
+            for owed in &delivery.owed {
+                let handed = delivery
+                    .handovers
+                    .iter()
+                    .any(|handover| handover.recipient == owed.recipient);
+                if !handed && !addresses.contains(&owed.recipient) {
+                    addresses.push(owed.recipient.clone());
+                }
+            }
+        }
+        if addresses.is_empty() {
+            return;
+        }
+        let roles = self.host.roles();
+        for address in addresses {
+            if matches!(roles.declared(&address), Ok(RoleEntry::Run(_))) {
+                if let Err(why) = self.wake_address(&address, &roles) {
+                    self.host.log(&format!(
+                        "{address}, a message pending for it, was not woken: {why}"
+                    ));
+                }
+            }
+        }
+    }
+
     /// Records, through weir's `record`, the message `words` to `address`
     /// from `from`: under a key of its own token, its one reader the
     /// address, expiring the host's span after now; its key, or why it

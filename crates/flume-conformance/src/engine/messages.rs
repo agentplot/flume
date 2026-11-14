@@ -8,7 +8,7 @@
 //! answered at once with its key, the address and what it found (43, 53,
 //! 132, 193).
 
-use super::role_waking::{configure, planner_id, planner_run, runs, PLANNER};
+use super::role_waking::{configure, configure_at, planner_id, planner_run, runs, PLANNER};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::deliveries;
@@ -42,6 +42,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "message: a command that reads no recipient of its own messaging east/planner records a delivery whose message begins A message to east/planner:",
             cites: &["43", "53"],
             run: a_message_from_no_one_the_command_names,
+        },
+        Scenario {
+            name: "message: a message to madswan/planner while no planner run is live or waiting launches one planner run by its own act, and a settle of every place that follows launches none; and a message recorded at another address with no run, handed to nothing, is woken by the next settle of every place, a role's messages waking it as its ends do",
+            cites: &["132", "43", "53"],
+            run: a_message_wakes_the_role,
         },
     ]
 }
@@ -261,5 +266,64 @@ fn a_message_from_no_one_the_command_names(_: &()) -> Outcome {
         "its message: {}",
         messages[0].message
     );
+    Ok(())
+}
+
+fn a_message_wakes_the_role(_: &()) -> Outcome {
+    let world = World::new();
+    let address = "madswan/planner";
+    configure_at(
+        &world,
+        address,
+        "Read what is pending for you.",
+        planner_run(None, None),
+    );
+    let run = World::id("turn", "madswan-planner");
+    let (_, _, found, woken) = messaged(&world.engine.message_address(
+        address,
+        "look at the nightly job",
+        None,
+        &from(Some("ops")),
+    ))?;
+    ensure_eq!(
+        (found, woken),
+        (Found::Woken, Some(run.clone())),
+        "what the message found"
+    );
+    ensure_eq!(runs(&world), vec![run.clone()], "the runs the message woke");
+    world.engine.settle(None);
+    ensure_eq!(runs(&world), vec![run.clone()], "the runs after a settle");
+    // A message to east/planner recorded with no act's wake after it, as
+    // by an act whose wake was refused, is woken by the next settle.
+    configure(
+        &world,
+        "Read what is pending for you.",
+        planner_run(None, None),
+    );
+    let at = deliveries::time(world.host.now());
+    deliveries::update(&*world.store, |records| {
+        match weir_delivery::record(
+            records,
+            "message/east/planner/0a1b2c3d",
+            "A message to east/planner:\nlook",
+            &[PLANNER],
+            &at,
+            604_800,
+        ) {
+            Ok(weir_delivery::Recorded::Add(added)) => added,
+            _ => vec![],
+        }
+    })?;
+    ensure_eq!(
+        runs(&world),
+        vec![run.clone()],
+        "the runs before the settle"
+    );
+    world.engine.settle(None);
+    let mut woken = runs(&world);
+    woken.sort();
+    let mut due = vec![run, planner_id()];
+    due.sort();
+    ensure_eq!(woken, due, "the runs the settle woke for the message");
     Ok(())
 }

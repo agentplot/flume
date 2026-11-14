@@ -37,6 +37,9 @@ impl Engine {
         for id in &places {
             tidy.add(self.settle_place(id));
         }
+        if place.is_none() {
+            self.settle_host();
+        }
         Answer::Settled { places, tidy }
     }
 
@@ -132,7 +135,16 @@ impl Engine {
             tidy.add(self.settle_place(&read.state.place.id));
         }
         self.let_go_of_the_gone();
+        self.settle_host();
         tidy
+    }
+
+    /// What a settle of every place does once for the host, after each
+    /// place's own steps: each role's address a message is pending for,
+    /// handed to it by nothing, woken where its source gives it a run and
+    /// none stands (132, 214).
+    fn settle_host(&self) {
+        self.wake_for_messages();
     }
 
     /// Where no caller keeps watch over the host, every command of
