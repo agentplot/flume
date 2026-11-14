@@ -10,7 +10,7 @@
 
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Answer, WaitFor};
+use flume_core::{Answer, Retry, WaitFor};
 use flume_fakes::Plan;
 use flume_seams::*;
 
@@ -30,6 +30,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "made things: a stage that commits and goes quiet with no line for a thing it declares is not delivered, and the stop check names the thing",
             cites: &["129", "44", "110"],
             run: commits_and_no_line,
+        },
+        Scenario {
+            name: "made things: a line an earlier start wrote counts for its retry, and the stage's end carries it",
+            cites: &["25", "49", "129"],
+            run: a_line_an_earlier_start_wrote,
         },
         Scenario {
             name: "made things: the line written, the stage is delivered at its head with the line in its end",
@@ -203,6 +208,67 @@ fn the_line_written(_: &()) -> Outcome {
     let end = code_end(&world, &id)?;
     ensure_eq!(end.head, Some(head), "the head delivered at");
     ensure_eq!(end.made, vec![Made::read(&line)], "the made lines");
+    Ok(())
+}
+
+fn a_line_an_earlier_start_wrote(_: &()) -> Outcome {
+    let world = World::new();
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = begun(&world, "one", &["preview"], &[])?;
+    let first = World::identity("spike", "one", "code", 1);
+    world.terminal.set_state(&first, AgentState::Working);
+    let head = world.commit("spike/one", &["spike.rs"]);
+    let line = format!(
+        r#"{{"name":"preview","what":"preview","branch":"spike/one","revision":"{}"}}"#,
+        head.0
+    );
+    world.store.record_made(&id, &line);
+    let secret = world
+        .held(&id)
+        .and_then(|held| held.stages[0].start.clone())
+        .ok_or("code never started")?
+        .secret;
+    let asked = world.engine.needs(
+        &first.to_string(),
+        &secret.0,
+        "The preview is up. Should it stay up once the spike lands?",
+        StopKind::NeedsAnswer,
+    );
+    ensure!(
+        asked.refusal().is_none(),
+        "the stop-short was refused: {asked:?}"
+    );
+    world.terminal.set_state(&first, AgentState::Waiting);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::EndedShort),
+        "code once its agent asked"
+    );
+    world.host.advance(flume_core::KEEP_OPEN);
+    let retried = world.engine.retry(
+        &id,
+        Retry::Stage("code".into()),
+        Some("Take it down once it lands.".into()),
+        false,
+    );
+    ensure!(
+        retried.refusal().is_none(),
+        "the retry was refused: {retried:?}"
+    );
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Delivered),
+        "code, its retry's agent writing no line and making no commit"
+    );
+    let end = code_end(&world, &id)?;
+    ensure_eq!(end.head, Some(head), "the head delivered at");
+    ensure_eq!(
+        end.made,
+        vec![Made::read(&line)],
+        "the made lines, the first start's"
+    );
     Ok(())
 }
 

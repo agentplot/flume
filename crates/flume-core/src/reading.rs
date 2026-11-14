@@ -158,6 +158,25 @@ impl Engine {
             .collect()
     }
 
+    /// The lines a stage's end carries, every line written to
+    /// `made.jsonl` since its stage started: from where the stage's count
+    /// began, else from where a document written before kept them, else
+    /// from the start's own count; each as written (129, 140).
+    pub(crate) fn stage_made(&self, held: &HeldState, start: &StartHeld) -> Vec<Made> {
+        let stage = held.stages.iter().find(|stage| {
+            stage
+                .start
+                .as_ref()
+                .is_some_and(|held| held.identity == start.identity)
+        });
+        self.store
+            .made(&held.place.id)
+            .iter()
+            .skip(lines_from(stage, start))
+            .map(|line| Made::read(line))
+            .collect()
+    }
+
     /// Each name the stage at `index` declares it makes that no line
     /// written since its current start's count began names (25, 129).
     pub(crate) fn unmade(&self, held: &HeldState, index: usize) -> Vec<String> {
@@ -322,11 +341,26 @@ impl Engine {
                 .agent(&start.program)
                 .and_then(|agent| agent.last_words(&folder, &start.identity)),
             screen: never_begun.then(|| self.agent_on(start).screen()).flatten(),
-            made: self.made_since(&place.id, start),
+            made: self.stage_made(held, start),
             group: start.group.clone().map(Box::new),
             ..StageEnd::default()
         }
     }
+}
+
+/// How many lines of `made.jsonl` a stage's end passes over: the count
+/// a document written before kept for a repeating stage between its
+/// repetitions, else where the stage's count began, else where the
+/// start's began, so the end carries every line since the stage started
+/// (129, 140).
+pub(crate) fn lines_from(stage: Option<&StageHeld>, start: &StartHeld) -> usize {
+    stage
+        .and_then(|stage| {
+            stage
+                .made_from
+                .or_else(|| stage.counts.as_ref().map(|counts| counts.made_from))
+        })
+        .unwrap_or_else(|| start.counted().made_from)
 }
 
 /// Whether the agent under the start's identity keeps the record its
