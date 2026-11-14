@@ -591,6 +591,7 @@ fn recipients_from_words(from: &RecipientsFrom) -> String {
             format!("from the stream's answerer, declared by {source}")
         }
         RecipientsFrom::BasePlace => "from the base place it fixes".into(),
+        RecipientsFrom::RoleRun => "from the role's run that launched it".into(),
     }
 }
 

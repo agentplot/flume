@@ -58,7 +58,7 @@ on them (design section 13).
 
 ## 6. A launch from a role's run
 
-- [ ] 6.1 In `crates/flume-core/src/launch.rs`, read a launch's recipients, where it names none, as `$FLUME_RECIPIENT`, then the address of the role's run `$FLUME_PLACE` names, `RecipientsFrom::RoleRun` written `role-run`, then the terminal's session, then the answerer behind the place's stream, and pass `$FLUME_PLACE` to the launch from the command line as the other commands pass it to `recipient` (7, 132, 214; design section 10). Add the engine's scenario of the role-waking spec's "A role's run launches its project". True when `devenv shell -- cargo test -p flume-conformance --test engine the_engine_passes_its_scenarios` passes.
+- [x] 6.1 In `crates/flume-core/src/launch.rs`, read a launch's recipients, where it names none, as `$FLUME_RECIPIENT`, then the address of the role's run `$FLUME_PLACE` names, `RecipientsFrom::RoleRun` written `role-run`, then the terminal's session, then the answerer behind the place's stream, and pass `$FLUME_PLACE` to the launch from the command line as the other commands pass it to `recipient` (7, 132, 214; design section 10). Add the engine's scenario of the role-waking spec's "A role's run launches its project". True when `devenv shell -- cargo test -p flume-conformance --test engine the_engine_passes_its_scenarios` passes.
 
 ## 7. MCP
 

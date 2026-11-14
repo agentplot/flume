@@ -71,6 +71,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["56", "7", "43", "132"],
             run: a_roles_messages_and_the_places_reporting_to_it,
         },
+        Scenario {
+            name: "message: the run of east/ops launches a fix naming no recipient, its environment naming the run's place: the fix's recipients are east/ops from role-run, and once it delivers its end is pending at east/ops with the address's other deliveries, a place a role launches reporting to the role's address",
+            cites: &["7", "132", "43"],
+            run: a_roles_run_launches_its_project,
+        },
     ]
 }
 
@@ -578,6 +583,51 @@ fn a_roles_messages_and_the_places_reporting_to_it(_: &()) -> Outcome {
         address_of(&world, ops)?.reporting,
         vec![two],
         "the places reporting once one landed"
+    );
+    Ok(())
+}
+
+fn a_roles_run_launches_its_project(_: &()) -> Outcome {
+    let world = World::new();
+    let ops = "east/ops";
+    configure_at(
+        &world,
+        ops,
+        "Read what is pending for you.",
+        planner_run(None, None),
+    );
+    ensure!(world.engine.wake(ops).refusal().is_none(), "the wake");
+    let run = World::id("turn", "east-ops");
+    // The run's command, whose environment names no recipient and names
+    // the run's place.
+    world.host.set_recipient(None);
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    let mut fix = launch("fix", "one", Some("mend it"));
+    fix.from_place = Some(run);
+    launched(&world.engine.launch(&fix))?;
+    let id = World::id("fix", "one");
+    let held = world.held(&id).ok_or("no fix")?;
+    ensure_eq!(
+        (
+            held.place.recipients.clone(),
+            held.place.recipients_from.clone()
+        ),
+        (vec![ops.to_string()], Some(RecipientsFrom::RoleRun)),
+        "the fix's recipients"
+    );
+    world.settle(&id);
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    let key = world
+        .delivery_key("fix--one", "stage/code/1/delivered")
+        .ok_or("no delivery of code's end")?;
+    ensure!(
+        world
+            .owing()
+            .deliveries
+            .get(&key)
+            .is_some_and(|delivery| delivery.owed.iter().any(|owed| owed.recipient == ops)),
+        "the fix's end is not pending at east/ops"
     );
     Ok(())
 }

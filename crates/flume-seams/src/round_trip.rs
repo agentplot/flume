@@ -692,7 +692,15 @@ fn a_launch() {
         stall_after: Some(30 * 60),
         stream: Some("work".into()),
         intent: Some("the-surfaces".into()),
+        from_place: Some(PlaceId::new("/r/places/turn--east-ops")),
     });
+    // A role's run's launch reports to its address, written `role-run`
+    // (7, 214).
+    round_trips(RecipientsFrom::RoleRun);
+    assert_eq!(
+        serde_json::to_value(RecipientsFrom::RoleRun).unwrap(),
+        serde_json::json!({"from": "role-run"})
+    );
 }
 
 #[test]

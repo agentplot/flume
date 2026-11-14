@@ -50,4 +50,9 @@ pub struct Launch {
     /// names none, and its repository and base give it (7, 147).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub intent: Option<String>,
+    /// The place the launching command runs in, as its environment's
+    /// `FLUME_PLACE` names it: where that place is a role's run, a launch
+    /// naming no recipient reports to the run's address (7, 132, 214).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_place: Option<crate::PlaceId>,
 }

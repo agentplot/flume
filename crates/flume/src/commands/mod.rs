@@ -885,6 +885,10 @@ fn launch_of(args: &LaunchArgs, given: Option<&Path>) -> Result<Launch, String> 
         stall_after: args.stall_after.as_deref().map(read_span).transpose()?,
         stream: args.stream.clone(),
         intent: args.intent.clone(),
+        from_place: std::env::var(PLACE)
+            .ok()
+            .filter(|place| !place.is_empty())
+            .map(PlaceId::new),
     })
 }
 
