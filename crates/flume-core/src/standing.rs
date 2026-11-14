@@ -144,6 +144,16 @@ pub(crate) enum StandingHere {
 }
 
 impl StandingHere {
+    /// What is held, where the agent holds at most one address; or the
+    /// refusal of a command in the pane of an agent standing for several
+    /// (132; core.8, core.28).
+    pub(crate) fn refused(self) -> Result<StandingHere, String> {
+        match self {
+            StandingHere::Several { agent, addresses } => Err(several_words(&agent, &addresses)),
+            held => Ok(held),
+        }
+    }
+
     /// The address held, none where none is; or the refusal of a command
     /// in the pane of an agent standing for several, naming the agent and
     /// each address and asking for `--recipient` (132; core.28).

@@ -211,6 +211,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["7", "8"],
             run: a_role_and_a_reader_beside_it,
         },
+        Scenario {
+            name: "launch: a launch naming no recipient, with $FLUME_RECIPIENT unset, in the pane of east-planner, which acme gives east/planner, takes east/planner, from the standing agent east-planner declared by acme",
+            cites: &["7", "132"],
+            run: a_launch_from_a_standing_agents_pane,
+        },
+        Scenario {
+            name: "launch: a launch naming no recipient, with $FLUME_RECIPIENT unset, in the pane of an agent acme gives east/planner and east/ops, is refused naming the agent, each address and --recipient, nothing made",
+            cites: &["7", "8", "132"],
+            run: a_launch_from_the_pane_of_two_addresses,
+        },
     ]
 }
 
@@ -1439,6 +1449,87 @@ fn a_role_and_a_reader_beside_it(_: &()) -> Outcome {
         recipients_of(&world, "one")?,
         both,
         "the place's recipients after a hold and a retry"
+    );
+    Ok(())
+}
+
+/// acme gives each of `addresses` the standing agent `east-planner` in
+/// the session `east`, the fake terminal holds it there, and the
+/// launching command runs in its pane with no recipient in its
+/// environment (7, 132).
+fn in_east_planners_pane(world: &World, addresses: &[&str]) {
+    world.host.set_stream("east", Some(Stream::default()));
+    for address in addresses {
+        world.host.set_standing(
+            address,
+            Some(StandingAgent {
+                source: "acme".into(),
+                agent: "east-planner".into(),
+                session: Some("east".into()),
+                answers: None,
+                answerer: false,
+            }),
+        );
+    }
+    let at = world
+        .terminal
+        .add_agent(Some("east"), "east-planner", AgentState::Waiting);
+    world.terminal.set_session(Some(&at));
+    world.host.set_recipient(None);
+}
+
+/// The launching spec's "A launch from a standing agent's pane", status
+/// giving where its recipient came from as place-status' "A recipient
+/// from a standing agent's launch" gives it (7, 56, 132).
+fn a_launch_from_a_standing_agents_pane(_: &()) -> Outcome {
+    let world = World::new();
+    in_east_planners_pane(&world, &["east/planner"]);
+    launched(&world.engine.launch(&launch("fix", "one", Some("mend it"))))?;
+    ensure_eq!(
+        recipients_of(&world, "one")?,
+        (
+            vec!["east/planner".to_string()],
+            Some(RecipientsFrom::Standing {
+                agent: "east-planner".into(),
+                source: "acme".into(),
+            })
+        ),
+        "the place's recipients and where they came from"
+    );
+    let from = serde_json::to_value(world.status(&World::id("fix", "one"))?.recipients_from)
+        .map_err(|error| format!("recipients_from as JSON: {error}"))?;
+    ensure_eq!(
+        (
+            from["from"].as_str(),
+            from["agent"].as_str(),
+            from["source"].as_str()
+        ),
+        (Some("standing"), Some("east-planner"), Some("acme")),
+        "recipients_from in the JSON form"
+    );
+    Ok(())
+}
+
+/// The launching spec's "A launch from the pane of an agent standing for
+/// two addresses" (132; core.8).
+fn a_launch_from_the_pane_of_two_addresses(_: &()) -> Outcome {
+    let world = World::new();
+    in_east_planners_pane(&world, &["east/planner", "east/ops"]);
+    let reason = refused(&world.engine.launch(&launch("fix", "one", Some("mend it"))))?;
+    ensure_eq!(
+        reason.as_str(),
+        "the agent east-planner this command runs in stands for east/ops and east/planner: \
+         name which with --recipient",
+        "the refusal"
+    );
+    nothing_made(&world)?;
+    ensure!(
+        world.git.branch_head(REPOSITORY, "fix/one").is_none(),
+        "the branch was made"
+    );
+    ensure!(
+        world.queue.submissions(REPOSITORY, "fix/one").is_empty(),
+        "the merge queue holds a submission of it"
     );
     Ok(())
 }
