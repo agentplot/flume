@@ -108,10 +108,11 @@ flume's for a bare `fix`, and `flume/fix` still names flume's. A name
 that resolves to nothing refuses the launch, naming what each source
 holds, and makes nothing.
 
-flume's own kinds are `flume/fix@1`, `flume/chore@1`, `flume/change@1`,
-`flume/change@2` and `flume/change@3`. A bare `change` takes the
-newest, `change@3`, unless a lock records another. The three versions
-of `change` share their stages and differ in how they code a change:
+flume's own kinds are `flume/fix@1`, `flume/fix@2`, `flume/chore@1`,
+`flume/chore@2` and `flume/change@1` to `flume/change@4`. A bare name
+takes the newest, `change@4`, `chore@2` or `fix@2`, unless a lock
+records another. The versions of `change` share their stages and differ
+in how they code a change:
 
 - `change@1` codes the whole change with one agent.
 - `change@2` codes it with a fresh agent for each task group, one after
@@ -119,6 +120,13 @@ of `change` share their stages and differ in how they code a change:
 - `change@3` codes it with one agent that checks each task by its own
   check, the narrowest that shows it done, and its `verify` runs the
   repository's whole checks once.
+- `change@4` codes it as `change@3` does.
+
+`change@4`, `chore@2` and `fix@2` are each the version before it, but
+that they give their agents `full`
+([flume's own kinds](/flume/guides/agent-settings/#flumes-own-kinds))
+and say in each prompt that stopping short is the agent's one way to
+ask.
 
 A place keeps the kind its launch read for its whole life
 ([a place keeps its kind](#a-place-keeps-its-kind)). `flume status`
