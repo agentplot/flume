@@ -26,6 +26,28 @@ tests `the_mcp_tools_listed`, `message_over_mcp`,
 `launch_over_mcp_refused_as_the_command_line_refuses_it` and
 `a_role_runs_launch_over_mcp_reports_to_its_address`. Every one passes.
 
+## The archive: six specs fail `root:specs`
+
+Archived, the change's delta specs give six requirements that
+`openspec validate --specs --strict`, the gate's `root:specs`, refuses:
+each one's text is longer than 500 characters. The base's 49 specs
+pass that check, and the archive leaves 43 passing and 6 failing. Each
+requirement is one that this change MODIFIES. The check reads
+`openspec/specs` alone, so it passes while the change stands
+unarchived, and `root:changes` passes the change itself:
+
+| Spec | Requirement | Characters | Delta |
+|---|---|---|---|
+| caller-acts | An answer names the stop-short it answers by its key | 503 | `specs/caller-acts/spec.md:149` |
+| claude-code-plugin | /launch, and launch, status, message and wake over MCP | 769 | `specs/claude-code-plugin/spec.md:8` |
+| end-delivery | The settle delivers each end once to each recipient | 656 | `specs/end-delivery/spec.md:3` |
+| place-status | Status gives the roles a host wakes | 550 | `specs/place-status/spec.md:3` |
+| role-waking | A role's run's first prompt carries its batch | 721 | `specs/role-waking/spec.md:45` |
+| terminal-profiles | herdr reaches a recipient by pane and socket | 655 | `specs/terminal-profiles/spec.md:3` |
+
+Archived as it stands, the branch would fail its own gate at
+submission.
+
 ## Tasks
 
 Every task of `tasks.md`, 1.1 to 9.1 with 4.7 and 7.2, is ticked done,
@@ -187,9 +209,16 @@ they said a tell.
 
 ## Outcome
 
-The whole checks pass, every task is ticked and every scenario of the
-delta specs has a test. Each test of `check-fast` passes in them. The
-walkthroughs `s126_…` and `s128_…` are `check-tools`'s, which a place
-on a bolt leaves to the bolt's merge onto main. Each scenario they
-cover also has an engine scenario or a commands test that passed here.
-The work holds, and the change is archived with this report.
+The whole checks pass on the branch as it stands, every task is ticked
+and every scenario of the delta specs has a test. Each test of
+`check-fast` passes in them. The walkthroughs `s126_…` and `s128_…`
+are `check-tools`'s, which a place on a bolt leaves to the bolt's
+merge onto main. Each scenario they cover also has an engine scenario
+or a commands test that passed here.
+
+The work still falls short. Archived, six of its MODIFIED requirements
+are longer than `openspec validate --strict` allows, so `root:specs`
+fails. Each needs its text cut to 500 characters or fewer, by moving
+detail into its scenarios or splitting it into requirements that each
+state one behavior. Then `openspec archive` gives specs that pass. The
+change is not archived and goes back to its code stage.
