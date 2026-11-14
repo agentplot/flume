@@ -179,6 +179,34 @@ impl FakeStore {
 }
 
 impl FakeStore {
+    /// Every document the store holds as it stands, past the log, each
+    /// as its text: each place's held state and the host's documents
+    /// written as JSON, each line of what a place made and each file
+    /// written into a place's folder, for a scenario that reads what
+    /// was kept (56, 221).
+    pub fn every_text(&self) -> Vec<String> {
+        let state = lock(&self.state);
+        let mut texts: Vec<String> = state
+            .documents
+            .values()
+            .map(|versioned| serde_json::to_string(&versioned.state).unwrap_or_default())
+            .collect();
+        texts.extend(
+            state
+                .host
+                .values()
+                .map(|versioned| serde_json::to_string(&versioned.document).unwrap_or_default()),
+        );
+        texts.extend(state.made.values().flatten().cloned());
+        texts.extend(
+            state
+                .files
+                .values()
+                .flat_map(|files| files.values().map(|(text, _)| text.clone())),
+        );
+        texts
+    }
+
     /// The host's document under `key` as it stands, past the log.
     pub fn host_document(&self, key: &HostKey) -> Option<HostDocument> {
         lock(&self.state)

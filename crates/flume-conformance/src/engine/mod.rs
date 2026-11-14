@@ -25,6 +25,7 @@ pub mod own_settings;
 pub mod place_line;
 pub mod place_status;
 pub mod places;
+pub mod relay;
 pub mod repeating_stages;
 pub mod restart;
 pub mod role_waking;
@@ -80,5 +81,6 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(own_settings::scenarios());
     every.extend(base_places::scenarios());
     every.extend(open_sessions::scenarios());
+    every.extend(relay::scenarios());
     every
 }
