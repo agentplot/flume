@@ -308,12 +308,22 @@ bytes macOS allows a socket, or that holds a `/`, naming it. In each
 server:
 
 - **A Rex session per repository and base**, labelled
-  `<repository> <base>`, as herdr's workspace is.
-- **A window per place**, `<kind>--<name>`, in its base's Rex session.
-  A second agent of the place splits its window.
+  `<repository> <base>`, as herdr's workspace is, then
+  `<repository> <base> · <count>` with the count of the base's places,
+  `1 running · 0 asking · 0 waiting on caller · 0 stalled`.
+- **A window per place**, `<kind>--<name>`, in its base's Rex session,
+  then `<kind>--<name> · <line>` with the place's short line,
+  `code 1/2 · run 1 · tasks 2/5 · working`. A second agent of the place
+  splits its window.
 - **A block per agent**, labelled with a name made from its identity.
   A script of the start's own starts the program and removes itself,
   so none of the agent's variables stands in any process's arguments.
+  A block keeps that name.
+
+flume labels a window and a Rex session again at each settle that
+changes the place's line or its base's count, each label cut to the 128
+characters Rex holds. A label is for you to read: flume finds a window
+and a Rex session by its id, whatever its label says.
 
 Rex reads an agent's state from the program's own reports, Program
 Status, which Claude Code gives it. A program that reports none can't
@@ -336,10 +346,23 @@ a server of Rex's choosing. flume closes a place's window once the place
 goes, and its base's Rex session once nothing of a live place and
 nothing you opened is in it.
 
-`flume open` refuses a Rex stream's session for now: Rex has no
-terminal client, and flume doesn't yet tell the Rex app to show a
-session. To watch a stream's agents, add its server's socket under the
-Rex app's Remote Hosts.
+Rex has no terminal client, so a Rex stream's session is shown in the
+Rex app. Give the stream `view = "app"`:
+
+```toml
+[streams.trial]
+multiplexer = "rex"
+view = "app"
+```
+
+`flume open trial` then brings the newest Rex session flume made in
+trial's server to the front of the Rex app. The app shows a server only
+once you add its socket under the app's Remote Hosts, which flume can't
+do for you, and takes flume's word only while its Remote Control
+setting is on. Until you add the socket, `flume open` refuses, naming
+it; while Remote Control is off, it refuses in Rex's words. A Rex
+stream whose view is `terminal` refuses its open, saying Rex has no
+terminal client.
 
 ## Seeing a stream's agents
 
@@ -398,7 +421,8 @@ multiplexer's attach. The view `app` is the multiplexer's own app,
 which titles its own window and needs no terminal app. herdr has no app
 of its own: the app of the same name runs on herdr-core, a backend with
 sessions of its own. So a stream under herdr whose view is `app`
-refuses its open, saying so.
+refuses its open, saying so. Rex has no terminal client, so a stream
+under Rex is opened in the Rex app ([places under Rex](#places-under-rex)).
 
 ### The terminal apps
 
