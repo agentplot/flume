@@ -5129,3 +5129,36 @@ fn held_state_written_before_reads_its_old_deliveries() {
         "its old deliveries written back as they were"
     );
 }
+
+/// The agent seam's windows, each variant written and read back
+/// unchanged, a report with no session leaving `session` out (211).
+#[test]
+fn the_windows_an_agent_reported() {
+    let reported = Windows::Reported {
+        taken_at: 1_800_000_000,
+        windows: vec![
+            UsageWindow {
+                name: "five_hour".into(),
+                used: 4_200,
+                resets_at: Some(1_800_010_800),
+            },
+            UsageWindow {
+                name: "seven_day".into(),
+                used: 1_850,
+                resets_at: None,
+            },
+        ],
+        session: Some("4e3c05c8-51c4-4449-8577-4f7038e394bf".into()),
+    };
+    round_trips(reported.clone());
+    let unnamed = Windows::Reported {
+        taken_at: 1_800_000_000,
+        windows: vec![],
+        session: None,
+    };
+    round_trips(unnamed.clone());
+    let json = serde_json::to_value(&unnamed).unwrap();
+    assert!(json["reported"].get("session").is_none(), "{json}");
+    round_trips(Windows::NoneYet);
+    round_trips(Windows::Unknown);
+}

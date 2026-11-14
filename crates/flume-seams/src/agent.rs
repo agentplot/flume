@@ -132,6 +132,25 @@ pub enum Spent {
     Unknown,
 }
 
+/// windows: the usage windows the agent's program last reported for the
+/// account it runs under, with when flume's own part of the program took
+/// them, by the host's clock, and the session they came from where the
+/// agent's record names one; none yet, where the record is readable and
+/// holds no report; or unknown, where the record cannot be read or the
+/// profile builds no such part (171, 174, 211).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Windows {
+    Reported {
+        taken_at: crate::Seconds,
+        windows: Vec<crate::UsageWindow>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        session: Option<String>,
+    },
+    NoneYet,
+    Unknown,
+}
+
 /// carry: whether the agent program can carry the conversation of the
 /// start whose agent stopped at its account's usage limit, or of a
 /// conversation's start reported lost, to the account chosen for the next
@@ -334,6 +353,24 @@ pub trait Agent: Send + Sync {
     /// limit has reset.
     fn spent(&self, _folder: &str, _agent: &Identity) -> Spent {
         Spent::Unknown
+    }
+
+    /// The usage windows the agent's program last reported for the
+    /// account it runs under, read in the place's own `folder` as `spent`
+    /// is, with when flume's own part of the program took them and the
+    /// session they came from; none yet, or unknown (184, 211, 128).
+    /// Unknown by default, for a program whose profile builds no such
+    /// part, which is degraded there: its accounts have no reading (171,
+    /// 174). flume asks no program or its maker, reads no sign-in and
+    /// fetches nothing (146).
+    fn windows(&self, _folder: &str, _agent: &Identity) -> Windows {
+        Windows::Unknown
+    }
+
+    /// Whether the profile builds the windows' part, so its accounts can
+    /// have a reading (171, 174, 211); not by default.
+    fn reports_windows(&self) -> Offered {
+        Offered::NotOffered
     }
 
     /// Whether its program can carry the conversation of `earlier`, the
