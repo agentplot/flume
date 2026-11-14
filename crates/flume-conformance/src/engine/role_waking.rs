@@ -27,7 +27,8 @@ use super::settling::deliver_fix;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{
-    AddressStatus, Answer, Engine, PendingEnd, PlaceStatus, StandingFound, StandingStatus, Woke,
+    AddressStatus, Answer, Answering, Engine, PendingEnd, PlaceStatus, Retry, StandingFound,
+    StandingStatus, Woke,
 };
 use flume_fakes::{FakeHistory, FakeStore};
 use flume_seams::*;
@@ -250,6 +251,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "role waking: in the pane of an agent standing for east/planner and east/ops, flume inbox --recipient east/ops collects east/ops's end alone, handed to east/ops by the inbox",
             cites: &["43", "132"],
             run: the_address_named,
+        },
+        Scenario {
+            name: "role waking: a retry naming the key and words of a construct's stop-short, whose place's recipient is east/planner, run in east-planner's pane, is taken, and status gives the end answered by east/planner, with when",
+            cites: &["42", "49", "132"],
+            run: an_answer_from_the_standing_agents_pane,
+        },
+        Scenario {
+            name: "role waking: a retry naming the key and words of a construct's stop-short, run in the pane of east-planner, which stands for east/planner and east/ops, is taken, and status gives the end answered with no one named as its giver",
+            cites: &["42", "49", "132"],
+            run: a_retry_from_the_pane_of_two_addresses,
         },
     ]
 }
@@ -2473,6 +2484,123 @@ fn the_address_named(_: &()) -> Outcome {
             .deliveries
             .is_empty(),
         "the planner's end was handed over"
+    );
+    Ok(())
+}
+
+/// The change `plan`, whose one recipient is the planner, launched and
+/// begun, and its construct stopped short needing an answer and settled:
+/// the place (41, 42).
+fn construct_asks_the_planner(world: &World) -> Result<PlaceId, String> {
+    let mut change = launch("change", "plan", Some("one of two designs"));
+    change.recipients = vec![PLANNER.into()];
+    launched(&world.engine.launch(&change))?;
+    let id = World::id("change", "plan");
+    world.settle(&id);
+    let start = world
+        .held(&id)
+        .and_then(|held| held.stages[0].start.clone())
+        .ok_or("no start")?;
+    let answer = world.engine.needs(
+        &start.identity.to_string(),
+        &start.secret.0,
+        "Which design?",
+        StopKind::NeedsAnswer,
+    );
+    ensure!(answer.refusal().is_none(), "the stop-short was refused");
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "construct"),
+        Some(StageState::EndedShort),
+        "construct once it stopped short"
+    );
+    Ok(id)
+}
+
+/// A retry of construct naming its stop-short's key and the words
+/// `the first`, run in the calling command's pane, its answer's giver
+/// what the engine reads the command's recipient as, none where that is
+/// refused, as the command layer's `answering` takes it; refused where
+/// the retry is (42, 49, 132).
+fn retry_in_the_pane(world: &World, id: &PlaceId) -> Outcome {
+    let engine = world.engine();
+    let by = engine.recipient(None).ok().flatten();
+    let key = super::caller_acts::construct_key(0);
+    match engine
+        .retry_answering(
+            id,
+            Retry::Stage("construct".into()),
+            Some("the first".into()),
+            false,
+            &Answering { key: Some(key), by },
+        )
+        .refusal()
+    {
+        Some(reason) => Err(format!("the retry was refused: {reason}")),
+        None => Ok(()),
+    }
+}
+
+/// The answer status gives on construct's stop-short.
+fn construct_answered(world: &World, id: &PlaceId) -> Result<AnswerHeld, String> {
+    let key = super::caller_acts::construct_key(0);
+    world
+        .status(id)?
+        .ends
+        .into_iter()
+        .find(|end| end.key == key)
+        .ok_or(format!("status gives no end keyed {key}"))?
+        .end
+        .answer
+        .ok_or("status gives the stop-short no answer".into())
+}
+
+/// The role-waking spec's "An answer from the standing agent's pane"
+/// (42, 49, 132).
+fn an_answer_from_the_standing_agents_pane(_: &()) -> Outcome {
+    let world = World::new();
+    in_the_planners_pane(&world, AgentState::Waiting);
+    let id = construct_asks_the_planner(&world)?;
+    world.host.advance(60);
+    let at = world.host.now();
+    retry_in_the_pane(&world, &id)?;
+    let answer = construct_answered(&world, &id)?;
+    ensure_eq!(
+        (answer.by.as_deref(), answer.at, answer.words.as_str()),
+        (Some(PLANNER), at, "the first"),
+        "who answered, when, and the words"
+    );
+    Ok(())
+}
+
+/// The role-waking spec's "A retry from the pane of two addresses" (42,
+/// 49, 132).
+fn a_retry_from_the_pane_of_two_addresses(_: &()) -> Outcome {
+    let world = World::new();
+    in_the_planners_pane(&world, AgentState::Waiting);
+    world.host.set_standing(
+        "east/ops",
+        Some(StandingAgent {
+            source: ACME.into(),
+            agent: "east-planner".into(),
+            session: Some("east".into()),
+            answers: None,
+            answerer: false,
+        }),
+    );
+    let id = construct_asks_the_planner(&world)?;
+    ensure!(
+        world.engine().recipient(None).is_err(),
+        "the pane's recipient was read"
+    );
+    world.host.advance(60);
+    let at = world.host.now();
+    retry_in_the_pane(&world, &id)?;
+    let answer = construct_answered(&world, &id)?;
+    ensure_eq!(
+        (answer.by.as_deref(), answer.at, answer.words.as_str()),
+        (None, at, "the first"),
+        "who answered, when, and the words"
     );
     Ok(())
 }
