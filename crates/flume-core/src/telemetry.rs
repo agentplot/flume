@@ -7,8 +7,9 @@
 
 use flume_seams::telemetry::{self as keys, Value};
 use flume_seams::{
-    Attributes, HeldState, HoldOn, IntentKey, Over, Phase, Seconds, Signal, StageState, StartHeld,
-    StopKind, TraceHeld, Verdict, WaitHeld, WaitParty, Waits,
+    Attributes, HeldState, HoldOn, HostReading, IntentKey, Over, Phase, PlacesStanding, Seconds,
+    Signal, StageState, StartHeld, StopKind, StreamAgents, TraceHeld, Verdict, WaitHeld, WaitParty,
+    Waits,
 };
 
 /// The resource attributes an agent of flume's is given: its place's
@@ -76,6 +77,64 @@ impl crate::Engine {
             }
             _ => {}
         }
+    }
+}
+
+impl crate::Engine {
+    /// Hands on the host's reading at a settle of every place: the places
+    /// standing, counted by kind, state in the list's words and whom they
+    /// wait on, a tidied place's kept document none of them; and each
+    /// stream's agents running and room, as status reads the room (220,
+    /// 121, 208).
+    pub(crate) fn read_host(&self) {
+        let mut counted: std::collections::BTreeMap<(String, String, Option<String>), u64> =
+            std::collections::BTreeMap::new();
+        for read in self.store.read_every() {
+            let held = &read.state;
+            if matches!(held.phase, Phase::Tidied { .. }) {
+                continue;
+            }
+            let (state, on) = self.state_of_place(held);
+            let on = on.map(|on| party_of(on).to_string());
+            *counted
+                .entry((held.place.kind.name.clone(), state, on))
+                .or_default() += 1;
+        }
+        let places = counted
+            .into_iter()
+            .map(|((kind, state, on), count)| PlacesStanding {
+                kind,
+                state,
+                on,
+                count,
+            })
+            .collect();
+        let streams = self
+            .queue()
+            .streams
+            .iter()
+            .map(|(stream, room)| StreamAgents {
+                stream: stream.clone(),
+                running: room.running,
+                room: room.room(),
+            })
+            .collect();
+        self.telemetry.send(Signal::Host(HostReading {
+            at: self.host.now(),
+            places,
+            streams,
+        }));
+    }
+}
+
+/// Whom a place waits on as a signal names it (217, 220).
+fn party_of(on: crate::WaitsOn) -> &'static str {
+    match on {
+        crate::WaitsOn::Caller => WaitParty::Caller.word(),
+        crate::WaitsOn::Host => WaitParty::Host.word(),
+        crate::WaitsOn::MergeQueue => WaitParty::MergeQueue.word(),
+        crate::WaitsOn::Session => "session",
+        crate::WaitsOn::Places => "places",
     }
 }
 
@@ -651,6 +710,7 @@ pub(crate) mod tests {
         place.location = "/home/someone/r/places/fix--one".into();
         place.brief = Some(format!("mend it: {PHRASE} in /home/someone/r/src"));
         place.mark = Some("FL-7".into());
+        place.kind.stages = vec![code_stage()];
         HeldState {
             place,
             phase: Phase::Live,
@@ -686,6 +746,23 @@ pub(crate) mod tests {
             fixes: vec![],
             trace: None,
             waits: vec![],
+        }
+    }
+
+    /// The stage `code`, delivering commits.
+    fn code_stage() -> flume_seams::Stage {
+        flume_seams::Stage {
+            name: "code".into(),
+            prompt: "{{brief}}{{needs}}".into(),
+            conversation: false,
+            deliverables: vec![flume_seams::Deliverable::Commits],
+            agents: vec![Settings::default()],
+            waits: false,
+            quiet_limit: None,
+            send_back_to: None,
+            send_back_limit: None,
+            makes: vec![],
+            repeats: false,
         }
     }
 
@@ -1262,7 +1339,7 @@ pub(crate) mod tests {
     impl World {
         pub(crate) fn new() -> World {
             use flume_fakes::*;
-            use flume_seams::{Deliverable, Kind, KindSettings, Stage};
+            use flume_seams::{Kind, KindSettings};
             use std::sync::Arc;
             let git = FakeGit::new();
             git.init(REPOSITORY, "main");
@@ -1280,19 +1357,7 @@ pub(crate) mod tests {
                     lands: true,
                     agents: KindSettings::default(),
                     label: None,
-                    stages: vec![Stage {
-                        name: "code".into(),
-                        prompt: "{{brief}}{{needs}}".into(),
-                        conversation: false,
-                        deliverables: vec![Deliverable::Commits],
-                        agents: vec![Settings::default()],
-                        waits: false,
-                        quiet_limit: None,
-                        send_back_to: None,
-                        send_back_limit: None,
-                        makes: vec![],
-                        repeats: false,
-                    }],
+                    stages: vec![code_stage()],
                     fix: None,
                     fix_limit: None,
                 }],
@@ -1628,5 +1693,92 @@ pub(crate) mod tests {
     fn a_value_is_encoded_where_the_variables_syntax_would_read_it() {
         assert_eq!(encode("fix/one"), "fix/one");
         assert_eq!(encode("a,b=c d"), "a%2Cb%3Dc%20d");
+    }
+    #[test]
+    fn the_hosts_reading_names_no_place() {
+        // A settle of every place hands on one reading of the host: the
+        // places standing by kind, state and whom they wait on, and each
+        // stream's agents running and room; a settle of one place none
+        // (220, 121, 208).
+        use flume_seams::{PlaceId, Stream};
+        let world = World::new();
+        world.host.set_stream(
+            "work",
+            Some(Stream {
+                agents: Some(4),
+                ..Stream::default()
+            }),
+        );
+        let (id, _) = begun(&world, "alder");
+        for name in ["birch", "cedar"] {
+            let mut waits = waiting(held(), Waits::Answer, world.host.now());
+            waits.place.id = PlaceId::new(format!("/data/places/x/fix--{name}"));
+            waits.place.name = name.into();
+            waits.place.stream.name = "work".into();
+            waits.stages[0].state = StageState::EndedShort;
+            world.store.put(&waits.place.id.clone(), waits);
+        }
+        world.telemetry.clear();
+        world.engine().settle(Some(&id));
+        let hosts = |world: &World| -> Vec<HostReading> {
+            world
+                .telemetry
+                .signals()
+                .into_iter()
+                .filter_map(|signal| match signal {
+                    Signal::Host(reading) => Some(reading),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert!(
+            hosts(&world).is_empty(),
+            "a settle of one place reads no host"
+        );
+        world.telemetry.clear();
+        world.engine().settle(None);
+        let read = hosts(&world);
+        assert_eq!(read.len(), 1, "{:?}", world.telemetry.signals());
+        assert_eq!(
+            read[0].places,
+            vec![
+                PlacesStanding {
+                    kind: "fix".into(),
+                    state: "waiting on an answer".into(),
+                    on: Some("caller".into()),
+                    count: 2,
+                },
+                PlacesStanding {
+                    kind: "fix".into(),
+                    state: "working".into(),
+                    on: None,
+                    count: 1,
+                },
+            ]
+        );
+        assert_eq!(
+            read[0].streams,
+            vec![
+                StreamAgents {
+                    stream: "default".into(),
+                    running: 1,
+                    room: None,
+                },
+                StreamAgents {
+                    stream: "work".into(),
+                    running: 0,
+                    room: Some(4),
+                },
+            ]
+        );
+        let shown = format!("{read:?}");
+        for word in [
+            "alder", "birch", "cedar", "/data", REPOSITORY, "work-1", "FL-7",
+        ] {
+            assert!(!shown.contains(word), "{word} in {shown}");
+        }
+        world.telemetry.clear();
+        world.engine().settle_all();
+        assert_eq!(hosts(&world).len(), 1, "settle_all reads the host once");
     }
 }

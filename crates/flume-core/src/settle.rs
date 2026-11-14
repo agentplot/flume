@@ -22,7 +22,8 @@ const STEPS: usize = 64;
 const TRIES: usize = 8;
 
 impl Engine {
-    /// Settles the place, or every place on the host.
+    /// Settles the place, or every place on the host, handing on the
+    /// host's reading once every place is settled (220).
     pub fn settle(&self, place: Option<&PlaceId>) -> Answer {
         let places: Vec<PlaceId> = match place {
             Some(id) => vec![id.clone()],
@@ -36,6 +37,9 @@ impl Engine {
         let mut tidy = Tidied::default();
         for id in &places {
             tidy.add(self.settle_place(id));
+        }
+        if place.is_none() {
+            self.read_host();
         }
         Answer::Settled { places, tidy }
     }
@@ -132,6 +136,7 @@ impl Engine {
             tidy.add(self.settle_place(&read.state.place.id));
         }
         self.let_go_of_the_gone();
+        self.read_host();
         tidy
     }
 
