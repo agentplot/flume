@@ -607,12 +607,18 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             within,
             answers,
         } => {
-            let place = named(target)?;
             let within = within.as_deref().map(read_span).transpose()?;
             let key = key_of(answers)?;
-            let core = build()?;
-            let answering = answering(&core, key);
-            core.message_answering(&place, words, within, &answering)
+            if flume_core::message::names_an_address(target) {
+                let core = build()?;
+                let answering = answering(&core, key);
+                core.message_address(target, words, within, &answering)
+            } else {
+                let place = named(target)?;
+                let core = build()?;
+                let answering = answering(&core, key);
+                core.message_answering(&place, words, within, &answering)
+            }
         }
         Command::Stop(forced) => build_for(forced, &named, build, Engine::stop)?,
         Command::Finish(forced) => build_for(forced, &named, build, Engine::finish)?,

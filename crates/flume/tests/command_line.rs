@@ -8,6 +8,7 @@
 
 use flume::commands;
 use flume_conformance::engine::caller_acts::asks_ops;
+use flume_conformance::engine::role_waking::{configure_at, planner_run};
 use flume_conformance::engine::world::World;
 use flume_core::{Answer, PlaceStatus};
 use flume_seams::*;
@@ -288,4 +289,109 @@ fn a_bound_on_a_stage_hold() {
     );
     assert!(reason.contains("a bound is given only"), "{reason}");
     assert!(world.held(&id).expect("the place").holds.is_empty());
+}
+
+/// The planner's address, which acme declares with a run.
+const PLANNER: &str = "east/planner";
+
+/// The deliveries the host's deliveries hold keyed as a message's.
+fn message_keys(world: &World) -> Vec<String> {
+    let (_, records) = flume_core::deliveries::read(&*world.store).expect("the host's deliveries");
+    flume_core::deliveries::owing(&records, world.host.now())
+        .deliveries
+        .into_keys()
+        .filter(|key| key.starts_with("message/"))
+        .collect()
+}
+
+#[test]
+fn a_message_to_an_address_answers_with_its_key() {
+    // The command-line spec's "Through the binary" (53, 61, 214): the
+    // address's run live and working, the JSON gives the key
+    // `message/east/planner/<token>`, the address and its run live, and
+    // the exit is 0; the person's form gives the key under the address.
+    let world = World::new();
+    configure_at(
+        &world,
+        PLANNER,
+        "Read what is pending for you.",
+        planner_run(None, None),
+    );
+    assert!(world.engine.wake(PLANNER).refusal().is_none());
+    let planner = World::id("turn", "east-planner");
+    world.settle(&planner);
+    let agent = World::identity("turn", "east-planner", "plan", 1);
+    world.terminal.set_state(&agent, AgentState::Working);
+    let (text, code) = run(
+        &world,
+        &["message", PLANNER, "look at the nightly job", "--json"],
+    );
+    assert_eq!(code, 0, "{text}");
+    let answer: Value = serde_json::from_str(text.trim()).expect("the answer's JSON");
+    let messaged = &answer["messaged"];
+    let key = messaged["key"].as_str().expect("a key");
+    let token = key
+        .strip_prefix("message/east/planner/")
+        .unwrap_or_else(|| panic!("the key {key}"));
+    assert!(
+        token.len() == 8 && token.chars().all(|c| c.is_ascii_hexdigit()),
+        "{key}"
+    );
+    assert_eq!(
+        (&messaged["address"], &messaged["found"], &messaged["run"]),
+        (
+            &Value::from(PLANNER),
+            &Value::from("live"),
+            &Value::from(planner.0.as_str())
+        ),
+        "{answer}"
+    );
+    let (text, code) = run(&world, &["message", PLANNER, "and the weekly one"]);
+    assert_eq!(code, 0, "{text}");
+    assert!(
+        text.starts_with("messaged east/planner: message/east/planner/")
+            && text.contains("is live, and takes it at its next wait"),
+        "{text}"
+    );
+    assert_eq!(message_keys(&world).len(), 2);
+}
+
+#[test]
+fn a_target_names_an_address_or_a_place() {
+    // The caller-acts spec's "An address and a place" (53, 132): an
+    // address is a delivery at it; a place, named here by the location
+    // the fakes' world holds it at, is messaged its agent; and
+    // `./east/planner` is a place's location, never the address.
+    let world = World::new();
+    configure_at(
+        &world,
+        PLANNER,
+        "Read what is pending for you.",
+        planner_run(None, None),
+    );
+    answered(&world, &["message", PLANNER, "words", "--json"]);
+    assert_eq!(message_keys(&world).len(), 1, "the delivery at the address");
+    let id = world
+        .begun("fix", Some(Deliverable::Commits), "one")
+        .expect("fix begun");
+    let work = World::identity("fix", "one", "work", 1);
+    let place = &id.to_string();
+    acted(
+        answered(&world, &["message", place, "words", "--json"]),
+        Act::Message,
+    );
+    assert_eq!(
+        world.terminal.sent_to(&work).last().map(String::as_str),
+        Some("words")
+    );
+    let refusal = refused(&world, &["message", "./east/planner", "words", "--json"]);
+    assert!(
+        refusal.contains("no place") && refusal.contains("/east/planner"),
+        "{refusal}"
+    );
+    assert_eq!(
+        message_keys(&world).len(),
+        1,
+        "a delivery at ./east/planner"
+    );
 }
