@@ -98,7 +98,7 @@ const PRINTED: &str = "printed";
 /// The keys the local layer may set, each a path of segments, `*` any one
 /// name: a stream's `agents`, `priority`, `points`, `pace`, `session` and
 /// `multiplexer`, the `session` it names for a kind and for a kind's
-/// stage, a label's `reserve` and `keep_free`, the `stream` a
+/// stage, a label's `owed` and `reserved`, the `stream` a
 /// repository, a repository's kind or a kind is given, the `label` a
 /// repository's kind or a kind is given, and every agents table, a kind's
 /// every stage's and one stage's, a repository's for every kind, a
@@ -116,8 +116,8 @@ pub const LOCAL_KEYS: &[&[&str]] = &[
     &["streams", "*", "multiplexer"],
     &["streams", "*", "kinds", "*", "session"],
     &["streams", "*", "kinds", "*", "stages", "*", "session"],
-    &["streams", "*", "labels", "*", "reserve"],
-    &["streams", "*", "labels", "*", "keep_free"],
+    &["streams", "*", "labels", "*", "owed"],
+    &["streams", "*", "labels", "*", "reserved"],
     &["repos", "*", "stream"],
     &["repos", "*", "kinds", "*", "stream"],
     &["kinds", "*", "stream"],
@@ -1240,10 +1240,11 @@ fn is_label(word: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-/// A stream's `labels` table: each label's share, its `reserve` and
-/// `keep_free` whole numbers from zero, zero where left out, and each
-/// other key of its table kept unknown, which refuses the stream's starts
-/// rather than the configuration (181, 182, C.7).
+/// A stream's `labels` table: each label's share, its `owed` and
+/// `reserved` each a whole number of agents from 0, 0 where left out, and
+/// each other key of its table kept unknown, `reserve` and `keep_free`
+/// among them with no alias, which refuses the stream's starts rather than
+/// the configuration (181, 182, C.7; record 0063).
 fn shares_of(table: &Table, at: &str) -> Result<BTreeMap<String, Share>, String> {
     let Some(labels) = table.get("labels") else {
         return Ok(BTreeMap::new());
@@ -1260,16 +1261,18 @@ fn shares_of(table: &Table, at: &str) -> Result<BTreeMap<String, Share>, String>
             Some(value) => value
                 .as_integer()
                 .and_then(|count| u32::try_from(count).ok())
-                .ok_or(format!("[{at}] {name} is not a whole number from zero")),
+                .ok_or(format!(
+                    "[{at}] {name} is not a whole number of agents from 0"
+                )),
         };
         shares.insert(
             label.clone(),
             Share {
-                owed: count("reserve")?,
-                reserved: count("keep_free")?,
+                owed: count("owed")?,
+                reserved: count("reserved")?,
                 unknown: share
                     .keys()
-                    .filter(|key| !matches!(key.as_str(), "reserve" | "keep_free"))
+                    .filter(|key| !matches!(key.as_str(), "owed" | "reserved"))
                     .cloned()
                     .collect(),
             },
@@ -2080,9 +2083,10 @@ mod tests {
         assert_eq!(keys, vec!["roles.\"east/planner\""]);
     }
 
-    /// C.7's example, as the statement writes it at fa40c94, its program
-    /// `agent` (core.1), and `personal`'s `points` and `pace` left out,
-    /// which record 0025's change reads.
+    /// C.7's example, as the statement writes it at fa40c94, its labels'
+    /// `owed` and `reserved` as at 695c446, its program `agent` (core.1),
+    /// and `personal`'s `points` and `pace` left out, which record 0025's
+    /// change reads.
     const C7: &str = r#"
 [host]
 agents = 8
@@ -2093,11 +2097,11 @@ priority = 10
 pool = "work"
 
 [streams.work.labels.operation]
-reserve = 2
-keep_free = 1
+owed = 2
+reserved = 1
 
 [streams.work.labels.construction]
-reserve = 2
+owed = 2
 
 [streams.work.kinds.research]
 session = "work-design"
@@ -2313,7 +2317,7 @@ label = "inception"
         // that reads it to refuse.
         let config = HostConfig::parse(
             "[streams.work]\nagents = 5\n\
-             [streams.work.labels.operation]\nreserve = 1\npool = \"ops\"\npoints = 3\n",
+             [streams.work.labels.operation]\nowed = 1\npool = \"ops\"\npoints = 3\n",
         )
         .unwrap();
         assert_eq!(
@@ -2330,10 +2334,10 @@ label = "inception"
     fn a_labels_share_that_is_no_count_is_refused() {
         // 181: whole numbers from zero.
         for (text, named) in [
-            ("[streams.work.labels.operation]\nreserve = -1\n", "reserve"),
+            ("[streams.work.labels.operation]\nowed = -1\n", "owed"),
             (
-                "[streams.work.labels.operation]\nkeep_free = \"one\"\n",
-                "keep_free",
+                "[streams.work.labels.operation]\nreserved = \"one\"\n",
+                "reserved",
             ),
             (
                 "[streams.work.labels]\noperation = 2\n",
@@ -2344,7 +2348,7 @@ label = "inception"
             let refused = HostConfig::parse(text).unwrap_err();
             assert!(refused.contains(named), "{text}: {refused}");
         }
-        let config = HostConfig::parse("[streams.work.labels.operation]\nreserve = 0\n").unwrap();
+        let config = HostConfig::parse("[streams.work.labels.operation]\nowed = 0\n").unwrap();
         assert_eq!(config.streams["work"].labels["operation"], Share::default());
     }
 
@@ -2454,10 +2458,10 @@ label = "inception"
         // 107, 180, 181, C.7, S85: each a key the local layer may set, and
         // a label's pool one it may not.
         let config = HostConfig::layers(
-            &format!("{WORK}[streams.work.labels.operation]\nreserve = 1\n[kinds.research]\nlabel = \"inception\"\n"),
+            &format!("{WORK}[streams.work.labels.operation]\nowed = 1\n[kinds.research]\nlabel = \"inception\"\n"),
             Some(
                 "[streams.work]\nsession = \"office\"\n\
-                 [streams.work.labels.operation]\nreserve = 3\n\
+                 [streams.work.labels.operation]\nowed = 3\n\
                  [kinds.research]\nlabel = \"operation\"\n",
             ),
         )
@@ -2474,7 +2478,7 @@ label = "inception"
             Some("operation".into())
         );
         assert_eq!(
-            value_at(&config, "streams.work.labels.operation.reserve"),
+            value_at(&config, "streams.work.labels.operation.owed"),
             Some(("3".into(), ConfigLayer::Local))
         );
         assert_eq!(
@@ -2483,7 +2487,7 @@ label = "inception"
         );
         let config = HostConfig::layers(
             WORK,
-            Some("[streams.work.labels.operation]\nreserve = 1\npool = \"ops\"\n"),
+            Some("[streams.work.labels.operation]\nowed = 1\npool = \"ops\"\n"),
         )
         .unwrap();
         assert_eq!(
@@ -2505,6 +2509,64 @@ label = "inception"
                 .is_some_and(|fault| fault.contains("kinds.fix.label")),
             "{fault:?}"
         );
+    }
+
+    #[test]
+    fn a_labels_reserve_and_keep_free_are_read_unknown() {
+        // 181, 182, C.7; record 0063: no words of a label's table, read
+        // with no alias and kept for the start that reads them to refuse.
+        let config = HostConfig::parse(
+            "[streams.work]\nagents = 5\n\
+             [streams.work.labels.operation]\nreserve = 2\nkeep_free = 1\n",
+        )
+        .unwrap();
+        assert_eq!(
+            config.streams["work"].labels["operation"],
+            Share {
+                owed: 0,
+                reserved: 0,
+                unknown: vec!["keep_free".into(), "reserve".into()],
+            }
+        );
+    }
+
+    #[test]
+    fn a_local_label_reserve_is_not_taken() {
+        // 181, C.7; core.45: a label's `owed` and `reserved` are the local
+        // layer's keys, and `reserve` is none of them.
+        let config =
+            HostConfig::layers(WORK, Some("[streams.work.labels.operation]\nreserve = 3\n"))
+                .unwrap();
+        assert_eq!(
+            config.configuration.local,
+            LocalLayer::NotTaken {
+                keys: vec!["streams.work.labels.operation.reserve".into()],
+                fault: None,
+            }
+        );
+        assert!(config.streams["work"].labels.is_empty());
+        let config = HostConfig::layers(
+            WORK,
+            Some("[streams.work.labels.operation]\nowed = 3\nreserved = 1\n"),
+        )
+        .unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        assert_eq!(
+            config.streams["work"].labels["operation"],
+            Share {
+                owed: 3,
+                reserved: 1,
+                unknown: vec![],
+            }
+        );
+        for key in ["owed", "reserved"] {
+            assert_eq!(
+                value_at(&config, &format!("streams.work.labels.operation.{key}"))
+                    .map(|(_, layer)| layer),
+                Some(ConfigLayer::Local),
+                "{key}"
+            );
+        }
     }
 
     #[test]
