@@ -17,7 +17,7 @@ the tree touched, citing record 0057's amendment and the clauses.
 
 ## 2. The tidy
 
-- [ ] 2.1 In `crates/flume-conformance/src/engine/tidying.rs`, have `a_place_read_gone` remove the place at its second remove by a settle, `world.engine.settle(Some(&id))`, its answer naming the place removed after two removes, its name gaining "and removed by the next settle" and its cites `76` (design D2, Task notes 2.1). True when `sluice exec bolt/flumes-places-need-no-hand -- cargo test -p flume-conformance --test engine` passes.
+- [x] 2.1 In `crates/flume-conformance/src/engine/tidying.rs`, have `a_place_read_gone` remove the place at its second remove by a settle, `world.engine.settle(Some(&id))`, its answer naming the place removed after two removes, its name gaining "and removed by the next settle" and its cites `76` (design D2, Task notes 2.1). True when `sluice exec bolt/flumes-places-need-no-hand -- cargo test -p flume-conformance --test engine` passes.
 
 ## 3. The site
 
