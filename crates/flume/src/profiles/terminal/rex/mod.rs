@@ -1847,15 +1847,17 @@ impl Rex {
             &record.socket,
             &["api", "call", "-s", session, "session.close_window", &args],
         ) {
+            // Rex closes a window with its last block, so a window the
+            // place's agents' closes emptied is gone as closed.
             Call::Answered(_) => {
                 let _ = fs::remove_file(&record.path);
                 Ok(Some(format!("the window {label}")))
             }
-            call if call.no_server() => {
-                let _ = fs::remove_file(&record.path);
-                Ok(None)
-            }
             Call::Refused(words) if words.contains("not found") => {
+                let _ = fs::remove_file(&record.path);
+                Ok(Some(format!("the window {label}")))
+            }
+            call if call.no_server() => {
                 let _ = fs::remove_file(&record.path);
                 Ok(None)
             }
