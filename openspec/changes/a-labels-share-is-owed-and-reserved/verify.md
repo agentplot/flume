@@ -6,8 +6,13 @@ cut from `bolt/flumes-settings-read-as-its-records-say` (2d180f0), on
 
 ## Verdict
 
-Archived. The gate passes, every task is ticked and holds in the tree,
-and every requirement and scenario of the change's specs is met.
+Not archived. The gate passes on 98ae281, every task is ticked and
+holds in the tree, and every requirement and scenario of the change's
+specs is met. But archiving the change would break the gate. Two of
+its MODIFIED requirements, once merged into `openspec/specs/`, fail
+`root:specs`. That task runs `openspec validate --specs --strict`,
+which fails a warning as an error. The change's own strict validation
+passes, so `root:changes` did not catch this.
 
 ## The gate's checks
 
@@ -63,6 +68,27 @@ All 12 tasks, 1.1 to 7.1, are ticked `[x]`. Each holds in the tree:
 `openspec validate a-labels-share-is-owed-and-reserved --strict`
 passes.
 
+## The archive
+
+`openspec archive a-labels-share-is-owed-and-reserved --yes` applied
+every delta: 5 added, 5 modified, 5 removed. After it,
+`openspec validate --specs --strict` gave 47 passed and 2 failed:
+
+```
+✗ spec/host-module
+  ⚠ [WARNING] requirements[2]: Requirement text is very long (>500 characters). Move examples and edge cases into scenarios, or split it into separate requirements that each state one behavior.
+✗ spec/streams
+  ⚠ [WARNING] requirements[0]: Requirement text is very long (>500 characters). Move examples and edge cases into scenarios, or split it into separate requirements that each state one behavior.
+```
+
+- host-module's "settings names the managed file's tables and keys"
+  goes from 370 characters on the base to 686 under the change's
+  MODIFIED block.
+- streams' "A host declares its streams" goes from 346 characters to
+  650.
+
+The archive was not committed, and the tree is back as it was.
+
 - **stream-labels.** "What a label is owed and holds reserved": each of
   its five scenarios is a labels scenario: S84's owed agent lent and
   reserved agent held empty, one settle ranking again, no room on the
@@ -110,3 +136,21 @@ says reserved"). It is on the branch
 `~/Code/github_agentplot/blueprints`, and no remote holds it yet. The
 orchestrator pushes it, as the design's section 8 says. The conformance
 suite reads the statement at 31f9f1c.
+
+## What the code stage must do
+
+Bring each of the two MODIFIED requirements' text to 500 characters or
+fewer, in `specs/host-module/spec.md` and `specs/streams/spec.md`. A
+requirement can be split into separate requirements that each state one
+behavior, with its scenarios moved under the one each tests.
+
+- In host-module, the number descriptions could become a requirement of
+  their own, with "A bound of zero" and "Each number says its unit,
+  range and default" under it.
+- In streams, the host's bound could become a requirement of its own,
+  with "A host's bound of zero" under it.
+
+Then check that the change archives cleanly. In a throwaway copy, run
+`openspec archive a-labels-share-is-owed-and-reserved --yes`, then
+`openspec validate --specs --strict`, and expect no failure. Discard
+the copy rather than committing the archive.
