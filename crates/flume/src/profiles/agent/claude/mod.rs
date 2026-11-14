@@ -81,6 +81,21 @@ pub const SECRET: &str = "FLUME_SECRET";
 pub const PLACE: &str = "FLUME_PLACE";
 pub const STAGE: &str = "FLUME_STAGE";
 
+/// The variable that gates the plugin's deliver module, set in the agent's
+/// environment only where the profile offers deliver (215, C.4).
+pub const DELIVER_VARIABLE: &str = "FLUME_DELIVER";
+
+/// Whether the pinned Claude Code offers the deliver part: not offered.
+/// The deliver row was read on 2.1.322, whose hooks modules submit words
+/// by `$.prompt.submit` once the session is idle, and flume pins 2.1.296,
+/// which sluice pins too; no check of this tree runs the pinned release in
+/// an interactive session but the live walkthroughs, by hand, so nothing
+/// shows that 2.1.296 runs a hooks module's `$.prompt.submit` there, and
+/// the terminal hands every batch and message until the chore that moves
+/// the pin reads one taken through the plugin's deliver module (215, C.4;
+/// core.39; record 0069).
+pub const DELIVER: Offered = Offered::NotOffered;
+
 /// The plugin's files, as `plugins/claude` holds them, by their path in
 /// the plugin: its manifests, its hooks, the module that pins the place's
 /// line under the prompt (design 4) and the /launch command.
@@ -191,6 +206,9 @@ pub struct Claude {
     plugins: PathBuf,
     /// The binary the plugin's hooks call.
     binary: PathBuf,
+    /// Whether the profile offers deliver: [`DELIVER`] at the pinned
+    /// release (215).
+    deliver: Offered,
 }
 
 impl Claude {
@@ -215,6 +233,17 @@ impl Claude {
         Claude {
             plugins: data.join("flume/plugins/claude"),
             binary: binary.to_path_buf(),
+            deliver: DELIVER,
+        }
+    }
+
+    /// The profile answering deliver offered, as the chore that moves the
+    /// pin to a release read running the deliver module builds it (215;
+    /// record 0069).
+    pub fn offering_deliver(self) -> Claude {
+        Claude {
+            deliver: Offered::Offered,
+            ..self
         }
     }
 
@@ -349,6 +378,11 @@ impl Agent for Claude {
         env.insert(SECRET.into(), secret.0.clone());
         env.insert(PLACE.into(), place.location.clone());
         env.insert(STAGE.into(), identity.stage.clone());
+        // The deliver module runs only where the profile offers deliver
+        // (215, C.4; core.13).
+        if self.deliver == Offered::Offered {
+            env.insert(DELIVER_VARIABLE.into(), "1".into());
+        }
         AgentCommand {
             program,
             args,
@@ -584,6 +618,12 @@ impl Agent for Claude {
         Offered::Offered
     }
 
+    /// [`DELIVER`] at the pinned release: not offered, so the terminal
+    /// hands every batch and message (215, C.4; record 0069).
+    fn deliver(&self) -> Offered {
+        self.deliver
+    }
+
     /// 2.1.296's keys that another of flume's settings, the account or a
     /// person owns, each with its owner ([`settings::reserved`]; design 6).
     fn reserved(&self) -> Vec<Reserved> {
@@ -652,5 +692,81 @@ impl Agent for Claude {
 
     fn on_quiet(&self) -> Offered {
         Offered::Offered
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A command built for a start of the profile `claude`, under a data
+    /// directory of the test's own.
+    fn command_of(claude: &Claude, folder: &Path) -> AgentCommand {
+        let identity = Identity {
+            repository: "0123456789ab".into(),
+            place: "fix--one".into(),
+            stage: "code".into(),
+            start: 1,
+        };
+        claude.command(
+            &folder.to_string_lossy(),
+            &Settings::default(),
+            None,
+            &BTreeMap::new(),
+            None,
+            &BTreeMap::new(),
+            &PlaceRef {
+                repository: "/r".into(),
+                location: "/r/places/fix--one".into(),
+                branch: "fix/one".into(),
+                base: "main".into(),
+            },
+            &identity,
+            &Secret("s3cret".into()),
+            "do the work",
+        )
+    }
+
+    /// A scratch directory of the test's own, named `name`.
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("flume-claude-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("a scratch directory");
+        dir
+    }
+
+    #[test]
+    fn deliver_is_not_offered_at_the_pinned_release() {
+        // The agent-profile spec's "The pinned release" (215, C.4;
+        // record 0069): not offered, and no FLUME_DELIVER in the command.
+        let dir = scratch("pinned");
+        let claude = Claude::new(&dir, Path::new("/opt/flume/bin/flume"));
+        assert_eq!(DELIVER, Offered::NotOffered);
+        assert_eq!(claude.deliver(), Offered::NotOffered);
+        let command = command_of(&claude, &dir);
+        assert!(
+            !command.env.contains_key(DELIVER_VARIABLE),
+            "{:?}",
+            command.env
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_command_names_flume_deliver_only_where_deliver_is_offered() {
+        // The agent-profile spec's "A profile that offers it" (215, C.4):
+        // FLUME_DELIVER=1 beside the four FLUME_* words.
+        let dir = scratch("offered");
+        let claude = Claude::new(&dir, Path::new("/opt/flume/bin/flume")).offering_deliver();
+        assert_eq!(claude.deliver(), Offered::Offered);
+        let command = command_of(&claude, &dir);
+        assert_eq!(
+            command.env.get(DELIVER_VARIABLE).map(String::as_str),
+            Some("1")
+        );
+        for variable in [AGENT, SECRET, PLACE, STAGE] {
+            assert!(command.env.contains_key(variable), "{variable}");
+        }
+        let _ = fs::remove_dir_all(&dir);
     }
 }
