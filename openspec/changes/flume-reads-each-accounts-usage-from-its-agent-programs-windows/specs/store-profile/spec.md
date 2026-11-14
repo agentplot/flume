@@ -39,9 +39,8 @@ one document at `accounts/<pool>/<account>.json` and each intent's
 affinity at `intents/<digest>.json` under `$XDG_STATE_HOME/flume/`,
 each with its version, written whole by compare-and-set under the
 store's lock and readable by the host's user alone, and reached by
-every flume process on the host; the reading SHALL be in C.7's form,
-and an account's document or an intent's document an earlier release
-wrote SHALL read as written (146, 147, 153, 184, C.7).
+every flume process on the host; a document an earlier release wrote
+SHALL read as written (146, 147, 153, 184, C.7).
 
 #### Scenario: Two processes record one account spent
 

@@ -5,12 +5,10 @@
 Status SHALL give, for the host, each pool with its strategy and its
 threshold, and each account with its agents running, its bound, the
 time it stops being spent, the words in which no reset was read while
-it is spent for the hour 146 gives, its reading with when flume took
-it, from which agent's session and whether it is fresh, or why it has
-none, and, while it is past its threshold, the window that holds it and
-until when; and never an account's environment's value or a path. Its
-JSON form SHALL only gain fields: `read_at` gives when flume took the
-reading (56, 144 to 146, 184, 185; core.14).
+it is spent for the hour 146 gives, its reading and whether it is
+fresh, or why it has none, and, while it is past its threshold, the
+window that holds it and until when; and never an account's
+environment's value or a path (56, 144 to 146, 184, 185; core.14).
 
 #### Scenario: A pool with a spent account
 
@@ -25,7 +23,7 @@ reading (56, 144 to 146, 184, 185; core.14).
 #### Scenario: A pool with readings
 
 - **WHEN** status is asked of a most-left pool stating no threshold, whose work-1 reads `five_hour` 42% used resetting at 17:00, taken two minutes ago from a fix's code agent in the session `s-1`, whose work-2's reading is twenty minutes old, and for whose work-3 no session has reported
-- **THEN** the pool gives most-left and a threshold of 90, work-1 its window with 42, 17:00 and fresh, its `read_at`, the code agent's identity as `agent` and `s-1` as `session`, work-2 its reading stale, and work-3 no reading with `no session flume started has reported its windows`, in the JSON form and the person's, and neither gives a path (56, 184, 185)
+- **THEN** the pool gives most-left and a threshold of 90, work-1 its window with 42, 17:00 and fresh, `read_at` when flume took it, the code agent's identity as `agent` and `s-1` as `session`, the JSON form keeping every field it gave before, work-2 its reading stale, and work-3 no reading with `no session flume started has reported its windows`, in the JSON form and the person's, and neither gives a path (56, 184, 185)
 
 #### Scenario: An account past its threshold
 

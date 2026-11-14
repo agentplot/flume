@@ -28,17 +28,15 @@ The seams SHALL pass one type each for a reading, with when flume took
 it, the agent and session it came from and its windows, for an
 account's document of its spent time and its reading, for a pool's
 threshold, the strategy `most-left`, and a move whose `why` is
-`threshold` with its window and end; each SHALL serialize to JSON and
-back unchanged, a reading's times as RFC 3339's with their offset and
-each window's use as a share from 0 to 100; an account's document an
-earlier release wrote SHALL read as spent with no reading, and a move
-recorded before SHALL read with no window and no end (147, 153, 184,
-185, C.7; core.14).
+`threshold` with its window and end; each SHALL serialize to JSON in
+C.7's form and back unchanged, and a document or a move an earlier
+release wrote SHALL read as written (147, 153, 184, 185, C.7;
+core.14).
 
 #### Scenario: A pool and a reading
 
 - **WHEN** a most-left pool with a threshold of 85, and a reading taken from an agent's session of two windows, one 23.5% used with no reset, are written and read
-- **THEN** each reads back unchanged, the strategy spelled `most-left`, the reading's `taken_at` RFC 3339's and the window's `used` 23.5 (184, 185, C.7)
+- **THEN** each reads back unchanged, the strategy spelled `most-left`, the reading's `taken_at` RFC 3339's with its offset and the window's `used` 23.5, a share from 0 to 100 (184, 185, C.7)
 
 #### Scenario: An account's document
 
