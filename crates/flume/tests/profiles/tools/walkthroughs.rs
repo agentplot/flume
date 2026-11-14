@@ -1872,7 +1872,9 @@ fn a_hosts_mode_over_the_repositorys_and_none_where_no_layer_gives_one() {
     // acceptEdits`, the started ack is taken on the program and the
     // variables, the stand-in's first prompt names `acceptEdits` and is
     // taken as received, so code begins, status names `edits` from
-    // `host-kind` passed as `acceptEdits`, and the fix lands.
+    // `host-kind` passed as `acceptEdits`, and the fix lands. Then fix@1
+    // named with no layer giving a mode, and a bare fix, fix@2, in `full`
+    // from its kind.
     let walk = Walk::new("walk-mode");
     walk.configure("[kinds.fix.agents]\nmode = \"edits\"\n");
     the_repository_gives(&walk, "[kinds.fix.agents]\nmode = \"full\"\n");
@@ -1920,10 +1922,11 @@ fn a_hosts_mode_over_the_repositorys_and_none_where_no_layer_gives_one() {
         Some("fn parse() {}\n")
     );
 
-    // 162: no layer gives a mode, so none is passed, the start records
-    // none, the account's own configuration decides, and the fix lands.
+    // 162: fix@1 named, whose declaration gives no mode, and no other
+    // layer gives one, so none is passed, the start records none, the
+    // account's own configuration decides, and the fix lands.
     let walk = Walk::new("walk-no-mode");
-    let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
+    let place = walk.launch("fix@1", "one", &["--brief", "fix the parser"]);
     let printed = walk.printed(&place);
     assert!(
         !printed.contains("--permission-mode"),
@@ -1933,6 +1936,39 @@ fn a_hosts_mode_over_the_repositorys_and_none_where_no_layer_gives_one() {
     assert!(status["agent"]["mode"].is_null(), "{status}");
     assert!(
         status["agent"]["settings"]["from"]["mode"].is_null(),
+        "{status}"
+    );
+    walk.agent(&place, commits("parser.rs", "fn parse() {}\n"));
+    until_landed(&walk, &place);
+    assert_eq!(
+        walk.on_remote("parser.rs").as_deref(),
+        Some("fn parse() {}\n")
+    );
+
+    // 22, 154, 162; record 0064: a bare fix runs flume's own newest,
+    // fix@2, whose stage gives its agent `full` in the kind's layer, the
+    // last, so with no other layer giving a mode the printed command
+    // passes `--permission-mode bypassPermissions`, status names `full`
+    // from `kind` passed as `bypassPermissions` and read back, and the fix
+    // lands.
+    let walk = Walk::new("walk-own-mode");
+    let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
+    let printed = walk.printed(&place);
+    assert!(
+        printed.contains("--permission-mode bypassPermissions"),
+        "the printed command: {printed}"
+    );
+    let status = walk.status(&place);
+    assert_eq!(status["identity"], "flume/fix@2", "{status}");
+    assert_eq!(
+        (
+            &status["agent"]["settings"]["from"]["mode"],
+            &status["agent"]["mode"]
+        ),
+        (
+            &json!({ "layer": "kind", "value": "full" }),
+            &json!({ "passed": "bypassPermissions", "entry": null, "read_back": true })
+        ),
         "{status}"
     );
     walk.agent(&place, commits("parser.rs", "fn parse() {}\n"));
