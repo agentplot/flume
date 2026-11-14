@@ -26,7 +26,12 @@
 //! its sessions' servers stopped when it ends; and a test may start a
 //! herdr server of its own, on a scratch socket and home, to run the
 //! stand-in in one of its panes. Every herdr call a test makes is bounded
-//! (core.29).
+//! (core.29). A walkthrough may run a stream under the pinned Rex instead:
+//! its agents in blocks of the Rex server flume's Rex profile starts for
+//! the stream's session under flume's state, which it keeps behind a short
+//! link so the servers' sockets fit, each start of the stand-in acting its
+//! own script, and every Rex server under that state stopped when it ends,
+//! every Rex call it makes bounded.
 
 use crate::common::*;
 use serde_json::Value;
@@ -694,6 +699,17 @@ fn login_shell(dir: &Path, path: &str) -> PathBuf {
     shell
 }
 
+/// The walk's login shell at `shell` written again to export `exports`
+/// beside `path` as its `PATH`.
+fn login_shell_exporting(shell: &Path, path: &str, exports: &[(&str, PathBuf)]) {
+    let mut text = format!("#!/bin/sh\nPATH='{path}'\nexport PATH\n");
+    for (name, value) in exports {
+        text.push_str(&format!("{name}='{}'\nexport {name}\n", value.display()));
+    }
+    text.push_str("[ \"$1\" = -l ] && shift\nexec /bin/sh \"$@\"\n");
+    std::fs::write(shell, text).expect("the login shell");
+}
+
 /// The pull request the stand-in for sluice on a base that takes pull
 /// requests answers with.
 pub const PULL_REQUEST: &str = "7";
@@ -1111,61 +1127,6 @@ impl UnderHerdr {
             .configure(&format!("[host]\nmultiplexer = \"herdr\"\n{host}\n{rest}"));
     }
 
-    /// The script the stand-in acts at the start `start` of the stage
-    /// `stage`: its runs, each a list of acts, the first taking the start's
-    /// prompt and each later one the next prompt typed into its session.
-    pub fn script(&self, stage: &str, start: u32, runs: Value) {
-        let file = self.scripts().join(format!("{stage}-{start}.json"));
-        std::fs::write(file, runs.to_string()).expect("the stand-in's script");
-    }
-
-    /// The prompts the stand-in took at the start `start` of `stage`, in
-    /// order, as its log keeps them.
-    pub fn prompts(&self, stage: &str, start: u32) -> Vec<String> {
-        self.log(stage, start)
-            .lines()
-            .filter_map(|line| line.strip_prefix("stand-in: took the prompt: "))
-            .map(|prompt| serde_json::from_str(prompt).expect("a prompt as JSON"))
-            .collect()
-    }
-
-    /// The stand-in's log at the start `start` of `stage`, empty where no
-    /// agent of it ran.
-    pub fn log(&self, stage: &str, start: u32) -> String {
-        std::fs::read_to_string(self.scripts().join(format!("{stage}-{start}.log")))
-            .unwrap_or_default()
-    }
-
-    /// Every start's stand-in log, each under its `<stage>-<n>.log`, and
-    /// every other log in the scripts' folder, a person's session's among
-    /// them, in the order of their names, then the host's own log, so a
-    /// walkthrough that never came to what it waited on says what each
-    /// agent took and did and what flume's settles could not do.
-    pub fn logs(&self) -> String {
-        let mut logs: Vec<PathBuf> = std::fs::read_dir(self.scripts())
-            .into_iter()
-            .flatten()
-            .filter_map(Result::ok)
-            .map(|entry| entry.path())
-            .filter(|path| path.extension().is_some_and(|ext| ext == "log"))
-            .collect();
-        logs.sort();
-        logs.push(self.home().join("state/flume/flume.log"));
-        logs.iter()
-            .filter(|path| path.exists())
-            .map(|path| {
-                let name = path.file_name().unwrap_or_default().to_string_lossy();
-                let log = std::fs::read_to_string(path).unwrap_or_default();
-                format!("--- {name}\n{log}")
-            })
-            .collect()
-    }
-
-    /// The folder the stand-in's scripts and logs are kept in.
-    pub fn scripts(&self) -> &Path {
-        self.walk.scripts.as_deref().expect("a host under herdr")
-    }
-
     /// herdr's answer to `args` under the host's configuration home, on
     /// the server at `socket` where one is named, within the bound: its
     /// JSON where it answers JSON, else its text, or its words where it
@@ -1242,6 +1203,63 @@ impl UnderHerdr {
     }
 }
 
+impl Walk {
+    /// The script the stand-in acts at the start `start` of the stage
+    /// `stage`: its runs, each a list of acts, the first taking the start's
+    /// prompt and each later one the next prompt typed into its session.
+    pub fn script(&self, stage: &str, start: u32, runs: Value) {
+        let file = self.scripts().join(format!("{stage}-{start}.json"));
+        std::fs::write(file, runs.to_string()).expect("the stand-in's script");
+    }
+
+    /// The prompts the stand-in took at the start `start` of `stage`, in
+    /// order, as its log keeps them.
+    pub fn prompts(&self, stage: &str, start: u32) -> Vec<String> {
+        self.log(stage, start)
+            .lines()
+            .filter_map(|line| line.strip_prefix("stand-in: took the prompt: "))
+            .map(|prompt| serde_json::from_str(prompt).expect("a prompt as JSON"))
+            .collect()
+    }
+
+    /// The stand-in's log at the start `start` of `stage`, empty where no
+    /// agent of it ran.
+    pub fn log(&self, stage: &str, start: u32) -> String {
+        std::fs::read_to_string(self.scripts().join(format!("{stage}-{start}.log")))
+            .unwrap_or_default()
+    }
+
+    /// Every start's stand-in log, each under its `<stage>-<n>.log`, and
+    /// every other log in the scripts' folder, a person's session's among
+    /// them, in the order of their names, then the host's own log, so a
+    /// walkthrough that never came to what it waited on says what each
+    /// agent took and did and what flume's settles could not do.
+    pub fn logs(&self) -> String {
+        let mut logs: Vec<PathBuf> = std::fs::read_dir(self.scripts())
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "log"))
+            .collect();
+        logs.sort();
+        logs.push(self.home().join("state/flume/flume.log"));
+        logs.iter()
+            .filter(|path| path.exists())
+            .map(|path| {
+                let name = path.file_name().unwrap_or_default().to_string_lossy();
+                let log = std::fs::read_to_string(path).unwrap_or_default();
+                format!("--- {name}\n{log}")
+            })
+            .collect()
+    }
+
+    /// The folder the stand-in's scripts and logs are kept in.
+    pub fn scripts(&self) -> &Path {
+        self.scripts.as_deref().expect("a host under a multiplexer")
+    }
+}
+
 /// The name of flume's own herdr session.
 fn own_session() -> &'static str {
     flume::profiles::terminal::herdr::SESSION
@@ -1257,5 +1275,172 @@ impl Drop for UnderHerdr {
             std::thread::sleep(Duration::from_millis(100));
         }
         let _ = std::fs::remove_file(&self.link);
+    }
+}
+
+/// A walkthrough's host whose stream `trial` runs its places under the
+/// pinned Rex (C.5; the change a-stream-runs-its-agents-in-rex): the walk,
+/// its home a short link so the sockets of the Rex servers flume's Rex
+/// profile starts for its sessions, under flume's state, fit a socket's
+/// path (core.51); the pinned `rex` on the walk's `PATH`, which the test's
+/// own leads with it; the stand-in for Claude Code first on the blocks'
+/// `PATH` as `claude`, reporting its state to Rex, through the login
+/// environment the walk's shell gives; and the walkthrough's account giving
+/// `STAND_IN_SCRIPTS` beside its scratch `CLAUDE_CONFIG_DIR` and token.
+/// Every Rex server under flume's state is stopped, and the link removed,
+/// when it is dropped.
+pub struct UnderRex {
+    pub walk: Walk,
+    pub link: PathBuf,
+}
+
+impl std::ops::Deref for UnderRex {
+    type Target = Walk;
+
+    fn deref(&self) -> &Walk {
+        &self.walk
+    }
+}
+
+impl Walk {
+    /// A walkthrough's host whose stream `trial` names the multiplexer
+    /// `rex`, its agents opened in the Rex server of the session `trial`.
+    pub fn under_rex(label: &str) -> UnderRex {
+        let mut walk = Walk::made(label, true);
+        let scripts = walk.repository.scratch.path("scripts");
+        std::fs::create_dir_all(&scripts).expect("the scripts' folder");
+        walk.scripts = Some(scripts);
+        let link = short_link(walk.home(), "state/flume/terminal/rex/trial.sock");
+        let walk = walk.with_home(link.clone());
+        // A block's program runs under the login environment alone, none of
+        // the Rex server's (C.5), so the walk's login shell gives the
+        // walk's state, configuration and data, where flume's own commands
+        // run, as a host user's login environment gives theirs.
+        let exports: Vec<(&str, PathBuf)> = ["state", "config", "data"]
+            .iter()
+            .map(|dir| match *dir {
+                "state" => ("XDG_STATE_HOME", walk.home().join(dir)),
+                "config" => ("XDG_CONFIG_HOME", walk.home().join(dir)),
+                _ => ("XDG_DATA_HOME", walk.home().join(dir)),
+            })
+            .collect();
+        login_shell_exporting(walk.login_shell(), walk.path(), &exports);
+        let host = UnderRex { walk, link };
+        host.walk
+            .configure("[streams.trial]\nmultiplexer = \"rex\"\npool = \"stand-in\"\n");
+        host
+    }
+}
+
+impl UnderRex {
+    /// The socket of the Rex server flume's Rex profile runs for the
+    /// session `name`, under flume's state.
+    pub fn socket(&self, name: &str) -> PathBuf {
+        self.home()
+            .join(format!("state/flume/terminal/rex/{name}.sock"))
+    }
+
+    /// Rex's answer to `args` on the session `name`'s server, the caller's
+    /// `REX_*` stripped, within the bound; its words where it refuses or
+    /// does not answer.
+    pub fn try_rex(&self, name: &str, args: &[&str]) -> Result<Value, String> {
+        let mut command = self.walk.command("rex", &self.walk.repository.dir);
+        command
+            .arg("--autostart=false")
+            .arg("-S")
+            .arg(format!("unix://{}", self.socket(name).display()))
+            .args(args);
+        for (variable, _) in std::env::vars_os() {
+            if variable.to_string_lossy().starts_with("REX_") {
+                command.env_remove(variable);
+            }
+        }
+        rex_within(&mut command)
+    }
+
+    /// Rex's answer to `args` on the session `name`'s server, which it
+    /// must give.
+    pub fn rex(&self, name: &str, args: &[&str]) -> Value {
+        self.try_rex(name, args)
+            .unwrap_or_else(|words| panic!("rex {}: {words}", args.join(" ")))
+    }
+}
+
+impl Drop for UnderRex {
+    fn drop(&mut self) {
+        let records = self.home().join("state/flume/terminal/rex");
+        for entry in std::fs::read_dir(&records).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "sock") {
+                let name = path
+                    .file_stem()
+                    .map(|stem| stem.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let pid = self
+                    .try_rex(&name, &["api", "call", "server.status"])
+                    .ok()
+                    .and_then(|status| status["pid"].as_i64());
+                let _ = self.try_rex(&name, &["server", "stop"]);
+                if let Some(pid) = pid.and_then(|pid| libc::pid_t::try_from(pid).ok()) {
+                    let deadline = Instant::now() + Duration::from_secs(10);
+                    // SAFETY: signal 0 asks only whether the process stands.
+                    while unsafe { libc::kill(pid, 0) } == 0 && Instant::now() < deadline {
+                        std::thread::sleep(Duration::from_millis(100));
+                    }
+                    // SAFETY: a signal to a server the walk's flume started.
+                    unsafe { libc::kill(pid, libc::SIGKILL) };
+                }
+            }
+        }
+        let _ = std::fs::remove_file(&self.link);
+    }
+}
+
+/// What the pinned Rex's call `command` answers within ten seconds: its
+/// JSON, null where it printed nothing; its words where it refuses, or the
+/// bound named where it does not answer within it, the call then killed
+/// (core.29).
+pub fn rex_within(command: &mut Command) -> Result<Value, String> {
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("rex could not be run: {error}"))?;
+    let read = |pipe: Option<Box<dyn std::io::Read + Send>>| {
+        std::thread::spawn(move || {
+            let mut text = String::new();
+            if let Some(mut pipe) = pipe {
+                let _ = pipe.read_to_string(&mut text);
+            }
+            text
+        })
+    };
+    let out = read(child.stdout.take().map(|pipe| Box::new(pipe) as _));
+    let err = read(child.stderr.take().map(|pipe| Box::new(pipe) as _));
+    let began = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if began.elapsed() < Duration::from_secs(10) => {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("rex did not answer within 10 seconds".into());
+            }
+        }
+    };
+    let (out, err) = (
+        out.join().unwrap_or_default(),
+        err.join().unwrap_or_default(),
+    );
+    if !status.success() {
+        return Err(format!("{out}{}", err.trim()));
+    }
+    match out.trim() {
+        "" => Ok(Value::Null),
+        text => Ok(serde_json::from_str(text).unwrap_or(Value::String(out.clone()))),
     }
 }
