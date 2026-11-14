@@ -1,33 +1,42 @@
 # Verify: every-message-to-a-role-waits-at-its-address
 
 Verified 2026-11-14 on `change/every-message-to-a-role-waits-at-its-address`
-at 852b465a, cut from `bolt/flumes-roles-sleep-and-wake` at 2d180f0b,
+at 46ea2ecd, cut from `bolt/flumes-roles-sleep-and-wake` at 2d180f0b,
 which is still the base's head.
 
-## The whole checks: not run
+## The whole checks: fail
 
-`devenv shell -- sluice exec bolt/flumes-roles-sleep-and-wake` ran once
-and exited 3 before running any check. The sluice the tree pins,
-0.71.0 (`devenv.nix`, `sluiceVersion`, the same on main and on the
-base), refused the host's sluice configuration:
+The gate's checks ran once, with the host's sluice 0.93.2, as the
+merge queue gates:
+`devenv shell -- /etc/profiles/per-user/chuck/bin/sluice exec bolt/flumes-roles-sleep-and-wake`.
+The sluice the tree pins, 0.71.0, cannot read the host's sluice
+configuration, whose `[forge]` gives `credential`. ops answered that
+the checks run with the host's sluice, and that a fix of main moves
+`sluiceVersion` to 0.93.2 for the bolt to take in. As a place on a
+bolt, it ran the bolt's `check-fast`: 38 tasks completed and 2 failed,
+`conformance:test` and `fakes:test`, so the run exited 1. Three tests
+fail:
 
-```
-sluice: reading /Users/chuck/.config/sluice/config.toml: TOML parse error at line 21, column 1
-   |
-21 | credential = ["/nix/store/…-boomdrive-0.9.0/bin/boomdrive", "forge-token", "--config", "/nix/store/…-boomdrive-config.toml"]
-   | ^^^^^^^^^^
-unknown field `credential`, expected one of `app_id`, `key`, `discovery`
-```
+- `flume-conformance`'s `no_tool::no_tool_is_named_outside_a_profile`
+  (core.1). The MCP tests that 7.1 added in
+  `crates/flume/tests/commands.rs` name `claude` outside a profile:
+  the comments at lines 4425, 4464 and 4509, "The claude-code-plugin
+  spec's …", and the argument `"agent": ["program=claude"]` at line
+  4568, in `a_role_runs_launch_over_mcp_reports_to_its_address`.
+- `flume-fakes`'s `fakes::the_terminal_holds_recipients_sessions_by_name`
+  (`crates/flume-fakes/tests/fakes.rs:1584`). After 4.1 the fake
+  terminal's `send_to` refuses a session that reads working, but the
+  test still adds `ops` working and wants `send_to("ops", "four")`
+  `Sent`, and its notices `["two", "four"]`. It gets
+  `Refused { reason: "the session ops works; nothing was typed" }`.
+- `flume-fakes`'s `fakes::two_of_one_name`
+  (`crates/flume-fakes/tests/fakes.rs:1856`). The test wants
+  `send_to(&second, "one")` `Sent` to the second `w-planner`, which
+  reads working. It gets
+  `Refused { reason: "the session fake:2@w works; nothing was typed" }`.
 
-The host's configuration is a link into the store, written by the
-host's Nix at 09:55 that day for the host's own sluice, 0.93.2, whose
-`[forge]` takes `credential`. No check of `check-fast` or `check-tools`
-ran, so none passed and none failed. Nothing in the change causes
-this: the base and main pin the same sluice and fail the same way on
-this host. Running the checks under another sluice, or over another
-configuration, is not how the repository names them (core.22), so the
-verify stage did not try either. Until the checks run on this host,
-the change is not archived.
+Every other test of the layer passes, `the_engine_passes_its_scenarios`
+among them.
 
 ## Tasks
 
@@ -185,8 +194,9 @@ they said a tell.
 
 ## Outcome
 
-The work matches the change: every task is done, and every scenario has
-a test that covers it. The whole checks did not run. The tree's pinned
-sluice 0.71.0 cannot read the host's sluice configuration, so whether
-those tests pass is unknown. The change is not archived. The verify
-stage stops short with a question for whoever runs this host.
+Every task is ticked and every scenario has a test, but the whole
+checks fail, so the work falls short. Two of 4.1's and 7.1's own
+consequences were left unmade. The fakes' own tests still send to a
+working session, which the fake terminal now refuses. The new MCP tests
+name a tool outside a profile, which core.1 rules out. The change is
+not archived and goes back to its code stage with these failures.
