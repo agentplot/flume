@@ -64,7 +64,7 @@ The refusals, each naming what was refused, the part and its socket:
   say to add it under the Rex app's Remote Hosts, since only a person
   adds a server the app shows (C.5).
 - **The app refuses**: Rex's words from `do`'s standard error, without
-  its `Error: ` lead as record 0067 gives Rex's words, as the app's
+  its `Error: ` lead as record 0068 gives Rex's words, as the app's
   "not accepting actions" while its Remote Control setting is off.
 - **A call past its bound**: refused naming the bound, as every Rex call
   is (core.29).
@@ -208,7 +208,7 @@ statement, by `flume needs --found`, never a reading changed here
 
 ## 9. The record
 
-Record 0067, proposed, says the Rex profile's attach for the app and
+Record 0068, proposed, says the Rex profile's attach for the app and
 show are the bolt's next unit. Its decision item for them is rewritten
 to say what they do, citing C.5's attach and show rows, and the choices
 of sections 3, 4, 6 and 7 join the construction agent's choices, each

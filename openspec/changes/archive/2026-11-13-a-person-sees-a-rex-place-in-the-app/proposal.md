@@ -43,7 +43,7 @@ a-stream-runs-its-agents-in-rex on the bolt rex-is-flumes-second-terminal
   records alone.
 - **The terminal seam's scenarios** run against the profile with its
   clues shown.
-- **The record** of the Rex profile, 0067, proposed, says what attach
+- **The record** of the Rex profile, 0068, proposed, says what attach
   for the app and show do and the choices this change makes.
 - **The site** says `flume open` shows a Rex stream's session in the
   Rex app once a person adds its server's socket under Remote Hosts and
@@ -75,7 +75,7 @@ None.
 - `crates/flume/tests/profiles/tools/walkthroughs.rs`: the fix under
   Rex reads its labels; `flume open` of a Rex stream's session through
   the binary.
-- `docs/adr/0067-…`: amended, still proposed.
+- `docs/adr/0068-…`: amended, still proposed.
 - `site/src/content/docs/guides/places-and-herdr.mdx`,
   `site/src/content/docs/roadmap.md`.
 - A host whose Rex stream names `view = "app"` has `flume open` show

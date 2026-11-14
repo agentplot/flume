@@ -14,7 +14,7 @@ failed `flume:tools` under sluice's sandbox.
 
 ## 3. The record
 
-- [x] 3.1 Add the choice of `"login": false` to record 0067's construction agent's choices, with the path not taken. True when `sluice exec bolt/rex-is-flumes-second-terminal -- moon run root:adrs` passes.
+- [x] 3.1 Add the choice of `"login": false` to record 0068's construction agent's choices, with the path not taken. True when `sluice exec bolt/rex-is-flumes-second-terminal -- moon run root:adrs` passes.
 
 ## 4. The gate
 

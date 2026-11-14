@@ -76,7 +76,7 @@ None.
   state folder, runtime root, own blocks and stand-in; the Rex walk's
   login shell; the tests' git environment named once in
   `tests/common`.
-- `docs/`: record 0067, still proposed, gains the construction agent's
+- `docs/`: record 0068, still proposed, gains the construction agent's
   choice of `"login": false`.
 - No new crate, plugin or site part, so no new moon project, and no new
   dependency or tool. The statement is unchanged: C.5 already says the
