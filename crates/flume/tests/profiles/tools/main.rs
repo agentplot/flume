@@ -21,5 +21,6 @@ mod open_sessions;
 mod place_git_worktree;
 mod stand_in;
 mod terminal_herdr;
+mod terminal_rex;
 mod walk;
 mod walkthroughs;

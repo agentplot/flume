@@ -494,7 +494,8 @@ impl Host {
         let mut command = Command::new(program);
         command.current_dir(dir);
         for (name, _) in std::env::vars() {
-            if name.starts_with("FLUME_") || name.starts_with("HERDR_") {
+            if name.starts_with("FLUME_") || name.starts_with("HERDR_") || name.starts_with("REX_")
+            {
                 command.env_remove(name);
             }
         }
@@ -3998,12 +3999,13 @@ fn an_unknown_terminal_app() {
 
 #[test]
 fn a_streams_multiplexer_flume_does_not_carry() {
-    // 4, 190; core.8: a launch on `trial`, whose multiplexer is `rex`,
-    // refused naming the stream, `rex` and the terminal profiles, nothing
-    // made; a launch on another stream runs.
-    let host = Host::new("stream-rex");
-    host.configure("[streams.trial]\nmultiplexer = \"rex\"\n[streams.personal]\nagents = 2\n");
-    let repository = repository("stream-rex", None);
+    // 4, 190; core.8: the launching scenario "A stream's multiplexer flume
+    // does not carry": a launch on `trial`, whose multiplexer is `cmux`,
+    // refused naming the stream, `cmux` and the terminal profiles, `rex`
+    // among them, nothing made; a launch on another stream runs.
+    let host = Host::new("stream-cmux");
+    host.configure("[streams.trial]\nmultiplexer = \"cmux\"\n[streams.personal]\nagents = 2\n");
+    let repository = repository("stream-cmux", None);
     let kinds = kinds_file(&host, false);
     let launch = |name: &str, stream: &str| {
         host.stand_in(
@@ -4024,6 +4026,7 @@ fn a_streams_multiplexer_flume_does_not_carry() {
         .unwrap_or_default();
     assert!(
         reason.contains("trial")
+            && reason.contains("cmux")
             && reason.contains("rex")
             && reason.contains(&flume::profiles::terminal_profiles().join(", ")),
         "{reason}"
@@ -4032,6 +4035,58 @@ fn a_streams_multiplexer_flume_does_not_carry() {
     let launched = launch("two", "personal");
     assert_eq!(launched.code, 0, "{}", launched.text);
     assert!(Path::new(&host.place_of(&repository, "change--two")).exists());
+}
+
+#[test]
+fn a_launch_from_a_rex_block_names_its_block() {
+    // 7, C.5: the terminal-profiles scenario "A launch from a Rex block":
+    // a launch naming no recipient, `FLUME_RECIPIENT` unset, run with
+    // `REX_BLOCK` and `REX_SERVER` set on a host that declares a stream
+    // under Rex, no Rex server running: the place's recipient is
+    // `rex:<block>@<socket>`, taken from the session, and no Rex server is
+    // started, nothing made under the profile's state.
+    let host = Host::new("rex-block");
+    host.configure("[streams.trial]\nmultiplexer = \"rex\"\n");
+    let repository = repository("rex-block", None);
+    let kinds = kinds_file(&host, false);
+    let socket = host.scratch.path("rex/caller.sock");
+    let server = format!("unix://{}", socket.display());
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &[
+            ("FLUME_RECIPIENT", ""),
+            ("REX_BLOCK", "block:01a1d7f4-c986-716b-904e-a3b017e8d18f"),
+            ("REX_SERVER", &server),
+            (
+                "REX_SESSION",
+                "session:01a1d7f4-c985-7f17-ade1-a7707e974087",
+            ),
+        ],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let status = host
+        .flume(&repository.dir, &["status", "fix--one", "--json"], &[])
+        .answer();
+    let place = the_place(&status);
+    assert_eq!(
+        place.recipients,
+        vec![format!(
+            "rex:block:01a1d7f4-c986-716b-904e-a3b017e8d18f@{}",
+            socket.display()
+        )]
+    );
+    assert_eq!(place.recipients_from, Some(RecipientsFrom::Session));
+    assert!(
+        !socket.exists(),
+        "a Rex server listens at the caller's socket"
+    );
+    assert!(
+        !host.state().join("terminal/rex").exists(),
+        "the Rex profile made something under the state"
+    );
 }
 
 #[test]

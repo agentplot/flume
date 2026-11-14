@@ -2,6 +2,7 @@
   pkgs,
   lib,
   config,
+  inputs,
   ...
 }:
 
@@ -337,6 +338,12 @@ let
     installPhase = "install -Dm755 $src $out/bin/herdr";
   };
 
+  # Rex, which the Rex terminal profile drives: the release devenv.yaml pins
+  # from Rex's flake, on the platforms that flake packages, so the shell
+  # evaluates elsewhere without it and the Rex tests fail naming it there
+  # (core.22, core.51).
+  rex = inputs.rex.packages.${pkgs.stdenv.hostPlatform.system}.rex or null;
+
   # sluice, which the merge-queue profile drives: its newest release. sluice
   # publishes no x86_64-darwin build. Its builds are Nix's: on Linux the
   # loader and libgcc_s, on macOS libiconv, are store paths of the machine
@@ -381,8 +388,8 @@ in
 {
   # The system tools are this file's, pinned by devenv.lock; moon and Rust
   # are .prototools', installed by the flume:proto:install task on entering
-  # the shell and activated by enterShell. Claude Code, OpenSpec, herdr and
-  # sluice are the releases pinned above, never the host's (core.22).
+  # the shell and activated by enterShell. Claude Code, OpenSpec, herdr,
+  # sluice and Rex are the releases pinned above, never the host's (core.22).
   # shellcheck and dash are the herdr plugin's lint and its second shell. The
   # site's tools are bun, and Playwright with the one browser it drives,
   # from Nix, for the site's screenshots (site/scripts/shots.mjs). nix,
@@ -426,7 +433,8 @@ in
     sluice
     pkgs.bun
     pkgs.playwright-test
-  ];
+  ]
+  ++ lib.optional (rex != null) rex;
 
   # root:hooks drives a commit through the hooks devenv installs: the
   # shims, and the hook config the shell links into a worktree.

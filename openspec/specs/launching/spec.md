@@ -148,8 +148,8 @@ name a stage the kind does not hold (4, 32, 158, 190, C.1, C.2).
 
 #### Scenario: A stream's multiplexer flume does not carry
 
-- **WHEN** the host's `[streams.trial]` gives `multiplexer = "rex"` and a fix is launched on `trial`
-- **THEN** the launch is refused naming `trial`, `rex` and the terminal profiles the resolver carries, and nothing is made (4, 190; core.8)
+- **WHEN** the host's `[streams.trial]` gives `multiplexer = "cmux"` and a fix is launched on `trial`
+- **THEN** the launch is refused naming `trial`, `cmux` and the terminal profiles the resolver carries, `rex` among them, and nothing is made (4, 190; core.8)
 
 ### Requirement: A place keeps what its launch resolved
 

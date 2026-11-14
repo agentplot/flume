@@ -40,8 +40,10 @@ pub mod agent {
 
 // ---- the terminal seam's profiles: a profile unit appends its module line below ----
 pub mod terminal {
+    pub mod common;
     pub mod herdr;
     pub mod printed;
+    pub mod rex;
 }
 
 // ---- the merge queue seam's profiles: a profile unit appends its module line below ----
@@ -418,7 +420,11 @@ impl Place for BoundPlace {
 /// The terminal profiles built in, by the name `[host] terminal` gives
 /// them; the printed command where it names none (105, C.5).
 pub fn terminal_profiles() -> Vec<String> {
-    vec![terminal::printed::NAME.into(), terminal::herdr::NAME.into()]
+    vec![
+        terminal::printed::NAME.into(),
+        terminal::herdr::NAME.into(),
+        terminal::rex::NAME.into(),
+    ]
 }
 
 /// The terminal profile `name` binds for the host, its records under
@@ -443,6 +449,14 @@ pub fn terminal(
                 herdr = herdr.with_login(login);
             }
             Ok(Arc::new(herdr))
+        }
+        Some(terminal::rex::NAME) => {
+            let mut rex = terminal::rex::Rex::new(state.join("terminal/rex"))
+                .with_caller(terminal::rex::caller());
+            if let Some(login) = login {
+                rex = rex.with_login(login);
+            }
+            Ok(Arc::new(rex))
         }
         Some(other) => Err(format!(
             "the host's configuration names the terminal {other}, and no terminal profile is named {other}; the terminal profiles there are: {}",

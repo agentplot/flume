@@ -107,14 +107,16 @@
 //! naming the bound; each runs with the caller's `HERDR_*` stripped and
 //! the recorded server's socket passed (98, core.29).
 
-use crate::host::process::{executable, program_path};
+use super::common::{
+    asks, base_label, digest, focused, quoted, read_json, runs_program, write_json, Running,
+};
+use crate::host::process::program_path;
 use flume_seams::{
     AgentCommand, AgentState, AgentsIn, Attached, Closed, Clues, FolderTrust, Identity, NamedAgent,
     OpenIn, Opened, PlaceRef, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession,
     View, ViewCommand,
 };
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Read;
@@ -1108,7 +1110,7 @@ impl Herdr {
         };
         let workspace = self.standing_workspace(place, &socket)?;
         let Some(workspace) = workspace else {
-            let label = workspace_label(place);
+            let label = base_label(place);
             let mut args: Vec<&str> = vec!["workspace", "create"];
             args.extend(made.iter().map(String::as_str));
             args.extend(["--label", &label, "--no-focus"]);
@@ -1334,60 +1336,38 @@ impl Herdr {
     /// arguments; or what ran in its place (32; record 0018).
     fn runs(&self, pane: &Pane, program: &Path) -> Result<(), String> {
         let info = self.answered(&pane.socket, &["pane", "process-info", "--pane", &pane.id])?;
-        let processes = info["process_info"]["foreground_processes"]
+        let processes: Vec<Running> = info["process_info"]["foreground_processes"]
             .as_array()
-            .cloned()
-            .unwrap_or_default();
-        let wanted = program.canonicalize().unwrap_or_else(|_| program.into());
-        let mut ran = vec![];
-        for process in &processes {
-            let cwd = process["cwd"].as_str().map(PathBuf::from);
-            let executable = process["pid"]
-                .as_u64()
-                .and_then(|pid| executable(pid as u32));
-            let mut paths: Vec<PathBuf> = executable.iter().cloned().collect();
-            for arg in process["argv"].as_array().into_iter().flatten() {
-                let Some(arg) = arg.as_str() else {
-                    continue;
-                };
-                let path = Path::new(arg);
-                if path.is_absolute() {
-                    paths.push(path.into());
-                } else if arg.contains('/') {
-                    if let Some(cwd) = &cwd {
-                        paths.push(cwd.join(path));
-                    }
-                }
-            }
-            if paths
-                .iter()
-                .filter_map(|path| path.canonicalize().ok())
-                .any(|path| path == wanted)
-            {
-                return Ok(());
-            }
-            let cmdline = process["cmdline"].as_str().map(str::to_string);
-            ran.push(match (executable, cmdline) {
-                (Some(path), Some(cmdline)) => format!("{} ({cmdline})", path.display()),
-                (Some(path), None) => path.display().to_string(),
-                (None, Some(cmdline)) => cmdline,
-                (None, None) => process.to_string(),
-            });
-        }
-        Err(if ran.is_empty() {
-            format!(
+            .into_iter()
+            .flatten()
+            .filter_map(|process| {
+                Some(Running {
+                    pid: u32::try_from(process["pid"].as_u64()?).ok()?,
+                    args: process["argv"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|arg| arg.as_str().map(str::to_string))
+                        .collect(),
+                    cwd: process["cwd"].as_str().map(PathBuf::from),
+                    cmdline: process["cmdline"].as_str().map(str::to_string),
+                })
+            })
+            .collect();
+        match runs_program(&processes, program) {
+            Ok(()) => Ok(()),
+            Err(ran) if ran.is_empty() => Err(format!(
                 "herdr shows nothing running in the pane {}, not {}",
                 pane.id,
                 program.display()
-            )
-        } else {
-            format!(
+            )),
+            Err(ran) => Err(format!(
                 "the pane {} ran {} rather than {}, the program the settings name",
                 pane.id,
                 ran.join(", "),
                 program.display()
-            )
-        })
+            )),
+        }
     }
 
     /// The panes on `socket` that `within` takes, flume opened none of,
@@ -1450,7 +1430,7 @@ impl Herdr {
         if let Some(kept) = self.held_workspace(record, opened) {
             return Err(kept);
         }
-        let label = workspace_label(place);
+        let label = base_label(place);
         match self.live_tabs(workspace, socket)? {
             Some(true) => return Ok(None),
             Some(false) => {}
@@ -1590,41 +1570,6 @@ pub fn pane_shell(login: &str) -> String {
     )
 }
 
-/// `text` quoted for a POSIX shell.
-fn quoted(text: &str) -> String {
-    format!("'{}'", text.replace('\'', "'\\''"))
-}
-
-/// The label of the workspace of a place's repository and base,
-/// `<repository> <base>`, the repository by its directory's name.
-pub fn workspace_label(place: &PlaceRef) -> String {
-    let repository = Path::new(&place.repository).file_name().map_or_else(
-        || place.repository.clone(),
-        |name| name.to_string_lossy().into_owned(),
-    );
-    format!("{repository} {}", place.base)
-}
-
-/// The first twelve hex digits of `text`'s SHA-256.
-fn digest(text: &str) -> String {
-    Sha256::digest(text.as_bytes())
-        .iter()
-        .take(6)
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
-}
-
-fn read_json(path: &Path) -> Option<Value> {
-    serde_json::from_str(&fs::read_to_string(path).ok()?).ok()
-}
-
-fn write_json(path: &Path, value: &Value) -> Result<(), String> {
-    path.parent()
-        .map_or(Ok(()), fs::create_dir_all)
-        .and_then(|()| fs::write(path, value.to_string()))
-        .map_err(|error| format!("{}: {error}", path.display()))
-}
-
 fn field(value: &Value, name: &str) -> String {
     value
         .get(name)
@@ -1658,20 +1603,6 @@ enum Trusted {
     Answered,
     /// The question still stands, with the screen.
     Unanswered(String),
-}
-
-/// Whether `screen` shows the folder-trust question: its yes choice.
-fn asks(screen: &str, trust: &FolderTrust) -> bool {
-    screen.lines().any(|line| line.contains(&trust.question))
-}
-
-/// Whether the yes choice has the focus on `screen`, or none where the
-/// question is not shown.
-fn focused(screen: &str, trust: &FolderTrust) -> Option<bool> {
-    screen
-        .lines()
-        .find(|line| line.contains(&trust.question))
-        .map(|line| !trust.focus.is_empty() && line.contains(&trust.focus))
 }
 
 /// The pane id under `key` of a herdr result.
