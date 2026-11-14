@@ -123,3 +123,156 @@ fn the_fake_history_passes_the_history_scenarios() {
         FakeHistoryHarness::default,
     );
 }
+
+/// An agent of the fix `one`'s code stage open under the fake terminal
+/// of `harness`, waiting.
+fn an_open_agent(harness: &FakeTerminalHarness) -> flume_seams::Identity {
+    use flume_conformance::seams::terminal::TerminalHarness;
+    use flume_seams::{Identity, OpenIn, Opened, Terminal};
+    let agent = Identity {
+        repository: "0123456789ab".into(),
+        place: "fix--one".into(),
+        stage: "code".into(),
+        start: 1,
+    };
+    let opened = harness.terminal.open(
+        &harness.place(),
+        &harness.folder(),
+        &harness.command(),
+        &agent,
+        &OpenIn::Own,
+        None,
+    );
+    assert!(matches!(opened, Opened::Opened { .. }), "{opened:?}");
+    agent
+}
+
+/// The seam-fakes scenario "A relay of the fake": an open agent's screen
+/// read, the text `hi` typed onto it and shown, `enter` submitting it,
+/// and every relay call logged without `hi` (106, 222).
+#[test]
+fn the_fake_terminals_relay_echoes_what_is_typed() {
+    use flume_seams::{Key, KeyName, RelayScreen, Terminal, Typed};
+    let harness = FakeTerminalHarness::new(true);
+    let agent = an_open_agent(&harness);
+    let fake = &harness.terminal;
+    fake.set_screen(&agent, Some("ready"));
+    fake.log.clear();
+    {
+        let mut relay = fake.relay(&agent).expect("the fake relays an open agent");
+        assert_eq!(relay.every(), std::time::Duration::from_millis(250));
+        assert_eq!(
+            relay.screen(),
+            RelayScreen::Shows {
+                screen: "ready".into()
+            }
+        );
+        assert_eq!(relay.typed(&Typed::Text("hi".into())), Ok(()));
+        match relay.screen() {
+            RelayScreen::Shows { screen } => assert!(screen.contains("hi"), "{screen}"),
+            other => panic!("the second read gave {other:?}"),
+        }
+        assert_eq!(
+            relay.typed(&Typed::Keys(vec![Key::bare(KeyName::Enter)])),
+            Ok(())
+        );
+        assert_eq!(
+            relay.screen(),
+            RelayScreen::Shows {
+                screen: "ready".into()
+            },
+            "what was typed is submitted, so the screen holds it no more"
+        );
+    }
+    assert_eq!(fake.sent_to(&agent).last().map(String::as_str), Some("hi"));
+    assert_eq!(
+        fake.typed(&agent),
+        Some((String::new(), 0)),
+        "nothing cleared"
+    );
+    let logged = fake.log.calls();
+    assert_eq!(
+        logged,
+        vec![
+            format!("relay {agent}"),
+            "relay read".into(),
+            "relay text".into(),
+            "relay read".into(),
+            "relay keys enter".into(),
+            "relay read".into(),
+        ]
+    );
+    assert!(logged.iter().all(|line| !line.contains("hi")), "{logged:?}");
+    assert!(fake.log.of("send").is_empty(), "the relay is no send");
+    {
+        let mut held = fake.relay(&agent).expect("relayed");
+        fake.close(&agent);
+        assert_eq!(
+            held.screen(),
+            RelayScreen::Gone,
+            "a closed agent reads gone"
+        );
+    }
+    assert!(
+        fake.relay(&agent).is_err(),
+        "a closed agent is relayed no more"
+    );
+    let killed = FakeTerminalHarness::new(true);
+    let agent = an_open_agent(&killed);
+    let mut held = killed.terminal.relay(&agent).expect("relayed");
+    killed.terminal.kill(&agent);
+    assert_eq!(
+        held.screen(),
+        RelayScreen::Gone,
+        "a killed agent reads gone"
+    );
+}
+
+/// The seam-fakes scenario "Scripted refusals": a relay refused as
+/// scripted, then answered, its reads giving the unread and the screens
+/// scripted in turn, and its first input refused as scripted and its
+/// second typed (106, 222).
+#[test]
+fn the_fake_terminal_scripts_its_relay() {
+    use flume_seams::{Key, KeyName, RelayScreen, Terminal, Typed};
+    let harness = FakeTerminalHarness::new(true);
+    let agent = an_open_agent(&harness);
+    let fake = &harness.terminal;
+    fake.refuse_relay(Some("no relay here"));
+    match fake.relay(&agent) {
+        Err(refused) => assert_eq!(refused, "no relay here"),
+        Ok(_) => panic!("relayed while scripted to refuse"),
+    }
+    fake.refuse_relay(None);
+    fake.relay_unread("slow");
+    fake.relay_screens(&["one", "two"]);
+    fake.refuse_next_typed("no such key");
+    let mut relay = fake.relay(&agent).expect("answered once scripted so");
+    assert_eq!(
+        relay.screen(),
+        RelayScreen::Unread {
+            reason: "slow".into()
+        }
+    );
+    for screen in ["one", "two"] {
+        assert_eq!(
+            relay.screen(),
+            RelayScreen::Shows {
+                screen: screen.into()
+            }
+        );
+    }
+    assert_eq!(
+        relay.typed(&Typed::Keys(vec![Key::bare(KeyName::F(12))])),
+        Err("no such key".into())
+    );
+    assert_eq!(relay.typed(&Typed::Text("yes".into())), Ok(()));
+    assert_eq!(fake.typed(&agent), Some(("yes".into(), 0)));
+    assert_eq!(
+        relay.screen(),
+        RelayScreen::Shows {
+            screen: "the agent's screen\nyes".into()
+        },
+        "the agent's own screen once the script is spent"
+    );
+}
