@@ -121,3 +121,14 @@ reserve = 2
 [streams.work.labels.operation]
 keep_free = 1
 reserve = 2
+
+[telemetry]
+collector = "http://localhost:4318"
+logs = false
+metrics = true
+send = true
+service = "flume"
+traces = true
+
+[telemetry.attributes]
+"deployment.environment" = "lab"

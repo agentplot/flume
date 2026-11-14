@@ -62,6 +62,13 @@ expect "$named" 'settings.streams.work.agents = "five" evaluates' [ "$status" -n
 expect "$named" "its failure names no services.flume.settings.streams.work.agents: $err" \
   says "$err" "services.flume.settings.streams.work.agents"
 
+named="A collector off the loopback"
+fresh
+fails collectorOffTheLoopback
+expect "$named" 'settings.telemetry.collector = "http://otel.example:4318" evaluates' [ "$status" -ne 0 ]
+expect "$named" "its failure names no services.flume.settings.telemetry.collector: $err" \
+  says "$err" "services.flume.settings.telemetry.collector"
+
 named="A path value"
 fresh
 fails path

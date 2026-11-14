@@ -1,8 +1,9 @@
 # Evaluations that fail, each read by its words in nix/tests/scripts.sh,
 # since a failure's message cannot be read by the evaluation it ends: a
-# mistyped declared key, a path where the file takes a string (the
-# host-module spec), and the package of a system the flake gives none for
-# (the change flume-publishes-its-own-flake-and-module, design 5); and a
+# mistyped declared key, a telemetry collector off the host's loopback, a
+# path where the file takes a string (the host-module spec), and the
+# package of a system the flake gives none for (the change
+# flume-publishes-its-own-flake-and-module, design 5); and a
 # source with no `kinds_dir`, one whose `kinds_dir` is under no home and
 # one with a path value, each rendering its file (the change
 # flumes-module-writes-the-hosts-sources, design 1 and 3).
@@ -50,6 +51,7 @@ let
 in
 {
   mistyped = text { streams.work.agents = "five"; };
+  collectorOffTheLoopback = text { telemetry.collector = "http://otel.example:4318"; };
   path = text { kinds.change.agents.programs.scribe.file = ./every-key.nix; };
   unknownSystem = (evaluated elsewhere { }).package.outPath;
   noKindsDir = sourceText { roles = "~/roles.toml"; };

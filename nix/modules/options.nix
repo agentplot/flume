@@ -63,6 +63,10 @@ let
     "app"
   ];
   agents = unset toml "An agents table, free-form whole: flume reads and judges its keys at each start (32, 195 to 198).";
+  # A collector on the host's loopback, as flume reads one: `http://`,
+  # `localhost`, an address of 127.0.0.0/8 or `[::1]`, a port, and at most
+  # a path (216, C.7).
+  collector = types.strMatching "http://(localhost|127[.][0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}|[[]::1[]]):[0-9]{1,5}(/[^?#@ ]*)?";
 
   stream = {
     agents = unset unsigned "The bound on the stream's agents running.";
@@ -180,6 +184,18 @@ in
             })
             "Each repository's settings, `[repos.\"<repository>\"]`, its key an address, `<owner>/<name>`, or a folder, as written.";
         inherit agents;
+        telemetry =
+          unset
+            (table {
+              send = unset types.bool "Whether flume sends telemetry; false where unset (216).";
+              collector = unset collector "The collector flume sends to: `http://`, a host of the loopback, a port and at most a path; a table that sends names one (216, C.7).";
+              service = unset types.str "The service flume sends as; `flume` where unset.";
+              traces = unset types.bool "Whether flume sends traces; true where unset.";
+              metrics = unset types.bool "Whether flume sends metrics; true where unset.";
+              logs = unset types.bool "Whether flume sends logs; true where unset.";
+              attributes = unset (types.attrsOf types.str) "The attributes flume's resource names beside its own, each a string; none shaped as a credential.";
+            })
+            "`[telemetry]`, the managed layer's alone: whether flume sends a place's trace, its records and its metrics, and to which collector on the host's loopback (216, C.7).";
       };
       default = { };
       description = "flume's managed file, `~/.config/flume/config.toml`, each key named as the file names it (C.7), rendered at evaluation. It holds no credential: name a variable of the host user's login environment by `$NAME` in its place.";
