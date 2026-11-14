@@ -222,10 +222,11 @@ impl Engine {
 
     /// Whether the address's run stands taking nothing into its session:
     /// its current start live and its prompt not yet received, starting,
-    /// or started and its prompt sent or still to send, whose agent would
-    /// take what is typed now as its prompt, its stage's own then never
-    /// received (37, 38); or its stage ended short and waiting on its
-    /// answer, so a delivery is never taken for the answer (42, 53, 214).
+    /// started with its prompt sent or still to send, or read never begun,
+    /// whose agent would take what is typed now as its prompt, its
+    /// stage's own then never received (37, 38); or its stage ended short
+    /// and waiting on its answer, so a delivery is never taken for the
+    /// answer (42, 53, 214).
     fn holds_back(&self, address: &str) -> bool {
         self.store.read_every().into_iter().any(|read| {
             let held = read.state;
@@ -233,9 +234,10 @@ impl Engine {
                 && !matches!(held.phase, Phase::Tidied { .. })
                 && (crate::open_sessions::waits_on_answer(&held).is_some()
                     || held.current.is_some_and(|index| {
-                        let stage = &held.stages[index];
-                        stage.start.as_ref().is_some_and(|start| start.live)
-                            && matches!(stage.state, StageState::Starting | StageState::Started)
+                        held.stages[index]
+                            .start
+                            .as_ref()
+                            .is_some_and(|start| start.live && start.prompt.received_at.is_none())
                     }))
         })
     }

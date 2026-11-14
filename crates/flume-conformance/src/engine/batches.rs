@@ -16,7 +16,8 @@ use super::settling::deliver_fix;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::deliveries::{self, rewrite_whole};
-use flume_core::{notice_to, Answer, Retry};
+use flume_core::message::message_words;
+use flume_core::{notice_to, way_to_stop_short, Answer, Retry};
 use flume_fakes::Plan;
 use flume_seams::*;
 use std::sync::{Arc, Mutex};
@@ -62,6 +63,21 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "batch: a message for east/ops while its run's plan ended short needing an answer, its agent kept open, is typed into its session never and handed to none; once a retry answers the stop-short and the agent goes quiet again, the next settle hands it the message, a delivery never taken for the answer",
             cites: &["42", "53", "132", "198"],
             run: a_message_while_the_run_waits_on_its_answer,
+        },
+        Scenario {
+            name: "batch: a message and a fix's end pending for east/planner when its run's start fills its prompt go in that prompt after the kind's template and before the way to stop short, each with its confirm, a role's run's first prompt carrying its batch",
+            cites: &["28", "43", "132"],
+            run: the_first_prompt_carries_the_batch,
+        },
+        Scenario {
+            name: "batch: a run's start carrying a batch, read never begun, lets its claims go and records nothing handed, and the next start's prompt carries the same batch",
+            cites: &["37", "38", "43", "132"],
+            run: a_start_that_never_began,
+        },
+        Scenario {
+            name: "batch: an end for east/planner that comes after its run's prompt was filled and before it was received is handed to none until the run's agent next waits, and then goes in one prompt alone",
+            cites: &["37", "38", "43", "132"],
+            run: what_came_after_the_prompt,
         },
     ]
 }
@@ -451,6 +467,154 @@ fn a_message_while_the_run_waits_on_its_answer(_: &()) -> Outcome {
         world.terminal.notices(ops),
         vec![batch_of(&world, std::slice::from_ref(&key), ops)?],
         "the message handed once the run took its answer"
+    );
+    Ok(())
+}
+
+/// The planner's address, which acme declares with a run.
+const PLANNER: &str = "east/planner";
+
+/// The prompt the start at `index` of the place `id` was given.
+fn prompt_of(world: &World, id: &PlaceId, start: u32) -> String {
+    world
+        .held(id)
+        .and_then(|held| {
+            held.stages
+                .iter()
+                .filter_map(|stage| stage.start.clone())
+                .find(|held| held.n == start)
+        })
+        .map(|start| start.prompt.text)
+        .unwrap_or_default()
+}
+
+/// A message to `address` recorded beside the host's deliveries, as a
+/// message's act records it, waking nothing; its key (214, C.7).
+fn recorded_message(world: &World, address: &str, words: &str) -> Result<String, String> {
+    let key = format!("message/{address}/0a1b2c3d");
+    let at = deliveries::time(world.host.now());
+    let message = message_words(address, Some("ops"), words);
+    deliveries::update(&*world.store, |records| {
+        match weir_delivery::record(records, &key, &message, &[address], &at, 604_800) {
+            Ok(weir_delivery::Recorded::Add(added)) => added,
+            _ => vec![],
+        }
+    })?;
+    Ok(key)
+}
+
+fn the_first_prompt_carries_the_batch(_: &()) -> Outcome {
+    let world = World::new();
+    // A caller keeps watch, so no act settles every place and wakes the
+    // run for the message before the end comes.
+    world.keep_watch();
+    let template = "Read what is pending for you.";
+    configure_at(&world, PLANNER, template, planner_run(None, None));
+    let message = recorded_message(&world, PLANNER, "the nightly job failed")?;
+    let (_, end) = delivered_for(&world, "one", PLANNER)?;
+    let run = World::id("turn", "east-planner");
+    let agent = World::identity("turn", "east-planner", "plan", 1);
+    let prompt = prompt_of(&world, &run, 1);
+    let batch = batch_of(&world, &[message.clone(), end.clone()], PLANNER)?;
+    let way = way_to_stop_short(&*world.agent, &agent);
+    ensure!(
+        prompt.starts_with(&format!("{template}\n\n{batch}\n\n{way}")),
+        "the run's first prompt: {prompt}"
+    );
+    world.settle(&run);
+    for (key, by) in [
+        (&message, DeliveredBy::Message),
+        (&end, DeliveredBy::Notice),
+    ] {
+        ensure_eq!(
+            handovers(&world, key),
+            vec![(PLANNER.to_string(), by)],
+            format!("the hand-overs of {key}")
+        );
+    }
+    ensure_eq!(claims(&world)?, vec![], "the claims left");
+    ensure!(
+        world.terminal.notices(PLANNER).is_empty(),
+        "a notice into the run's pane"
+    );
+    Ok(())
+}
+
+fn a_start_that_never_began(_: &()) -> Outcome {
+    let world = World::new();
+    configure_at(
+        &world,
+        PLANNER,
+        "Read what is pending for you.",
+        planner_run(None, None),
+    );
+    let first = World::identity("turn", "east-planner", "plan", 1);
+    world.agent.receives_at(&first, None);
+    let (_, end) = delivered_for(&world, "one", PLANNER)?;
+    let run = World::id("turn", "east-planner");
+    let item = batch_of(&world, std::slice::from_ref(&end), PLANNER)?;
+    ensure!(
+        prompt_of(&world, &run, 1).contains(&item),
+        "the first start's prompt carries not the end"
+    );
+    ensure_eq!(claims(&world)?.len(), 1, "the claims of the first start");
+    for _ in 0..3 {
+        world.host.advance(60);
+        world.settle(&run);
+    }
+    ensure_eq!(
+        world.stage_state(&run, "plan"),
+        Some(StageState::NeverBegun),
+        "the run's first start"
+    );
+    ensure_eq!(claims(&world)?, vec![], "the claims once it never began");
+    ensure_eq!(handovers(&world, &end), vec![], "the end's hand-overs");
+    let retried = world.engine.retry(&run, Retry::Current, None, true);
+    ensure!(retried.refusal().is_none(), "the retry: {retried:?}");
+    ensure!(
+        prompt_of(&world, &run, 2).contains(&item),
+        "the next start's prompt carries not the end: {}",
+        prompt_of(&world, &run, 2)
+    );
+    Ok(())
+}
+
+fn what_came_after_the_prompt(_: &()) -> Outcome {
+    let world = World::new();
+    configure_at(
+        &world,
+        PLANNER,
+        "Read what is pending for you.",
+        planner_run(None, None),
+    );
+    let agent = World::identity("turn", "east-planner", "plan", 1);
+    world.agent.set_started(&agent, Reading::No);
+    ensure!(world.engine.wake(PLANNER).refusal().is_none(), "the wake");
+    let run = World::id("turn", "east-planner");
+    world.settle(&run);
+    let (one, end) = delivered_for(&world, "one", PLANNER)?;
+    world.settle(&one);
+    ensure!(
+        world.terminal.notices(PLANNER).is_empty(),
+        "a notice before the run's prompt was received"
+    );
+    ensure_eq!(handovers(&world, &end), vec![], "the end's hand-overs");
+    world.agent.set_started(&agent, Reading::Yes);
+    world.settle(&run);
+    ensure_eq!(
+        world.stage_state(&run, "plan"),
+        Some(StageState::Begun),
+        "the run's stage"
+    );
+    world.settle(&run);
+    ensure!(
+        !prompt_of(&world, &run, 1).contains(&end),
+        "the run's prompt carries the end that came after it"
+    );
+    ensure_eq!(
+        world.terminal.notices(PLANNER),
+        vec![batch_of(&world, std::slice::from_ref(&end), PLANNER)?],
+        "the end handed at the run's wait"
     );
     Ok(())
 }

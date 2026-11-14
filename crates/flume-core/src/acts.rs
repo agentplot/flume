@@ -65,6 +65,7 @@ impl Engine {
             agent.as_deref(),
             group.as_ref().map(Option::as_ref),
             &listed,
+            None,
         ) {
             Ok(text) => Answer::Prompt {
                 place: place.clone(),

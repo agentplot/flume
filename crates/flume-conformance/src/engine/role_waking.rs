@@ -152,7 +152,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_run_an_earlier_flume_named,
         },
         Scenario {
-            name: "role waking: an end for east/planner whose run's agent waits in its session before its start took its prompt stays pending, and is delivered into its pane once by the settle after its start is begun",
+            name: "role waking: an end for east/planner whose run's agent waits in its session before its start took its prompt is typed into its pane never, and goes in that prompt, recorded handed to the address once the prompt is received and sent by no settle again, a role's run's first prompt carrying its batch",
             cites: &["37", "38", "43", "132"],
             run: a_run_not_yet_given_its_prompt,
         },
@@ -197,7 +197,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_run_whose_kind_lands,
         },
         Scenario {
-            name: "role waking: the run of east/planner lost and left five minutes stalls to east/operator, the answerer behind east, whose run is woken, and never to its own address",
+            name: "role waking: the run of east/planner lost and left five minutes stalls to east/operator, the answerer behind east, whose run is woken carrying the stall in its first prompt, and never to its own address",
             cites: &["130", "132", "193"],
             run: a_planners_run_is_lost,
         },
@@ -1400,13 +1400,18 @@ fn a_run_not_yet_given_its_prompt(_: &()) -> Outcome {
         Vec::<String>::new(),
         "the notices into the run's pane before its prompt"
     );
-    ensure_eq!(
+    let end = world
+        .delivery_key("fix--one", "stage/code/1/delivered")
+        .ok_or("no delivery of code's end")?;
+    let handed = |world: &World| {
         world
-            .held(&one)
-            .map(|held| held.pending_for(&world.owing())),
-        Some(vec![PLANNER.to_string()]),
-        "the ends pending before the run's prompt"
-    );
+            .owing()
+            .deliveries
+            .get(&end)
+            .map(|delivery| delivery.handovers.len())
+            .unwrap_or_default()
+    };
+    ensure_eq!(handed(&world), 0, "the end's hand-overs before the prompt");
     world.agent.set_started(&agent, Reading::Yes);
     world.settle(&planner_id());
     ensure_eq!(
@@ -1416,17 +1421,35 @@ fn a_run_not_yet_given_its_prompt(_: &()) -> Outcome {
     );
     world.settle(&one);
     world.settle(&one);
+    let prompt = world
+        .held(&planner_id())
+        .and_then(|held| held.stages[0].start.clone())
+        .map(|start| start.prompt.text)
+        .unwrap_or_default();
+    ensure!(
+        prompt.contains(&world.confirming(&code_delivered("one"), PLANNER)),
+        "the run's prompt carries not the end: {prompt}"
+    );
     ensure_eq!(
         world.terminal.notices(PLANNER),
-        vec![world.confirming(&code_delivered("one"), PLANNER)],
+        Vec::<String>::new(),
         "the notices into the run's pane"
+    );
+    ensure_eq!(
+        world.owing().deliveries.get(&end).map(|delivery| delivery
+            .handovers
+            .iter()
+            .map(|handover| (handover.recipient.clone(), handover.by))
+            .collect::<Vec<_>>()),
+        Some(vec![(PLANNER.to_string(), DeliveredBy::Notice)]),
+        "the end handed to the address in the run's prompt"
     );
     ensure_eq!(
         world
             .held(&one)
             .map(|held| held.pending_for(&world.owing())),
         Some(vec![PLANNER.to_string()]),
-        "the ends pending once the run is begun, handed by notice and not confirmed"
+        "the ends pending once the run is begun, handed and not confirmed"
     );
     Ok(())
 }
@@ -1872,15 +1895,27 @@ fn a_planners_run_is_lost(_: &()) -> Outcome {
         vec!["east/operator".to_string()],
         "the ends pending once the stall is read"
     );
-    // The host's places settled, the operator's run's agent up.
+    // The host's places settled, the operator's run's agent up: the stall
+    // that woke it went in its first prompt, and nothing into its pane
+    // after it (214).
     world.engine().settle(None);
     ensure_eq!(
         world.terminal.notices("east/operator"),
-        vec![world.confirming(
-            "flume: turn--east-planner stalled: a retry of plan [stall/1000000]; read: flume inbox",
-            "east/operator"
-        )],
+        Vec::<String>::new(),
         "the notices into the operator's run's pane"
+    );
+    let prompt = world
+        .held(&operator)
+        .and_then(|held| held.stages[0].start.clone())
+        .map(|start| start.prompt.text)
+        .unwrap_or_default();
+    let stall = world.confirming(
+        "flume: turn--east-planner stalled: a retry of plan [stall/1000000]; read: flume inbox",
+        "east/operator",
+    );
+    ensure!(
+        prompt.contains(&stall),
+        "the operator's run's first prompt: {prompt}"
     );
     let held = world.held(&id).ok_or("no place")?;
     ensure_eq!(

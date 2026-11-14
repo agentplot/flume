@@ -158,7 +158,144 @@ fn held_back(documents: &[HeldState]) -> HeldBack {
     held_back
 }
 
+/// A role's run's start's batch: the start, and the words its prompt
+/// carries (214; design 9).
+pub(crate) struct StartBatch {
+    pub identity: Identity,
+    pub words: String,
+}
+
+/// The stage's state and the start of `documents` whose identity is
+/// `identity`, as a claim names it.
+fn start_of<'a>(documents: &'a [HeldState], identity: &str) -> Option<(StageState, &'a StartHeld)> {
+    documents.iter().find_map(|held| {
+        held.stages.iter().find_map(|stage| {
+            stage
+                .start
+                .as_ref()
+                .filter(|start| start.identity.to_string() == identity)
+                .map(|start| (stage.state, start))
+        })
+    })
+}
+
 impl Engine {
+    /// Claims `address`'s batch for the start `identity` of its run, whose
+    /// prompt carries it, every start's claims settled first; none where
+    /// nothing is pending at the address (214; design 9).
+    pub(crate) fn claim_for_start(&self, address: &str, identity: &Identity) -> Option<StartBatch> {
+        let documents = self.documents();
+        self.settle_start_claims(&documents);
+        let items = self.claim_batch(
+            address,
+            &held_back(&documents),
+            self.host.now(),
+            Some(identity.to_string()),
+        )?;
+        Some(StartBatch {
+            identity: identity.clone(),
+            words: batch_words(&items, address),
+        })
+    }
+
+    /// Lets go of every claim the start `identity` holds, recording nothing
+    /// (214; design 9).
+    pub(crate) fn release_start(&self, identity: &Identity) {
+        let start = identity.to_string();
+        let written = rewrite_whole(&*self.store, |records, claims| {
+            let next: Vec<DeliveryClaim> = claims
+                .iter()
+                .filter(|claim| claim.start.as_deref() != Some(start.as_str()))
+                .cloned()
+                .collect();
+            (next.len() != claims.len()).then(|| (records.to_vec(), next))
+        });
+        if let Err(why) = written {
+            self.host.log(&why);
+        }
+    }
+
+    /// Every place's document on the host, as one read gives them.
+    fn documents(&self) -> Vec<HeldState> {
+        self.store
+            .read_every()
+            .into_iter()
+            .map(|read| read.state)
+            .collect()
+    }
+
+    /// Settles each claim a start of a role's run holds for its prompt:
+    /// recorded handed, at its receipt, once the start's prompt is read
+    /// received, by `notice` for an end and by `message` for a message;
+    /// kept while the start is live and its prompt not yet received; and
+    /// otherwise let go of, recording nothing, as for a start read never
+    /// begun or ended before its prompt was received, so the next start
+    /// or the next wait takes them; each in one write (37, 38, 43, 214;
+    /// record 0058; design 9).
+    fn settle_start_claims(&self, documents: &[HeldState]) {
+        let mut refused: Vec<String> = vec![];
+        let written = rewrite_whole(&*self.store, |records, claims| {
+            refused.clear();
+            if claims.iter().all(|claim| claim.start.is_none()) {
+                return None;
+            }
+            let mut all = records.to_vec();
+            let mut next: Vec<DeliveryClaim> = vec![];
+            for claim in claims {
+                let Some(start) = claim.start.as_deref() else {
+                    next.push(claim.clone());
+                    continue;
+                };
+                match start_of(documents, start) {
+                    Some((_, start)) if start.prompt.received_at.is_some() => {
+                        let by = if is_message_key(&claim.key) {
+                            DeliveredBy::Message
+                        } else {
+                            DeliveredBy::Notice
+                        };
+                        let at = time(start.prompt.received_at.unwrap_or(claim.at));
+                        match weir_delivery::hand(
+                            &all,
+                            &claim.key,
+                            &claim.recipient,
+                            by.way(),
+                            &at,
+                            false,
+                        ) {
+                            Ok(Handed::Add(added)) => all.extend(added),
+                            Ok(Handed::Confirmed(_)) => {}
+                            Err(refusal) => refused.push(format!("{}: {refusal}", claim.key)),
+                        }
+                    }
+                    Some((StageState::Starting | StageState::Started, start)) if start.live => {
+                        next.push(claim.clone());
+                    }
+                    _ => {}
+                }
+            }
+            (next.len() != claims.len()).then_some((all, next))
+        });
+        if let Err(why) = written {
+            self.host.log(&why);
+        }
+        for why in refused {
+            self.host.log(&format!(
+                "a delivery a run's prompt carried was not recorded: {why}"
+            ));
+        }
+    }
+
+    /// Settles the claims of the starts of roles' runs, where any stands
+    /// (214; design 9).
+    fn settle_any_start_claims(&self) {
+        let any = read_whole(&*self.store)
+            .map(|whole| whole.claims.iter().any(|claim| claim.start.is_some()))
+            .unwrap_or(false);
+        if any {
+            self.settle_start_claims(&self.documents());
+        }
+    }
+
     /// Hands each batch a settle reads: of one place, each recipient of
     /// its ends pending and, for a role's run, its own address; of every
     /// place, every recipient a delivery is pending for, once each (43,
@@ -189,6 +326,7 @@ impl Engine {
             None => pending_recipients(&self.owing()),
         };
         self.record_answered();
+        self.settle_any_start_claims();
         if recipients.is_empty() {
             return;
         }
