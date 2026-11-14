@@ -204,6 +204,9 @@ pub const WAIT_MOVE: &str = "flume.wait.move";
 pub const WAIT_HELD: &str = "flume.wait.held";
 /// Whether a wait stalled.
 pub const WAIT_STALLED: &str = "flume.wait.stalled";
+/// How a wait on the merge queue ended: `landed`, `failed`, `conflict`,
+/// `withdrawn` or `refused`.
+pub const WAIT_OUTCOME: &str = "flume.wait.outcome";
 /// A place's state in the list's words.
 pub const STATE: &str = "flume.state";
 /// A record's change.

@@ -6,10 +6,11 @@
 
 use crate::base::base_place;
 use crate::status::waiting_on;
+use crate::telemetry::{signals_between, Tracing};
 use crate::Engine;
 use flume_seams::{
-    Act, EndHeld, EndOf, HeldState, HoldOn, Over, Phase, PlaceId, Seconds, StageState,
-    StopShortWaited, Verdict, Versioned, Waiting, WaitingOn, Waits, Written,
+    Act, EndHeld, EndOf, HeldState, HoldOn, Over, Phase, PlaceId, Seconds, Signal, StageState,
+    StartHeld, StopShortWaited, Verdict, Versioned, Waiting, WaitingOn, Waits, Written,
 };
 
 /// What an act decided of a place's held state.
@@ -31,10 +32,16 @@ impl Engine {
     }
 
     /// A new place's first held state, written only if the place has
-    /// none: its version, or none when held state stands (75, 103).
+    /// none, naming its trace, its place's span and the launch's time:
+    /// its version, or none when held state stands (75, 103, 217).
     pub fn create(&self, state: &HeldState) -> Option<u64> {
-        match self.store.write(&state.place.id, None, Some(state)) {
-            Written::Written { version } => Some(version),
+        let mut first = state.clone();
+        let signals = self.trace(None, &mut first);
+        match self.store.write(&state.place.id, None, Some(&first)) {
+            Written::Written { version } => {
+                self.hand_on(signals);
+                Some(version)
+            }
             Written::Moved => None,
         }
     }
@@ -56,9 +63,12 @@ impl Engine {
                     if next == read.state {
                         return Some(answer);
                     }
-                    self.stamp(&read.state, &mut next);
+                    let signals = self.stamp(&read.state, &mut next);
                     match self.store.write(place, Some(read.version), Some(&next)) {
-                        Written::Written { .. } => return Some(answer),
+                        Written::Written { .. } => {
+                            self.hand_on(signals);
+                            return Some(answer);
+                        }
                         Written::Moved => continue,
                     }
                 }
@@ -70,8 +80,10 @@ impl Engine {
     /// Stamps since when each stage stands in its state and the place
     /// waits for its caller, wherever an act changed them, so status says
     /// since when a place waits (56, 130); a base place's wait read from
-    /// the live places on its branch as they stand (203).
-    fn stamp(&self, was: &HeldState, next: &mut HeldState) {
+    /// the live places on its branch as they stand (203); and names the
+    /// trace's spans the write opens, giving the signals it makes, which
+    /// go only once it lands (217).
+    fn stamp(&self, was: &HeldState, next: &mut HeldState) -> Vec<Signal> {
         let now = self.host.now();
         for (index, stage) in next.stages.iter_mut().enumerate() {
             if was.stages.get(index).map(|was| was.state) != Some(stage.state) {
@@ -87,6 +99,46 @@ impl Engine {
         let on_branch = self.on_branch_count(next);
         refresh_waiting(next, now, on_branch);
         record_ends(next, now);
+        self.trace(Some(was), next)
+    }
+
+    /// The signals the write from `was`, none for a launch's, to `next`
+    /// makes, its spans named in `next`: each id from the host's source of
+    /// secrets, and a start's conversation as its agent seam reads it in
+    /// the place's own folder (217, 218; design 5, 7).
+    fn trace(&self, was: Option<&HeldState>, next: &mut HeldState) -> Vec<Signal> {
+        let folder = self.store.folder(&next.place.id);
+        let conversation = |start: &StartHeld| {
+            self.agent(&start.program)
+                .and_then(|agent| agent.conversation(&folder, &start.identity))
+        };
+        let mut id = |digits: usize| self.new_id(digits);
+        signals_between(
+            was,
+            next,
+            Tracing {
+                now: self.host.now(),
+                id: &mut id,
+                conversation: &conversation,
+            },
+        )
+    }
+
+    /// A new id of `digits` hex digits, read from a secret of the host's,
+    /// so the fakes give fixed ones (217; design 5).
+    fn new_id(&self, digits: usize) -> String {
+        use sha2::{Digest, Sha256};
+        let digest = Sha256::digest(self.host.secret().0.as_bytes());
+        let hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+        hex[..digits.min(hex.len())].to_string()
+    }
+
+    /// Hands `signals` to the engine's telemetry, once their write landed
+    /// (216, 217).
+    pub(crate) fn hand_on(&self, signals: Vec<Signal>) {
+        for signal in signals {
+            self.telemetry.send(signal);
+        }
     }
 
     /// Removes the place's held state, and its folder with it, at the
