@@ -274,10 +274,15 @@ impl Engine {
                 expired,
             });
         }
+        let messages = match place {
+            Some(_) => vec![],
+            None => self.collect_messages(recipient, by, confirms),
+        };
         Answer::Inbox {
             recipient: recipient.into(),
             ends,
             waiting,
+            messages,
         }
     }
 }
@@ -307,11 +312,12 @@ pub fn session_words(answer: &Answer) -> Option<String> {
         recipient,
         ends,
         waiting,
+        messages,
     } = answer
     else {
         return None;
     };
-    if ends.is_empty() && waiting.is_empty() {
+    if ends.is_empty() && waiting.is_empty() && messages.is_empty() {
         return None;
     }
     let mut lines = vec![format!(
@@ -326,6 +332,17 @@ pub fn session_words(answer: &Answer) -> Option<String> {
                 "- {short} {} [{}]; read: flume status {short}",
                 end_words(&collected.end.end.of),
                 collected.end.key
+            ));
+        }
+    }
+    if !messages.is_empty() {
+        lines.push(String::new());
+        lines.push("Messages delivered to this session now:".into());
+        for message in messages {
+            let from = message.from.as_deref().unwrap_or("no one named");
+            lines.push(format!(
+                "- from {from} [{}]: {}",
+                message.key, message.words
             ));
         }
     }

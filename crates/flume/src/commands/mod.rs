@@ -251,11 +251,12 @@ enum Command {
         confirm: bool,
     },
     /// Collect every end pending for a recipient, of every place on the
-    /// host, each handed to it; an inbox naming a place collects that
-    /// place's ends alone (43, 62). A hand-over delivers nothing until its
-    /// recipient confirms it: an end the inbox gives stays pending, and is
-    /// given again by the next inbox, until `--confirm` confirms it on
-    /// receipt or `flume confirm` names its delivery's key.
+    /// host, and every message pending at it, each handed to it; an inbox
+    /// naming a place collects that place's ends alone (43, 62, 214). A
+    /// hand-over delivers nothing until its recipient confirms it: an end
+    /// the inbox gives stays pending, as a message does, and is given again
+    /// by the next inbox, until `--confirm` confirms it on receipt or `flume
+    /// confirm` names its delivery's key.
     Inbox {
         /// The place whose ends alone are collected, named as `flume
         /// status` names one: a location, or `<kind>--<name>` in the
@@ -273,13 +274,14 @@ enum Command {
         confirm: bool,
     },
     /// Confirm, as a recipient, each delivery key given: a notice, a wait,
-    /// the inbox and a session's start hand an end over, and a hand-over
-    /// delivers nothing until its recipient confirms it by its key, which
-    /// `flume inbox`, `flume wait`, `flume status` and the notice give as
-    /// the end's delivery (43). A key confirmed before says when it first
-    /// was; a key no end is under, or one whose end is another
-    /// recipient's, is refused naming it, and the keys after it are not
-    /// confirmed. Exits 1 on a refusal.
+    /// the inbox and a session's start hand an end or a message over, and
+    /// a hand-over delivers nothing until its recipient confirms it by its
+    /// key, which `flume inbox`, `flume wait`, `flume status` and the
+    /// notice give as its delivery's, a message's beginning `message/`
+    /// (43, 214). A key confirmed before says when it first was; a key no
+    /// delivery is under, or one that is another recipient's, is refused
+    /// naming it, and the keys after it are not confirmed. Exits 1 on a
+    /// refusal.
     Confirm {
         /// The delivery keys, `<kind>--<name>/<token>/<end key>`.
         #[arg(required = true, value_name = "KEY")]

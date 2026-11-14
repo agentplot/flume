@@ -8,7 +8,9 @@
 //! answered at once with its key, the address and what it found (43, 53,
 //! 132, 193).
 
-use super::role_waking::{configure, configure_at, planner_id, planner_run, runs, PLANNER};
+use super::role_waking::{
+    asks, configure, configure_at, fix_for, planner_id, planner_run, runs, PLANNER,
+};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::deliveries;
@@ -47,6 +49,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "message: a message to madswan/planner while no planner run is live or waiting launches one planner run by its own act, and a settle of every place that follows launches none; and a message recorded at another address with no run, handed to nothing, is woken by the next settle of every place, a role's messages waking it as its ends do",
             cites: &["132", "43", "53"],
             run: a_message_wakes_the_role,
+        },
+        Scenario {
+            name: "message: a message pending at east/planner with an end of a fix, flume inbox --recipient east/planner gives the end under ends and the message under messages, with its key, its sender ops and its words, each handed to east/planner by the inbox and pending for it; flume confirm takes the message's key as east/planner, and refuses it as ops, which it is not owed to, and a message key no delivery stands under",
+            cites: &["43", "53", "132"],
+            run: a_message_collected,
         },
     ]
 }
@@ -325,5 +332,83 @@ fn a_message_wakes_the_role(_: &()) -> Outcome {
     let mut due = vec![run, planner_id()];
     due.sort();
     ensure_eq!(woken, due, "the runs the settle woke for the message");
+    Ok(())
+}
+
+fn a_message_collected(_: &()) -> Outcome {
+    let world = World::new();
+    configure(
+        &world,
+        "Read what is pending for you.",
+        planner_run(None, None),
+    );
+    let one = fix_for(&world, "one", &[PLANNER])?;
+    asks(&world, &one)?;
+    let (key, ..) = messaged(&world.engine.message_address(
+        PLANNER,
+        "the nightly job failed",
+        None,
+        &from(Some("ops")),
+    ))?;
+    let (ends, messages) = match world.engine.inbox(PLANNER, None, false) {
+        Answer::Inbox { ends, messages, .. } => (ends, messages),
+        other => return Err(format!("the inbox answered {other:?}")),
+    };
+    ensure_eq!(ends.len(), 1, "the ends collected");
+    ensure_eq!(
+        messages
+            .iter()
+            .map(|message| (
+                message.key.as_str(),
+                message.address.as_str(),
+                message.from.as_deref(),
+                message.words.as_str(),
+                message.confirmed
+            ))
+            .collect::<Vec<_>>(),
+        vec![(
+            key.as_str(),
+            PLANNER,
+            Some("ops"),
+            "the nightly job failed",
+            false
+        )],
+        "the messages collected"
+    );
+    let owing = world.owing();
+    let delivery = owing.deliveries.get(&key).ok_or("no delivery")?;
+    ensure!(
+        delivery
+            .handovers
+            .iter()
+            .any(|handover| handover.recipient == PLANNER && handover.by == DeliveredBy::Inbox),
+        "the message not handed by the inbox: {:?}",
+        delivery.handovers
+    );
+    ensure!(
+        delivery.owed.iter().any(|owed| owed.recipient == PLANNER),
+        "the message not pending for the address"
+    );
+    let as_ops = world.engine.confirm("ops", std::slice::from_ref(&key));
+    ensure!(as_ops.refusal().is_some(), "confirmed as ops: {as_ops:?}");
+    let none = world
+        .engine
+        .confirm(PLANNER, &["message/east/planner/ffffffff".to_string()]);
+    ensure!(
+        none.refusal().is_some(),
+        "an unknown key confirmed: {none:?}"
+    );
+    match world.engine.confirm(PLANNER, std::slice::from_ref(&key)) {
+        Answer::Confirmed { confirmed, .. } if confirmed.len() == 1 && !confirmed[0].before => {}
+        other => return Err(format!("the confirm answered {other:?}")),
+    }
+    ensure!(
+        world
+            .owing()
+            .deliveries
+            .get(&key)
+            .is_some_and(|delivery| delivery.owed.is_empty()),
+        "the message still owed once confirmed"
+    );
     Ok(())
 }

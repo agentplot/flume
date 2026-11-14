@@ -104,8 +104,9 @@ pub fn person(answer: &Answer) -> String {
             recipient,
             ends,
             waiting,
+            messages,
         } => {
-            if ends.is_empty() {
+            if ends.is_empty() && messages.is_empty() {
                 lines.push(format!("nothing pending for {recipient}"));
             }
             for collected in ends {
@@ -124,6 +125,25 @@ pub fn person(answer: &Answer) -> String {
                     collected.end.key,
                     collected.place
                 ));
+            }
+            for message in messages {
+                let state = match (message.confirmed, message.expired) {
+                    (true, _) => "; confirmed".to_string(),
+                    (false, expired) => format!(
+                        "{}; confirm: {}",
+                        if expired { "; expired" } else { "" },
+                        flume_core::confirm_command(recipient, &[message.key.as_str()])
+                    ),
+                };
+                lines.push(format!(
+                    "message from {} at {} [{}]{state}",
+                    message.from.as_deref().unwrap_or("no one named"),
+                    message.at,
+                    message.key
+                ));
+                for line in message.words.lines() {
+                    lines.push(format!("  {line}"));
+                }
             }
             for place in waiting {
                 lines.extend(waiting_place_lines(recipient, place));
@@ -3215,6 +3235,7 @@ mod tests {
                 expired: false,
             }],
             waiting: vec![],
+            messages: vec![],
         };
         assert_eq!(
             person(&inbox),
@@ -4122,6 +4143,7 @@ mod tests {
                 expired: false,
             }],
             waiting: vec![],
+            messages: vec![],
         };
         assert_eq!(
             person(&inbox),
@@ -4342,6 +4364,7 @@ mod tests {
                 expired: false,
             }],
             waiting: vec![],
+            messages: vec![],
         };
         assert_eq!(
             person(&inbox),
@@ -4387,6 +4410,7 @@ mod tests {
                     lapsed: None,
                 }),
             }],
+            messages: vec![],
         };
         assert_eq!(
             person(&inbox),

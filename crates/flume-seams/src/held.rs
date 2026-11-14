@@ -417,6 +417,17 @@ pub struct Owing {
     pub deliveries: BTreeMap<String, EndDelivery>,
     /// Each name a recipient has confirmed under (weir 106).
     pub known: std::collections::BTreeSet<String>,
+    /// Each delivery's key in the order the host's deliveries recorded
+    /// them, by which a recipient takes what is pending for it (43, 214).
+    pub order: Vec<String>,
+}
+
+impl Owing {
+    /// Each delivery in the order the host's deliveries recorded them
+    /// (43, 214).
+    pub fn in_order(&self) -> impl Iterator<Item = &EndDelivery> {
+        self.order.iter().filter_map(|key| self.deliveries.get(key))
+    }
 }
 
 /// One end's delivery as the host's deliveries hold it at the time it was
@@ -430,6 +441,8 @@ pub struct EndDelivery {
     /// way to confirm it, which a notice adds for the recipient it goes
     /// to (43; weir 100; core.11).
     pub message: String,
+    /// When it was recorded (C.8; weir 100).
+    pub recorded_at: Seconds,
     pub expires_at: Seconds,
     /// Each reader that has not confirmed it, in its readers' order.
     pub owed: Vec<OwedTo>,

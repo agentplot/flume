@@ -211,16 +211,21 @@ pub fn owing(records: &[Record], now: Seconds) -> Owing {
     let at = |time: &weir_delivery::Time| seconds(time.as_str()).unwrap_or_default();
     let mut deliveries: BTreeMap<String, EndDelivery> = BTreeMap::new();
     let mut known = std::collections::BTreeSet::new();
+    let mut order: Vec<String> = vec![];
     for record in records {
         match record {
             Record::Delivery(delivery) => {
                 let key = delivery.key().to_string();
+                if !deliveries.contains_key(&key) {
+                    order.push(key.clone());
+                }
                 deliveries
                     .entry(key.clone())
                     .or_insert_with(|| EndDelivery {
                         key,
                         readers: delivery.readers().iter().map(ToString::to_string).collect(),
                         message: delivery.message().to_string(),
+                        recorded_at: at(delivery.recorded_at()),
                         expires_at: at(delivery.expires_at()),
                         owed: vec![],
                         confirmed: vec![],
@@ -283,7 +288,11 @@ pub fn owing(records: &[Record], now: Seconds) -> Owing {
                 .unwrap_or(usize::MAX)
         });
     }
-    Owing { deliveries, known }
+    Owing {
+        deliveries,
+        known,
+        order,
+    }
 }
 
 /// A place's token, eight hex characters of `secret`, by which its ends'

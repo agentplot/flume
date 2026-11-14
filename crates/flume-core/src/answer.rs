@@ -63,6 +63,11 @@ pub enum Answer {
         ends: Vec<Collected>,
         #[serde(default)]
         waiting: Vec<WaitingPlace>,
+        /// Every message pending at the recipient, in the order recorded,
+        /// each handed to it by the inbox; none where the inbox names a
+        /// place (43, 214).
+        #[serde(default)]
+        messages: Vec<CollectedMessage>,
     },
     /// Each delivery key a recipient confirmed, with when, and whether it
     /// had confirmed it before (43; weir 102).
@@ -729,6 +734,24 @@ pub struct Collected {
     pub confirmed: bool,
     /// It is expired for the recipient: pending past the host's span
     /// since it was read (43; weir 104).
+    #[serde(default)]
+    pub expired: bool,
+}
+
+/// A message the inbox collected: its delivery's key, the address it
+/// waits at, who sent it where its first line names one, when it was
+/// recorded, its words, and whether this inbox confirmed it and it is
+/// expired for the recipient (43, 214; weir 103, 104).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CollectedMessage {
+    pub key: String,
+    pub address: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
+    pub at: Seconds,
+    pub words: String,
+    #[serde(default)]
+    pub confirmed: bool,
     #[serde(default)]
     pub expired: bool,
 }

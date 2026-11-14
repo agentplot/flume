@@ -1097,6 +1097,15 @@ pub fn full() -> Vec<(&'static str, Answer)> {
                         lapsed: None,
                     }),
                 }],
+                messages: vec![CollectedMessage {
+                    key: "message/east/planner/0a1b2c3d".into(),
+                    address: "east/planner".into(),
+                    from: Some("ops".into()),
+                    at: 120,
+                    words: "the nightly job failed".into(),
+                    confirmed: true,
+                    expired: false,
+                }],
             },
         ),
         (
@@ -1128,6 +1137,16 @@ pub fn full() -> Vec<(&'static str, Answer)> {
                     key: "stage/code/1/ended-short".parse().unwrap(),
                     what: "code delivered".into(),
                 }],
+            },
+        ),
+        (
+            "messaged",
+            Answer::Messaged {
+                key: "message/east/planner/0a1b2c3d".into(),
+                address: "east/planner".into(),
+                found: Found::Unwoken,
+                run: Some(PlaceId::new("/r/places/turn--east-planner")),
+                why: Some("the run of east/planner was not launched".into()),
             },
         ),
         (
@@ -2670,6 +2689,14 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "inbox.ends[].name",
             "inbox.ends[].place",
             "inbox.recipient",
+            "inbox.messages",
+            "inbox.messages[].address",
+            "inbox.messages[].at",
+            "inbox.messages[].confirmed",
+            "inbox.messages[].expired",
+            "inbox.messages[].from",
+            "inbox.messages[].key",
+            "inbox.messages[].words",
         ],
     ),
     (
@@ -2997,6 +3024,17 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "held.standing.session.name",
             "held.standing.stream",
             "held.standing.terminal",
+        ],
+    ),
+    (
+        "messaged",
+        &[
+            "messaged",
+            "messaged.address",
+            "messaged.found",
+            "messaged.key",
+            "messaged.run",
+            "messaged.why",
         ],
     ),
     (

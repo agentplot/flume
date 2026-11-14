@@ -2024,7 +2024,7 @@ fn a_sessions_own_inbox(_: &()) -> Outcome {
     world.terminal.set_session(Some("ops"));
     let answer = world.engine.session_inbox().ok_or("no inbox")?;
     ensure!(
-        matches!(&answer, Answer::Inbox { recipient, ends, waiting }
+        matches!(&answer, Answer::Inbox { recipient, ends, waiting, .. }
             if recipient == "ops" && ends.is_empty() && waiting.is_empty()),
         "the session's inbox: {answer:?}"
     );

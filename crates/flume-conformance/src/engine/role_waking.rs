@@ -72,7 +72,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_wake_while_the_run_waits_for_room,
         },
         Scenario {
-            name: "role waking: a run's inbox with no recipient named, confirming on receipt, collects every end pending for its address, each handed to it by the inbox and confirmed by it",
+            name: "role waking: a run's inbox with no recipient named, confirming on receipt, collects every end and every message pending for its address, each handed to it by the inbox and confirmed by it, a role's messages waiting at its address",
             cites: &["132", "43"],
             run: the_run_starts,
         },
@@ -743,11 +743,41 @@ fn the_run_starts(_: &()) -> Outcome {
     let recipient = run
         .recipient(Some(&planner_id()))
         .ok_or("the run names no recipient")?;
-    let ends = match run.inbox(&recipient, None, true) {
-        Answer::Inbox { ends, .. } => ends,
+    let message = match world.engine.message_address(
+        PLANNER,
+        "the nightly job failed",
+        None,
+        &flume_core::Answering {
+            key: None,
+            by: Some("ops".into()),
+        },
+    ) {
+        Answer::Messaged { key, .. } => key,
+        other => return Err(format!("the message answered {other:?}")),
+    };
+    let (ends, messages) = match run.inbox(&recipient, None, true) {
+        Answer::Inbox { ends, messages, .. } => (ends, messages),
         other => return Err(format!("the inbox answered {other:?}")),
     };
     ensure_eq!(ends.len(), 1, "the ends collected");
+    ensure_eq!(
+        messages
+            .iter()
+            .map(|collected| (collected.key.as_str(), collected.confirmed))
+            .collect::<Vec<_>>(),
+        vec![(message.as_str(), true)],
+        "the messages collected and confirmed"
+    );
+    let owing = world.owing();
+    let delivery = owing.deliveries.get(&message).ok_or("no message")?;
+    ensure!(
+        delivery.owed.is_empty()
+            && delivery
+                .handovers
+                .iter()
+                .any(|handover| handover.recipient == PLANNER && handover.by == DeliveredBy::Inbox),
+        "the message not handed and confirmed: {delivery:?}"
+    );
     let held = world.held(&one).ok_or("no place")?;
     let statuses: Vec<_> = held
         .ends

@@ -16,7 +16,7 @@
 //! an address, each recording nothing (42, 53, 193).
 
 use crate::deliveries::{time, token, update};
-use crate::{Answer, Answering, Engine, Found, Woke};
+use crate::{Answer, Answering, CollectedMessage, Engine, Found, Woke};
 use flume_seams::*;
 use weir_delivery::{Record, Recorded};
 
@@ -51,7 +51,76 @@ pub fn message_words(address: &str, from: Option<&str>, words: &str) -> String {
     format!("{first}\n{words}")
 }
 
+/// Who sent a message, where its first line names one, and its words, as
+/// its delivery's message holds them (214, C.7).
+pub fn sent(message: &str) -> (Option<String>, String) {
+    let (first, words) = message.split_once('\n').unwrap_or((message, ""));
+    let from = first
+        .strip_suffix(':')
+        .and_then(|first| first.rsplit_once(" messages "))
+        .map(|(from, _)| from.to_string());
+    (from, words.to_string())
+}
+
 impl Engine {
+    /// Collects every message pending for `recipient`, in the order the
+    /// host's deliveries recorded them, each handed to it `by` a way in
+    /// one write, and confirmed on receipt where `confirms`; one the
+    /// recipient confirmed before, or whose hand-over weir refused, is
+    /// left out (43, 214; weir 102, 103).
+    pub(crate) fn collect_messages(
+        &self,
+        recipient: &str,
+        by: DeliveredBy,
+        confirms: bool,
+    ) -> Vec<CollectedMessage> {
+        let owing = self.owing();
+        let pending: Vec<(EndDelivery, bool)> = owing
+            .in_order()
+            .filter(|delivery| is_message_key(&delivery.key))
+            .filter_map(|delivery| {
+                let owed = delivery
+                    .owed
+                    .iter()
+                    .find(|owed| owed.recipient == recipient)?;
+                Some((delivery.clone(), owed.expired))
+            })
+            .collect();
+        if pending.is_empty() {
+            return vec![];
+        }
+        let keys: Vec<String> = pending
+            .iter()
+            .map(|(delivery, _)| delivery.key.clone())
+            .collect();
+        let handed = self.hand_over(&keys, recipient, by, self.host.now(), confirms);
+        let mut collected = vec![];
+        for ((delivery, expired), handed) in pending.into_iter().zip(handed) {
+            match handed {
+                Ok(true) => {}
+                Ok(false) => continue,
+                Err(why) => {
+                    self.host.log(&format!(
+                        "the message {} was not handed to {recipient} by the inbox: {why}",
+                        delivery.key
+                    ));
+                    continue;
+                }
+            }
+            let (from, words) = sent(&delivery.message);
+            collected.push(CollectedMessage {
+                key: delivery.key,
+                address: recipient.into(),
+                from,
+                at: delivery.recorded_at,
+                words,
+                confirmed: confirms,
+                expired,
+            });
+        }
+        collected
+    }
+
     /// Messages the role's address `address` `words`, from the recipient
     /// `answering` names as the sending command's: refused, recording
     /// nothing, with a bound or a key, or for an address no source of the
@@ -250,6 +319,17 @@ mod tests {
             "message/east/planner/0a1b2c3d"
         );
         assert!(is_message_key("message/east/planner/0a1b2c3d"));
+        assert_eq!(
+            sent("ops messages east/planner:\nthe nightly job failed\nand more"),
+            (
+                Some("ops".to_string()),
+                "the nightly job failed\nand more".to_string()
+            )
+        );
+        assert_eq!(
+            sent("A message to east/planner:\nlook"),
+            (None, "look".to_string())
+        );
         assert!(!is_message_key("fix--one/0a1b2c3d/stage/code/1/delivered"));
     }
 }
