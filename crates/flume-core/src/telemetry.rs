@@ -11,6 +11,113 @@ use flume_seams::{
     StopKind, TraceHeld, Verdict, WaitHeld, WaitParty, Waits,
 };
 
+/// The resource attributes an agent of flume's is given: its place's
+/// facts, its stage and its start, in this order (219; design 9).
+const AGENTS_KEYS: [&str; 10] = [
+    keys::REPOSITORY,
+    keys::KIND,
+    keys::KIND_VERSION,
+    keys::PLACE,
+    keys::BASE,
+    keys::STREAM,
+    keys::INTENT,
+    keys::MARK,
+    keys::STAGE,
+    keys::START,
+];
+
+/// The variable an agent's telemetry reads its resource from, and the one
+/// it reads its parent span from (219).
+pub(crate) const RESOURCE_VARIABLE: &str = "OTEL_RESOURCE_ATTRIBUTES";
+pub(crate) const PARENT_VARIABLE: &str = "TRACEPARENT";
+
+impl crate::Engine {
+    /// Gives the agent of the start under `identity`, whose command's
+    /// environment is `env`, its place's facts in `OTEL_RESOURCE_ATTRIBUTES`
+    /// after the pairs its environment, else the login environment, gives
+    /// there, any pair of a key flume names taken out of those, and, while
+    /// traces go, `TRACEPARENT` naming its start's span in its place's
+    /// trace; nothing while flume sends nothing. Neither is in the start's
+    /// record (161, 219; core.10, core.30).
+    pub(crate) fn give_telemetry(
+        &self,
+        id: &flume_seams::PlaceId,
+        identity: &flume_seams::Identity,
+        env: &mut std::collections::BTreeMap<String, String>,
+    ) {
+        let sends = self.telemetry.sends();
+        if !sends.any() {
+            return;
+        }
+        let Some(read) = self.store.read(id) else {
+            return;
+        };
+        let held = read.state;
+        let Some(start) = held
+            .stages
+            .iter()
+            .filter_map(|stage| stage.start.as_ref())
+            .find(|start| start.identity == *identity)
+        else {
+            return;
+        };
+        let given = env
+            .get(RESOURCE_VARIABLE)
+            .cloned()
+            .or_else(|| self.host.login(RESOURCE_VARIABLE));
+        let facts = stage_attributes(&place_attributes(&held), &identity.stage, start.n);
+        env.insert(RESOURCE_VARIABLE.into(), resource(given.as_deref(), &facts));
+        match (&held.trace, &start.span) {
+            (Some(trace), Some(span)) if sends.traces => {
+                env.insert(
+                    PARENT_VARIABLE.into(),
+                    format!("00-{}-{span}-01", trace.trace),
+                );
+            }
+            _ => {}
+        }
+    }
+}
+
+/// `OTEL_RESOURCE_ATTRIBUTES` as an agent of flume's is given it: the
+/// pairs `given` holds, each whose key flume names taken out, then the
+/// place's `facts` in [`AGENTS_KEYS`]' order, each value percent-encoded
+/// as OpenTelemetry's resource reads it (219; design 9).
+fn resource(given: Option<&str>, facts: &Attributes) -> String {
+    let mut pairs: Vec<String> = given
+        .unwrap_or_default()
+        .split(',')
+        .filter(|pair| !pair.trim().is_empty())
+        .filter(|pair| {
+            let key = pair.split('=').next().unwrap_or_default().trim();
+            !AGENTS_KEYS.contains(&key)
+        })
+        .map(str::to_string)
+        .collect();
+    for key in AGENTS_KEYS {
+        if let Some(value) = facts.get(key) {
+            pairs.push(format!("{key}={}", encode(&value.to_string())));
+        }
+    }
+    pairs.join(",")
+}
+
+/// A resource attribute's value, percent-encoded where the variable's
+/// own syntax would read it (W3C baggage octets), as sluice encodes its
+/// own (219).
+fn encode(value: &str) -> String {
+    let mut encoded = String::new();
+    for byte in value.bytes() {
+        match byte {
+            b',' | b'=' | b';' | b'%' | b'"' | b'\\' | 0..=0x20 | 0x7f.. => {
+                encoded.push_str(&format!("%{byte:02X}"));
+            }
+            _ => encoded.push(byte as char),
+        }
+    }
+    encoded
+}
+
 /// The hex digits of a trace's id and of a span's (217).
 pub(crate) const TRACE_DIGITS: usize = 32;
 pub(crate) const SPAN_DIGITS: usize = 16;
@@ -1425,5 +1532,101 @@ pub(crate) mod tests {
         assert_eq!((from, to), (asked, answered));
         assert_eq!(attributes[keys::WAIT_MOVE], text("asking"));
         assert_eq!(attributes[keys::STAGE], text("code"));
+    }
+    #[test]
+    fn the_agents_resource_keeps_its_own_pairs_before_the_places() {
+        // While flume sends, the agent is given its account's pairs, any of
+        // a key flume names taken out, then its place's facts with its
+        // stage and start, once each, and, while traces go, a TRACEPARENT
+        // naming its start's span in its place's trace; neither is in its
+        // start's record. With traces off, no TRACEPARENT; sending
+        // nothing, neither (219; core.10, core.30).
+        use flume_seams::{Account, Pool, Sends, Strategy};
+        let world = World::new();
+        world.telemetry.set_sends(Sends::ALL);
+        world.host.set_pool(
+            "work",
+            Some(Pool {
+                strategy: Strategy::FillFirst,
+                threshold: None,
+                accounts: vec![Account {
+                    name: "work-1".into(),
+                    program: "agent".into(),
+                    env: BTreeMap::from([(
+                        RESOURCE_VARIABLE.to_string(),
+                        "team=ops,flume.stage=x".to_string(),
+                    )]),
+                    agents: None,
+                    usage: None,
+                }],
+            }),
+        );
+        world.host.set_host_pool(Some("work"));
+        let id = world.launch("one");
+        let held = world.store.held(&id).unwrap();
+        let start = held.stages[0].start.clone().unwrap();
+        let (command, _) = world.terminal.opened(&start.identity).expect("opened");
+        assert_eq!(
+            command.env[RESOURCE_VARIABLE],
+            "team=ops,flume.repository=r,flume.kind=fix,flume.kind.version=1,\
+             flume.place=one,flume.base=main,flume.stream=default,flume.intent=base:r:main,\
+             flume.stage=code,flume.start=1"
+        );
+        let trace = held.trace.clone().unwrap();
+        assert_eq!(
+            command.env[PARENT_VARIABLE],
+            format!("00-{}-{}-01", trace.trace, start.span.clone().unwrap())
+        );
+        for name in [RESOURCE_VARIABLE, PARENT_VARIABLE] {
+            assert!(!start.start_record.env.contains_key(name), "{name}");
+        }
+        assert!(
+            start.from.contains_key(&format!("env.{RESOURCE_VARIABLE}")),
+            "the account's variable named with its layer: {:?}",
+            start.from
+        );
+
+        let world = World::new();
+        world.telemetry.set_sends(Sends {
+            traces: false,
+            ..Sends::ALL
+        });
+        world
+            .host
+            .set_login(RESOURCE_VARIABLE, Some("team=ops,flume.place=other"));
+        let id = world.launch("two");
+        let start = world.store.held(&id).unwrap().stages[0]
+            .start
+            .clone()
+            .unwrap();
+        let (command, _) = world.terminal.opened(&start.identity).unwrap();
+        assert!(
+            command.env[RESOURCE_VARIABLE].starts_with("team=ops,flume.repository=r,"),
+            "the login environment's pairs first: {}",
+            command.env[RESOURCE_VARIABLE]
+        );
+        assert_eq!(
+            command.env[RESOURCE_VARIABLE]
+                .matches("flume.place=")
+                .count(),
+            1
+        );
+        assert!(!command.env.contains_key(PARENT_VARIABLE));
+
+        let world = World::new();
+        let id = world.launch("three");
+        let start = world.store.held(&id).unwrap().stages[0]
+            .start
+            .clone()
+            .unwrap();
+        let (command, _) = world.terminal.opened(&start.identity).unwrap();
+        assert!(!command.env.contains_key(RESOURCE_VARIABLE));
+        assert!(!command.env.contains_key(PARENT_VARIABLE));
+    }
+
+    #[test]
+    fn a_value_is_encoded_where_the_variables_syntax_would_read_it() {
+        assert_eq!(encode("fix/one"), "fix/one");
+        assert_eq!(encode("a,b=c d"), "a%2Cb%3Dc%20d");
     }
 }

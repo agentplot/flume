@@ -22,6 +22,13 @@ pub const STAGE_VARIABLE: &str = "FLUME_STAGE";
 /// record holds whatever gives them (record 0018).
 pub const TERMINALS_OWN: [&str; 2] = ["PATH", "SHELL"];
 
+/// The variables of an agent's telemetry flume sets while it sends, over
+/// what its account gives there, which no start's record holds and no
+/// started ack compares, so telemetry changes no ack; an account's value
+/// of either is named with its layer as any of its variables is (161,
+/// 216, 219).
+pub const TELEMETRYS_OWN: [&str; 2] = ["OTEL_RESOURCE_ATTRIBUTES", "TRACEPARENT"];
+
 /// A variable's digest for a start: HMAC-SHA256 keyed by the start's
 /// secret over the variable's name, a zero byte and its value, in hex, so
 /// no value is kept and no guessed value is tested without the secret
@@ -64,7 +71,9 @@ pub(crate) fn start_record(
         .iter()
         .map(|(name, value)| (name.as_str(), value.as_str()))
         .filter(|(name, _)| {
-            !TERMINALS_OWN.contains(name) && !withheld.iter().any(|kept| kept == name)
+            !TERMINALS_OWN.contains(name)
+                && !TELEMETRYS_OWN.contains(name)
+                && !withheld.iter().any(|kept| kept == name)
         })
         .chain(flumes)
         .map(|(name, value)| (name.to_string(), variable_digest(secret, name, value)))
@@ -117,6 +126,14 @@ mod tests {
             ("PATH".to_string(), "/bin".to_string()),
             ("SHELL".to_string(), "/bin/sh".to_string()),
             ("AGENT_TOKEN".to_string(), "t".to_string()),
+            (
+                "OTEL_RESOURCE_ATTRIBUTES".to_string(),
+                "team=ops".to_string(),
+            ),
+            (
+                "TRACEPARENT".to_string(),
+                "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01".to_string(),
+            ),
         ]);
         let record = start_record(
             "agent",
