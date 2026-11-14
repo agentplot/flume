@@ -1,8 +1,9 @@
 //! The terminal seam's scenarios (B.5, 94 to 98, 122, 136 to 139, 7),
 //! a recipient's session reached by its name (43, 132), a part's agents
 //! given by their names (132, C.5), a part shown to a person in each
-//! view the terminal offers (187), whether a part runs (201), and
-//! whether the terminal hands a running agent words (95).
+//! view the terminal offers (187), whether a part runs (201), whether
+//! the terminal hands a running agent words (95), and its relay of an
+//! agent's screen and a person's keys, or its refusal of one (221, 222).
 
 use crate::engine::world::World;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -10,6 +11,7 @@ use flume_core::Engine;
 use flume_seams::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 pub trait TerminalHarness {
     type Seam: Terminal + ?Sized;
@@ -127,6 +129,13 @@ pub trait TerminalHarness {
     /// started one, none by default, for a terminal that holds no agent
     /// a name finds (132, C.5).
     fn named_agent(&self, _session: &str, _name: &str) -> bool {
+        false
+    }
+
+    /// Whether the terminal relays an agent's screen and a person's
+    /// keys; none by default, for a terminal that offers no relay (221,
+    /// 222).
+    fn relays(&self) -> bool {
         false
     }
 }
@@ -269,7 +278,112 @@ pub fn scenarios<H: TerminalHarness>() -> Vec<Scenario<H>> {
             cites: &["95", "53", "198"],
             run: sends_says_whether_it_hands_words::<H>,
         },
+        Scenario {
+            name: "terminal: relay (221, 222) gives what the terminal shows of an open agent, types a person's text onto what it holds typed with nothing cleared and enter submits both together, shows what was typed on a screen read within ten seconds, ends nothing when dropped, and reads a closed agent gone",
+            cites: &["107", "136", "95"],
+            run: relay_reads_and_types::<H>,
+        },
+        Scenario {
+            name: "terminal: a terminal that offers no relay (221, 222) refuses the relay of an open agent with words",
+            cites: &["4"],
+            run: relay_refused::<H>,
+        },
     ]
+}
+
+/// How long a relay's typing may take to show on its screen (222).
+const RELAY_SHOWS_WITHIN: Duration = Duration::from_secs(10);
+
+/// The seam-contracts scenario "The relay among the terminal's
+/// scenarios": a relay of an open agent gives a screen; text typed onto
+/// what the agent holds typed clears nothing and shows on a screen read
+/// within ten seconds, and `enter` submits both together; dropping the
+/// handle ends nothing; and a read once the agent is closed answers that
+/// the terminal holds it no more (107, 136, 221, 222).
+fn relay_reads_and_types<H: TerminalHarness>(harness: &H) -> Outcome {
+    if !harness.relays() {
+        return Ok(());
+    }
+    let who = opened(harness, 1)?;
+    harness.leave_typed(&who, "left ");
+    {
+        let mut relay = harness
+            .seam()
+            .relay(&who)
+            .map_err(|refused| format!("the relay of an open agent was refused: {refused}"))?;
+        let every = relay.every();
+        ensure!(
+            every > Duration::ZERO && every <= RELAY_SHOWS_WITHIN,
+            "the relay states {every:?}"
+        );
+        let first = relay.screen();
+        ensure!(
+            matches!(first, RelayScreen::Shows { .. }),
+            "the first read of an open agent gave {first:?}"
+        );
+        relay
+            .typed(&Typed::Text("relayed".into()))
+            .map_err(|refused| format!("the text was refused: {refused}"))?;
+        let deadline = Instant::now() + RELAY_SHOWS_WITHIN;
+        loop {
+            match relay.screen() {
+                RelayScreen::Shows { screen } if screen.contains("relayed") => break,
+                read if Instant::now() >= deadline => {
+                    return Err(format!(
+                    "no screen read within {RELAY_SHOWS_WITHIN:?} showed the typed text: {read:?}"
+                ))
+                }
+                _ => std::thread::sleep(every),
+            }
+        }
+        relay
+            .typed(&Typed::Keys(vec![Key::bare(KeyName::Enter)]))
+            .map_err(|refused| format!("enter was refused: {refused}"))?;
+        ensure_eq!(
+            harness.submitted(&who).last().cloned(),
+            Some("left relayed".to_string()),
+            "what the agent took once enter was typed, nothing cleared first"
+        );
+    }
+    ensure!(
+        harness.seam().state(&who) != AgentState::Stopped,
+        "the agent stopped once its relay was dropped"
+    );
+    if !harness.closes() {
+        return Ok(());
+    }
+    let mut relay = harness
+        .seam()
+        .relay(&who)
+        .map_err(|refused| format!("the second relay was refused: {refused}"))?;
+    ensure_eq!(harness.seam().close(&who), Closed::Closed, "close");
+    let deadline = Instant::now() + RELAY_SHOWS_WITHIN;
+    loop {
+        match relay.screen() {
+            RelayScreen::Gone => return Ok(()),
+            read if Instant::now() >= deadline => {
+                return Err(format!("a closed agent's relay read {read:?}"))
+            }
+            _ => std::thread::sleep(relay.every()),
+        }
+    }
+}
+
+/// The seam-contracts scenario "The relay refused among the terminal's
+/// scenarios": a terminal that offers no relay refuses the relay of an
+/// open agent, with words (4, 222).
+fn relay_refused<H: TerminalHarness>(harness: &H) -> Outcome {
+    if harness.relays() {
+        return Ok(());
+    }
+    let who = opened(harness, 1)?;
+    match harness.seam().relay(&who) {
+        Err(refused) => {
+            ensure!(!refused.trim().is_empty(), "a relay refused with no words");
+            Ok(())
+        }
+        Ok(_) => Err("a terminal that offers no relay relayed".into()),
+    }
 }
 
 /// The seam-contracts spec's scenarios of whether a terminal hands a
