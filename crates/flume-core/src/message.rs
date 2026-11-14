@@ -178,6 +178,25 @@ impl Engine {
             RoleEntry::Standing(_) => (Found::Standing, None, None),
             RoleEntry::Carried(_) => (Found::Carried, None, None),
         };
+        // A session that waits takes its batch now, the message among it
+        // (214; design 4).
+        let found = match found {
+            Found::Live | Found::Standing => {
+                self.hand_batch_to(address);
+                let handed = self.owing().deliveries.get(&key).is_some_and(|delivery| {
+                    delivery
+                        .handovers
+                        .iter()
+                        .any(|handover| handover.recipient == address)
+                });
+                if handed {
+                    Found::Handed
+                } else {
+                    found
+                }
+            }
+            found => found,
+        };
         Answer::Messaged {
             key,
             address: address.into(),

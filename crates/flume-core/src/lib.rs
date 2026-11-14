@@ -13,6 +13,7 @@ pub mod address;
 mod agent_acts;
 mod answer;
 mod base;
+mod batch;
 mod clues;
 mod deliver;
 pub mod deliveries;

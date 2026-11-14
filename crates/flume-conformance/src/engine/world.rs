@@ -137,6 +137,17 @@ impl World {
         PlaceId::new(place_location(REPOSITORY, &format!("{kind}--{name}")))
     }
 
+    /// Every item handed to the session named `name`, in order: each text
+    /// sent to it split at its blank lines, since a batch joins its items
+    /// by one (43, 214).
+    pub fn notice_items(&self, name: &str) -> Vec<String> {
+        self.terminal
+            .notices(name)
+            .iter()
+            .flat_map(|text| text.split("\n\n").map(str::to_string).collect::<Vec<_>>())
+            .collect()
+    }
+
     pub fn held(&self, place: &PlaceId) -> Option<HeldState> {
         self.store.held(place)
     }

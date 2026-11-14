@@ -53,6 +53,7 @@ struct TerminalState {
     /// The next send to a session refused with these words, once what
     /// runs while it is in flight has run.
     send_refused: Option<(DuringSend, String)>,
+    during_send: Option<DuringSend>,
     open_refusal: Option<String>,
     close_refused: BTreeSet<String>,
     sent: Vec<(String, String)>,
@@ -221,6 +222,7 @@ impl FakeTerminal {
                 comes_up: AgentState::Waiting,
                 sends: true,
                 send_refused: None,
+                during_send: None,
                 open_refusal: None,
                 close_refused: BTreeSet::new(),
                 sent: vec![],
@@ -295,6 +297,12 @@ impl FakeTerminal {
     /// as a terminal whose call fails before it types (43, 75).
     pub fn refuse_next_send(&self, reason: &str, during: impl FnOnce() + Send + 'static) {
         lock(&self.state).send_refused = Some((Box::new(during), reason.into()));
+    }
+
+    /// The next send to a session runs `during`, as what happens while it
+    /// is in flight, and then goes on as it would (43, 75).
+    pub fn during_next_send(&self, during: impl FnOnce() + Send + 'static) {
+        lock(&self.state).during_send = Some(Box::new(during));
     }
 
     /// The terminal cannot send to a running agent: it says it sends
@@ -691,6 +699,10 @@ impl Terminal for FakeTerminal {
         if let Some((during, reason)) = refused {
             during();
             return ToSession::Refused { reason };
+        }
+        let during = lock(&self.state).during_send.take();
+        if let Some(during) = during {
+            during();
         }
         let agent = lock(&self.state).agent_sessions.get(session).cloned();
         if let Some(key) = agent.filter(|key| self.read(key) != AgentState::Stopped) {

@@ -141,12 +141,16 @@ impl Engine {
 
     /// What a settle of every place does once for the host, after each
     /// place's own steps: each message its reader confirmed let go of, its
-    /// known name kept, and each role's address a message is pending for,
+    /// known name kept; each role's address a message is pending for,
     /// handed to it by nothing, woken where its source gives it a run and
-    /// none stands (43, 132, 214; weir 107).
+    /// none stands; and the batch of every recipient a delivery is pending
+    /// for handed at its wait, so a message to a standing agent or a
+    /// session no place's settle reaches is handed (43, 132, 214; weir
+    /// 107).
     fn settle_host(&self) {
         self.let_go_where(crate::message::is_message_key, "its reader confirmed it");
         self.wake_for_messages();
+        self.hand_batches(None);
     }
 
     /// Where no caller keeps watch over the host, every command of
@@ -165,7 +169,7 @@ impl Engine {
     /// gives what its tidy did.
     pub(crate) fn settle_place(&self, id: &PlaceId) -> Tidied {
         let mut tidied = Tidied::default();
-        self.deliver_ends(id);
+        self.hand_batches(Some(id));
         for _ in 0..STEPS {
             if !self.step(id, &mut tidied) {
                 break;
@@ -173,7 +177,7 @@ impl Engine {
         }
         self.forecast_base(id);
         self.stall(id);
-        self.deliver_ends(id);
+        self.hand_batches(Some(id));
         self.wake_roles(id);
         self.show(id);
         self.start_waiting();

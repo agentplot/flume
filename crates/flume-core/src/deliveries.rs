@@ -23,7 +23,7 @@ use weir_delivery::{Confirmed, Handed, Record, Recorded};
 
 /// How many times a write of the host's deliveries reads again on a
 /// moved version before it says so (75).
-const TRIES: usize = 32;
+pub const TRIES: usize = 32;
 
 /// weir's store seam over flume's store: the host's deliveries document,
 /// read whole and added to at the version read (weir 112, 113).

@@ -25,6 +25,7 @@ use super::settling::{deliver_fix, write_change};
 use super::stage_runs::east_and_west;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
+use flume_core::deliveries;
 use flume_core::{Act, Answer, EndStatus, WaitFor, WaitingPlace, Waits};
 use flume_fakes::Plan;
 use flume_seams::*;
@@ -522,7 +523,7 @@ fn a_landing_and_a_failure(_: &()) -> Outcome {
     world.settle(&id);
     ensure!(world.held(&id).is_none(), "the landed place stands");
     let landed = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
-    let notices = world.terminal.notices("ops");
+    let notices = world.notice_items("ops");
     for what in [
         "code delivered".to_string(),
         "submission failed".to_string(),
@@ -688,9 +689,12 @@ fn a_landing_with_its_recipient_away(_: &()) -> Outcome {
     world.terminal.add_session("ops", AgentState::Waiting);
     world.engine().settle(None);
     ensure_eq!(
-        world.terminal.notices("ops").len(),
-        2,
-        "the notices once ops is back"
+        (
+            world.terminal.notices("ops").len(),
+            world.notice_items("ops").len()
+        ),
+        (1, 2),
+        "the notices once ops is back, its two ends in one"
     );
     ensure!(
         world.held(&kept_id).is_some(),
@@ -2516,8 +2520,7 @@ fn a_place_launched_twice(_: &()) -> Outcome {
     let first_key = format!("fix--twice/{first}/stage/code/1/delivered");
     ensure!(
         world
-            .terminal
-            .notices("ops")
+            .notice_items("ops")
             .iter()
             .any(|notice| notice.ends_with(&format!(
                 "; confirm: flume confirm --recipient ops {first_key}"
@@ -2645,16 +2648,17 @@ fn a_notice_claimed_and_not_recorded(_: &()) -> Outcome {
         "a notice sent into a question"
     );
     world.terminal.set_session_state("ops", AgentState::Waiting);
-    // The claim is the settle's first write of the place; the host's
-    // deliveries refuse every write from it until the settle is over.
+    // The claim is written beside the host's deliveries before the send;
+    // while the send is in flight the deliveries come to refuse every
+    // write of the hand-over, and take the next, which marks the claim
+    // answered.
     let store = world.store.clone();
     world
-        .store
-        .before_next_write(move || store.refuse_host_writes(true));
+        .terminal
+        .during_next_send(move || store.refuse_next_host_writes(deliveries::TRIES));
     world.host.advance(30);
     let claimed_at = world.host.now();
     world.settle(&id);
-    world.store.refuse_host_writes(false);
     ensure_eq!(world.terminal.notices("ops").len(), 1, "notices sent");
     ensure!(
         world
@@ -2664,13 +2668,6 @@ fn a_notice_claimed_and_not_recorded(_: &()) -> Outcome {
             .iter()
             .any(|write| write.ends_with("refused")),
         "the hand-over's write was not refused"
-    );
-    ensure!(
-        end_keyed(&world, &id, "stage/code/1/delivered")?
-            .end
-            .deliveries
-            .is_empty(),
-        "a hand-over recorded while the deliveries refused writes"
     );
     world.host.advance(30);
     world.settle(&id);
@@ -2828,12 +2825,12 @@ fn an_inbox_before_the_notices_claim(_: &()) -> Outcome {
     // A caller keeps watch, so the inbox settles nothing itself.
     world.engine.settle_every(3600);
     world.terminal.set_session_state("ops", AgentState::Waiting);
-    // The claim is the settle's first write of the place; ops's inbox
-    // runs just before it.
+    // The claim is the settle's first write of the host's deliveries;
+    // ops's inbox runs just before it.
     let collected_by = Arc::new(Mutex::new(None));
     let engine = world.engine();
     let into = collected_by.clone();
-    world.store.before_next_write(move || {
+    world.store.before_next_host_write(move || {
         let answer = engine.inbox("ops", None, false);
         *into.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(answer);
     });

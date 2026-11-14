@@ -1010,8 +1010,9 @@ pub struct Delivery {
     pub by: DeliveredBy,
 }
 
-/// What handed an end over: a notice through the terminal, a wait by
-/// place, the inbox, or a session's start collecting it (43, C.4).
+/// What handed an end or a message over: a notice through the terminal,
+/// a wait by place, the inbox, a session's start collecting it, or a
+/// message handed into its address's session at its wait (43, 214, C.4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeliveredBy {
@@ -1019,6 +1020,7 @@ pub enum DeliveredBy {
     Wait,
     Inbox,
     SessionStart,
+    Message,
 }
 
 impl DeliveredBy {
@@ -1030,6 +1032,7 @@ impl DeliveredBy {
             DeliveredBy::Wait => "wait",
             DeliveredBy::Inbox => "inbox",
             DeliveredBy::SessionStart => "session-start",
+            DeliveredBy::Message => "message",
         }
     }
 
@@ -1041,6 +1044,7 @@ impl DeliveredBy {
             DeliveredBy::Wait,
             DeliveredBy::Inbox,
             DeliveredBy::SessionStart,
+            DeliveredBy::Message,
         ]
         .into_iter()
         .find(|by| by.way() == way)
