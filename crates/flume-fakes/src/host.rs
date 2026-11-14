@@ -4,8 +4,8 @@ use flume_seams::{
     ConfigLayer, ConfigValue, Host, HostConfiguration, HostSettings, HostSource, HostSourceRead,
     KindSessions, KindSettings, LabelFrom, LabelHeld, NamedBy, Pool, PoolFrom, PoolNamed,
     ProfileHeld, RepositoryName, RoleEntry, RoleRefused, RoleRun, RolesUnread, RoomGuard, Seconds,
-    Secret, Settings, Share, StandingAgent, Stream, StreamDisplay, StreamFrom, StreamHeld, Usage,
-    View, ViewHeld, DEFAULT_STREAM,
+    Secret, Settings, Share, StandingAgent, Stream, StreamDisplay, StreamFrom, StreamHeld,
+    TelemetryTable, Usage, View, ViewHeld, DEFAULT_STREAM,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex};
@@ -72,6 +72,8 @@ struct HostState {
     bound: Option<u32>,
     /// The host's span for an end pending for a recipient (43, C.7).
     ends_expire: Seconds,
+    /// The managed layer's `[telemetry]`, none until set (216, C.7).
+    telemetry: Option<TelemetryTable>,
     recipient: Option<String>,
     /// The agents' settings by kind, for every repository.
     kinds: BTreeMap<String, KindSettings>,
@@ -160,6 +162,7 @@ impl Default for FakeHost {
                 alive: BTreeSet::from(["command-1".to_string()]),
                 bound: None,
                 ends_expire: flume_seams::ENDS_EXPIRE,
+                telemetry: None,
                 recipient: None,
                 kinds: BTreeMap::new(),
                 repos: BTreeMap::new(),
@@ -241,6 +244,11 @@ impl FakeHost {
     /// set (43, C.7).
     pub fn set_ends_expire(&self, span: Seconds) {
         lock(&self.state).ends_expire = span;
+    }
+
+    /// The managed layer's `[telemetry]`, or none (216, C.7).
+    pub fn set_telemetry(&self, table: Option<TelemetryTable>) {
+        lock(&self.state).telemetry = table;
     }
 
     /// The recipient the calling command's environment names, or none.
@@ -621,6 +629,10 @@ impl Host for FakeHost {
 
     fn ends_expire(&self) -> Seconds {
         lock(&self.state).ends_expire
+    }
+
+    fn telemetry(&self) -> Option<TelemetryTable> {
+        lock(&self.state).telemetry.clone()
     }
 
     fn recipient(&self) -> Option<String> {

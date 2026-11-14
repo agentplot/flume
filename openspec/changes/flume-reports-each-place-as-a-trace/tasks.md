@@ -14,7 +14,7 @@ and S129, with record 0067 and rule core.56. The design's numbers are
 
 ## 2. The fakes
 
-- [ ] 2.1 Add `crates/flume-fakes/src/telemetry.rs`, a fake `Telemetry` a test sets the `Sends` of, none by default, keeping every signal it is handed, in order, and read back; and have the fake host script `[telemetry]` and the fake agent a conversation (216, 217). True when `devenv shell -- cargo test -p flume-fakes --test fakes the_fake_telemetry_keeps_every_signal_in_order` passes.
+- [x] 2.1 Add `crates/flume-fakes/src/telemetry.rs`, a fake `Telemetry` a test sets the `Sends` of, none by default, keeping every signal it is handed, in order, and read back; and have the fake host script `[telemetry]` and the fake agent a conversation (216, 217). True when `devenv shell -- cargo test -p flume-fakes --test fakes the_fake_telemetry_keeps_every_signal_in_order` passes.
 
 ## 3. The host's table
 
