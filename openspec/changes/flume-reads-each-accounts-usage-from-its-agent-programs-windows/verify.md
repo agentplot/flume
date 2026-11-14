@@ -1,72 +1,87 @@
 # Verify: flume-reads-each-accounts-usage-from-its-agent-programs-windows
 
-Verified at `3d233282` on
-`change/flume-reads-each-accounts-usage-from-its-agent-programs-windows`,
-against its base `bolt/flumes-settings-read-as-its-records-say` at
-`2d180f0b`, which the branch holds.
+Verified at `77d915c3` on
+`change/flume-reads-each-accounts-usage-from-its-agent-programs-windows`.
+The branch was cut from `bolt/flumes-settings-read-as-its-records-say`
+at `2d180f0b`. The base has since moved to `ea8939fd`, where
+`a-labels-share-is-owed-and-reserved` landed (#73, record 0063).
 
 **Verdict: falls short. Not archived.** The whole checks pass, every
-task is ticked done, and every requirement and scenario of the change's
-nine specs has code and a test that the run passed. But the change
-cannot be archived as it stands: three of its MODIFIED requirements are
-longer than strict validation lets a spec's requirement be, so the
-archive writes specs that fail `root:specs`. The change goes back to its
-code stage.
+task is ticked done, and the code meets every requirement and scenario
+of the change's nine specs. But the branch no longer lands on its base.
+It conflicts with `ea8939fd` in three files. Its host-module delta also
+modifies a requirement the base has since modified, so archiving the
+change now would drop record 0063's words from
+`openspec/specs/host-module/spec.md`, or would force that spec to be
+edited by hand when the base is merged. The change goes back to its code
+stage.
 
-## The shortfall
+## The shortfall: the base moved under the change
 
-`openspec archive` applied the change, and `openspec validate --specs
---strict`, the command `root:specs` runs, then failed three of the 49
-specs, each on one requirement whose text, before its first scenario,
-is over 500 characters:
+### Three files conflict
+
+`sluice exec` reported the conflict before running the checks, and
+`git merge-tree` against `ea8939fd` shows the same three files:
 
 ```
-✗ spec/place-status
-  ⚠ [WARNING] requirements[9]: Requirement text is very long (>500 characters). …
-✗ spec/seam-contracts
-  ⚠ [WARNING] requirements[22]: Requirement text is very long (>500 characters). …
-✗ spec/store-profile
-  ⚠ [WARNING] requirements[2]: Requirement text is very long (>500 characters). …
+would conflict: nix/tests/options.nix, site/src/content/docs/reference/configuration.md, site/src/content/docs/reference/state.md with bolt/flumes-settings-read-as-its-records-say
 ```
 
-| spec | requirement the change modifies | its text |
-|---|---|---|
-| place-status | "Status gives the host's pools" | 602 characters |
-| seam-contracts | "The types of a reading and a move past a threshold" | 631 characters |
-| store-profile | "The host's own documents" | 530 characters |
+Each file holds a part that both changes rewrote. Task 8.1 drops an
+account's `usage` from the case "Only the keys flume reads are declared"
+in `nix/tests/options.nix`. Record 0063's change adds `ends_expire`,
+`owed` and `reserved` to the same case and takes out `reserve` and
+`keep_free`. Task 10.1 and record 0063's change both rewrite the
+configuration and state references.
 
-Each is the text of the change's own MODIFIED block, in
-`specs/<spec>/spec.md` of this change. The archive was taken back off
-the branch, unpushed, and the specs on the branch pass again (49
-passed).
+### One requirement is modified by both changes
 
-`root:changes` passed the change because `openspec validate --changes
---strict` does not hold a delta's requirement to the length a spec's
-requirement is held to; its comment in `moon.yml` says it is there so a
-requirement archive would refuse fails the change's own checks, which
-this one did not catch.
+This change's `specs/host-module/spec.md` modifies "Only the keys flume
+reads are declared". Its text was written against the requirement as it
+stood at `2d180f0b`. At `ea8939fd` the same requirement and its scenario
+"The declared keys" also say that a label's `reserve` and `keep_free`
+pass undeclared (record 0063), and the scenario gives `host`'s
+`ends_expire` and a label's `owed` and `reserved`.
 
-What the code stage must do: shorten each of the three requirements'
-text to 500 characters or fewer, moving its detail into its scenarios or
-splitting it into requirements that each state one behaviour, so that
-`openspec archive` followed by `openspec validate --specs --strict`
-passes.
+- **The change archived over the base's specs** (tried on a copy):
+  `openspec archive` replaces the requirement with this change's text.
+  `openspec validate --specs --strict` passes (49 passed), but the spec
+  loses record 0063's words. The base's spec names `keep_free` or
+  `ends_expire` three times. The result names them once.
+- **The change archived on the branch, then the base merged** (tried
+  with `git merge-file` on copies): `openspec/specs/seam-contracts/spec.md`
+  merges cleanly. `openspec/specs/host-module/spec.md` conflicts in two
+  hunks, the requirement's text and its scenario. Resolving those hunks
+  means editing a spec file directly, which the repository's
+  instructions forbid.
+
+### What the code stage must do
+
+Merge `bolt/flumes-settings-read-as-its-records-say` (`ea8939fd` or
+later) into the branch, resolving the three files so each keeps both
+changes. Rewrite this change's host-module MODIFIED block over the
+requirement as it stands at the base, so it keeps record 0063's words
+(`reserve` and `keep_free` undeclared; `host`'s `ends_expire`; a label's
+`owed` and `reserved`) and adds an account's `usage` and the account's
+declared keys. The change is not archived, so verify can then archive
+it over the merged base.
 
 ## The whole checks
 
-`sluice exec bolt/flumes-settings-read-as-its-records-say`, run once
-with the host's sluice 0.93.2: **passed**, `exit 0`. sluice ran the
-checks `3d23328` affects against the base, the bolt's `#check-fast`:
-40 tasks completed, and sluice recorded 39 passed results under their
-keys for `3d23328`, `site:install` being the site's dependency and no
-check of its own. No task failed.
+`devenv shell -- sluice exec bolt/flumes-settings-read-as-its-records-say`
+ran no check. Inside the devenv shell, the sluice the tree pins for the
+merge-queue profile's tests, 0.71.0, comes first on `PATH`. It refused
+the host's `~/.config/sluice/config.toml` (`unknown field credential`,
+line 21) and exited 3.
 
-`devenv shell -- sluice exec …` stopped before any check ran. Inside the
-shell the sluice the tree pins for the merge-queue profile's tests,
-0.71.0, comes first on `PATH`, and it refused the host's
-`~/.config/sluice/config.toml` (`unknown field credential`, line 21).
-The run above uses the host's own sluice, which enters the devenv
-toolchain itself as `.config/sluice.toml`'s `[tests] toolchain` says.
+`sluice exec bolt/flumes-settings-read-as-its-records-say`, run once with
+the host's sluice 0.93.2, which enters the devenv toolchain itself as
+`.config/sluice.toml`'s `[tests] toolchain` says: **passed**, `exit 0`.
+sluice "ran the checks 77d915c affects against
+bolt/flumes-settings-read-as-its-records-say (ea8939f)", the bolt's
+`#check-fast`. 40 tasks completed, and sluice recorded 39 passed results
+under their keys for `77d915c`. `site:install` is the site's dependency
+and has no check of its own. No task failed.
 
 What passed: `root:format`, `root:hooks`, `root:adrs`, `root:specs`
 (49 passed), `root:changes` (2 passed, this change among them),
@@ -77,85 +92,50 @@ What passed: `root:format`, `root:hooks`, `root:adrs`, `root:specs`
 `format`, `typecheck`, `engine-types` and `test`;
 `plugin-herdr:manifest`, `lint` and `test`; `site:install`,
 `site:prose` (0 errors, 0 warnings) and `site:build`.
-`conformance:test`'s `no_tool_is_named_outside_a_profile` passed: no
-tool is named outside a profile (core.1).
 
 The run's warnings are moon's: from the gate's sandbox it could not
 write its output archives. No task failed because of them.
 
-`openspec validate flume-reads-each-accounts-usage-from-its-agent-programs-windows --strict`:
-valid.
-
 ## The tasks
 
-All 23 tasks, 1.1 to 11.1, are ticked done, and each check a task names
-exists. Every check that falls inside `#check-fast` passed in the run,
-task 11.1's `conformance:test` among them. The check-tools build that
-task 6.4 names, `devenv shell -- cargo test -p flume --features tools
---test tools --no-run`, was run beside the gate and built.
+All 24 tasks, 1.1 to 11.2, are ticked done, and each check a task names
+exists. Every check that falls inside `#check-fast` passed in the run.
+Task 11.2's own check passes: `openspec archive` on a copy of the
+branch's `openspec`, then `openspec validate --specs --strict`, gives
+49 passed. The three requirements it shortened are now 467, 471 and 455
+characters long.
 
 ## The specs
 
-Each scenario has a test the run passed. The code was read against
-each requirement.
+The code has not changed since `3d233282`, which the last verify read
+against every requirement and found complete. Since then only the text
+of three MODIFIED requirements has changed (task 11.2). The detail
+taken out of each requirement is now in one of its scenarios, and an
+existing test holds that detail:
 
-- **account-pools** (14 scenarios): `account_pools.rs` holds each:
-  S86's four places, no reading anywhere, the affinity first; a fresh
-  and a stale reading; a window past its reset; an account no session
-  reported for, and a program whose profile gives no windows, each with
-  its words; an account flume runs no agent on; nothing asked of the
-  program, where the fake agent's log shows no `windows` read; a report
-  taken, an earlier report, and no account or another secret, through
-  `Engine::take_reading` in `crates/flume-core/src/readings.rs`, which
-  refuses a start that is not live or a secret not its start's, takes
-  nothing under no account or with no report, and writes by
-  compare-and-set, keeping the spent keys and writing nothing where the
-  kept reading was taken at the same second or later; and a spent time
-  and a reading. A reading is fresh for 15 minutes, read from
-  `taken_at`.
-- **agent-profile** (2): `profiles/agent/claude/windows.rs` reads the
-  engine's `{"rateLimits": […]}`, each window's `kind` a non-empty
-  string, its `percentUsed` 0 or more in hundredths and past 100 read
-  as 100, its `resetsAt` by RFC 3339, and a report with any window in
-  no such form, or an empty list, read as none. `Claude::windows` reads
-  `windows.json` in the start's record with the started ack's session.
-  `reports_windows` is offered. `agent_claude.rs` passes the seam's
-  windows scenarios.
-- **claude-code-plugin** (10): `hooks/usage.ts` runs `flume hook usage`
-  after `next(e)`, only where `FLUME_PLACE` and `FLUME_AGENT` are set,
-  `changed` names `rateLimits` and `rateLimits` holds a window, with a
-  10-second bound, not awaited, any failure caught.
-  `tests/usage.test.ts` holds its five scenarios. `hooks/flume.ts`, the
-  one module `hooks.json` lists, registers it beside `line.ts`.
-  `hooks_claude.rs` holds the four `hook usage` scenarios, 107.5 read
-  as 100 among them. The engine types are pinned:
-  `plugin-claude:engine-types` passed.
-- **clause-coverage** (3): `clauses.rs` is at `55b89a4`, with 211 in
-  Part B, `SCENARIOS` 123, and S121 to S123 named unbuilt by records
-  0060 and 0061's changes. `conformance:coverage` passed.
-- **host-module** (1): `nix/modules/options.nix` declares no `usage`.
-  `nix/tests/options.nix` reads `name`, `program`, `env` and `agents`.
-  `nix:test` passed.
-- **place-status** (4): status's JSON form only gains fields:
-  `ReadingStatus::Read` keeps `read_at` and gains `agent` and `session`,
-  and `Unread` gives why. `place_status.rs` holds "A pool with
-  readings". `print.rs` gives `taken at <time> from <agent>`, `stale, `
-  before it where the reading is not fresh, and `no reading: <why>`.
-- **seam-contracts** (6): `seams/agent.rs` holds the windows scenarios,
-  run against the fake both ways (`FakeAgentHarness::reporting_no_windows`).
-  `round_trip.rs` holds "A pool and a reading" and "An account's
-  document", an earlier release's document reading as spent with no
-  reading. `seams/store.rs` holds a document with both. `Host::usage`
-  and `Account::usage` are gone.
-- **seam-fakes** (2): the fake agent's `report_windows` and
-  `reports_no_windows` are tested in `fakes.rs`, each `windows` read
-  logged. The fake host's `set_usage` and `usage` are gone.
-- **store-profile** (9): `host/config.rs` refuses `usage` as
-  `[pools.work.accounts[0]] usage is no word of an account`, its tests
-  naming the program `agent`, which no profile holds (core.1). C.7's
-  example reads whole. `store_state_dir.rs` holds "A reading beside a
-  spent time" and "An account's document an earlier release wrote".
-  `host/usage.rs` is gone.
+- **place-status**, "A pool with readings": `read_at` gives when flume
+  took the reading, and the JSON form keeps every field it gave before.
+  `ReadingStatus::Read` keeps `read_at` and gains `agent` and `session`;
+  `place_status.rs` holds the scenario.
+- **seam-contracts**, "A pool and a reading": `taken_at` is RFC 3339's
+  with its offset, and `used` is a share from 0 to 100.
+  `round_trip::a_pool_and_a_reading` asserts `2026-11-05T14:02:00Z`,
+  `used` 42 and 23.5, and reads a reading written with an offset.
+- **store-profile**, "A reading beside a spent time": the reading is in
+  C.7's form. `store_state_dir.rs` holds the scenario.
 
-Nothing the specs ask for is missing in the code. The one shortfall is
-the three requirements' length above.
+Everything else the last verify found still holds:
+
+- **account-pools** (14 scenarios): `account_pools.rs`.
+- **agent-profile** (2): `profiles/agent/claude/windows.rs` and
+  `agent_claude.rs`.
+- **claude-code-plugin** (10): `hooks/usage.ts`, `tests/usage.test.ts`,
+  `hooks/flume.ts` and `hooks_claude.rs`.
+- **clause-coverage** (3): `clauses.rs` at `55b89a4`.
+- **host-module** (1): `nix/modules/options.nix` and
+  `nix/tests/options.nix`.
+- **place-status** (4), **seam-contracts** (6), **seam-fakes** (2) and
+  **store-profile** (9): the code and tests the last verify named.
+
+Against `2d180f0b`, the code meets everything the specs ask for. The
+shortfall is the moved base above.
