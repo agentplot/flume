@@ -20,7 +20,7 @@ and S129, with record 0067 and rule core.56. The design's numbers are
 
 - [x] 3.1 Read `[telemetry]` in `crates/flume/src/host/config.rs` by a `telemetry_of` beside `ends_expire_of`, into `HostConfig.telemetry`, as design 3's table says: a collector off the loopback, without a port, or not `http://`, a table that sends with no collector, a key it does not read and an attribute shaped as a credential each refused naming the key and never a value; `values_of` giving each value with its layer; `RealHost::telemetry` answering it; and the local layer setting any key of it not taken (216, C.7; core.45, core.50). Name each test `telemetry_…`. True when `devenv shell -- cargo test -p flume --lib host::config::tests::telemetry_` passes.
 - [x] 3.2 Declare `telemetry` in `nix/modules/options.nix` as the host-module requirement "settings declares the telemetry table" says, its collector typed by a pattern of the loopback; set it in `nix/tests/every-key.nix`, sending to `http://localhost:4318` with one attribute; and add a case to the module's tests that a collector off the loopback fails evaluation naming `services.flume.settings.telemetry.collector` (C.7; record 0055). True when `sluice exec bolt/flume-shows-its-places-as-traces -- moon run nix:test` passes.
-- [ ] 3.3 Have `the_modules_files_read_whole` read every-key's `[telemetry]` as set (C.7). True when `devenv shell -- cargo test -p flume --test host the_modules_files_read_whole` passes.
+- [x] 3.3 Have `the_modules_files_read_whole` read every-key's `[telemetry]` as set (C.7). True when `devenv shell -- cargo test -p flume --test host the_modules_files_read_whole` passes.
 
 ## 4. The core makes the signals
 

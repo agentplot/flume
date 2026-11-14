@@ -1568,6 +1568,21 @@ fn the_modules_files_read_whole() {
         config.streams_agents["work"].effort.as_deref(),
         Some("high")
     );
+
+    // `[telemetry]` as set, sending to the host's loopback with one
+    // attribute (216, C.7).
+    assert_eq!(
+        config.telemetry,
+        Some(TelemetryTable {
+            send: true,
+            collector: Some("http://localhost:4318".into()),
+            service: "flume".into(),
+            traces: true,
+            metrics: true,
+            logs: false,
+            attributes: BTreeMap::from([("deployment.environment".into(), "lab".into())]),
+        })
+    );
 }
 
 /// The sources the flake's module renders from `nix/tests/sources.nix`,
