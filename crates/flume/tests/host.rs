@@ -1414,16 +1414,16 @@ fn the_modules_files_read_whole() {
             (
                 "construction".to_string(),
                 Share {
-                    reserve: 2,
-                    keep_free: 0,
+                    owed: 2,
+                    reserved: 0,
                     unknown: vec![],
                 }
             ),
             (
                 "operation".to_string(),
                 Share {
-                    reserve: 2,
-                    keep_free: 1,
+                    owed: 2,
+                    reserved: 1,
                     unknown: vec![],
                 }
             ),

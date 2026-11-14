@@ -88,21 +88,22 @@ pub(crate) struct StreamRoom {
     pub uncarried: Option<String>,
 }
 
-/// A label's share of its stream as the queue reads it: its reserve, the
-/// slots of the stream it keeps free while it runs fewer, and its agents
+/// A label's share of its stream as the queue reads it: the stream's
+/// agents it is owed, those of them it holds reserved, and its agents
 /// running, each counted toward the label it started under until it ends
 /// (180, 181).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct LabelRoom {
-    pub reserve: u32,
-    pub keep_free: u32,
+    pub owed: u32,
+    pub reserved: u32,
     pub running: u32,
 }
 
 impl LabelRoom {
-    /// The stream's slots it keeps free and does not use.
-    pub fn kept(&self) -> u32 {
-        self.keep_free.saturating_sub(self.running)
+    /// The stream's agents it holds reserved and does not use: what it
+    /// holds reserved less its agents running, from zero (181).
+    pub fn reserved_unused(&self) -> u32 {
+        self.reserved.saturating_sub(self.running)
     }
 }
 
@@ -125,8 +126,8 @@ impl StreamRoom {
                     (
                         label,
                         LabelRoom {
-                            reserve: share.reserve,
-                            keep_free: share.keep_free,
+                            owed: share.owed,
+                            reserved: share.reserved,
                             running: 0,
                         },
                     )
@@ -143,19 +144,20 @@ impl StreamRoom {
         self.bound.map(|bound| bound.saturating_sub(self.running))
     }
 
-    /// Whether a stage of `label` starts before the stream's others: its
-    /// reserves are held and the label runs fewer than its reserve (181).
-    pub fn below_reserve(&self, label: Option<&str>) -> bool {
+    /// Whether a stage of `label` starts before the stream's others: what
+    /// its labels are owed is held and the label runs fewer agents than it
+    /// is owed (181).
+    pub fn below_owed(&self, label: Option<&str>) -> bool {
         self.held
             && label
                 .and_then(|label| self.labels.get(label))
-                .is_some_and(|room| room.running < room.reserve)
+                .is_some_and(|room| room.running < room.owed)
     }
 
-    /// The stream's slots its labels other than `label` keep free and do
-    /// not use, and those labels, where its reserves are held; a stage of
-    /// no label counts every label's (181).
-    pub fn kept_for(&self, label: Option<&str>) -> (u32, Vec<String>) {
+    /// The stream's agents its labels other than `label` hold reserved and
+    /// do not use, and those labels, where what its labels are owed is
+    /// held; a stage of no label counts every label's (181).
+    pub fn reserved_for(&self, label: Option<&str>) -> (u32, Vec<String>) {
         if !self.held {
             return (0, vec![]);
         }
@@ -163,7 +165,7 @@ impl StreamRoom {
             .labels
             .iter()
             .filter(|(name, _)| Some(name.as_str()) != label)
-            .map(|(name, room)| (name, room.kept()))
+            .map(|(name, room)| (name, room.reserved_unused()))
             .filter(|(_, kept)| *kept > 0)
             .collect();
         (
@@ -480,11 +482,11 @@ fn fault_of(name: &str, stream: &Stream) -> Option<String> {
     });
     let more_free = || {
         stream.labels.iter().find_map(|(label, share)| {
-            (share.keep_free > share.reserve).then(|| {
+            (share.reserved > share.owed).then(|| {
                 format!(
                     "the label {label} of the stream {name} keeps {} free of a reserve of {}, \
                      and a reserve is at least what it keeps free",
-                    share.keep_free, share.reserve
+                    share.reserved, share.owed
                 )
             })
         })
@@ -494,13 +496,13 @@ fn fault_of(name: &str, stream: &Stream) -> Option<String> {
         let total = stream
             .labels
             .values()
-            .fold(0u32, |total, share| total.saturating_add(share.reserve));
+            .fold(0u32, |total, share| total.saturating_add(share.owed));
         (total > bound).then(|| {
             let each: Vec<String> = stream
                 .labels
                 .iter()
-                .filter(|(_, share)| share.reserve > 0)
-                .map(|(label, share)| format!("{label} {}", share.reserve))
+                .filter(|(_, share)| share.owed > 0)
+                .map(|(label, share)| format!("{label} {}", share.owed))
                 .collect();
             format!(
                 "the stream {name}'s reserves, {}, {total} in all, pass its bound of {bound}",
@@ -698,7 +700,7 @@ impl Queue {
                 bound,
             });
         }
-        if let (Some(room), (kept, labels)) = (of.room(), of.kept_for(label)) {
+        if let (Some(room), (kept, labels)) = (of.room(), of.reserved_for(label)) {
             if kept > 0 && room <= kept {
                 return Some(RoomWanted::KeptFree {
                     stream: stream.to_string(),
@@ -751,7 +753,7 @@ impl Queue {
             rank: (self.stream(stream).priority, priority),
             order: self.next_order(),
             since: None,
-            below: self.stream(stream).below_reserve(label),
+            below: self.stream(stream).below_owed(label),
         });
         start_order(&standings)
             .into_iter()
@@ -771,7 +773,7 @@ impl Queue {
             since: waiting.since,
             below: self
                 .stream(&waiting.stream)
-                .below_reserve(waiting.label.as_deref()),
+                .below_owed(waiting.label.as_deref()),
         }
     }
 
@@ -1122,8 +1124,8 @@ impl Engine {
                     .iter()
                     .map(|(label, room)| LabelStatus {
                         name: label.clone(),
-                        reserve: room.reserve,
-                        keep_free: room.keep_free,
+                        reserve: room.owed,
+                        keep_free: room.reserved,
                         running: room.running,
                         waiting: queued
                             .iter()

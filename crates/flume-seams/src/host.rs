@@ -166,17 +166,18 @@ pub struct StreamDisplay {
     pub terminal_app: ProfileHeld,
 }
 
-/// A label's share of its stream's agents: the reserve its places start
-/// within before the stream's others, and how many of its stream's slots
-/// it keeps free while it runs fewer, each zero where its table gives
-/// none; and each other key its table holds, which refuses every start of
-/// the stream rather than the configuration (181, 182, C.7).
+/// A label's share of its stream's agents: how many of the stream's
+/// agents its places are owed, `owed`, and how many of those are held for
+/// it alone, `reserved`, each a whole number of agents from zero, zero
+/// where its table gives none; and each other key its table holds, which
+/// refuses every start of the stream rather than the configuration (181,
+/// 182, C.7).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Share {
     #[serde(default)]
-    pub reserve: u32,
+    pub owed: u32,
     #[serde(default)]
-    pub keep_free: u32,
+    pub reserved: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unknown: Vec<String>,
 }

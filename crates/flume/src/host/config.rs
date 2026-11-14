@@ -1265,8 +1265,8 @@ fn shares_of(table: &Table, at: &str) -> Result<BTreeMap<String, Share>, String>
         shares.insert(
             label.clone(),
             Share {
-                reserve: count("reserve")?,
-                keep_free: count("keep_free")?,
+                owed: count("reserve")?,
+                reserved: count("keep_free")?,
                 unknown: share
                     .keys()
                     .filter(|key| !matches!(key.as_str(), "reserve" | "keep_free"))
@@ -2187,16 +2187,16 @@ label = "inception"
                 (
                     "construction".to_string(),
                     Share {
-                        reserve: 2,
-                        keep_free: 0,
+                        owed: 2,
+                        reserved: 0,
                         unknown: vec![],
                     }
                 ),
                 (
                     "operation".to_string(),
                     Share {
-                        reserve: 2,
-                        keep_free: 1,
+                        owed: 2,
+                        reserved: 1,
                         unknown: vec![],
                     }
                 ),
@@ -2319,8 +2319,8 @@ label = "inception"
         assert_eq!(
             config.streams["work"].labels["operation"],
             Share {
-                reserve: 1,
-                keep_free: 0,
+                owed: 1,
+                reserved: 0,
                 unknown: vec!["points".into(), "pool".into()],
             }
         );
@@ -2465,7 +2465,7 @@ label = "inception"
         assert_eq!(config.configuration.local, LocalLayer::Taken);
         let work = &config.streams["work"];
         assert_eq!(work.session.as_deref(), Some("office"));
-        assert_eq!(work.labels["operation"].reserve, 3);
+        assert_eq!(work.labels["operation"].owed, 3);
         assert_eq!(work.agents, Some(6));
         assert_eq!(
             config

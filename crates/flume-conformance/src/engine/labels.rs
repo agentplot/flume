@@ -105,7 +105,7 @@ pub fn labelled_kinds(world: &World) {
 }
 
 /// The host declares `stream` with `agents`, and each label's share of
-/// it, `(label, reserve, keep_free)`.
+/// it, `(label, owed, reserved)`.
 pub fn shared(world: &World, stream: &str, agents: Option<u32>, shares: &[(&str, u32, u32)]) {
     world.host.set_stream(
         stream,
@@ -113,12 +113,12 @@ pub fn shared(world: &World, stream: &str, agents: Option<u32>, shares: &[(&str,
             agents,
             labels: shares
                 .iter()
-                .map(|(label, reserve, keep_free)| {
+                .map(|(label, owed, reserved)| {
                     (
                         (*label).to_string(),
                         Share {
-                            reserve: *reserve,
-                            keep_free: *keep_free,
+                            owed: *owed,
+                            reserved: *reserved,
                             unknown: vec![],
                         },
                     )
@@ -546,8 +546,8 @@ fn a_pool_in_a_labels_table(_: &()) -> Outcome {
         "work",
         "operation",
         Some(Share {
-            reserve: 1,
-            keep_free: 0,
+            owed: 1,
+            reserved: 0,
             unknown: vec!["pool".into()],
         }),
     );
