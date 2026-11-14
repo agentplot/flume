@@ -87,6 +87,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["129", "140", "43"],
             run: every_repetitions_made_lines,
         },
+        Scenario {
+            name: "repeating stages: a retry after the last group was ticked and the repetition stopped short starts with no group, and the stage delivers on the commit before it",
+            cites: &["25", "49", "140"],
+            run: a_retry_after_the_last_group,
+        },
+        Scenario {
+            name: "repeating stages: a repetition given its group again counts the line the first start given that group wrote",
+            cites: &["25", "49", "129", "140"],
+            run: a_repetition_given_its_group_again,
+        },
     ]
 }
 
@@ -784,6 +794,166 @@ fn a_long_stage_with_short_repetitions(_: &()) -> Outcome {
             .iter()
             .all(|end| !matches!(&end.of, EndOf::Stage { stage, state: StageState::Stuck, .. } if stage == "code"))),
         "a repetition was recorded stuck"
+    );
+    Ok(())
+}
+
+/// The live start of code, working, stops short needing an answer with
+/// `words` and ends its turn; a settle reads it, and its caller retries
+/// code with `answer` once that agent is no longer kept open, so a fresh
+/// agent takes it (49, 198).
+fn asks_and_is_answered(world: &World, id: &PlaceId, words: &str, answer: &str) -> Outcome {
+    let asking = code_start(world, id)?;
+    world
+        .terminal
+        .set_state(&asking.identity, AgentState::Working);
+    let asked = world.engine.needs(
+        &asking.identity.to_string(),
+        &asking.secret.0,
+        words,
+        StopKind::NeedsAnswer,
+    );
+    ensure!(asked.refusal().is_none(), "the stop-short: {asked:?}");
+    world
+        .terminal
+        .set_state(&asking.identity, AgentState::Waiting);
+    world.settle(id);
+    ensure_eq!(
+        world.stage_state(id, "code"),
+        Some(StageState::EndedShort),
+        "code once its agent asked"
+    );
+    world.host.advance(flume_core::KEEP_OPEN);
+    let retried = world.engine.retry(
+        id,
+        flume_core::Retry::Stage("code".into()),
+        Some(answer.into()),
+        false,
+    );
+    ensure!(retried.refusal().is_none(), "the retry: {retried:?}");
+    Ok(())
+}
+
+fn a_retry_after_the_last_group(_: &()) -> Outcome {
+    let world = World::new();
+    let id = code_begun(&world, "plan", &[])?;
+    for ticked in [2, 4] {
+        world.tick_groups(&branch("plan"), "plan", GROUPS, ticked);
+        world.settle(&id);
+    }
+    let third = code_start(&world, &id)?;
+    ensure_eq!(
+        third.group.and_then(|group| group.number),
+        Some("3".to_string()),
+        "the third repetition's group"
+    );
+    world
+        .terminal
+        .set_state(&third.identity, AgentState::Working);
+    let head = world.tick_groups(&branch("plan"), "plan", GROUPS, 5);
+    asks_and_is_answered(
+        &world,
+        &id,
+        "Every task is ticked. Should the notes stay with the change?",
+        "Leave them where they are.",
+    )?;
+    let fourth = code_start(&world, &id)?;
+    ensure_eq!(
+        (
+            fourth.identity.start,
+            fourth.group.clone(),
+            fourth.counts.as_ref().map(|counts| counts.start)
+        ),
+        (4, None, Some(1)),
+        "the retry's start, its group and the start it counts from"
+    );
+    world.settle(&id);
+    let held = world.held(&id).ok_or("the place is gone")?;
+    ensure_eq!(
+        held.stages[1].state,
+        StageState::Delivered,
+        "code, the retry's agent making no commit"
+    );
+    ensure_eq!(
+        held.stages[1].end.as_ref().and_then(|end| end.head.clone()),
+        Some(head),
+        "the head code delivered at, the third repetition's commit"
+    );
+    ensure!(
+        held.stages[2].state.running(),
+        "verify did not start: {:?}",
+        held.stages[2].state
+    );
+    Ok(())
+}
+
+fn a_repetition_given_its_group_again(_: &()) -> Outcome {
+    let world = World::new();
+    let mut change = repeating_change();
+    change.stages[1].makes = vec!["preview".into()];
+    world.kinds.set_kinds(REPOSITORY, vec![change]);
+    launched(
+        &world
+            .engine
+            .launch(&launch("change", "plan", Some("plan it"))),
+    )?;
+    let id = World::id("change", "plan");
+    world.settle(&id);
+    world.tick_groups(&branch("plan"), "plan", GROUPS, 0);
+    world.settle(&id);
+    let lines = [
+        r#"{"name":"preview","what":"group one"}"#,
+        r#"{"name":"preview","what":"group two"}"#,
+        r#"{"name":"preview","what":"group three"}"#,
+    ];
+    world.store.record_made(&id, lines[0]);
+    world.tick_groups(&branch("plan"), "plan", GROUPS, 2);
+    world.settle(&id);
+    let second = code_start(&world, &id)?;
+    ensure_eq!(
+        second.group.and_then(|group| group.number),
+        Some("2".to_string()),
+        "the second repetition's group"
+    );
+    world.store.record_made(&id, lines[1]);
+    asks_and_is_answered(
+        &world,
+        &id,
+        "The preview for group 2 is up. Does task 2.2 mean the old schema?",
+        "The new one.",
+    )?;
+    let again = code_start(&world, &id)?;
+    ensure_eq!(
+        (
+            again.identity.start,
+            again.group.and_then(|group| group.number),
+            again.counts.map(|counts| counts.start)
+        ),
+        (3, Some("2".to_string()), Some(2)),
+        "the retry's start, its group and the start it counts from"
+    );
+    // The retry ticks group 2 and commits, writing no line.
+    world.tick_groups(&branch("plan"), "plan", GROUPS, 4);
+    world.settle(&id);
+    let next = code_start(&world, &id)?;
+    ensure_eq!(
+        (
+            next.identity.start,
+            next.group.and_then(|group| group.number),
+            next.counts
+        ),
+        (4, Some("3".to_string()), None),
+        "the repetition after group 2 delivered, counting from itself"
+    );
+    world.store.record_made(&id, lines[2]);
+    world.tick_groups(&branch("plan"), "plan", GROUPS, 5);
+    world.settle(&id);
+    let held = world.held(&id).ok_or("the place is gone")?;
+    ensure_eq!(held.stages[1].state, StageState::Delivered, "code");
+    ensure_eq!(
+        held.stages[1].end.as_ref().map(|end| end.made.clone()),
+        Some(lines.iter().map(|line| Made::read(line)).collect()),
+        "the stage's end, every repetition's lines"
     );
     Ok(())
 }
