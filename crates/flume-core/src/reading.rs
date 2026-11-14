@@ -147,19 +147,19 @@ impl Engine {
         format!("{}/{MADE}", self.store.folder(place))
     }
 
-    /// The lines the start's run wrote to `made.jsonl` since it started,
-    /// each as written (129).
+    /// The lines written to `made.jsonl` since the start its deliverable
+    /// counts from, each as written (25, 129).
     pub(crate) fn made_since(&self, place: &PlaceId, start: &StartHeld) -> Vec<Made> {
         self.store
             .made(place)
             .iter()
-            .skip(start.made_from)
+            .skip(start.counted().made_from)
             .map(|line| Made::read(line))
             .collect()
     }
 
-    /// Each name the stage at `index` declares it makes that no line of
-    /// its current start's names (129).
+    /// Each name the stage at `index` declares it makes that no line
+    /// written since its current start's count began names (25, 129).
     pub(crate) fn unmade(&self, held: &HeldState, index: usize) -> Vec<String> {
         let makes = &held.place.kind.stages[index].makes;
         let Some(start) = held.stages[index].start.as_ref() else {
@@ -176,8 +176,9 @@ impl Engine {
             .collect()
     }
 
-    /// Whether the stage's deliverable exists at `head`, made since its
-    /// start, and the report it is, for a report form (24, 25).
+    /// Whether the stage's deliverable exists at `head`, made since the
+    /// start it counts from, the first of the stage's starts since it last
+    /// delivered, and the report it is, for a report form (24, 25).
     fn delivered(
         &self,
         held: &HeldState,
@@ -191,7 +192,8 @@ impl Engine {
         let Some(start) = held.stages[index].start.as_ref() else {
             return (false, None);
         };
-        let since = &start.start_head;
+        let counted = start.counted();
+        let since = &counted.head;
         let facts = match change {
             Some(ChangeRead::Read { facts }) => Some(facts),
             _ => None,
@@ -232,7 +234,7 @@ impl Engine {
                 let written = self
                     .host
                     .write_time(&path)
-                    .is_some_and(|written| written > start.started_at);
+                    .is_some_and(|written| written > counted.at);
                 (written, written.then_some(path))
             }
             Some(Deliverable::CommittedReport { path }) => {

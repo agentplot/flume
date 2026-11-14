@@ -2,10 +2,11 @@
 //! filled and delivered, and its end read from its deliverable, its
 //! agent's stop-short or a conversation's finish.
 
+use super::settling::{fix_begun, write_change};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{Answer, Retry};
-use flume_fakes::Log;
+use flume_fakes::{Log, Plan};
 use flume_seams::*;
 
 pub fn scenarios() -> Vec<Scenario<()>> {
@@ -93,6 +94,21 @@ pub fn scenarios() -> Vec<Scenario<()>> {
                 "end: each of the six forms delivers where it lives, made since the stage started",
             cites: &["24", "25", "123"],
             run: the_six_forms,
+        },
+        Scenario {
+            name: "end: an answered stop-short delivers what its start committed, and the place is submitted (S131)",
+            cites: &["25", "49", "111"],
+            run: an_answered_stop_short_delivers,
+        },
+        Scenario {
+            name: "end: a retry of a stage that has delivered starts afresh, and is not delivered with no commit of its own",
+            cites: &["25", "49", "110"],
+            run: a_delivered_stages_retry_starts_afresh,
+        },
+        Scenario {
+            name: "end: a stage written before it kept its count counts from its next start, as flume did",
+            cites: &["25", "49"],
+            run: a_stage_written_before_counts_from_its_next_start,
         },
         Scenario {
             name: "stop-short: a construct stops short, and no code stage starts",
@@ -795,6 +811,225 @@ fn the_six_forms(_: &()) -> Outcome {
             name
         );
     }
+    Ok(())
+}
+
+/// The words a fix's code agent stops short with once its fix is
+/// committed, and its caller's answer (S131).
+const COMMITTED_ASKS: &str = "The fix is committed. Should the old flag stay as an alias?";
+const COMMITTED_ANSWER: &str = "Keep it as an alias for one release.";
+
+/// The secret of the last start of the place's stage at `index`.
+fn secret_of(world: &World, id: &PlaceId, index: usize) -> Result<Secret, String> {
+    world
+        .held(id)
+        .and_then(|held| held.stages[index].start.clone())
+        .map(|start| start.secret)
+        .ok_or_else(|| format!("the stage at {index} never started"))
+}
+
+/// The stage at `index` of the place as held state gives it.
+fn stage_held(world: &World, id: &PlaceId, index: usize) -> Result<StageHeld, String> {
+    world
+        .held(id)
+        .map(|held| held.stages[index].clone())
+        .ok_or_else(|| "the place is gone".into())
+}
+
+/// The start `at` of the place's stage at `index`, working, stops short
+/// needing an answer with `words` and ends its turn, and a settle reads
+/// it.
+fn asks(world: &World, id: &PlaceId, at: &Identity, index: usize, words: &str) -> Outcome {
+    world.terminal.set_state(at, AgentState::Working);
+    let asked = world.engine.needs(
+        &at.to_string(),
+        &secret_of(world, id, index)?.0,
+        words,
+        StopKind::NeedsAnswer,
+    );
+    ensure!(
+        asked.refusal().is_none(),
+        "the stop-short was refused: {asked:?}"
+    );
+    world.terminal.set_state(at, AgentState::Waiting);
+    world.settle(id);
+    ensure_eq!(
+        world.held(id).map(|held| held.stages[index].state),
+        Some(StageState::EndedShort),
+        "the stage once its agent asked"
+    );
+    Ok(())
+}
+
+/// The caller's retry of `stage` with `words`, once the agent that asked
+/// is no longer kept open, so a fresh agent takes them (49, 198).
+fn retried(world: &World, id: &PlaceId, stage: &str, words: &str) -> Outcome {
+    world.host.advance(flume_core::KEEP_OPEN);
+    let retried = world
+        .engine
+        .retry(id, Retry::Stage(stage.into()), Some(words.into()), false);
+    ensure!(
+        retried.refusal().is_none(),
+        "the retry was refused: {retried:?}"
+    );
+    Ok(())
+}
+
+/// The fix `one`, its submissions' outcomes `plans`, whose code agent
+/// commits its fix and then stops short needing an answer, its caller
+/// retrying code with the answer: the head the commit reached (25, 49,
+/// S131).
+fn a_fix_answered_after_its_commit(
+    world: &World,
+    plans: Vec<Plan>,
+) -> Result<(PlaceId, Revision), String> {
+    world.queue.plan_submits(plans);
+    let id = fix_begun(world, "one")?;
+    let first = World::identity("fix", "one", "code", 1);
+    world.terminal.set_state(&first, AgentState::Working);
+    let head = world.commit("fix/one", &["fix.rs"]);
+    asks(world, &id, &first, 0, COMMITTED_ASKS)?;
+    retried(world, &id, "code", COMMITTED_ANSWER)?;
+    Ok((id, head))
+}
+
+fn an_answered_stop_short_delivers(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, head) = a_fix_answered_after_its_commit(&world, vec![Plan::Hold])?;
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.log.count("open"),
+        2,
+        "agents opened: the one that asked and the retry's"
+    );
+    let code = stage_held(&world, &id, 0)?;
+    ensure_eq!(
+        code.state,
+        StageState::Delivered,
+        "code, its retry's agent making no commit"
+    );
+    ensure_eq!(
+        code.end.and_then(|end| end.head),
+        Some(head.clone()),
+        "the head code delivered at, the first start's commit"
+    );
+    ensure_eq!(
+        code.start
+            .and_then(|start| start.counts)
+            .map(|counts| counts.start),
+        Some(1),
+        "the start the retry counted from"
+    );
+    ensure_eq!(code.counts, None, "code's count once it delivered");
+    ensure_eq!(
+        world.queue.log.of("submit"),
+        vec![format!("submit fix/one {head} main")],
+        "the submissions"
+    );
+    Ok(())
+}
+
+fn a_delivered_stages_retry_starts_afresh(_: &()) -> Outcome {
+    let world = World::new();
+    let mut held = launch("change", "plan", Some("plan it"));
+    held.hold = vec!["code".into()];
+    launched(&world.engine.launch(&held))?;
+    let id = World::id("change", "plan");
+    world.settle(&id);
+    write_change(&world, "plan");
+    world.settle(&id);
+    let construct = stage_held(&world, &id, 0)?;
+    ensure_eq!(construct.state, StageState::Delivered, "construct");
+    ensure_eq!(
+        construct.counts,
+        None,
+        "construct's count once it delivered"
+    );
+    let retried = world.engine.retry(
+        &id,
+        Retry::Stage("construct".into()),
+        Some("Weigh the log beside the queue.".into()),
+        false,
+    );
+    ensure!(
+        retried.refusal().is_none(),
+        "the retry was refused: {retried:?}"
+    );
+    world.settle(&id);
+    let again = World::identity("change", "plan", "construct", 2);
+    let construct = stage_held(&world, &id, 0)?;
+    ensure_eq!(
+        construct.state,
+        StageState::Begun,
+        "construct's retry, its agent making no commit"
+    );
+    ensure_eq!(
+        construct.start.and_then(|start| start.counts),
+        None,
+        "the retry's start counts from itself"
+    );
+    ensure_eq!(
+        construct.counts.map(|counts| counts.start),
+        Some(2),
+        "construct's count, begun at its retry"
+    );
+    let words = stop_words(&world, &again).ok_or("the agent was not sent back")?;
+    ensure!(
+        words.contains("change written") && words.contains("since the stage started"),
+        "the words name not the change it lacks: {words}"
+    );
+    Ok(())
+}
+
+fn a_stage_written_before_counts_from_its_next_start(_: &()) -> Outcome {
+    let world = World::new();
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = fix_begun(&world, "one")?;
+    let first = World::identity("fix", "one", "code", 1);
+    world.terminal.set_state(&first, AgentState::Working);
+    world.commit("fix/one", &["fix.rs"]);
+    asks(&world, &id, &first, 0, COMMITTED_ASKS)?;
+    // The document as a flume before stages kept their count wrote it.
+    let read = world.store.read(&id).ok_or("no held state")?;
+    let mut json = serde_json::to_value(&read.state).map_err(|error| error.to_string())?;
+    let code = &mut json["stages"][0];
+    code.as_object_mut().ok_or("a stage")?.remove("counts");
+    code["start"]
+        .as_object_mut()
+        .ok_or("a start")?
+        .remove("counts");
+    let before: HeldState = serde_json::from_value(json).map_err(|error| error.to_string())?;
+    ensure_eq!(before.stages[0].counts, None, "code's count written before");
+    ensure!(
+        matches!(
+            world.store.write(&id, Some(read.version), Some(&before)),
+            Written::Written { .. }
+        ),
+        "the earlier held state was not written"
+    );
+    retried(&world, &id, "code", COMMITTED_ANSWER)?;
+    world.settle(&id);
+    let code = stage_held(&world, &id, 0)?;
+    ensure_eq!(
+        code.state,
+        StageState::Begun,
+        "code, counting from the retry's start"
+    );
+    ensure_eq!(
+        (
+            code.counts.map(|counts| counts.start),
+            code.start.and_then(|start| start.counts)
+        ),
+        (Some(2), None),
+        "code's count and its retry's"
+    );
+    let second = World::identity("fix", "one", "code", 2);
+    let words = stop_words(&world, &second).ok_or("the agent was not sent back")?;
+    ensure!(
+        words.contains("commits"),
+        "the words name not commits: {words}"
+    );
+    ensure_eq!(world.queue.log.count("submit"), 0, "submissions");
     Ok(())
 }
 

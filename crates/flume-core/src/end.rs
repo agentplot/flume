@@ -239,6 +239,12 @@ impl Engine {
                 made,
                 ..StageEnd::default()
             });
+            // The stage's delivery, or its caller's finish, lets go of
+            // its count, so its next start counts afresh; any other end
+            // keeps it (25).
+            if matches!(state, StageState::Delivered | StageState::Finished) {
+                stage.counts = None;
+            }
             if index + 1 == held.stages.len() && held.place.kind.lands {
                 held.submission.due = true;
             }
