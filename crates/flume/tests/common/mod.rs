@@ -32,25 +32,31 @@ pub fn isolate() {
         ] {
             std::env::remove_var(name);
         }
-        for (name, value) in [
-            ("GIT_CONFIG_NOSYSTEM", "1"),
-            ("GIT_CONFIG_GLOBAL", "/dev/null"),
-            ("GIT_TERMINAL_PROMPT", "0"),
-            ("GIT_ASKPASS", "/usr/bin/false"),
-            ("SSH_ASKPASS", "/usr/bin/false"),
-            ("GCM_INTERACTIVE", "never"),
-            ("GIT_CONFIG_COUNT", "1"),
-            ("GIT_CONFIG_KEY_0", "credential.helper"),
-            ("GIT_CONFIG_VALUE_0", ""),
-            ("GIT_AUTHOR_NAME", "flume tests"),
-            ("GIT_AUTHOR_EMAIL", "tests@flume.invalid"),
-            ("GIT_COMMITTER_NAME", "flume tests"),
-            ("GIT_COMMITTER_EMAIL", "tests@flume.invalid"),
-        ] {
+        for (name, value) in GIT_ISOLATED {
             std::env::set_var(name, value);
         }
     });
 }
+
+/// The git environment every test process runs under: no system or
+/// global configuration, no credential helper, no prompt, and the tests'
+/// own identity. A program a terminal starts with the login environment
+/// alone, as Rex's blocks are, is given it by that environment.
+pub const GIT_ISOLATED: [(&str, &str); 13] = [
+    ("GIT_CONFIG_NOSYSTEM", "1"),
+    ("GIT_CONFIG_GLOBAL", "/dev/null"),
+    ("GIT_TERMINAL_PROMPT", "0"),
+    ("GIT_ASKPASS", "/usr/bin/false"),
+    ("SSH_ASKPASS", "/usr/bin/false"),
+    ("GCM_INTERACTIVE", "never"),
+    ("GIT_CONFIG_COUNT", "1"),
+    ("GIT_CONFIG_KEY_0", "credential.helper"),
+    ("GIT_CONFIG_VALUE_0", ""),
+    ("GIT_AUTHOR_NAME", "flume tests"),
+    ("GIT_AUTHOR_EMAIL", "tests@flume.invalid"),
+    ("GIT_COMMITTER_NAME", "flume tests"),
+    ("GIT_COMMITTER_EMAIL", "tests@flume.invalid"),
+];
 
 /// A directory of its own under the system's temporary directory,
 /// removed when dropped.

@@ -702,10 +702,10 @@ fn login_shell(dir: &Path, path: &str) -> PathBuf {
 
 /// The walk's login shell at `shell` written again to export `exports`
 /// beside `path` as its `PATH`.
-fn login_shell_exporting(shell: &Path, path: &str, exports: &[(&str, PathBuf)]) {
+fn login_shell_exporting(shell: &Path, path: &str, exports: &[(&str, String)]) {
     let mut text = format!("#!/bin/sh\nPATH='{path}'\nexport PATH\n");
     for (name, value) in exports {
-        text.push_str(&format!("{name}='{}'\nexport {name}\n", value.display()));
+        text.push_str(&format!("{name}='{value}'\nexport {name}\n"));
     }
     text.push_str("[ \"$1\" = -l ] && shift\nexec /bin/sh \"$@\"\n");
     std::fs::write(shell, text).expect("the login shell");
@@ -1316,15 +1316,24 @@ impl Walk {
         // A block's program runs under the login environment alone, none of
         // the Rex server's (C.5), so the walk's login shell gives the
         // walk's state, configuration and data, where flume's own commands
-        // run, as a host user's login environment gives theirs.
-        let exports: Vec<(&str, PathBuf)> = ["state", "config", "data"]
+        // run, and the tests' git environment, its identity among it, as a
+        // host user's login environment and configuration give theirs.
+        let mut exports: Vec<(&str, String)> = ["state", "config", "data"]
             .iter()
-            .map(|dir| match *dir {
-                "state" => ("XDG_STATE_HOME", walk.home().join(dir)),
-                "config" => ("XDG_CONFIG_HOME", walk.home().join(dir)),
-                _ => ("XDG_DATA_HOME", walk.home().join(dir)),
+            .map(|dir| {
+                let at = walk.home().join(dir).to_string_lossy().into_owned();
+                match *dir {
+                    "state" => ("XDG_STATE_HOME", at),
+                    "config" => ("XDG_CONFIG_HOME", at),
+                    _ => ("XDG_DATA_HOME", at),
+                }
             })
             .collect();
+        exports.extend(
+            GIT_ISOLATED
+                .iter()
+                .map(|(name, value)| (*name, value.to_string())),
+        );
         login_shell_exporting(walk.login_shell(), walk.path(), &exports);
         let host = UnderRex { walk, link };
         host.walk
