@@ -46,12 +46,12 @@ herdr.
   `▶ 1  fix--one · fix@1 · code · run 1 · working`, with its location
   beneath, the chosen one marked `▶`. Each key acts at once, with no
   Enter: the arrow keys or `j` and `k` move the choice, and `1` to `9`
-  choose the place so numbered. `o` opens the chosen place's tab, `t`
-  tells its agent the words you type, `s` stops its agent and `r`
-  retries its stage; where words are needed, `t`'s words, `r`'s and
+  choose the place so numbered. `o` opens the chosen place's tab, `m`
+  messages its agent the words you type, `s` stops its agent and `r`
+  retries its stage; where words are needed, `m`'s words, `r`'s and
   whether `s` or `r` should force, it asks for them as a line, ended by
   Enter. `q` or Escape closes it. Each key runs one flume command,
-  `flume tell`, `flume stop` or `flume retry`, or focuses the place's
+  `flume message`, `flume stop` or `flume retry`, or focuses the place's
   tab. No key types into an agent's pane.
 
 ## Keeping watch over the host
