@@ -107,8 +107,12 @@
 //! handle states 250 milliseconds, reads what a person's view of the pane
 //! shows by `pane read <pane> --source visible --format ansi`, and types a
 //! person's input as typed, text by `pane send-text <pane> <text>` and
-//! keys by one `pane send-keys <pane> <key>…`, each of flume's key names
-//! as herdr 0.9.5 names it, clearing nothing and reading no receipt. A
+//! keys by `pane send-keys <pane> <key>…`, each key herdr 0.9.5 types
+//! spelled as flume spells it, clearing nothing and reading no receipt;
+//! herdr 0.9.5 names no `delete`, `insert`, `home`, `end`, `pageup` or
+//! `pagedown`, so each of those, bare or led, is refused, named as a key
+//! herdr 0.9.5 cannot type, nothing sent for it, and the keys around it
+//! are typed, one call for each run of them. A
 //! call herdr answers `pane_not_found` finds the pane again by the agent's
 //! herdr name and reads or types there, herdr refusing before it writes a
 //! byte; a pane not found again, or `server_not_running`, reads gone. Each
@@ -1625,37 +1629,29 @@ fn unvalued(args: &[&str]) -> String {
     words.join(" ")
 }
 
-/// A key as herdr 0.9.5's `pane send-keys` names it: its `ctrl+`, `alt+`
-/// and `shift+` as flume leads it, then its own name, each name herdr
-/// spells otherwise taken from the table, every other as flume names it
-/// (222; core.29).
-pub fn herdr_key(key: &Key) -> String {
-    let name = match key.name {
-        KeyName::F(number) => format!("f{number}"),
-        KeyName::Char(one) => one.to_string(),
-        named => HERDR_KEYS
-            .iter()
-            .find(|(flume, _)| *flume == named)
-            .map_or_else(|| named.to_string(), |(_, herdr)| herdr.to_string()),
-    };
-    let mut written = String::new();
-    for (led, word) in [
-        (key.ctrl, "ctrl+"),
-        (key.alt, "alt+"),
-        (key.shift, "shift+"),
-    ] {
-        if led {
-            written.push_str(word);
-        }
+/// A key as herdr 0.9.5's `pane send-keys` takes it, which spells every
+/// key it types as flume spells it: its `ctrl+`, `alt+` and `shift+` as
+/// flume leads it, then its own name; or, for a key herdr 0.9.5 names
+/// none of, bare or led, why it cannot be typed, naming it (222, C.5's
+/// relay row; core.29).
+pub fn herdr_key(key: &Key) -> Result<String, String> {
+    if CANNOT_TYPE.contains(&key.name) {
+        return Err(format!("{key} is a key herdr 0.9.5 cannot type"));
     }
-    written.push_str(&name);
-    written
+    Ok(key.to_string())
 }
 
-/// flume's key names herdr 0.9.5 spells otherwise, each with herdr's
-/// spelling, read from the pinned herdr's `pane send-keys` by the tools
-/// layer (222; core.29).
-const HERDR_KEYS: [(KeyName, &str); 0] = [];
+/// flume's key names herdr 0.9.5's `pane send-keys` names none of, bare
+/// or led, as C.5's relay row lists them and the tools layer reads them
+/// from the pinned herdr (222; core.29).
+pub const CANNOT_TYPE: [KeyName; 6] = [
+    KeyName::Delete,
+    KeyName::Insert,
+    KeyName::Home,
+    KeyName::End,
+    KeyName::PageUp,
+    KeyName::PageDown,
+];
 
 /// The relay of one agent's pane: its pane as found at the ask, found
 /// again by the agent's herdr name where it moved, each call under the
@@ -1728,28 +1724,60 @@ impl Relay for HerdrRelay {
         RelayScreen::Gone
     }
 
-    /// Text by `pane send-text <pane> <text>`, keys by one `pane send-keys
-    /// <pane> <key>…` as herdr names them; where herdr finds no pane by
-    /// its id, which it answers before it writes a byte, found again once
-    /// and typed there (95, 107, 222).
+    /// Text by `pane send-text <pane> <text>`; keys by `pane send-keys
+    /// <pane> <key>…`, a key herdr 0.9.5 cannot type refused, named,
+    /// nothing sent for it, and each run of keys around it typed in order,
+    /// one call each, the input then refused naming each key not typed
+    /// (95, 107, 222, C.5's relay row).
     fn typed(&mut self, input: &Typed) -> Result<(), String> {
-        let (verb, rest): ([&str; 2], Vec<String>) = match input {
-            Typed::Text(text) => (["pane", "send-text"], vec![text.clone()]),
-            Typed::Keys(keys) => (["pane", "send-keys"], keys.iter().map(herdr_key).collect()),
+        let keys = match input {
+            Typed::Text(text) => return self.on_pane_again(&["pane", "send-text"], &[text]),
+            Typed::Keys(keys) => keys,
         };
-        let rest: Vec<&str> = rest.iter().map(String::as_str).collect();
+        let mut runs: Vec<Vec<String>> = vec![vec![]];
+        let mut untyped = vec![];
+        for key in keys {
+            match herdr_key(key) {
+                Ok(name) => runs.last_mut().expect("a run").push(name),
+                Err(why) => {
+                    untyped.push(why);
+                    runs.push(vec![]);
+                }
+            }
+        }
+        for run in runs.iter().filter(|run| !run.is_empty()) {
+            let run: Vec<&str> = run.iter().map(String::as_str).collect();
+            self.on_pane_again(&["pane", "send-keys"], &run)?;
+        }
+        if untyped.is_empty() {
+            Ok(())
+        } else {
+            let (them, were) = if untyped.len() == 1 {
+                ("it", "it")
+            } else {
+                ("them", "them")
+            };
+            Err(format!(
+                "{}; nothing was sent for {them}, and the keys around {were} were typed",
+                untyped.join("; ")
+            ))
+        }
+    }
+}
+
+impl HerdrRelay {
+    /// `verb` with the pane's id and `rest`, found again once and asked
+    /// there where herdr finds no pane by its id, which it answers before
+    /// it writes a byte; a refusal in herdr's words (95, 222; record
+    /// 0018).
+    fn on_pane_again(&mut self, verb: &[&str], rest: &[&str]) -> Result<(), String> {
         for again in [false, true] {
-            match self.on_pane(&verb, &rest) {
+            match self.on_pane(verb, rest) {
                 Call::Answered(_) => return Ok(()),
                 Call::Refused { code, .. } if code == "pane_not_found" && !again => {
                     match self.found_again() {
                         Found::At(_) => continue,
-                        Found::Gone => {
-                            return Err(format!(
-                                "herdr holds no pane of the agent {}",
-                                self.identity
-                            ))
-                        }
+                        Found::Gone => break,
                         Found::Unknown(reason) => return Err(reason),
                     }
                 }
@@ -2811,6 +2839,63 @@ mod tests {
             "{:?}",
             asked.elapsed()
         );
+        let _ = fs::remove_dir_all(scratch);
+    }
+
+    #[test]
+    fn relay_refuses_a_key_herdr_cannot_type_and_types_the_keys_after_it() {
+        // The terminal-profiles scenario "A key herdr cannot type among
+        // keys it can" (222, C.5's relay row at blueprints b54a9b4).
+        let body = format!("case \"$1 $2\" in\n{PANE_GET}\n*) echo '{{\"result\":{{}}}}' ;;\nesac");
+        let (herdr, scratch, log) = over_stand_in("cannot", &body);
+        let mut relay = herdr.relay(&identity()).expect("the pane is found");
+        let keys =
+            |names: &[&str]| Typed::Keys(names.iter().map(|name| name.parse().unwrap()).collect());
+        let refused = relay
+            .typed(&keys(&["ctrl+c", "home", "enter"]))
+            .expect_err("home is refused");
+        assert_eq!(
+            refused,
+            "home is a key herdr 0.9.5 cannot type; nothing was sent for it, and the keys around it were typed"
+        );
+        assert_eq!(
+            relay_calls(&log),
+            vec![
+                "pane send-keys w1:p2 ctrl+c HERDR_SOCKET_PATH=/run/h.sock".to_string(),
+                "pane send-keys w1:p2 enter HERDR_SOCKET_PATH=/run/h.sock".to_string(),
+            ]
+        );
+        let six = [
+            "delete",
+            "ctrl+insert",
+            "alt+home",
+            "shift+end",
+            "ctrl+alt+pageup",
+            "pagedown",
+        ];
+        let refused = relay.typed(&keys(&six)).expect_err("each of the six");
+        for name in six {
+            assert!(
+                refused.contains(&format!("{name} is a key herdr 0.9.5 cannot type")),
+                "{refused}"
+            );
+        }
+        assert!(refused.ends_with("nothing was sent for them, and the keys around them were typed"));
+        assert_eq!(relay_calls(&log).len(), 2, "a herdr call for the six");
+        for name in ["delete", "insert", "home", "end", "pageup", "pagedown"] {
+            assert!(herdr_key(&name.parse().unwrap()).is_err(), "{name}");
+        }
+        for name in [
+            "enter",
+            "esc",
+            "backspace",
+            "f12",
+            "ctrl+c",
+            "shift+tab",
+            "é",
+        ] {
+            assert_eq!(herdr_key(&name.parse().unwrap()), Ok(name.to_string()));
+        }
         let _ = fs::remove_dir_all(scratch);
     }
 

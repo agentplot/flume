@@ -48,7 +48,10 @@ queued on the bolt boomdrives-runner-reaches-a-terminal-through-flume
   stopped. It reaches the terminal the agent's start recorded (190).
 - **herdr's relay (C.5's relay row).** `pane read <pane> --source
   visible --format ansi` every 250 milliseconds at most, `pane
-  send-text` for text and `pane send-keys` for keys, each call bounded
+  send-text` for text and `pane send-keys` for keys, the six keys
+  herdr 0.9.5 names none of, `delete`, `insert`, `home`, `end`,
+  `pageup` and `pagedown`, refused, named, and the keys after them
+  typed, each call bounded
   at one second, the pane found again where it moved.
 - **The printed command and Rex refuse relay.** The printed command
   holds no part of a terminal a person can be shown (C.5). The

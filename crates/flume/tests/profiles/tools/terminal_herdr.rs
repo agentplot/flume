@@ -151,6 +151,14 @@ if [ -n "$STAND_IN_DIALOG" ]; then
 fi
 : > "$log/started"
 report idle
+if [ -n "$STAND_IN_CAT" ]; then
+  # Once the test says go, after open has read the program, a pane
+  # running `cat` in raw mode, so every key a relay types reaches it as
+  # bytes, a ctrl+c or a ctrl+d among them, and none ends it.
+  while [ ! -e "$log/go" ]; do sleep 0.1; done
+  stty raw -echo 2>/dev/null
+  exec cat > "$log/cat"
+fi
 ctrl_c=$(printf '\003')
 stty -isig 2>/dev/null
 while :; do
@@ -4180,5 +4188,81 @@ esac
     assert!(
         matches!(&listing, AgentsIn::Unread { reason } if reason.contains("did not answer within 1 seconds")),
         "the agents of a part whose listing does not answer gave {listing:?}"
+    );
+}
+
+#[test]
+fn relay_types_each_of_flumes_key_names_into_a_pane() {
+    // 222, C.5's relay row at blueprints b54a9b4, core.29: each of flume's
+    // key names, bare and led by ctrl+, alt+ and shift+, typed by the relay
+    // into a pane of the pinned herdr running `cat`, herdr taking every
+    // name but delete, insert, home, end, pageup and pagedown, which the
+    // relay refuses, named, and which the pinned herdr itself still
+    // refuses; and of `a`, `home` and `b` together, `cat` reads `a` and `b`.
+    let server = TestServer::start("herdr-keys");
+    let profile = server.profile();
+    let who = identity(1);
+    let pane = opened(
+        &server,
+        &profile,
+        &who,
+        &server.command(&[("STAND_IN_CAT", "1")]),
+    );
+    let log = server.scratch.path("log").join(&pane.id);
+    fs::write(log.join("go"), "").expect("the stand-in told to run cat");
+    server.within("the pane's cat did not run", || log.join("cat").exists());
+    let mut relay = profile.relay(&who).expect("the pane is relayed");
+    let six = ["delete", "insert", "home", "end", "pageup", "pagedown"];
+    let mut bare: Vec<String> = KeyName::named().iter().map(ToString::to_string).collect();
+    bare.extend(["a", "Z", "1", "+", "/", "é"].map(str::to_string));
+    let mut names = vec![];
+    for name in &bare {
+        for lead in ["", "ctrl+", "alt+", "shift+"] {
+            names.push(format!("{lead}{name}"));
+        }
+    }
+    names.extend(["ctrl+alt+x", "ctrl+shift+tab", "ctrl+alt+shift+delete"].map(str::to_string));
+    let mut refused = vec![];
+    for name in &names {
+        let key: Key = name.parse().unwrap_or_else(|refused| panic!("{refused}"));
+        let cannot = six.iter().any(|one| name.ends_with(one));
+        match relay.typed(&Typed::Keys(vec![key])) {
+            Ok(()) => assert!(!cannot, "{name} was typed"),
+            Err(words) if cannot => assert!(
+                words.starts_with(&format!("{name} is a key herdr 0.9.5 cannot type")),
+                "{name}: {words}"
+            ),
+            Err(words) => refused.push((name.clone(), words)),
+        }
+    }
+    assert!(refused.is_empty(), "herdr refused {refused:#?}");
+    for name in six {
+        let words = server
+            .try_herdr(&["pane", "send-keys", &pane.id, name])
+            .expect_err(name);
+        assert!(
+            words.contains("invalid_key") || words.contains("unsupported key"),
+            "the pinned herdr's refusal of {name}: {words}"
+        );
+    }
+    let cat = log.join("cat");
+    let before = fs::read(&cat).expect("what cat read").len();
+    let around = Typed::Keys(
+        ["a", "home", "b"]
+            .map(|name| name.parse().unwrap())
+            .to_vec(),
+    );
+    let words = relay.typed(&around).expect_err("home is refused");
+    assert!(
+        words.starts_with("home is a key herdr 0.9.5 cannot type"),
+        "{words}"
+    );
+    server.within("cat did not read a and b", || {
+        fs::read(&cat).is_ok_and(|read| read.len() >= before + 2)
+    });
+    assert_eq!(&fs::read(&cat).expect("what cat read")[before..], b"ab");
+    assert!(
+        matches!(relay.screen(), RelayScreen::Shows { .. }),
+        "the pane reads gone once every key was typed"
     );
 }

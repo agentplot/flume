@@ -6,9 +6,9 @@ The herdr profile's relay SHALL find the agent's pane as its other
 operations do, refusing where herdr holds none of the agent. Its handle
 SHALL state 250 milliseconds, read by `pane read <pane> --source
 visible --format ansi`, type text by `pane send-text <pane> <text>` and
-keys by one `pane send-keys <pane> <key>…` as herdr 0.9.5 names them,
-each call with `HERDR_SOCKET_PATH` the pane's server and the caller's
-`HERDR_*` stripped (107, 221, 222, C.5; core.29).
+keys by `pane send-keys <pane> <key>…`, each call with
+`HERDR_SOCKET_PATH` the pane's server and the caller's `HERDR_*`
+stripped (107, 221, 222, C.5; core.29).
 
 #### Scenario: Reads and types over a stand-in herdr
 
@@ -20,10 +20,23 @@ each call with `HERDR_SOCKET_PATH` the pane's server and the caller's
 - **WHEN** the terminal seam's scenarios run against the herdr profile and the pinned herdr, its harness saying it relays
 - **THEN** each passes, the relay's among them (221, 222, C.5)
 
+### Requirement: herdr's relay refuses the keys herdr 0.9.5 cannot type
+
+The herdr profile's relay SHALL refuse each of `delete`, `insert`,
+`home`, `end`, `pageup` and `pagedown`, bare or led, which herdr 0.9.5
+names none of, naming it as a key herdr 0.9.5 cannot type, sending
+nothing for it and typing the keys after it, each run of keys between
+them one `pane send-keys` (222, C.5; core.29).
+
 #### Scenario: Every key name against the pinned herdr
 
-- **WHEN** each of flume's key names, bare and led by `ctrl+`, `alt+` and `shift+` where the name allows, is typed by the profile's relay into a pane of the pinned herdr running `cat`
-- **THEN** herdr takes each, refusing none (222; core.29)
+- **WHEN** each of flume's key names, bare and led by `ctrl+`, `alt+` and `shift+`, is typed by the profile's relay into a pane of the pinned herdr running `cat`, and then the keys `a`, `home` and `b` together
+- **THEN** herdr takes every name but `delete`, `insert`, `home`, `end`, `pageup` and `pagedown`; the relay refuses each of those six, bare or led, naming it as a key herdr 0.9.5 cannot type, and the pinned herdr's own `pane send-keys` still refuses each; and of `a`, `home` and `b`, `home` is refused, named, and `cat` reads `a` and then `b` (222, C.5; core.29)
+
+#### Scenario: A key herdr cannot type among keys it can
+
+- **WHEN** the profile's relay types the keys `ctrl+c`, `home` and `enter` over a stand-in `herdr` that logs its arguments
+- **THEN** the stand-in ran `pane send-keys w1:p2 ctrl+c` and then `pane send-keys w1:p2 enter`, nothing for `home`, and the input is refused naming `home` as a key herdr 0.9.5 cannot type (222, C.5)
 
 ### Requirement: herdr's relay finds a moved pane again and reads a gone one gone
 

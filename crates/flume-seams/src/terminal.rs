@@ -490,8 +490,9 @@ pub trait Relay: Send {
 
     /// The person's input given to the agent as the person typed it:
     /// nothing typed cleared first and no receipt read, which no send of
-    /// flume's is (95); or the terminal's refusal in its words (107,
-    /// 222).
+    /// flume's is (95); or the terminal's refusal in its words. A key the
+    /// terminal cannot type is refused, named, with nothing typed for it,
+    /// and the keys after it are still typed (107, 222).
     fn typed(&mut self, input: &Typed) -> Result<(), String>;
 }
 

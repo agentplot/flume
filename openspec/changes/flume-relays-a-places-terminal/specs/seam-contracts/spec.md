@@ -20,6 +20,16 @@ SHALL end nothing in the terminal (107, 221, 222).
 - **WHEN** the terminal seam's scenarios run against a terminal that offers no relay
 - **THEN** its relay of an open agent is refused with words (222)
 
+### Requirement: A relay refuses a key its terminal cannot type
+
+A relay's handle SHALL refuse a key its terminal cannot type, naming
+it, with nothing typed for it, and SHALL type the keys after it (222).
+
+#### Scenario: A key the terminal cannot type
+
+- **WHEN** a relay is given keys one of which its terminal cannot type
+- **THEN** the input is refused naming that key, nothing is typed for it, and the keys before and after it are typed in order (222)
+
 ### Requirement: A terminal that builds no relay refuses it
 
 A terminal that builds no relay SHALL refuse every relay with `the

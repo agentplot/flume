@@ -6,8 +6,13 @@ relay text main's head on 2026-11-14, 81288ba, holds unchanged: 107,
 command, with the clauses they cite (4, 95, 96, 98, 120, 136, 187,
 190). The decision behind them is boomdrivedev/boomdrive record 0004,
 accepted by the user on 2026-11-07 on their card, and its terminal
-relay spec says what the runner did with herdr itself. Where this
-design and the statement disagree, the statement wins (core.19).
+relay spec says what the runner did with herdr itself. 222 and C.5's
+relay row are read as boomdrivedev/blueprints b54a9b4 gives them, on
+its branch design/a-relay-refuses-a-key-it-cannot-type: a key the
+terminal cannot type is refused, named, with nothing typed for it, and
+the keys after it still go in; and herdr 0.9.5 names no `delete`,
+`insert`, `home`, `end`, `pageup` or `pagedown`. Where this design and
+the statement disagree, the statement wins (core.19).
 
 The rules relied on: core.1 and core.2 (the core names no terminal and
 reaches one through the terminal seam alone; herdr's commands are the
@@ -160,9 +165,21 @@ of the agent, and unknown refuses it in herdr's words. The handle:
   `pane_not_found` the pane found again, read there where it moved and
   `Gone` where it is gone; `server_not_running` is `Gone`.
 - `typed`: text by `pane send-text <pane> <text>`, keys by `pane
-  send-keys <pane> <key>…` in one call, each flume key name as herdr
-  0.9.5 names it; `pane_not_found` found again once and typed there,
+  send-keys <pane> <key>…`, each flume key name herdr 0.9.5 types
+  spelled as flume spells it, in one call where every key is one herdr
+  types. herdr 0.9.5 names no `delete`, `insert`, `home`, `end`,
+  `pageup` or `pagedown`, bare or led, so each of those is refused,
+  named as a key herdr 0.9.5 cannot type, nothing sent for it, and the
+  keys after it still go in, each run of keys between them one call;
+  the input is then given back as untyped with those words (222, C.5's
+  relay row). `pane_not_found` is found again once and typed there,
   since herdr refuses before it writes a byte.
+
+The six stay among flume's names, which are flume's own and which a
+later herdr may type; they are not typed as escape sequences by `pane
+send-text`, which may paste a sequence as text rather than type it as a
+key, and C.5 sends keys by `pane send-keys` (boomdrive-design's ruling
+of 2026-11-14).
 
 Every relay call runs with `HERDR_SOCKET_PATH` the pane's server and the
 caller's `HERDR_*` stripped, as every call of the profile, and is
@@ -170,7 +187,8 @@ bounded at one second, as runs' listing is, since herdr answers in
 milliseconds and a read that waits holds the person's screen; one past
 it is unread, or untyped, naming the bound (98; core.29). Each command
 and field is checked against the pinned herdr in the tools layer, every
-key name of section 3 among them.
+key name of section 3 among them: herdr takes every other name and still
+refuses the six, so a herdr that comes to type them shows there.
 
 ## 7. The printed command and Rex
 
