@@ -60,3 +60,7 @@ build until its own tasks come.
 ## 10. The site
 
 - [x] 10.1 Say on the site what an account's reading is now (core.35): `guides/agent-settings.md`, the reading what the agent program reports in the sessions flume starts, `usage` gone from the examples and the section on the file, and an account with no reading; `reference/configuration.md`, `usage` gone from an account's keys and named among the words refused; `reference/state.md`, the account's document's `reading`, the file an account's `usage` named gone, and status's `reading` with `read_at`, `agent`, `session` and why there is none; `guides/claude-code.mdx`, the module that passes the windows; `reference/commands.md`, `flume hook usage`; and the roadmap's row reading the program's reading. True when `sluice exec <base> -- moon run site:prose` passes.
+
+## 11. What verify found, mended
+
+- [x] 11.1 Name a program no profile holds in `a_most_left_pool` and `an_accounts_usage_is_no_word_of_an_account` in `crates/flume/src/host/config.rs`, `agent` as the file's other pools do, where task 6.1 named `claude`, which verify found at 909025df the conformance suite's `no_tool_is_named_outside_a_profile` refusing (core.1). True when `sluice exec bolt/flumes-settings-read-as-its-records-say -- moon run conformance:test` passes.

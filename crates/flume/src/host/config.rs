@@ -2737,7 +2737,7 @@ label = "inception"
     fn a_most_left_pool() {
         let config = HostConfig::parse(
             "[pools.work]\nstrategy = \"most-left\"\nthreshold = 85\n\
-             accounts = [{ name = \"work-1\", program = \"claude\" }]\n",
+             accounts = [{ name = \"work-1\", program = \"agent\" }]\n",
         )
         .unwrap();
         let work = &config.pools["work"];
@@ -2747,7 +2747,7 @@ label = "inception"
             work.accounts,
             vec![Account {
                 name: "work-1".into(),
-                program: "claude".into(),
+                program: "agent".into(),
                 env: BTreeMap::new(),
                 agents: None,
             }]
@@ -2771,7 +2771,7 @@ label = "inception"
         for usage in ["\"~/.local/state/usage/work-1.json\"", "\"\"", "7"] {
             let text = format!(
                 "[pools.work]\nstrategy = \"fill-first\"\n\
-                 accounts = [{{ name = \"work-1\", program = \"claude\", usage = {usage} }}]\n"
+                 accounts = [{{ name = \"work-1\", program = \"agent\", usage = {usage} }}]\n"
             );
             assert_eq!(
                 HostConfig::parse(&text).unwrap_err(),
