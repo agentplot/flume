@@ -195,18 +195,16 @@ Each account:
 | `program` | a string | the program it runs, such as `claude`; it takes only stages of that program, and a pool with no account of a stage's program refuses that stage | refused |
 | `env` | a table of strings | its agents' environment, over the login environment | no variable |
 | `agents` | a whole number above 0 | the bound on agents running under it at once | no bound of its own |
-| `usage` | a path | the file of its reading, written by something of the host's and read by flume, never written | no reading |
 
 In `env`, a leading `~` is your home and `$VAR` or `${VAR}` a variable
 of your login environment, read at each start. A variable the login
 environment lacks refuses that start, naming it and the account.
 
-`usage` reads `~` and `$VAR` the same way, at each choice of an account
-and whenever status is asked. A variable the login environment lacks
-leaves the account with no reading, and status names the variable; it
-refuses no start. A file that is missing or not in the reading's form
-is no reading either, and status says why. Status gives `usage` as
-`<set>`, never its path.
+An account names nothing for its reading: its reading is the usage
+windows its agent program reports in the sessions flume starts, which
+flume keeps in the account's own document ([an account's
+reading](/flume/guides/agent-settings/#an-accounts-reading)). An
+account that names any other key, `usage` among them, is refused.
 
 ### A repository's name
 
@@ -356,7 +354,9 @@ flume refuses the file, naming the key, for:
 
 - a `strategy` other than `fill-first`, `least-busy` and `most-left`;
 - a `threshold` that is not a whole number from 1 to 100;
-- a `usage` that is not a string, or is empty;
+- an account naming a key other than `name`, `program`, `env` and
+  `agents`, such as `usage`, refused as `[pools.<pool>.accounts[<n>]]
+  usage is no word of an account`;
 - a stream's `pool` or `[host] pool` naming a pool no `[pools]` table
   declares;
 - a pool with no accounts, or two accounts of one name;

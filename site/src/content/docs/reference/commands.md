@@ -791,8 +791,10 @@ case do nothing but `session-start`, which collects for the session
 | `flume ack received --digest <hex> [--mode <mode>]` | The agent received a prompt, by the SHA-256 digest of its text with paste tags taken off and whitespace collapsed. At the start's first prompt, where its start passed a mode, flume takes it only where `--mode` names that mode as the program names it. Otherwise it refuses, naming the mode asked and the one given, records the start begun without its settings and starts a settle of the place. A later prompt compares no mode. |
 | `flume hook <event>` | What the hook for the event does with the input on standard input: `session-start`, `user-prompt-submit`, `pre-tool-use`, `permission-request`, `post-tool-use`, `stop`, `stop-failure` or `session-end`. Any other event does nothing. It always exits `0`. |
 | `flume hook status-line` | Prints the line of the place `FLUME_PLACE` names, as `flume status <place> --line` gives it, ending `· this session is not its agent` where `FLUME_AGENT` is not the current stage's live start. It needs `FLUME_PLACE` and `FLUME_AGENT` alone, and reads no standard input. It prints nothing where they are missing or the place cannot be read, writes nothing, settles nothing and always exits `0`. |
+| `flume hook usage` | Keeps the usage windows its standard input reports, `{"rateLimits": […]}` as Claude Code gives them, beside the start's record with the time it ran, and has flume take them as the reading of the account the start `FLUME_AGENT` names runs under, with `FLUME_SECRET`. A report with a window in no form it reads keeps nothing, and one taken no later than the reading kept changes nothing. It reads and writes nothing without `FLUME_AGENT` and `FLUME_SECRET`, prints nothing and always exits `0` ([the account's usage windows](/flume/guides/claude-code/#the-accounts-usage-windows)). |
 
 flume's Claude Code plugin runs `flume hook` for every event, and its
-module runs `flume hook status-line` to pin the place's line;
+module runs `flume hook status-line` to pin the place's line and
+`flume hook usage` to pass the account's usage windows;
 [the Claude Code plugin](/flume/guides/claude-code/#what-each-hook-does)
 says what each does.
