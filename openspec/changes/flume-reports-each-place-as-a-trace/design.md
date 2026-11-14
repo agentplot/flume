@@ -227,7 +227,10 @@ They are set by the core, so every program and every terminal gets
 them, the printed command's file among them. They are in no start's
 record and never compared: telemetry changes no started ack (216). As
 `FLUME_*` are, they are flume's way of starting the program and no
-setting of a layer, so status gives no layer for them (core.30).
+setting of a layer, so status gives no layer for them (core.30). A
+variable of either name that the start's account gives is in no record
+either, since flume rewrites the first while it sends, and status names
+it with the account's layer as any account's variable (record 0067).
 
 ## 10. Metrics (220)
 

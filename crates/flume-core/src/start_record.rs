@@ -159,4 +159,46 @@ mod tests {
         assert_eq!(record.program, "agent");
         assert_eq!(record.account, None);
     }
+
+    #[test]
+    fn an_accounts_telemetry_variables_are_in_no_record() {
+        // An account's OTEL_RESOURCE_ATTRIBUTES and TRACEPARENT stay out of
+        // the record beside its own variable's digest, since flume rewrites
+        // the first while it sends (161, 219; record 0067).
+        let secret = Secret("s".into());
+        let account = AccountHeld {
+            pool: "main".into(),
+            name: "work-1".into(),
+            from: flume_seams::AccountFrom::Strategy,
+        };
+        let env = BTreeMap::from([
+            ("HOME_DIR".to_string(), "/s/work-1".to_string()),
+            (
+                "OTEL_RESOURCE_ATTRIBUTES".to_string(),
+                "team=ops".to_string(),
+            ),
+            (
+                "TRACEPARENT".to_string(),
+                "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01".to_string(),
+            ),
+        ]);
+        let record = start_record(
+            "agent",
+            Some(&account),
+            &env,
+            &[],
+            &identity(),
+            "/r/places/fix--one",
+            &secret,
+        );
+        assert_eq!(
+            record.env.keys().collect::<Vec<_>>(),
+            vec!["FLUME_AGENT", "FLUME_PLACE", "FLUME_STAGE", "HOME_DIR"]
+        );
+        assert_eq!(
+            record.env["HOME_DIR"],
+            variable_digest(&secret, "HOME_DIR", "/s/work-1")
+        );
+        assert_eq!(record.account.as_deref(), Some("work-1"));
+    }
 }
