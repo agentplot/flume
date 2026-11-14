@@ -1,85 +1,76 @@
 # Verify: flumes-own-kinds-carry-their-agents-mode
 
-Verified at `e7bb42d6` on `change/flumes-own-kinds-carry-their-agents-mode`,
+Verified at `23239655` on `change/flumes-own-kinds-carry-their-agents-mode`,
 against its base `bolt/flumes-settings-read-as-its-records-say` at
-`2d180f0b`, which the branch holds.
+`ea8939fd`. The branch was cut at `2d180f0b`. The bolt has since landed
+#73, `a-labels-share-is-owed-and-reserved`. Its spec moves touch
+host-configuration, host-module, host-queue, seam-contracts,
+stream-labels and streams, none of the five capabilities this change
+modifies.
 
-**Verdict: falls short. Not archived.** The whole checks fail on one
-test. `flume:test`'s `kinds_weir::flumes_own_as_packages` still expects
-flume's own five packages, and the binary now holds eight. That test is
-the kinds-profile scenario "Flume's own as packages", which this change
-modifies to name the eight, so that scenario is not met. Every task is
-ticked, and every other requirement and scenario is met by a check that
-passed.
+**Verdict: holds. Archived.** The whole checks pass. Every requirement
+and scenario of the change's five delta specs is met by a check that
+passed, and every task, 1.1 to 5.1, is ticked and done.
 
 ## The whole checks
 
 `sluice exec bolt/flumes-settings-read-as-its-records-say`, the host's
-sluice 0.93.2, run once: **failed**, `exit 1`. sluice ran the checks
-`e7bb42d` affects against the base, the bolt's `#check-fast`: 15 tasks,
-14 passed and 1 failed (`flume:test`). It recorded the 14 passing
-results under their keys for `e7bb42d`.
+sluice 0.93.2, run once: **passed**, `exit 0`. sluice ran the checks
+`2323965` affects against the bolt at `ea8939f`, its `#check-fast`. moon
+completed 15 tasks with none failed, and sluice recorded 14 results
+under their keys for `2323965`.
+
+The tasks: `site:install`, `site:prose` (0 errors, 0 warnings),
+`site:build`, `root:format`, `root:changes` (2 passed, this change among
+them), `nix:typecheck`, `nix:test`, `plugin-claude:test`,
+`conformance:format`, `conformance:lint`, `conformance:test`,
+`conformance:coverage`, `flume:format`, `flume:lint` and `flume:test`.
+`flume:lint` is clippy over `--all-targets --all-features`, the live
+walkthroughs among them, which is task 4.4's check. In `flume:test`, the
+unit tests (286), the binary's own (2), `command_line` (4), `commands`
+(62), `host` (32), `profiles` (204) and `scratch` (2) all passed.
 
 The run first asked through `devenv shell -- sluice exec …` stopped
 before any check ran. Inside the shell, the sluice the tree pins for the
-merge-queue profile's tests, 0.71.0, comes first on `PATH`. It refused
-the host's `~/.config/sluice/config.toml` (`unknown field credential`,
-line 21). No check ran under it. The run above is the host's own sluice,
-which enters the devenv toolchain itself, as `.config/sluice.toml`'s
-`[tests] toolchain` says.
-
-The failure:
-
-```
----- kinds_weir::flumes_own_as_packages stdout ----
-thread 'kinds_weir::flumes_own_as_packages' panicked at crates/flume/tests/profiles/kinds_weir.rs:2937:5:
-assertion `left == right` failed
-  left: [("flume/change@1", 71), ("flume/change@2", 71), ("flume/change@3", 71), ("flume/change@4", 71), ("flume/chore@1", 71), ("flume/chore@2", 71), ("flume/fix@1", 71), ("flume/fix@2", 71)]
- right: [("flume/change@1", 71), ("flume/change@2", 71), ("flume/change@3", 71), ("flume/chore@1", 71), ("flume/fix@1", 71)]
-
-test result: FAILED. 203 passed; 1 failed (the `profiles` test binary)
-```
-
-The tasks that passed: `site:install`, `site:prose` (0 errors, 0
-warnings), `site:build`, `root:format`, `root:changes` (2 passed, this
-change among them), `nix:typecheck`, `nix:test`, `plugin-claude:test`,
-`conformance:format`, `conformance:lint`, `conformance:test`,
-`conformance:coverage`, `flume:format` and `flume:lint`. `flume:lint` is
-clippy over `--all-targets --all-features`, the live walkthroughs among
-them, which is task 4.4's check.
-
-In `flume:test`, the unit tests (286), the binary's own (2) and
-`command_line`, `commands` (62, `a_source_file_with_no_kinds_dir` among
-them), `host` and `profiles` ran. cargo stopped at the failing
-`profiles` binary, so `scratch` and the doc tests did not run.
+merge-queue profile's tests, 0.71.0, comes first on `PATH`, and it
+refused the host's `~/.config/sluice/config.toml` (`unknown field
+credential`, line 21). The run above is the host's own sluice, which
+enters the devenv toolchain itself, as `.config/sluice.toml`'s `[tests]
+toolchain` says.
 
 ## The tasks' own checks outside the bolt's gate
 
 The bolt requires `#check-fast` alone. The walkthroughs are
-`#check-tools`, which main requires. Tasks 4.2 and 4.3 name them, so
+`#check-tools`, which main requires, and tasks 4.2 and 4.3 name them, so
 they ran once, through sluice:
 `sluice exec bolt/flumes-settings-read-as-its-records-say -- moon run flume:tools`,
 **passed**, 170 passed and 0 failed.
 `walkthroughs::a_hosts_mode_over_the_repositorys_and_none_where_no_layer_gives_one`,
 `walkthroughs::a_change_runs_construct_code_and_verify` and
-`walkthroughs::a_fix_agents_line_is_status_line_and_the_fix_lands` passed.
+`walkthroughs::a_fix_agents_line_is_status_line_and_the_fix_lands` are
+among them.
+
+`openspec validate flumes-own-kinds-carry-their-agents-mode --strict`:
+valid.
 
 ## The specs
 
 ### kinds-profile
 
 - **flume's newest own versions give full and say their one way to
-  ask.** Met. The three declarations give each stage
-  `agents = [{ mode = "full" }]`. Each new prompt is its earlier
-  version's with the sentence added as a paragraph of its own after the
-  line holding `{{needs}}`, byte for byte as design section 3 gives it.
-  fix@2's and chore@2's are equal and drop "or you find work this stage
-  cannot deliver past, ". No declaration gives a `label`, a `standing`
-  or a kind-level `agents` table. Each scenario is held by a test that
-  passed: `kinds_weir::flumes_own_kinds_are_built_in`,
+  ask.** Met. `change@4`, `chore@2` and `fix@2` are each the version
+  before it at the next version: their `kind.toml`s differ only in the
+  header comment, the version, and `agents = [{ mode = "full" }]` on
+  each stage. Each change@4 prompt is change@3's with a blank line and
+  the sentence after the line holding `{{needs}}`, byte for byte as
+  design section 3 gives it. fix@2's code prompt is fix@1's with "or you
+  find work this stage cannot deliver past, " taken out of its last line
+  and the sentence after it. chore@2's prompts equal fix@2's. No
+  declaration gives a `label`, a `standing` or a kind-level `agents`
+  table. Held by `kinds_weir::flumes_own_kinds_are_built_in`,
   `the_newest_own_prompts_say_their_one_way_to_ask`,
   `each_versions_prompts_are_its_own` and
-  `built_in::flumes_own_kinds_declare_no_label`.
+  `built_in::flumes_own_kinds_declare_no_label`, all passed.
 - **flume's own three kinds and their prompts.** Met: "The kinds built
   in", "Each version's prompts are its own", "No prompt asks to submit"
   and the places launched at change@1 and change@2, each held by its
@@ -88,15 +79,12 @@ they ran once, through sluice:
   `a_code_prompt_sent_back_with_a_conflict_merges_the_base_never_rebasing`
   renders fix@2's, chore@2's and change@4's code prompts with a
   conflict's words, and it passed.
-- **Packages, identities and locks through weir's crate.** **Not met.**
-  The scenario "Flume's own as packages" says each package is one of
-  `flume/fix@1`, `flume/fix@2`, `flume/chore@1`, `flume/chore@2` and
-  `flume/change@1` to `flume/change@4`, with its hash.
-  `kinds_weir::flumes_own_as_packages`, its test, still lists the five
-  before this change and fails. The binary holds the eight, as the test's
-  own output shows, so the code is right and the test was not brought to
-  the scenario. No task of `tasks.md` names this test. The requirement's
-  other four scenarios are unchanged and passed.
+- **Packages, identities and locks through weir's crate.** Met. "Flume's
+  own as packages" is held by `kinds_weir::flumes_own_as_packages`, which
+  names the eight versions in `OWN`'s order, `flume/change@1` to
+  `flume/change@4`, `flume/chore@1`, `flume/chore@2`, `flume/fix@1` and
+  `flume/fix@2`, each with its hash, and passed. The other four
+  scenarios are unchanged and passed.
 
 ### agent-modes
 
@@ -106,7 +94,8 @@ they ran once, through sluice:
   `World::with_every_own_version()`. In the profile,
   `kinds_weir::flumes_newest_own_kinds_give_full_from_the_kind` covers
   the same three. Over the binary, the mode walkthrough's third walk
-  covers a bare fix. All passed.
+  launches a bare fix, reads `full` from `kind` passed as
+  `bypassPermissions`, and lands it. All passed.
 - **No mode where no layer gives one.** Met. `no_mode_in_any_layer`
   launches `fix@1` by name, and the mode walkthrough's second walk does
   the same.
@@ -143,14 +132,14 @@ they ran once, through sluice:
 
 Every task, 1.1 to 5.1, is ticked. Each task's change is on the branch
 as the task says, and each check a task names exists and passed, in the
-gate or in the walkthroughs above.
+gate or in the walkthroughs above. Task 1.5, `flumes_own_as_packages`
+naming the eight versions, holds the scenario the last verify found
+unmet.
 
-## What goes back to code
+## The statement
 
-1. Bring `kinds_weir::flumes_own_as_packages`
-   (`crates/flume/tests/profiles/kinds_weir.rs:2925`) to the
-   kinds-profile scenario "Flume's own as packages", listing
-   `flume/change@1` to `flume/change@4`, `flume/chore@1`,
-   `flume/chore@2`, `flume/fix@1` and `flume/fix@2` in `OWN`'s order,
-   and record it as a ticked task of the change naming that test as its
-   check.
+Design section 7 leaves clause 22's list of flume's own kinds, and the
+statement's table naming change@3 the newest, for design to bring to
+change@4, chore@2 and fix@2 (core.19). This change cites record 0064 and
+the paragraph after the table for them, and changes nothing in the
+statement.
