@@ -14,9 +14,9 @@ use crate::ends::notice;
 use crate::{Answer, Engine, KeyConfirmed, Step};
 use chrono::{DateTime, SecondsFormat, Utc};
 use flume_seams::{
-    ConfirmedBy, DeliveredBy, Deliveries, Delivery, DeliveryRecord, EndDelivery, EndHeld, EndOf,
-    HeldState, HostDocument, HostKey, HostVersioned, OwedTo, Owing, PlaceId, Seconds, Secret,
-    Store, Written,
+    ConfirmedBy, DeliveredBy, Deliveries, Delivery, DeliveryClaim, DeliveryRecord, EndDelivery,
+    EndHeld, EndOf, HeldState, HostDocument, HostKey, HostVersioned, OwedTo, Owing, PlaceId,
+    Seconds, Secret, Store, Written,
 };
 use std::collections::BTreeMap;
 use weir_delivery::{Confirmed, Handed, Record, Recorded};
@@ -41,14 +41,21 @@ impl<'a> HostDeliveries<'a> {
 impl weir_delivery::Store for HostDeliveries<'_> {
     type Error = String;
 
+    /// The document's records alone, its claims flume's own (C.7).
     fn read(&self) -> Result<Vec<Record>, String> {
         read(self.store).map(|(_, records)| records)
     }
 
+    /// `records` added after the others, the claims kept as they were
+    /// found (C.7; weir 113).
     fn add(&mut self, records: &[Record]) -> Result<(), String> {
-        let (at, mut held) = read(self.store)?;
+        let Whole {
+            at,
+            records: mut held,
+            claims,
+        } = read_whole(self.store)?;
         held.extend(records.iter().cloned());
-        match write(self.store, at, &held) {
+        match write(self.store, at, &held, &claims) {
             Written::Written { .. } => Ok(()),
             Written::Moved => Err(format!(
                 "{} moved while they were written, and nothing was added",
@@ -58,52 +65,99 @@ impl weir_delivery::Store for HostDeliveries<'_> {
     }
 }
 
-/// The host's deliveries and the version they were read at; none and no
-/// version where the host holds no deliveries document (C.7).
+/// The host's deliveries' records and the version they were read at;
+/// none and no version where the host holds no deliveries document (C.7).
 pub fn read(store: &dyn Store) -> Result<(Option<u64>, Vec<Record>), String> {
+    read_whole(store).map(|whole| (whole.at, whole.records))
+}
+
+/// The host's deliveries document whole, as read: the version it was read
+/// at, none where the host holds none, its records and the claims beside
+/// them (75, C.7).
+#[derive(Clone, Debug, Default)]
+pub struct Whole {
+    pub at: Option<u64>,
+    pub records: Vec<Record>,
+    pub claims: Vec<DeliveryClaim>,
+}
+
+/// The records and the claims a write of the host's deliveries leaves
+/// (75, C.7).
+pub type Next = (Vec<Record>, Vec<DeliveryClaim>);
+
+/// The host's deliveries whole, their records and the claims beside
+/// them, and the version they were read at; none and no version where the
+/// host holds no deliveries document (75, C.7).
+pub fn read_whole(store: &dyn Store) -> Result<Whole, String> {
     match store.read_host(&HostKey::Deliveries) {
-        None => Ok((None, Vec::new())),
+        None => Ok(Whole::default()),
         Some(HostVersioned {
             version,
             document: HostDocument::Deliveries(deliveries),
-        }) => Ok((
-            Some(version),
-            deliveries
+        }) => Ok(Whole {
+            at: Some(version),
+            records: deliveries
                 .records
                 .into_iter()
                 .map(|record| record.0)
                 .collect(),
-        )),
+            claims: deliveries.claims,
+        }),
         Some(_) => Err(format!("{} hold another document", HostKey::Deliveries)),
     }
 }
 
-/// The host's deliveries as `records`, whole, only if still at `at` (75,
-/// 103).
-fn write(store: &dyn Store, at: Option<u64>, records: &[Record]) -> Written {
+/// The host's deliveries as `records` and `claims`, whole, only if still
+/// at `at` (75, 103).
+fn write(
+    store: &dyn Store,
+    at: Option<u64>,
+    records: &[Record],
+    claims: &[DeliveryClaim],
+) -> Written {
     let document = HostDocument::Deliveries(Deliveries {
         records: records.iter().cloned().map(DeliveryRecord).collect(),
-        claims: vec![],
+        claims: claims.to_vec(),
     });
     store.write_host(&HostKey::Deliveries, at, Some(&document))
 }
 
 /// Reads the host's deliveries and their version, asks `next` for the
 /// records that stand after this write, the whole of them, and writes
-/// them at that version, reading again where the version moved; `next`
-/// giving none writes nothing. Gives the records as they stand after it,
-/// or why they could not be written (75; core.17).
+/// them at that version with the claims as it read them, reading again
+/// where the version moved; `next` giving none writes nothing. Gives the
+/// records as they stand after it, or why they could not be written (75;
+/// core.17).
 pub fn rewrite(
     store: &dyn Store,
     mut next: impl FnMut(&[Record]) -> Option<Vec<Record>>,
 ) -> Result<Vec<Record>, String> {
+    rewrite_whole(store, |records, claims| {
+        next(records).map(|records| (records, claims.to_vec()))
+    })
+    .map(|(records, _)| records)
+}
+
+/// Reads the host's deliveries whole and their version, asks `next` for
+/// the records and the claims that stand after this write, and writes
+/// them at that version, reading again where the version moved; `next`
+/// giving none writes nothing. Gives the records and the claims as they
+/// stand after it, or why they could not be written (75, C.7; core.17).
+pub fn rewrite_whole(
+    store: &dyn Store,
+    mut next: impl FnMut(&[Record], &[DeliveryClaim]) -> Option<Next>,
+) -> Result<Next, String> {
     for _ in 0..TRIES {
-        let (at, records) = read(store)?;
-        let Some(next) = next(&records) else {
-            return Ok(records);
+        let Whole {
+            at,
+            records,
+            claims,
+        } = read_whole(store)?;
+        let Some((records, claims)) = next(&records, &claims) else {
+            return Ok((records, claims));
         };
-        if let Written::Written { .. } = write(store, at, &next) {
-            return Ok(next);
+        if let Written::Written { .. } = write(store, at, &records, &claims) {
+            return Ok((records, claims));
         }
     }
     Err(format!(

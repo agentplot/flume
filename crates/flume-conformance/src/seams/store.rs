@@ -93,8 +93,8 @@ pub fn scenarios<H: StoreHarness>() -> Vec<Scenario<H>> {
             run: two_confirmations_at_once::<H>,
         },
         Scenario {
-            name: "store: flume's store of deliveries passes every delivery case of weir's pack, its deliveries document removed before each case (weir 87, 112, 113)",
-            cites: &["43", "102", "103", "104"],
+            name: "store: flume's store of deliveries passes every delivery case of weir's pack, its deliveries document holding a claim of flume's alone before each case, which each case keeps as it found it (weir 87, 112, 113)",
+            cites: &["43", "75", "102", "103", "104"],
             run: the_pack_over_the_store::<H>,
         },
     ]
@@ -479,17 +479,62 @@ fn two_confirmations_at_once<H: StoreHarness>(harness: &H) -> Outcome {
     Ok(())
 }
 
+/// The claim of flume's each case of weir's pack begins over, as the
+/// deliveries spec's "weir's pack over a document with claims" gives it
+/// (75, C.7).
+fn a_claim() -> DeliveryClaim {
+    DeliveryClaim {
+        key: "message/east/planner/0a1b2c3d".into(),
+        recipient: "east/planner".into(),
+        at: 1_794_150_180,
+        sending: true,
+        start: None,
+    }
+}
+
+/// The host's deliveries holding [`a_claim`] and no record, as each case
+/// of weir's pack begins (C.7; weir 113).
+fn only_a_claim(store: &dyn Store) -> Outcome {
+    no_deliveries(store)?;
+    let document = HostDocument::Deliveries(Deliveries {
+        records: vec![],
+        claims: vec![a_claim()],
+    });
+    written(store.write_host(&HostKey::Deliveries, None, Some(&document)))?;
+    Ok(())
+}
+
+/// Whether the host's deliveries still hold [`a_claim`] alone, as a case
+/// of weir's pack found it (C.7; core.4).
+fn the_claim_kept(store: &dyn Store) -> Outcome {
+    let claims = deliveries::read_whole(store)?.claims;
+    ensure_eq!(
+        claims,
+        vec![a_claim()],
+        "the claims a case of weir's pack left"
+    );
+    Ok(())
+}
+
 fn the_pack_over_the_store<H: StoreHarness>(harness: &H) -> Outcome {
     let store = harness.another();
-    let mut removed: Outcome = Ok(());
+    let mut fault: Outcome = Ok(());
+    let mut begun = false;
     let verdicts = weir_pack::conform_deliveries(&weir_pack::Pack::embedded(), || {
-        if let Err(why) = no_deliveries(&*store) {
-            removed = Err(why);
+        if begun {
+            if let Err(why) = the_claim_kept(&*store) {
+                fault = fault.clone().and(Err(why));
+            }
+        }
+        begun = true;
+        if let Err(why) = only_a_claim(&*store) {
+            fault = fault.clone().and(Err(why));
         }
         HostDeliveries::new(&*store)
     });
-    removed?;
+    fault?;
     ensure!(!verdicts.is_empty(), "weir's pack ran no delivery case");
+    the_claim_kept(&*store)?;
     let failed: Vec<String> = verdicts
         .into_iter()
         .filter_map(|(case, verdict)| {
