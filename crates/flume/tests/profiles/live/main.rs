@@ -201,6 +201,15 @@ impl Live {
                 text.push_str(&format!("\n[kinds.{kind}.agents]\n{table}"));
             }
         }
+        // flume's own newest kinds give their agents `full`, which Claude
+        // Code passes as `bypassPermissions`, and a scratch configuration
+        // home has never accepted the warning Claude Code shows before an
+        // account's first such session, which flume never answers (34), so
+        // a bare fix would stall at it. The host gives `edits` in its own
+        // layer, as a host that wants less does, and its agents start with
+        // `acceptEdits`, the reach the repository's settings already give
+        // (32, 162; record 0064).
+        text.push_str("\n[agents]\nmode = \"edits\"\n");
         text.push_str(&more(&walk));
         walk.configure(&text);
 

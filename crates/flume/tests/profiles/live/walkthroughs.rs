@@ -485,7 +485,7 @@ fn a_fix_agents_pane_holds_its_place_line_under_the_prompt() {
         .unwrap_or_else(|| panic!("herdr lists no pane for the code agent: {agent}"))
         .to_string();
 
-    let line = "fix--one · fix@1 · code · run 1 ·";
+    let line = "fix--one · fix@2 · code · run 1 ·";
     let began = Instant::now();
     loop {
         let screen = live.screen(&pane);
