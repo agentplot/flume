@@ -8,10 +8,8 @@ managed file's, as 143 and C.7 name them. It SHALL declare `host`,
 SHALL type each key C.7 gives one type that flume reads at the revision
 the module is built from, each `agents` a whole number from 1, a
 label's `owed` and `reserved` from 0 and a pool's `threshold` from 1 to
-100, and SHALL leave an agents table free-form whole. Each declared
-number's option, and the agents table's for its `keep_open`, SHALL say
-in its description what the number counts, its range and what holds
-where it is unset (record 0055; record 0063; principles 13).
+100, and SHALL leave an agents table free-form whole (record 0055;
+record 0063).
 
 #### Scenario: A mistyped declared key
 
@@ -22,11 +20,6 @@ where it is unset (record 0055; record 0063; principles 13).
 
 - **WHEN** `nix:test` evaluates the options with `settings.host.agents = 0`, and again with `settings.streams.work.agents = 0`
 - **THEN** each evaluation fails, since flume reads each bound from 1 (70, C.7)
-
-#### Scenario: Each number says its unit, range and default
-
-- **WHEN** `nix:test` reads the descriptions of `host.agents`, `host.ends_expire`, a stream's `agents` and `priority`, a label's `owed` and `reserved`, a pool's `threshold`, an account's `agents` and the agents table
-- **THEN** each says what its number counts, its range, `from 1`, `from 0`, `from 1 to 100`, a whole number for `priority` with which way it orders, or seconds, minutes and hours for a time, and what holds where it is unset (70, 143, 181, 185, 198, C.7)
 
 ### Requirement: Only the keys flume reads are declared
 
@@ -41,3 +34,17 @@ flume refuses, pass undeclared (record 0055; record 0063).
 
 - **WHEN** `nix:test` reads the options `services.flume.settings` declares
 - **THEN** `host` declares `multiplexer` and `ends_expire` and no `terminal`, a label declares `owed` and `reserved` and neither `reserve` nor `keep_free`, and a stream declares neither `points` nor `pace`
+
+## ADDED Requirements
+
+### Requirement: Each declared number says its unit, range and default
+
+Each number's option the module declares, and the agents table's for
+its `keep_open`, SHALL say in its description what the number counts,
+its range and what holds where it is unset (record 0063; principles
+13).
+
+#### Scenario: Each number says its unit, range and default
+
+- **WHEN** `nix:test` reads the descriptions of `host.agents`, `host.ends_expire`, a stream's `agents` and `priority`, a label's `owed` and `reserved`, a pool's `threshold`, an account's `agents` and the agents table
+- **THEN** each says what its number counts, its range, `from 1`, `from 0`, `from 1 to 100`, a whole number for `priority` with which way it orders, or seconds, minutes and hours for a time, and what holds where it is unset (70, 143, 181, 185, 198, C.7)

@@ -3,15 +3,12 @@
 ### Requirement: A host declares its streams
 
 The host's configuration SHALL declare streams by name, each with its
-bound on agents running, a whole number from 1, the host's bound alone
-holding it where it gives none, its priority, a whole number, a stream
-of higher priority starting first, zero where it gives none, and its
-pool. The host's own bound SHALL be a whole number from 1, none where
-it gives none; a bound of 0, the host's or a stream's, SHALL refuse the
-configuration naming its key. The stream `default` SHALL always stand,
-held by the host's bound alone unless a `[streams.default]` table states
-its own. The host's bound SHALL cap every stream's agents together (70,
-143, C.7).
+bound on agents running, the host's bound alone holding it where it
+gives none, its priority, a whole number, a stream of higher priority
+starting first, zero where it gives none, and its pool. The stream
+`default` SHALL always stand, held by the host's bound alone unless a
+`[streams.default]` table states its own. The host's bound SHALL cap
+every stream's agents together (70, 143, C.7).
 
 #### Scenario: Two streams declared
 
@@ -22,6 +19,15 @@ its own. The host's bound SHALL cap every stream's agents together (70,
 
 - **WHEN** the host's configuration declares no stream
 - **THEN** every place runs in `default`, bounded by `[host] agents` alone (70)
+
+## ADDED Requirements
+
+### Requirement: A bound on agents is a whole number from 1
+
+The host's bound and each stream's SHALL each be a whole number of
+agents from 1, the host's none where it gives none, and a bound of 0,
+the host's or a stream's, SHALL refuse the configuration naming its
+key (70, 143, C.7).
 
 #### Scenario: A host's bound of zero
 
