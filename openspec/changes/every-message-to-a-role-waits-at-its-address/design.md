@@ -303,7 +303,8 @@ deliveries (214).
   hand-over with its way and when, and whether it is expired; and
   `reporting`, each place whose work is not over that names the address
   among its recipients. Status lists an address a message alone is
-  pending for, as one an end is pending for. Both are read at the ask
+  pending for, or a place alone reports to, as one an end is pending
+  for. Both are read at the ask
   and kept by nothing (core.15).
 - `flume inbox` gives `messages` beside `ends`, each handed to its
   recipient by the inbox and confirmed by `--confirm`; an inbox naming

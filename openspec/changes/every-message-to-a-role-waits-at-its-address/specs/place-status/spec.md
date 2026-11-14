@@ -4,7 +4,8 @@
 
 Status SHALL give, for each stream, its answerer with the source that
 declares it; each source's roles, or why they cannot be read; and for
-each address an end or a message stands pending for, its run, or that
+each address an end or a message stands pending for, or a place whose
+work is not over reports to, its run, or that
 it is carried or wakes nothing and why, each message pending at it with
 its key, who sent it, when, its words' first line, each hand-over and
 whether it is expired, and each place whose work is not over that names

@@ -254,6 +254,17 @@ impl Engine {
                 .or_insert_with(|| AddressStatus::of(address))
                 .messages = messages;
         }
+        // Each role's address a place whose work is not over reports to
+        // (7, 214).
+        for held in every
+            .iter()
+            .filter(|held| matches!(held.phase, Phase::Making { .. } | Phase::Live))
+        {
+            for address in held.place.recipients.iter().filter(|name| is_address(name)) {
+                by.entry(address.clone())
+                    .or_insert_with(|| AddressStatus::of(address.clone()));
+            }
+        }
         let mut standing = Standing::of(roles);
         for address in standing.addresses() {
             by.entry(address.clone())
