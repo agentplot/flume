@@ -754,6 +754,7 @@ impl Engine {
                     passed: None,
                 }),
                 answered: 0,
+                counts: None,
             });
             if !held
                 .terminals

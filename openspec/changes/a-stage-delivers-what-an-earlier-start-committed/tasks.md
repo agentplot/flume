@@ -9,7 +9,7 @@ in its citations (design 8).
 
 ## 1. The count in held state
 
-- [ ] 1.1 Add `flume_seams::Counted`, its `start`, `at`, `head` and `made_from`; `StageHeld::counts` and `StartHeld::counts`, each `Option<Counted>`, left out when none and read as none in a document written before; and `StartHeld::counted()`, giving the start's `counts` or else its own `n`, `started_at`, `start_head` and `made_from` (25, 129; design 1). Every place that builds a `StageHeld` or a `StartHeld` gives none. Add the unit test `tests::a_start_written_before_counts_from_itself` to `crates/flume-seams/src/lib.rs`, reading a stage and a start written before the fields and finding no count and the start's own point. True when `sluice exec bolt/flumes-places-need-no-hand -- cargo test -p flume-seams a_start_written_before_counts_from_itself` passes.
+- [x] 1.1 Add `flume_seams::Counted`, its `start`, `at`, `head` and `made_from`; `StageHeld::counts` and `StartHeld::counts`, each `Option<Counted>`, left out when none and read as none in a document written before; and `StartHeld::counted()`, giving the start's `counts` or else its own `n`, `started_at`, `start_head` and `made_from` (25, 129; design 1). Every place that builds a `StageHeld` or a `StartHeld` gives none. Add the unit test `tests::a_start_written_before_counts_from_itself` to `crates/flume-seams/src/lib.rs`, reading a stage and a start written before the fields and finding no count and the start's own point. True when `sluice exec bolt/flumes-places-need-no-hand -- cargo test -p flume-seams a_start_written_before_counts_from_itself` passes.
 
 ## 2. A stage counts from the first of its starts since it last delivered
 

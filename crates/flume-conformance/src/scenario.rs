@@ -169,6 +169,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
             since: None,
             room: None,
             made_from: None,
+            counts: None,
         }],
         current: None,
         submission: SubmissionHeld::default(),
