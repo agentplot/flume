@@ -9,10 +9,10 @@
 //! stage whose stream has no room, or whose pool has no usable account,
 //! without holding the host's room for it,
 //! and ending no agent for one (31, 46; core.26). Within a stream, a
-//! stage of a label running fewer agents than its reserve starts first,
+//! stage of a label running fewer agents than it is owed starts first,
 //! and a stage starts only while its stream's room passes what the
-//! stream's other labels keep free and do not use; a stream whose labels
-//! are at fault starts no stage (180 to 182; core.46). A place's priority is
+//! stream's other labels hold reserved and do not use; a stream whose
+//! labels are at fault starts no stage (180 to 182; core.46). A place's priority is
 //! its caller's, given at the launch and changed after (7), and a
 //! stream's the host's; a host that states no bound, in a stream that
 //! states none, has no queue.
@@ -64,7 +64,7 @@ pub(crate) struct Queue {
 
 /// A stream's agents running, its bound, its priority among streams, the
 /// session it names, the sessions it names for kinds and their stages,
-/// its labels' shares, whether their reserves are held, and why its
+/// its labels' shares, whether what they are owed is held, and why its
 /// labels refuse its starts (107, 143, 181, 182, 199); a stream a live
 /// place runs in that the host's configuration no longer declares states
 /// no bound, ranks at zero, names no session and has no labels.
@@ -76,8 +76,8 @@ pub(crate) struct StreamRoom {
     pub session: Option<String>,
     pub kinds: BTreeMap<String, KindSessions>,
     pub labels: BTreeMap<String, LabelRoom>,
-    /// Its labels' reserves and the slots they keep free are held: it
-    /// states a bound and its labels are at no fault (70, 181).
+    /// What its labels are owed and hold reserved is held: it states a
+    /// bound and its labels are at no fault (70, 181).
     pub held: bool,
     /// Why its labels refuse every start of the stream, none where they
     /// do not (4, 181, 182).
@@ -468,24 +468,24 @@ fn layer_at(configuration: &HostConfiguration, path: &[&str]) -> ConfigLayer {
 }
 
 /// Why the labels of the stream `name` refuse its starts: a label's table
-/// holding another key, then a label keeping more free than its reserve,
-/// then reserves past the stream's bound; none where none of them holds
-/// (4, 181, 182).
+/// holding another key, then a label holding more reserved than it is
+/// owed, then what its labels are owed past the stream's bound; none where
+/// none of them holds (4, 181, 182).
 fn fault_of(name: &str, stream: &Stream) -> Option<String> {
     let other = stream.labels.iter().find_map(|(label, share)| {
         share.unknown.first().map(|key| {
             format!(
-                "streams.{name}.labels.{label}.{key}: a label's table holds its reserve and \
-                 what it keeps free alone; its stream's pool, points and pace are its budget"
+                "streams.{name}.labels.{label}.{key}: a label's table holds owed and reserved \
+                 alone; its stream's pool, points and pace are its budget"
             )
         })
     });
-    let more_free = || {
+    let more_reserved = || {
         stream.labels.iter().find_map(|(label, share)| {
             (share.reserved > share.owed).then(|| {
                 format!(
-                    "the label {label} of the stream {name} keeps {} free of a reserve of {}, \
-                     and a reserve is at least what it keeps free",
+                    "the label {label} of the stream {name} holds {} reserved of the {} it is \
+                     owed, and a label holds reserved no more than it is owed",
                     share.reserved, share.owed
                 )
             })
@@ -505,17 +505,17 @@ fn fault_of(name: &str, stream: &Stream) -> Option<String> {
                 .map(|(label, share)| format!("{label} {}", share.owed))
                 .collect();
             format!(
-                "the stream {name}'s reserves, {}, {total} in all, pass its bound of {bound}",
+                "the stream {name}'s labels are owed {total} in all, {}, past its bound of {bound}",
                 and_list(&each)
             )
         })
     };
-    other.or_else(more_free).or_else(past_bound)
+    other.or_else(more_reserved).or_else(past_bound)
 }
 
 /// What places a stage among those waiting: its stream, its stream's
 /// priority then its place's, the order it came to wait, since when, and
-/// whether its label runs fewer than its reserve (70, 143, 181).
+/// whether its label runs fewer agents than it is owed (70, 143, 181).
 struct Standing<'a> {
     stream: &'a str,
     rank: (i64, i64),
@@ -527,7 +527,7 @@ struct Standing<'a> {
 /// The positions of `standings` in the order their stages start: by
 /// their streams' priority, then their places', then the order they came
 /// to wait; then, within each stream, its stages in the positions its
-/// stages hold, a stage whose label runs fewer than its reserve first,
+/// stages hold, a stage whose label runs fewer than it is owed first,
 /// each part in that order (70, 143, 181).
 fn start_order(standings: &[Standing<'_>]) -> Vec<usize> {
     let mut order: Vec<usize> = (0..standings.len()).collect();
@@ -683,8 +683,8 @@ impl Queue {
     /// The room a stage of `stream` and `label` whose agent runs
     /// `program` is short of now, none where the host and the stream have
     /// room and an account of its pool is usable: its stream's bound
-    /// first, then its stream's room past what its other labels keep free,
-    /// then its pool's accounts, then the host's (70, 143, 145, 181). A
+    /// first, then its stream's room past what its other labels hold
+    /// reserved, then its pool's accounts, then the host's (70, 143, 145, 181). A
     /// pool that holds no account of `program` gives no want: no room
     /// could start the stage, and its claim refuses it (4, 32).
     pub fn wants(
@@ -722,7 +722,7 @@ impl Queue {
 
     /// Whether a stage of `place` in `stream` and `label` whose agent runs
     /// `program` at `priority` due to start waits: the host or its stream
-    /// is full, the room its stream's other labels keep free is all it has
+    /// is full, the room its stream's other labels hold reserved is all it has
     /// left, its pool has no usable account, or a stage of another place
     /// waits that stands before it in the order stages start and could
     /// start now, its pool holding an account of its program and no
@@ -985,7 +985,7 @@ impl Engine {
     /// and opened after it is released; ends no agent (31, 46, 70, 143;
     /// core.26). After each start it counts that agent toward the host,
     /// its stream, its label and its account and orders what is left
-    /// again, so a label that reaches its reserve goes back among its
+    /// again, so a label that reaches what it is owed goes back among its
     /// stream's others (181). Ahead of the host's room, each stage waiting
     /// whose pool holds no account of its program, whose stream's labels
     /// are at fault, whose stream's word for where its kind or its stage

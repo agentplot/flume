@@ -747,7 +747,7 @@ fn host_status() -> HostStatus {
                 waiting: 1,
             }],
             reserves: Reserves::Held,
-            refused: Some("the stream work's reserves, operation 3 and construction 3, 6 in all, pass its bound of 5".into()),
+            refused: Some("the stream work's labels are owed 6 in all, construction 3 and operation 3, past its bound of 5".into()),
             view_refused: None,
             answerer: Some(StreamAnswerer::Stands(DeclaredBy {
                 address: "work/operator".into(),
