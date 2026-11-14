@@ -20,8 +20,9 @@
 //!
 //! open claims the identity in the host's state before it makes a block,
 //! since Rex refuses no label twice (98, 132). The block runs, with no
-//! shell, a script of the start's own, mode 0700, that removes itself and
-//! execs `/usr/bin/env -i` with Rex's terminal variables, the login
+//! shell and not as a login, so nothing runs between Rex and it, a script
+//! of the start's own, mode 0700, that removes itself and execs
+//! `/usr/bin/env -i` with Rex's terminal variables, the login
 //! environment, the agent's environment and flume's own, `PATH` led by a
 //! folder of the start's own linking the program's kind to the program, so
 //! no variable stands in any process's arguments (29, 32; core.30). Rex's
@@ -69,7 +70,7 @@
 use super::common::{
     asks, base_label, digest, focused, quoted, read_json, runs_program, write_json, Running,
 };
-use crate::host::process::{children, executable, program_path};
+use crate::host::process::{listed, program_path};
 use flume_seams::{
     AgentCommand, AgentState, AgentsIn, Attached, Closed, Clues, FolderTrust, Identity, NamedAgent,
     OpenIn, Opened, PlaceRef, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession,
@@ -148,12 +149,13 @@ pub const LABEL_MOST: usize = 128;
 /// The `info.kind` of the Rex app among a server's clients (C.5).
 const APP: &str = "app";
 
+/// The variable the pinned Rex reads its runtime root from,
+/// `$XDG_RUNTIME_DIR/rex`, `~/Library/Application Support/rex` on macOS
+/// where it is unset (C.5).
+pub const RUNTIME_ROOT: &str = "XDG_RUNTIME_DIR";
+
 /// What Rex answers where no server listens at a socket.
 const NO_SERVER: &str = "no Rex server is running at";
-
-/// The program that runs a block's program under it on macOS, which
-/// `process` names as the block's child (C.5).
-const LOGIN: &str = "/usr/bin/login";
 
 /// The variables of a block's own environment its start script keeps,
 /// Rex's terminal variables (C.5).
@@ -265,6 +267,7 @@ pub struct Rex {
     start_timeout: Duration,
     caller: Option<Block>,
     login: Arc<OnceLock<BTreeMap<String, String>>>,
+    runtime_root: Option<PathBuf>,
 }
 
 impl Rex {
@@ -279,6 +282,7 @@ impl Rex {
             start_timeout: START_TIMEOUT,
             caller: None,
             login: Arc::default(),
+            runtime_root: None,
         }
     }
 
@@ -286,6 +290,16 @@ impl Rex {
     /// tests, which name the pinned one.
     pub fn with_program(mut self, program: impl Into<PathBuf>) -> Rex {
         self.program = program.into();
+        self
+    }
+
+    /// Rex's runtime root placed under `root` rather than the host user's:
+    /// every Rex call, a server's start among them, run with `root` as
+    /// [`RUNTIME_ROOT`], which the pinned Rex keeps its servers' start
+    /// locks under and refuses to start a server where it cannot write;
+    /// for tests, which reach no runtime root of the host's (core.29).
+    pub fn with_runtime_root(mut self, root: impl Into<PathBuf>) -> Rex {
+        self.runtime_root = Some(root.into());
         self
     }
 
@@ -391,6 +405,9 @@ impl Rex {
             if name.to_string_lossy().starts_with("REX_") {
                 command.env_remove(name);
             }
+        }
+        if let Some(root) = &self.runtime_root {
+            command.env(RUNTIME_ROOT, root);
         }
         std::os::unix::process::CommandExt::process_group(&mut command, 0);
         let mut child = match command.spawn() {
@@ -749,8 +766,11 @@ impl Rex {
             .answer()
     }
 
-    /// The block's options for the agent's start: no shell, the place its
-    /// folder, kept once its program exits, running `script` (94, C.5).
+    /// The block's options for the agent's start: no shell and not as a
+    /// login, so the block's child is `script` itself and no
+    /// `/usr/bin/login` runs between Rex and it, as the pinned Rex runs a
+    /// command it is given otherwise, the place its folder, kept once its
+    /// program exits (94, C.5).
     fn block_layout(&self, label: &str, place: &PlaceRef, script: &Path) -> Value {
         json!({
             "block": {
@@ -758,6 +778,7 @@ impl Rex {
                 "label": label,
                 "options": {
                     "shell": "none",
+                    "login": false,
                     "cwd": place.location,
                     "exit": {"on_completion": false},
                     "command": [script.to_string_lossy()],
@@ -1095,27 +1116,21 @@ impl Rex {
         }
     }
 
-    /// Whether the block's child, `child`, or its child where that is
-    /// `/usr/bin/login`, is `program`, read from the host's process table;
-    /// or what ran in its place (32, C.5).
+    /// Whether the block's child, `child`, is `program`, by the file the
+    /// host's process table says it runs or the arguments it gives it; or
+    /// what ran in its place (32, C.5).
     fn runs(&self, located: &Located, child: u32, program: &Path) -> Result<(), String> {
-        let processes: Vec<Running> =
-            if executable(child).is_some_and(|path| path == Path::new(LOGIN)) {
-                children(child)
-                    .into_iter()
-                    .map(|process| Running {
-                        pid: process.pid,
-                        args: process.args,
-                        cwd: None,
-                        cmdline: None,
-                    })
-                    .collect()
-            } else {
-                vec![Running {
-                    pid: child,
-                    ..Running::default()
-                }]
-            };
+        let args = listed()
+            .unwrap_or_default()
+            .into_iter()
+            .find(|process| process.pid == child)
+            .map(|process| process.args)
+            .unwrap_or_default();
+        let processes = [Running {
+            pid: child,
+            args,
+            ..Running::default()
+        }];
         match runs_program(&processes, program) {
             Ok(()) => Ok(()),
             Err(ran) if ran.is_empty() => Err(format!(
@@ -2549,6 +2564,14 @@ mod tests {
             layout["block"]["options"]["command"],
             json!([script.to_string_lossy()])
         );
+        assert_eq!(
+            (
+                &layout["block"]["options"]["shell"],
+                &layout["block"]["options"]["login"]
+            ),
+            (&json!("none"), &json!(false)),
+            "the script runs with no shell and no /usr/bin/login between Rex and it: {layout}"
+        );
         assert!(
             !layout.to_string().contains("A_VALUE")
                 && !layout.to_string().contains("from the login"),
@@ -2596,9 +2619,9 @@ mod tests {
         // record by updated_at whose owner is the block's child, a record
         // of another owner never; working, waiting for idle, done and
         // error, asking for blocked, and unknown for none.
-        let process = json!({"last_exit": null, "child": {"pid": 41, "path": LOGIN}});
+        let process = json!({"last_exit": null, "child": {"pid": 41, "path": "/bin/claude"}});
         let status = |records: Value| json!({ "records": records });
-        let record = |state: &str, owner: u64, at: &str| json!({"state": state, "owner": {"pid": owner, "name": "login"}, "updated_at": at});
+        let record = |state: &str, owner: u64, at: &str| json!({"state": state, "owner": {"pid": owner, "name": "claude"}, "updated_at": at});
         for (state, read) in [
             ("working", AgentState::Working),
             ("idle", AgentState::Waiting),
