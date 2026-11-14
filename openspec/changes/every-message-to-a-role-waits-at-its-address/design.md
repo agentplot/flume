@@ -208,11 +208,12 @@ common profile, not yet built, will not (170 to 174).
 a deliver part: refused unless `agent` names the live agent of the
 place's current stage, `secret` is its start's, and its profile offers
 deliver, as `flume needs` is refused (41); nothing while that agent's
-asking mark stands, its prompt is not received or its stage waits on
-an answer; otherwise the oldest message waiting for that start (section
-8), alone, and else, where the place is a role's run, its address's
-batch, claimed and recorded handed in one write, with no send between.
-It answers the words, or nothing.
+asking mark stands or its prompt is not received; otherwise the oldest
+message waiting for that start (section 8), alone, which while its
+stage waits on an answer is only ever that answer, handed to the agent
+kept open; and else, where the place is a role's run whose stage waits
+on no answer, its address's batch, claimed and recorded handed in one
+write, with no send between. It answers the words, or nothing.
 
 **Claude Code.** `flume hook deliver` reads `FLUME_AGENT`,
 `FLUME_SECRET` and `FLUME_PLACE`, asks the take, prints its words, and
