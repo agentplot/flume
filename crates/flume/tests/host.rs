@@ -1386,6 +1386,7 @@ fn the_modules_files_read_whole() {
     // every-key.nix's settings, under the names the file gives each key.
     let config = &read["every-key.toml"];
     assert_eq!(config.agents, Some(8));
+    assert_eq!(config.ends_expire, 48 * 60 * 60, "ends_expire, 48 hours");
     assert_eq!(config.terminal.as_deref(), Some("printed"));
     assert_eq!(config.view, Some(View::Terminal));
     assert_eq!(config.terminal_app.as_deref(), Some("printed"));
