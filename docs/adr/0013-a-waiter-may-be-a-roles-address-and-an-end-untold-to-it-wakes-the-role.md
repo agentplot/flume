@@ -19,6 +19,8 @@ The construct stage of `a-roles-address-may-be-held-by-a-standing-agent` read it
 
 Amended 2026-11-06 by record 0039, its design approved by the user the same day: an address is `<stream>/<role>`, a role of a stream the host declares, where this record wrote `<partition>/<role>`; a role is declared by a source of the host in the roles file its declaration names, never by the host's `[roles]`, and so is the standing agent the amendment below names (record 0039's own amendment); a run is named per address, by its entry's name or `<stream>-<role>`, runs in its address's stream, carries its entry's settings and intent, and is over at its delivery, flume declaring it done with no caller's word; and a stop-short may name the role it is for, of any stream.
 
+Amended 2026-11-14 by boomdrive-design, below: a command that names no recipient, run in a standing agent's pane, acts as the address its source declares the agent holds.
+
 Deciders: the user, accepting recommendation R1 of the design review of 2026-10-28; the shape is the reviewing agent's.
 Sources: `boomdrivedev/blueprints:design/flume/requirements.md` clauses 3, 43, 69, 70, 72, 132, C.7 and S38, as amended with this record, and the callers table's crew row; records 0005, 0009, 0010, 0011; `afterthought/crew:docs/adr/0047` move 6 (no crew role stands; each is a kind Flume launches on a nudge naming a record) and `0048` patterns 3 and 4; rules core.13, core.25, core.26, core.27.
 
@@ -141,3 +143,39 @@ the user's read.
   give `agent` for a role not yet moved, or whether such roles go back
   to the door at the stall, and either keeps or drops one reader and one
   step of the delivery.
+
+## Amendment, 2026-11-14: a standing agent's own commands act as the address it holds
+
+Status: decided on 2026-11-14 by boomdrive-design, the design agent of the boomdrive drive. Nothing in it is the user's alone: it holds to clauses 7 and 132, rule core.28 and principle 14, and each choice is cheap to change.
+
+Deciders: boomdrive-design.
+
+Sources: signal `2026-11-14-boomdrive-ops-bca216e0/01` on afterthought/crew-state's `boomdrive/main`, where boomdrive-ops' `flume confirm` in its standing pane acted as `herdr:w2:p3@…/boomdrive/herdr.sock`, which is no reader of the landing's end owed to `boomdrive/ops`, so the end stayed pending; `crates/flume/src/commands/mod.rs` `recipient_of` on main at ae188b74, which takes a command's recipient from `--recipient`, then `$FLUME_RECIPIENT`, then the address of the role's run `$FLUME_PLACE` names, and else the terminal's session; crew record 0057 (crew writes its roles file, each standing role its agent); clauses 7, 43, 132 and 193; principle 14 (boomdrivedev/blueprints `design/principles.md`).
+
+### Context
+
+The amendment of 2026-11-06 delivers an address's ends into the standing agent its source names. What the agent then runs, a `flume confirm`, `flume inbox` or `flume wait`, or a launch of its own, names no recipient, and flume reads the agent as the terminal's session: its pane. A pane is no reader of an end owed to the address, so the agent cannot confirm the end it was handed, and each one stays pending until someone confirms it with `--recipient` written out. A place the agent launches takes its pane as recipient, which a revive changes.
+
+### Considered options
+
+1. **flume reads a standing agent as the address its source declares it holds.**
+2. **Whoever starts a standing agent sets `$FLUME_RECIPIENT` to its address in the agent's environment.**
+3. **Every standing agent writes `--recipient <address>` on each command.**
+
+### Decision outcome
+
+Option 1.
+
+- **The agent acts as its address.** Where a command names no recipient, `$FLUME_RECIPIENT` names none and the command runs in no role's run, flume asks the terminal which agent the command runs in. Where a source declares that agent, by its name in that session, standing for an address (132), the command acts as that address: a confirm, a collect and a wait as that recipient, and a launch with it as the place's recipient (7). Anywhere else it acts as the terminal's session.
+- **One address, or the command asks for one.** An agent its sources declare standing for more than one address acts as none by itself: its command is refused, naming each address, and asks for `--recipient`.
+- **What the command names comes first.** `--recipient` and `$FLUME_RECIPIENT` keep their place ahead of this reading, so a person or a tool may still act as another recipient (core.28).
+
+Not taken: option 2, which keeps a second record of which agent holds an address, written by whoever starts the agent, where principle 14 has a tool read what it needs from its own source and never from an environment a host sets for it; a restart by anything else loses it. Option 3, the stopgap the 2026-11-06 amendment refused for delivery: every standing role's brief must carry the flag, and a launch from the pane still names the pane.
+
+### Consequences
+
+- Good: the agent an end was handed to confirms it with no flag, and a place it launches delivers to its address across a revive.
+- Bad: a command that names no recipient reads the terminal once more, in a pane flume did not open.
+- Bad: as for delivery, flume trusts the name, so an agent that takes a standing agent's name in that session acts as its address.
+- Rule core.28 says so. Clause 132 says so on boomdrivedev/blueprints' branch `design/a-standing-agent-acts-as-its-address`.
+- Unit: a command that names no recipient, run in a standing agent's pane, acts as the address its source declares the agent holds.
