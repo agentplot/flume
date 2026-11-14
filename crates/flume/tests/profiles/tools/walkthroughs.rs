@@ -3996,7 +3996,7 @@ fn s94_a_restarted_session_is_given_its_place_and_the_stall_reaches_the_door() {
         format!(
             "flume retry change--s94 --stage construct --answers {CONSTRUCT_KEY} --words \"<answer>\""
         ),
-        format!("flume tell change--s94 --answers {CONSTRUCT_KEY} \"<answer>\""),
+        format!("flume message change--s94 --answers {CONSTRUCT_KEY} \"<answer>\""),
         "flume hold change--s94 \"<words>\" --waiting --for <time>".to_string(),
     ] {
         assert!(

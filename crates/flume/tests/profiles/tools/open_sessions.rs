@@ -3,10 +3,10 @@
 //! 146, 198): each walkthrough a fix on a host under herdr, its code
 //! agents the stand-in for Claude Code in panes of flume's own herdr
 //! session, each start acting its own script, and the test settling as a
-//! caller would. An answer within the hour, by a retry and then by a tell,
+//! caller would. An answer within the hour, by a retry and then by a message,
 //! reaches the same session, each recorded, code started once and the
 //! place landed (S4); an agent's time passing lets it go and ends it, its
-//! room taken by the place waiting, a tell then refused naming the retry,
+//! room taken by the place waiting, a message then refused naming the retry,
 //! and the late retry's fresh agent carries the question and the answer
 //! (S104); and an agent whose session ended, and one whose account was
 //! spent, within the hour, are each let go and answered by a retry whose
@@ -87,13 +87,13 @@ fn refused(host: &UnderHerdr, words: &[&str]) -> String {
 }
 
 #[test]
-fn s4_an_answer_within_the_hour_by_a_retry_and_a_tell_reaches_the_same_session() {
+fn s4_an_answer_within_the_hour_by_a_retry_and_a_message_reaches_the_same_session() {
     // S4; 42, 49, 53 to 55, 198: code's first start stops short needing
     // an answer; status gives the move as a retry of code, its agent kept
     // open until an hour after the stop-short, and `keep_open` from flume's
     // own default. A retry with the words `notes.md` reaches the same
     // session, which takes the question and the answer as its next prompt
-    // and stops short again, an end of its own; a tell reaches the same
+    // and stops short again, an end of its own; a message reaches the same
     // session too, and its last run commits. Code started once, status
     // gave both answers with their questions and acts, and the place lands.
     let host = Walk::under_herdr("open-s4");
@@ -140,7 +140,7 @@ fn s4_an_answer_within_the_hour_by_a_retry_and_a_tell_reaches_the_same_session()
         .collect();
     assert_eq!(questions.len(), 2, "two ends of their own: {status}");
 
-    host.flume(&["tell", "fix--one", "Hello."]);
+    host.flume(&["message", "fix--one", "Hello."]);
     let status = host.status(&place);
     let answers = &stage(&status, "code")["answers"];
     assert_eq!(
@@ -152,7 +152,7 @@ fn s4_an_answer_within_the_hour_by_a_retry_and_a_tell_reaches_the_same_session()
             .collect::<Vec<_>>(),
         [
             (&json!(WHICH), &json!("notes.md"), &json!("retry")),
-            (&json!("And its text?"), &json!("Hello."), &json!("tell")),
+            (&json!("And its text?"), &json!("Hello."), &json!("message")),
         ],
         "{status}"
     );
@@ -198,7 +198,7 @@ fn s104_the_time_passing_lets_the_agent_go_and_a_late_answer_starts_a_fresh_one(
     // fix waits for room. Once five seconds have passed, a settle records
     // the agent let go by its time and ends it, its pane closed; status
     // says the place waits on an answer, its agent ended, and the second
-    // fix's code starts in the room it freed. A tell is refused, naming
+    // fix's code starts in the room it freed. A message is refused, naming
     // the retry. A retry with the answer starts code's second start, whose
     // prompt carries the question then the answer; it commits and the
     // place lands.
@@ -244,7 +244,7 @@ fn s104_the_time_passing_lets_the_agent_go_and_a_late_answer_starts_a_fresh_one(
         stage(status, "code")["starts"] == 1
     });
 
-    let refusal = refused(&host, &["tell", "fix--one", "notes.md"]);
+    let refusal = refused(&host, &["message", "fix--one", "notes.md"]);
     assert!(
         refusal.contains("no longer kept open")
             && refusal.contains(&format!("flume retry {place} --words")),
