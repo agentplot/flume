@@ -24,7 +24,10 @@ const REPOSITORY: &str = "/repository";
 /// change@1, change@2 and change@3 side by side, each sent back to code,
 /// change@2's code stage repeating per task group with its group, notes
 /// and words last, and change@3's one agent for the whole change with a
-/// code prompt of its own (22, 140, 141, 157, C.2; core.31).
+/// code prompt of its own; then change@4, chore@2 and fix@2, each the
+/// version before it at the next version with every stage's agent given
+/// `full`, appended after the five so a lookup by name alone still finds
+/// the oldest version (22, 140, 141, 157, 162, C.2; core.31; record 0064).
 pub fn flumes_own() -> Vec<Kind> {
     let stage = |name: &str, deliverable: Deliverable, prompt: &str| Stage {
         name: name.into(),
@@ -82,7 +85,7 @@ pub fn flumes_own() -> Vec<Kind> {
     let mut one_agent = change.clone();
     one_agent.version = 3;
     one_agent.stages[1].prompt = "Build {{change}}, every task of it, running each task's own check and ticking it once the check passes.\n\n{{needs}}{{#words}}\n\n{{words}}{{/words}}".into();
-    vec![
+    let mut own = vec![
         Kind {
             name: "fix".into(),
             version: 1,
@@ -110,7 +113,28 @@ pub fn flumes_own() -> Vec<Kind> {
         change,
         repeating,
         one_agent,
-    ]
+    ];
+    let full = Settings {
+        mode: Some(ModeSetting::Flume(Mode::Full)),
+        ..Settings::default()
+    };
+    let newest: Vec<Kind> = [("change", 3), ("chore", 1), ("fix", 1)]
+        .into_iter()
+        .map(|(name, version)| {
+            let mut kind = own
+                .iter()
+                .find(|kind| kind.name == name && kind.version == version)
+                .cloned()
+                .unwrap_or_else(|| panic!("the fake's own kinds hold {name}@{version}"));
+            kind.version += 1;
+            for stage in &mut kind.stages {
+                stage.agents = vec![full.clone()];
+            }
+            kind
+        })
+        .collect();
+    own.extend(newest);
+    own
 }
 
 pub struct FakePlaceHarness {

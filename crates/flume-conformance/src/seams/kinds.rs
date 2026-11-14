@@ -149,8 +149,8 @@ pub fn scenarios<H: KindsHarness>() -> Vec<Scenario<H>> {
             run: what_a_stage_makes::<H>,
         },
         Scenario {
-            name: "kinds: flume's own kinds are fix@1, chore@1, change@1, change@2 and change@3, each landing and sent back to code, change@2's code stage alone repeating",
-            cites: &["22", "19", "S35", "140", "157"],
+            name: "kinds: flume's own kinds are fix@1, fix@2, chore@1, chore@2 and change@1 to change@4, each landing and sent back to code, change@2's code stage alone repeating, the newest three's agents in full",
+            cites: &["22", "19", "S35", "140", "157", "162"],
             run: flumes_own::<H>,
         },
         Scenario {
@@ -303,7 +303,9 @@ fn flumes_own<H: KindsHarness>(harness: &H) -> Outcome {
     names.sort_unstable();
     ensure_eq!(
         names,
-        vec!["change@1", "change@2", "change@3", "chore@1", "fix@1"],
+        vec![
+            "change@1", "change@2", "change@3", "change@4", "chore@1", "chore@2", "fix@1", "fix@2"
+        ],
         "flume's own kinds"
     );
     ensure!(
@@ -362,6 +364,28 @@ fn flumes_own<H: KindsHarness>(harness: &H) -> Outcome {
                 kind.name, kind.version
             )
         );
+        // change@4, chore@2 and fix@2 give each stage's one agent `full`
+        // and nothing else, every earlier version's none (162; record
+        // 0064).
+        let newest = matches!(
+            (kind.name.as_str(), kind.version),
+            ("change", 4) | ("chore", 2) | ("fix", 2)
+        );
+        let agent = if newest {
+            Settings {
+                mode: Some(ModeSetting::Flume(Mode::Full)),
+                ..Settings::default()
+            }
+        } else {
+            Settings::default()
+        };
+        for stage in &kind.stages {
+            ensure_eq!(
+                stage.agents,
+                vec![agent.clone()],
+                format!("{}@{}'s {}'s agents", kind.name, kind.version, stage.name)
+            );
+        }
     }
     Ok(())
 }
