@@ -1853,15 +1853,15 @@ fn a_label_and_its_share() {
         assert_eq!(serde_json::to_value(from).unwrap(), spelled);
     }
     round_trips(Share::default());
-    let read: Share = serde_json::from_str(r#"{"reserve":2}"#).unwrap();
+    let read: Share = serde_json::from_str(r#"{"owed":2}"#).unwrap();
     assert_eq!(
         read,
         Share {
-            reserve: 2,
-            keep_free: 0,
+            owed: 2,
+            reserved: 0,
             unknown: vec![],
         },
-        "zero kept free and nothing unknown where its table gives none"
+        "zero reserved and nothing unknown where its table gives none"
     );
     let before: Stream = serde_json::from_str(r#"{"agents":5,"priority":10}"#).unwrap();
     assert_eq!((before.session, before.labels.len()), (None, 0));
@@ -2979,16 +2979,16 @@ fn streams_and_pools_as_the_configuration_names_them() {
             (
                 "operation".into(),
                 Share {
-                    reserve: 2,
-                    keep_free: 1,
+                    owed: 2,
+                    reserved: 1,
                     unknown: vec![],
                 },
             ),
             (
                 "construction".into(),
                 Share {
-                    reserve: 0,
-                    keep_free: 0,
+                    owed: 0,
+                    reserved: 0,
                     unknown: vec!["pool".into()],
                 },
             ),

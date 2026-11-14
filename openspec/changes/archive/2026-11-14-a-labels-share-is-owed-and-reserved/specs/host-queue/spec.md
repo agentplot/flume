@@ -1,0 +1,90 @@
+## REMOVED Requirements
+
+### Requirement: A stage starts only under the host's bound
+
+**Reason**: Its scenario of a label's slot kept free is said in 181's
+words, an agent another label holds reserved (record 0063).
+
+**Migration**: "A stage starts only within the host's room" below,
+which holds its scenarios, its label's as "An agent another label holds
+reserved".
+
+### Requirement: What waits starts by priority
+
+**Reason**: Its scenario of a label below its reserve is said in 181's
+words, a label below what it is owed (record 0063).
+
+**Migration**: "What waits starts by priority, a label below what it is
+owed first" below, which holds its scenarios, its label's as "A label
+below what it is owed before a place's priority".
+
+## ADDED Requirements
+
+### Requirement: A stage starts only within the host's room
+
+A stage that may start SHALL start only while the agents running on
+the host, every caller's counted together, are under the host's bound,
+its stream's are under the stream's less what the stream's other labels
+hold reserved and do not use, and an account of its pool is usable;
+otherwise it SHALL wait for room. The count and the start SHALL be
+taken under one host-wide lock. A host that states no bound of its own
+and no stream's bound SHALL have no queue (70, 75, 143, 145, 181).
+
+#### Scenario: A third launch on a host of two
+
+- **WHEN** the host states two agents and three fixes are launched over the fakes
+- **THEN** two code stages start, the third launch is taken and its stage waits for room, and no launch is refused
+
+#### Scenario: Two settles at once
+
+- **WHEN** one agent ends and two settles run at once with two stages waiting for room on a host of two
+- **THEN** exactly one stage starts
+
+#### Scenario: Two streams under the host's bound
+
+- **WHEN** the host states six agents, `work` four at priority 10 and `personal` three, and five work and three personal places are launched
+- **THEN** four work agents and two personal agents start, one work place waits for its stream's room and one personal place for the host's, and when a work agent ends the waiting work place starts first (S53)
+
+#### Scenario: A stream's bound on a host with no bound
+
+- **WHEN** the host states no bound of its own, `work` states one agent, and two work places and a place in `default` are launched
+- **THEN** one work agent and the default place's agent start, the second work place waits for its stream's room, and when the work agent ends it starts (70, 143)
+
+#### Scenario: An agent another label holds reserved
+
+- **WHEN** `work` has two agents, one running, and its label `operation`, running none, holds one reserved, and a place of no label is launched on `work`
+- **THEN** its stage waits for room, and an operation place launched then starts (70, 181)
+
+### Requirement: What waits starts by priority, a label below what it is owed first
+
+Every settle SHALL start the stages waiting for room by their stream's
+priority, then, within a stream, a label's below what it is owed first,
+then their place's priority, then the order they came to wait, as many
+as there is room for, passing over one whose stream has no room or
+whose pool has no usable account without holding the host's room for
+it, and SHALL end no agent for one (31, 46, 70, 143, 181).
+
+#### Scenario: Nine units on a host of four
+
+- **WHEN** nine changes are launched on a host of four, one waiting place's priority is raised, and an agent ends
+- **THEN** four constructs start, five wait in order, and the raised place's construct starts at the next room (S37)
+
+#### Scenario: A full stream holds no other's room
+
+- **WHEN** `work` at priority 10 is at its bound with a place waiting, `personal` at priority zero has a place waiting, and the host has room
+- **THEN** the personal place starts, and the work place keeps its turn for its stream's next room (70, 143)
+
+#### Scenario: The stream's priority before the place's
+
+- **WHEN** a personal place at priority 50 and a work place at priority zero wait, `work` ranking above `personal`, and one agent's room opens
+- **THEN** the work place starts (70, 143)
+
+#### Scenario: A pool with nothing usable
+
+- **WHEN** a stage's pool has every account spent and a stage of another pool waits behind it
+- **THEN** the stage behind starts, and the first keeps its turn until an account of its pool is usable (70, 145)
+
+#### Scenario: A label below what it is owed before a place's priority
+
+- **WHEN** in `work` an operation place at priority zero, its label running none of the one it is owed, and a construction place at priority 50, its label running more than it is owed, wait, and one agent's room opens
+- **THEN** the operation place starts (70, 181)

@@ -2929,8 +2929,8 @@ fn the_hosts_labels_shares_and_layers_are_scripted() {
     );
 
     let share = Share {
-        reserve: 2,
-        keep_free: 1,
+        owed: 2,
+        reserved: 1,
         unknown: vec![],
     };
     host.set_share("work", "operation", Some(share.clone()));

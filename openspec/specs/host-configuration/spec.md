@@ -42,7 +42,7 @@ write either file (32, C.7; core.16).
 
 The local layer SHALL set only a stream's `agents`, `priority`,
 `points`, `pace`, `session` and `multiplexer`, the `session` a stream
-names for a kind and for a kind's stage, a label's `reserve` and `keep_free`, the `stream` and
+names for a kind and for a kind's stage, a label's `owed` and `reserved`, the `stream` and
 `label` a repository's kind or a kind is given, the `stream` a
 repository is given, and a kind's agents table; a local file setting any
 other key, unreadable, or setting a value its key refuses, SHALL not be
@@ -87,6 +87,16 @@ taken at all, the managed layer read alone (C.7, 199).
 
 - **WHEN** the managed layer gives `[streams.work.kinds.research] session = "work-design"` and pins `"streams.work.kinds"`, and the local layer gives research `session = "work-research"` and `work` three agents
 - **THEN** `work`'s three agents are taken, research's session is passed over and reads `work-design` from the managed layer, and status names `streams.work.kinds.research.session` with its pin (199, C.7)
+
+#### Scenario: A label's share set locally
+
+- **WHEN** the local layer gives `streams.work.labels.operation.owed = 3` and `streams.work.labels.operation.reserved = 1`
+- **THEN** the local layer is taken, `operation` is owed three in `work` and holds one reserved, each from the local layer (181, C.7, S85)
+
+#### Scenario: A label's old key set locally
+
+- **WHEN** the local layer gives `streams.work.labels.operation.reserve = 3`
+- **THEN** no key of it is taken, and status names `streams.work.labels.operation.reserve` (181, C.7)
 
 ### Requirement: The managed layer pins keys
 

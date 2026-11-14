@@ -7,9 +7,9 @@
 //! host's agents running, bound, room and queue, and each stream's (56,
 //! 130); a host with no bound of its own and no stream's bound has no
 //! queue, and a stream's bound holds on a host that states none of its
-//! own. Within a stream, a stage of a label below its reserve starts
+//! own. Within a stream, a stage of a label below what it is owed starts
 //! first, and a stage starts only while its stream's room passes what the
-//! stream's other labels keep free (181).
+//! stream's other labels hold reserved and do not use (181).
 
 use super::account_pools::{account, account_of, pool, spent, stream_on};
 use super::labels::{end, labelled_kinds, placed, running, shared, waiting};
@@ -97,14 +97,14 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: waiting_on_a_streams_room,
         },
         Scenario {
-            name: "host queue: a slot another label keeps free holds a place of no label, and a place of that label launched then starts in it",
+            name: "host queue: an agent another label holds reserved holds a place of no label waiting, and a place of that label launched then starts in it",
             cites: &["70", "181"],
-            run: a_slot_another_label_keeps_free,
+            run: an_agent_another_label_holds_reserved,
         },
         Scenario {
-            name: "host queue: a stage of a label below its reserve starts before a place of higher priority whose label runs past its own",
+            name: "host queue: a stage of a label below what it is owed starts before a place of higher priority whose label runs more than it is owed",
             cites: &["70", "181", "46"],
-            run: a_label_below_its_reserve_before_a_places_priority,
+            run: a_label_below_what_it_is_owed_before_a_places_priority,
         },
     ]
 }
@@ -755,7 +755,7 @@ fn a_pool_with_nothing_usable(_: &()) -> Outcome {
     Ok(())
 }
 
-fn a_slot_another_label_keeps_free(_: &()) -> Outcome {
+fn an_agent_another_label_holds_reserved(_: &()) -> Outcome {
     let world = World::new();
     labelled_kinds(&world);
     shared(&world, "work", Some(2), &[("operation", 1, 1)]);
@@ -768,7 +768,7 @@ fn a_slot_another_label_keeps_free(_: &()) -> Outcome {
     let deploy = placed(&world, "work", "deploy", "d1", 0)?;
     ensure!(
         running(&world, &deploy),
-        "the operation place did not start in its slot"
+        "the operation place did not start in the agent held reserved for it"
     );
     ensure!(
         waiting(&world, &research),
@@ -777,7 +777,7 @@ fn a_slot_another_label_keeps_free(_: &()) -> Outcome {
     Ok(())
 }
 
-fn a_label_below_its_reserve_before_a_places_priority(_: &()) -> Outcome {
+fn a_label_below_what_it_is_owed_before_a_places_priority(_: &()) -> Outcome {
     let world = World::new();
     labelled_kinds(&world);
     shared(

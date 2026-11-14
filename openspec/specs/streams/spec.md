@@ -11,10 +11,12 @@ stream's priority before the place's.
 ### Requirement: A host declares its streams
 
 The host's configuration SHALL declare streams by name, each with its
-bound on agents running, its priority, zero where it gives none, and
-its pool. The stream `default` SHALL always stand, held by the host's
-bound alone unless a `[streams.default]` table states its own. The
-host's bound SHALL cap every stream's agents together (70, 143, C.7).
+bound on agents running, the host's bound alone holding it where it
+gives none, its priority, a whole number, a stream of higher priority
+starting first, zero where it gives none, and its pool. The stream
+`default` SHALL always stand, held by the host's bound alone unless a
+`[streams.default]` table states its own. The host's bound SHALL cap
+every stream's agents together (70, 143, C.7).
 
 #### Scenario: Two streams declared
 
@@ -131,3 +133,15 @@ no setting (32, 143).
 
 - **WHEN** the host's `[agents.programs.agent]` names a file giving `line = "host"` and `tui = "fullscreen"`, its `[agents.streams.work.programs.agent.settings]` gives `line = "work"`, and two fixes are launched, one in `work` and one in `default`
 - **THEN** the fix in `work` is given `line = "work"` from `host-stream` and the file's `tui` from `host`, and the one in `default` the file's `line = "host"` and `tui`, each from `host` (S100, 143)
+
+### Requirement: A bound on agents is a whole number from 1
+
+The host's bound and each stream's SHALL each be a whole number of
+agents from 1, the host's none where it gives none, and a bound of 0,
+the host's or a stream's, SHALL refuse the configuration naming its
+key (70, 143, C.7).
+
+#### Scenario: A host's bound of zero
+
+- **WHEN** the managed layer gives `[host] agents = 0`
+- **THEN** reading the configuration is refused naming `[host] agents` and that it is a whole number from 1 (70, C.7)

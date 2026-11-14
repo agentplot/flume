@@ -190,7 +190,7 @@ The local layer sets only what runs the host's work from hour to hour:
 
 - a stream's `agents`, `priority`, `session` and `multiplexer`, the
   `session` it names for a kind or a kind's stage, and its labels'
-  `reserve` and `keep_free`;
+  `owed` and `reserved`;
 - the `stream` and the `label` a repository's kind, a repository or a
   kind is given;
 - every agents table of the host's, `[agents]`,
@@ -1025,19 +1025,20 @@ says what each view and terminal app does.
 ### Labels
 
 A place's label gives it a share of its stream's agents, and nothing
-else. A stream owes a label a `reserve` of its agents, and may keep
-some of its slots free for it:
+else. A stream says how many of its agents a label is `owed`, and how
+many of those are `reserved` for it alone, each a whole number of
+agents from 0, 0 where left out:
 
 ```toml
 [streams.work]
 agents = 5
 
 [streams.work.labels.operation]
-reserve = 2
-keep_free = 1
+owed = 2
+reserved = 1
 
 [streams.work.labels.construction]
-reserve = 2
+owed = 2
 
 [kinds.fix]
 label = "construction"
@@ -1046,20 +1047,23 @@ label = "construction"
 label = "operation"
 ```
 
-Within its stream, a stage of a label running fewer agents than its
-reserve starts before every stage of a label running its reserve or
-more, whatever their priorities. A label keeps `keep_free` of its
-stream's slots free while it runs fewer agents than that: no stage of
-another label, and no stage of no label, starts in them. flume ends no
-agent for a reserve. A reserve another label borrowed comes back as
-that label's agents end.
+Within its stream, a stage of a label running fewer agents than it is
+owed starts before every stage of a label running what it is owed or
+more, whatever their priorities. An agent a label is owed and does not
+use is lent while it has nothing waiting, and is its own again at the
+next agent to end. An agent a label holds reserved and does not use
+stays empty for its own next stage and is never lent: no stage of
+another label, and no stage of no label, starts in it. A label holds
+reserved no more than it is owed. flume ends no agent for what a label
+is owed.
 
 Take `work` above with no operation place waiting. Four construction
-places run, and a place of no label waits, since the one slot left is
-kept free for operation. An operation place launched then starts at
-once in it. A second operation place waits until the next agent ends,
-then starts before the place of no label and every construction place
-waiting, whatever their priorities.
+places run, and a research place of no label waits, since the one
+agent left is held reserved for operation. An operation place launched
+then starts at once in it. A second operation place waits until the
+next agent ends, then starts before the research place and every
+construction place waiting, whatever their priorities, and no agent
+running is ended for it.
 
 A place's label is read at each start, from the first of:
 
@@ -1073,13 +1077,14 @@ label changed while it runs takes the place's next start. A label is
 one word of letters, digits, `-` and `_`. flume's own kinds declare
 none.
 
-A stream holds its labels' reserves only where it states a bound, and
-in one that states none status says they are passed over. A stream
-starts no stage while its labels' reserves together pass its bound, a
-label keeps more free than its reserve, or a label's table holds any
-key but `reserve` and `keep_free`. Each of its starts is refused,
-naming the stream and why, until the configuration is mended and the
-stage retried. A label has no pool, account or bound of its own: those
+A stream holds what its labels are owed only where it states a bound,
+and in one that states none status says what they are owed is passed
+over. A stream starts no stage while its labels are owed more together
+than its bound, a label holds more reserved than it is owed, or a
+label's table holds any key but `owed` and `reserved`, `reserve` and
+`keep_free` among them. Each of its starts is refused, naming the
+stream and why, until the configuration is mended and the stage
+retried ([what refuses](/flume/reference/configuration/#what-refuses)). A label has no pool, account or bound of its own: those
 are its stream's.
 
 ## Pools of accounts
@@ -1547,8 +1552,10 @@ for and the layer each came from. Each pool gives its strategy and
 threshold, and each account with its agents running, bound, spent time,
 reading, and what holds it past its threshold ([a pool's
 accounts](#a-pools-accounts-and-their-readings)). A stream gives each
-label's reserve, what it keeps free, its agents running and its stages
-waiting, and a stage waiting gives its label. A stream whose labels or
+label as `label <name>: owed <n>, reserved <m>`, with its agents
+running and its stages waiting, and a stage waiting gives its label. A
+stream that states no bound says `what its labels are owed is passed
+over: it states no bound`. A stream whose labels or
 multiplexer refuse its starts says `it starts no stage:` with why, and
 one whose terminal app names no profile says `it opens no view:`, its
 stages starting as before. A table for a kind or a stage that refuses
@@ -1563,8 +1570,8 @@ pin, or, where it was not taken, each key it may not set or its fault:
     it names the session work-design for the kind research (from managed)
     it names the session work-review for the stage release.review (from local)
     multiplexer herdr (the host's), view terminal (the default), terminal app ghostty (the host's), title "Work Agents" (the stream's title)
-    label construction: a reserve of 2, keeping 0 free, 4 agents running, 0 waiting
-    label operation: a reserve of 2, keeping 1 free, 1 agents running, 1 waiting
+    label construction: owed 2, reserved 0, 4 agents running, 0 waiting
+    label operation: owed 2, reserved 1, 1 agents running, 1 waiting
     waiting for room: /home/you/.local/share/flume/places/f5f5e14159a8/deploy--rollout's code in work as operation, priority 0, short of the stream work's room, at its bound of 5
   the host's local layer is taken, setting:
     streams.work.kinds.release.stages.review.session = "work-review"
