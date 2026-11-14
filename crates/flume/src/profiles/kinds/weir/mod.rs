@@ -22,7 +22,8 @@
 //! to its declaration's file, read beside it: at the same revision for a
 //! repository's, on disk for a launch's, and from the binary for flume's
 //! own, whose versions are each a declaration of its own with its prompts
-//! beside it, change@1, change@2 and change@3 side by side (157).
+//! beside it, change@1 to change@4, chore@1 and chore@2, and fix@1 and
+//! fix@2 side by side (157; record 0064).
 //!
 //! flume's own kinds are packages, each read through weir-kinds' package
 //! reader at its identity, `flume/<name>@<version>`, with its content's
@@ -108,9 +109,12 @@ const KIND_TOML: &str = "kind.toml";
 
 /// flume's own kinds, one declaration per version, each in a directory of
 /// its own under `own/`, `<name>@<version>/kind.toml` with its prompts
-/// beside it under `prompts/`: change@1, change@2 and change@3 side by
-/// side, in ascending order so the last is the newest, and fix@1 and
-/// chore@1 (22, 154, 157, C.2; records 0022, 0054).
+/// beside it under `prompts/`: change@1 to change@4 side by side, then
+/// chore@1 and chore@2, then fix@1 and fix@2, each name's versions in
+/// ascending order so its last is its newest. change@4, chore@2 and fix@2
+/// give each stage's agent `full` and say in each prompt that stopping
+/// short is its one way to ask (22, 154, 157, 162, C.2; records 0022,
+/// 0054, 0064).
 const OWN: &[Own] = &[
     Own {
         identity: "flume/change@1",
@@ -167,6 +171,24 @@ const OWN: &[Own] = &[
         ],
     },
     Own {
+        identity: "flume/change@4",
+        declaration: include_str!("own/change@4/kind.toml"),
+        prompts: &[
+            (
+                "prompts/change-construct.md",
+                include_str!("own/change@4/prompts/change-construct.md"),
+            ),
+            (
+                "prompts/change-code.md",
+                include_str!("own/change@4/prompts/change-code.md"),
+            ),
+            (
+                "prompts/change-verify.md",
+                include_str!("own/change@4/prompts/change-verify.md"),
+            ),
+        ],
+    },
+    Own {
         identity: "flume/chore@1",
         declaration: include_str!("own/chore@1/kind.toml"),
         prompts: &[(
@@ -175,9 +197,22 @@ const OWN: &[Own] = &[
         )],
     },
     Own {
+        identity: "flume/chore@2",
+        declaration: include_str!("own/chore@2/kind.toml"),
+        prompts: &[(
+            "prompts/code.md",
+            include_str!("own/chore@2/prompts/code.md"),
+        )],
+    },
+    Own {
         identity: "flume/fix@1",
         declaration: include_str!("own/fix@1/kind.toml"),
         prompts: &[("prompts/code.md", include_str!("own/fix@1/prompts/code.md"))],
+    },
+    Own {
+        identity: "flume/fix@2",
+        declaration: include_str!("own/fix@2/kind.toml"),
+        prompts: &[("prompts/code.md", include_str!("own/fix@2/prompts/code.md"))],
     },
 ];
 
@@ -238,8 +273,9 @@ impl Kinds for Weir {
     /// Each version of flume's own kinds as a package, read through
     /// weir-kinds' package reader over its declaration and prompts by
     /// their paths within its version's directory, at the identity it is
-    /// held at, with its content's hash over those paths and bytes; two
-    /// versions of `change` among them (22, 156, 157).
+    /// held at, with its content's hash over those paths and bytes; four
+    /// versions of `change` and two each of `chore` and `fix` among them
+    /// (22, 156, 157).
     fn flumes_own(&self) -> Vec<Packaged> {
         OWN.iter()
             .map(|own| {
