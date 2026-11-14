@@ -776,6 +776,7 @@ impl Engine {
                     passed: None,
                 }),
                 answered: 0,
+                messages: vec![],
             });
             if !held
                 .terminals

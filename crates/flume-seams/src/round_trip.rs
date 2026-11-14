@@ -425,6 +425,7 @@ fn held() -> HeldState {
                     passed: Some("--own /state/places/x/agent/own.json".into()),
                 }),
                 answered: 0,
+                messages: vec![],
             }),
             since: Some(120),
         }],
@@ -1988,6 +1989,58 @@ impl Agent for Bare {
     fn on_quiet(&self) -> Offered {
         Offered::NotOffered
     }
+}
+
+#[test]
+fn a_profile_that_names_no_deliver_offers_none() {
+    // The seam-contracts spec's "A profile that names no deliver" (171,
+    // 215): an agent profile that says nothing of it offers none.
+    assert_eq!(Bare.deliver(), Offered::NotOffered);
+}
+
+#[test]
+fn a_start_with_messages_waiting_round_trips() {
+    // The seam-contracts spec's "The fake agent's deliver" (75, 215): a
+    // start holding one message taken and one waiting reads back equal;
+    // a start written before reads with no message waiting.
+    let mut state = held();
+    let start = state.stages[0].start.as_mut().expect("the fixture's start");
+    start.messages = vec![
+        MessageHeld {
+            words: "use the second".into(),
+            at: 40,
+            by: Some("ops".into()),
+            taken_at: Some(45),
+        },
+        MessageHeld {
+            words: "and the third".into(),
+            at: 50,
+            by: None,
+            taken_at: None,
+        },
+    ];
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(
+        json["stages"][0]["start"]["messages"],
+        serde_json::json!([
+            {"words": "use the second", "at": 40, "by": "ops", "taken_at": 45},
+            {"words": "and the third", "at": 50},
+        ])
+    );
+    let mut before = json.clone();
+    before["stages"][0]["start"]
+        .as_object_mut()
+        .expect("a start")
+        .remove("messages");
+    let read: HeldState = serde_json::from_value(before).expect("a start written before");
+    assert_eq!(
+        read.stages[0]
+            .start
+            .as_ref()
+            .map(|start| start.messages.len()),
+        Some(0)
+    );
 }
 
 #[test]

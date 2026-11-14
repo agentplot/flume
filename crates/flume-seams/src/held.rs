@@ -1718,6 +1718,25 @@ pub struct StartHeld {
     /// written before (42, 198).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub answered: u32,
+    /// Each message to its place waiting for its agent's take, where its
+    /// agent's profile offers deliver, in the order sent; none in a start
+    /// written before (53, 54, 75, 215).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub messages: Vec<MessageHeld>,
+}
+
+/// A message to a place waiting on its start for its agent's deliver
+/// part: its words, when it was sent, who sent it where the sending
+/// command named one, and when the agent took it, none until it did (53,
+/// 54, 215).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MessageHeld {
+    pub words: String,
+    pub at: Seconds,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub taken_at: Option<Seconds>,
 }
 
 /// A start's own settings beyond its keys: each file a layer named for

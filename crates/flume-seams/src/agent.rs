@@ -415,6 +415,14 @@ pub trait Agent: Send + Sync {
         Offered::NotOffered
     }
 
+    /// Whether the program takes words as one prompt the next time its
+    /// agent waits by its own channel, leaving its input as a person left
+    /// it: its deliver part, which the core's take answers (215, C.4); not
+    /// by default, so a profile that says nothing of it offers none.
+    fn deliver(&self) -> Offered {
+        Offered::NotOffered
+    }
+
     /// Each key of its program's settings that another of flume's
     /// settings or the account owns, with its owner, which the core
     /// refuses where a table gives it and leaves out of a named file (195,

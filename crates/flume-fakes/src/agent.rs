@@ -56,6 +56,7 @@ struct AgentModel {
     /// The own values the program names, each passed as written (169).
     own_modes: Vec<String>,
     mode_read_back: bool,
+    deliver: bool,
     /// The mode is named at the start's first prompt, never in the word
     /// that it started (161).
     mode_at_prompt: bool,
@@ -359,6 +360,12 @@ impl FakeAgent {
     /// (169).
     pub fn own_mode(&self, value: &str) {
         lock(&self.state).own_modes.push(value.to_string());
+    }
+
+    /// The program takes words by its own channel at its agent's wait:
+    /// its profile offers deliver (215).
+    pub fn offer_deliver(&self) {
+        lock(&self.state).deliver = true;
     }
 
     /// The program's word that it started names the mode it began in
@@ -850,6 +857,14 @@ impl Agent for FakeAgent {
 
     fn mode_read_back(&self) -> Offered {
         if lock(&self.state).mode_read_back {
+            Offered::Offered
+        } else {
+            Offered::NotOffered
+        }
+    }
+
+    fn deliver(&self) -> Offered {
+        if lock(&self.state).deliver {
             Offered::Offered
         } else {
             Offered::NotOffered
