@@ -365,7 +365,7 @@ and its intent's moves with no program, and SHALL never be written so
 
 The host's facts SHALL give, as its configuration stands when asked,
 each stream's `session`, the sessions it names for its kinds and their
-stages, and its labels' shares with their `reserve` and `keep_free`,
+stages, and its labels' shares with their `owed` and `reserved`,
 each table with any other key it holds; the label the configuration
 gives a repository's kind or a kind, with where from; and every value
 of the configuration with its layer, whether its local layer was taken,
@@ -373,7 +373,7 @@ and each key passed over with its pin (143, 180, 181, 199, C.7).
 
 #### Scenario: The fake host's sessions, labels and layers
 
-- **WHEN** a test scripts the fake host's `work` with the session `office` and `operation`'s reserve of two keeping one free, `[kinds.research] label = "inception"`, and `streams.work.agents` from the local layer
+- **WHEN** a test scripts the fake host's `work` with the session `office` and `operation` owed two, one of them reserved, `[kinds.research] label = "inception"`, and `streams.work.agents` from the local layer
 - **THEN** the core reads `office` for `work`, `operation`'s share, `inception` from `host-kind` for research in any repository, and `streams.work.agents` from `local` (143, 180, 181, C.7)
 
 #### Scenario: The fake host's sessions for its kinds and stages
