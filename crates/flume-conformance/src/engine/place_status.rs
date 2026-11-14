@@ -1418,7 +1418,7 @@ fn a_place_gone(_: &()) -> Outcome {
 
 fn a_stalled_place_with_a_pending_end(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.add_session("ops", AgentState::Working);
+    world.terminal.add_session("ops", AgentState::Waiting);
     super::role_waking::answerer_behind(&world, DEFAULT_STREAM);
     let (id, asked) =
         super::caller_waits::construct_asks(&world, "plan", &["ops", "madswan/planner"], None)?;

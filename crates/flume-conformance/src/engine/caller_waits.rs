@@ -667,7 +667,7 @@ fn a_lost_stage_waits_on_its_caller(_: &()) -> Outcome {
 
 fn stalled_after_five_minutes(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.add_session("ops", AgentState::Working);
+    world.terminal.add_session("ops", AgentState::Waiting);
     world.terminal.add_session("lead", AgentState::Waiting);
     world.engine.settle_every(30);
     let (id, asked) = construct_asks(&world, "plan", &["ops", "lead"], None)?;

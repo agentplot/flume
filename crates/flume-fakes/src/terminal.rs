@@ -694,6 +694,13 @@ impl Terminal for FakeTerminal {
         }
         let agent = lock(&self.state).agent_sessions.get(session).cloned();
         if let Some(key) = agent.filter(|key| self.read(key) != AgentState::Stopped) {
+            // A session at work is typed nothing, so two tasks never
+            // interleave in one turn (54, 214).
+            if self.read(&key) == AgentState::Working {
+                return ToSession::Refused {
+                    reason: format!("the session {session} works; nothing was typed"),
+                };
+            }
             let mut state = lock(&self.state);
             if !state.sends {
                 return ToSession::Refused {
@@ -711,12 +718,17 @@ impl Terminal for FakeTerminal {
             return ToSession::Sent;
         }
         let mut state = lock(&self.state);
-        if !state.sessions.contains_key(session) {
+        let Some(read) = state.sessions.get(session).copied() else {
             return ToSession::NotFound;
-        }
+        };
         if !state.sends {
             return ToSession::Refused {
                 reason: "this terminal cannot send to a session".into(),
+            };
+        }
+        if read == AgentState::Working {
+            return ToSession::Refused {
+                reason: format!("the session {session} works; nothing was typed"),
             };
         }
         state.notices.push((session.into(), text.into()));

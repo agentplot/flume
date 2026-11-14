@@ -53,7 +53,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_landing_and_a_failure,
         },
         Scenario {
-            name: "end delivery: no notice is sent into a recipient asking a question, and the first settle that reads it not asking delivers it",
+            name: "end delivery: no notice is sent into a recipient asking a question, read unknown or at work, and the first settle that reads it waiting delivers it, a recipient's session typed into only at its wait",
             cites: &["43", "95", "38"],
             run: a_recipient_asking,
         },
@@ -467,7 +467,7 @@ fn settled_twice(_: &()) -> Outcome {
 
 fn an_agent_killed(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.add_session("ops", AgentState::Working);
+    world.terminal.add_session("ops", AgentState::Waiting);
     let id = fix_for_ops(&world, "one")?;
     let code = World::identity("fix", "one", "code", 1);
     world.agent.set_last_words(&code, "I was cut off");
@@ -570,6 +570,12 @@ fn a_recipient_asking(_: &()) -> Outcome {
         "a notice sent into a session read unknown"
     );
     world.terminal.set_session_state("ops", AgentState::Working);
+    world.settle(&id);
+    ensure!(
+        world.terminal.notices("ops").is_empty(),
+        "a notice typed into a session at work"
+    );
+    world.terminal.set_session_state("ops", AgentState::Waiting);
     world.settle(&id);
     ensure_eq!(
         world.terminal.notices("ops"),
