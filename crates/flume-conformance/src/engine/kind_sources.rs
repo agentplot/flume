@@ -60,7 +60,12 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: the_repositorys_and_the_launchs_by_source,
         },
         Scenario {
-            name: "kind sources: a source holding fix leaves a bare fix flume's own, and acme/fix runs the source's",
+            name: "kind sources: a host that declares no source runs flume's own newest fix, fix@2, for a bare fix",
+            cites: &["154", "191"],
+            run: no_sources_directory,
+        },
+        Scenario {
+            name: "kind sources: a source holding fix leaves a bare fix flume's own newest, flume/fix@2, and acme/fix runs the source's acme/fix@1",
             cites: &["S97", "154", "191"],
             run: s97_a_source_that_holds_fix,
         },
@@ -649,13 +654,25 @@ fn the_repositorys_and_the_launchs_by_source(_: &()) -> Outcome {
     Ok(())
 }
 
+fn no_sources_directory(_: &()) -> Outcome {
+    let world = World::with_every_own_version();
+    ensure!(
+        world.host.sources().is_empty(),
+        "the host declares a source"
+    );
+    let own = launched(&launching(&world, "fix", "one"))?;
+    ensure_eq!(own.declared, Declared::Flume, "a bare fix's declaration");
+    ensure_eq!(own.identity.as_deref(), Some("flume/fix@2"), "a bare fix");
+    Ok(())
+}
+
 fn s97_a_source_that_holds_fix(_: &()) -> Outcome {
-    let world = World::new();
+    let world = World::with_every_own_version();
     holds(&world, "acme", ACME, &[("fix", 1, '7')]);
     host_locks(&world, vec![entry("acme", "fix", 1, &hash_of('7'))]);
     let own = launched(&launching(&world, "fix", "one"))?;
     ensure_eq!(own.declared, Declared::Flume, "a bare fix's declaration");
-    ensure_eq!(own.identity.as_deref(), Some("flume/fix@1"), "a bare fix");
+    ensure_eq!(own.identity.as_deref(), Some("flume/fix@2"), "a bare fix");
     let theirs = launched(&launching(&world, "acme/fix", "two"))?;
     ensure_eq!(theirs.declared, Declared::Host, "acme's fix's declaration");
     ensure_eq!(theirs.identity.as_deref(), Some("acme/fix@1"), "acme's fix");
