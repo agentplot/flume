@@ -504,14 +504,19 @@ pub fn window(name: &str, login: Option<&[(String, String)]>) -> Option<Arc<dyn 
 /// `$XDG_CONFIG_HOME/flume/config.toml` and `config.local.toml` over it,
 /// and the recipient
 /// `$FLUME_RECIPIENT` names; a configuration that cannot be read is
-/// refused, naming its fault (C.7; design 16).
+/// refused, naming its fault (C.7; design 16); its signals handed to the
+/// command's telemetry, which the managed layer's `[telemetry]` chose as
+/// the command's first engine was built (216).
 pub fn core() -> Result<Engine, String> {
-    core_over(
+    let config = HostConfig::of_host()?;
+    let telemetry = crate::telemetry::held(config.telemetry.as_ref());
+    Ok(core_over(
         &config::flume_state()?,
-        HostConfig::of_host()?,
+        config,
         host::recipient(),
         BuiltIn::new(),
-    )
+    )?
+    .with_telemetry(telemetry))
 }
 
 /// The core over `resolver`, the terminal `config` binds, built through

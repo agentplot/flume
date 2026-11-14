@@ -461,13 +461,19 @@ pub struct Outcome {
 }
 
 impl Outcome {
-    /// Prints the words and gives the exit status.
+    /// Prints the words, then sends what the command's telemetry holds,
+    /// within its bound, and gives the exit status: the answer is never
+    /// held for a signal (216; core.13).
     pub fn exit(self) -> ExitCode {
+        use std::io::Write;
         if self.usage {
             eprintln!("{}", self.text.trim_end());
         } else if !self.text.is_empty() {
             println!("{}", self.text);
         }
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+        crate::telemetry::finish();
         ExitCode::from(self.code)
     }
 }
