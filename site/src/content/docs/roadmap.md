@@ -28,7 +28,7 @@ the same answers you do.
 | Streams, each with its own bound and priority, under the host's | ✓ | ✓ |
 | Each stream's agents in a herdr session of its own, or the one a launch names | ✓ | ✓ |
 | The host's configuration in a managed layer and a local one over it, the managed one pinning keys | ✓ | ✓ |
-| Labels sharing a stream's agents, each with a reserve and slots kept free for it | ✓ | ✓ |
+| Labels owed a stream's agents, each holding some of them reserved | ✓ | ✓ |
 | Pools of accounts, a spent account paused and its agent's conversation carried to another where the host shares it, else its stage started afresh | ✓ | ✓ |
 | An intent's agents kept to one account while it is usable | ✓ | ✓ |
 | A pool choosing the account with the most of its allowance left by the host's reading, and starting nothing on an account past its threshold | ✓ | ✓ |
