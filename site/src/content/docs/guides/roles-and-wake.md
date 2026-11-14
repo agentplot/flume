@@ -350,6 +350,44 @@ flume trusts the name. It did not start the agent and checks no
 identity for it, so an agent that takes the name in that session takes
 the address's ends.
 
+### The agent's own commands
+
+A command the agent runs in its own pane that names no recipient acts
+as its address. `flume confirm <key>`, `flume inbox` and `flume wait`
+confirm, collect and wait as `east/planner`, so the agent confirms a
+notice by the key at its end with no flag, and a retry or a tell that
+answers a question records `east/planner` as its giver. `flume launch`
+naming no `--recipient` takes `east/planner` as the place's recipient,
+and status says where it came from:
+
+```console
+  recipients: east/planner, from the standing agent east-planner that launched it, declared by acme
+```
+
+flume finds the agent a command runs in as a delivery finds it: it asks
+the stream's multiplexer for the session's agents, and the command acts
+as the address where the one agent of the entry's name is in the pane
+the multiplexer names for the command. Anything the command names comes
+first: `--recipient`, then `$FLUME_RECIPIENT`, then a role's run's own
+address. A command in any other pane acts as that pane's session, as
+before, and so does one in the pane of one of two agents of the entry's
+name, since no delivery reaches either, and one whose session flume
+cannot read. flume asks the multiplexer only where a source gives an
+address an agent and the command runs in a session the multiplexer
+names, so a command from a plain shell asks nothing.
+
+An agent its sources give two addresses names which with each command.
+One that names no recipient is refused, naming the agent and each
+address, and does nothing as either:
+
+```console
+$ flume inbox
+refused: the agent east-planner this command runs in stands for east/ops and east/planner: name which with --recipient
+```
+
+`flume inbox --recipient east/ops` then collects what is pending for
+`east/ops` alone. A launch so refused makes nothing.
+
 ### No run, and the wake
 
 flume opens nothing for an address an agent holds and keeps no watch on

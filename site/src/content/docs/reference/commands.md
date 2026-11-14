@@ -84,7 +84,7 @@ flume launch --kind <kind> --name <name> [--brief <text> | --brief-file <file>] 
 | `--kinds <file>` | A declaration of kinds the launch carries, read from disk with its prompts beside it. |
 | `--hold <stage>=<words>` | Hold that stage before it starts, with words saying what it waits for. Repeatable. |
 | `--hold-submission` | Hold the submission once the last stage delivers. |
-| `--recipient <name>` | A recipient of the place's ends: a terminal's session by its name, or a role's address, `<stream>/<role>`, of any stream, whose run is woken for them. A name no pane holds is sent no notice: its ends wait for it, the place's record kept once it is tidied, until it collects them by `flume inbox` or `flume wait` as that name and confirms them ([the end of a place's work](/flume/guides/callers-and-holds/#the-end-of-a-places-work)). Repeatable. With none, `$FLUME_RECIPIENT`, else the terminal session the launch runs in, else the answerer behind the place's stream ([who answers a place](/flume/guides/callers-and-holds/#who-answers-a-place)). Every stall reaches that answerer too. |
+| `--recipient <name>` | A recipient of the place's ends: a terminal's session by its name, or a role's address, `<stream>/<role>`, of any stream, whose run is woken for them. A name no pane holds is sent no notice: its ends wait for it, the place's record kept once it is tidied, until it collects them by `flume inbox` or `flume wait` as that name and confirms them ([the end of a place's work](/flume/guides/callers-and-holds/#the-end-of-a-places-work)). Repeatable. With none, `$FLUME_RECIPIENT`, else the address a standing agent holds where the launch runs in its pane ([the agent's own commands](/flume/guides/roles-and-wake/#the-agents-own-commands)), else the terminal session the launch runs in, else the answerer behind the place's stream ([who answers a place](/flume/guides/callers-and-holds/#who-answers-a-place)). Every stall reaches that answerer too. |
 | `--mark <mark>` | A mark the caller finds its places by, given back in status. |
 | `--priority <n>` | The place's priority in the host's queue, a whole number, negative allowed; `0` where none is given. |
 | `--stall-after <time>` | How long the place may wait on its caller under no hold's words before it is said stalled; five minutes where none is given. |
@@ -122,6 +122,9 @@ nothing it made, when:
   while a launch on another stream runs;
 - it finds no recipient: no `--recipient`, no `$FLUME_RECIPIENT`, no
   terminal session it runs in, and no role standing behind its stream;
+- it names no recipient, `$FLUME_RECIPIENT` is unset, and it runs in the
+  pane of an agent its sources give more than one address, naming the
+  agent and each address;
 - it would take its stream's answerer, and two roles stand behind the
   stream, naming both;
 - it names a role's address that no source declares, or two declare,
@@ -527,7 +530,17 @@ takes.
 | `1` | refused |
 
 The recipient is `--recipient`, else `$FLUME_RECIPIENT`, else the role
-a role's run serves, else the terminal session the command runs in.
+a role's run serves, else the address a standing agent holds where the
+command runs in its pane, else the terminal session the command runs
+in ([the agent's own commands](/flume/guides/roles-and-wake/#the-agents-own-commands)).
+In the pane of an agent its sources give more than one address, a
+command naming no recipient is refused, naming the agent and each
+address, and does nothing:
+
+```console
+$ flume wait fix--one --stage code
+refused: the agent east-planner this command runs in stands for east/ops and east/planner: name which with --recipient
+```
 
 ## `flume inbox`
 

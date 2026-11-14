@@ -180,10 +180,10 @@ first settle that reads it while the place still waits under no hold's
 words reads them for it.
 
 A launch keeps where its recipients came from, `recipients_from`:
-`from` `launch`, `environment`, `session`, or `answerer` with its
-`source`; or `base-place`, for a fix flume launched for a base place,
-which takes the base place's recipients. A place an earlier release
-launched keeps none.
+`from` `launch`, `environment`, `standing` with its `agent` and
+`source`, `session`, or `answerer` with its `source`; or `base-place`,
+for a fix flume launched for a base place, which takes the base place's
+recipients. A place an earlier release launched keeps none.
 
 ### A base place's fixes
 
@@ -310,7 +310,7 @@ Each place:
 | `refused_acts` | each act the guard refused |
 | `cannot_read` | each fact flume could not read when asked; among them, each branch the merge queue could not read, in its words, which flume reads past unless it is the place's base, where the place's own submission is |
 | `failures` | each act that failed, in flume's words |
-| `recipients`, `recipients_from` | the place's recipients, and where its launch took them from: `from` `launch`, `environment`, `$FLUME_RECIPIENT`, `session`, the session it ran in, or `answerer` with the `source` that declares the answerer behind its stream, or `base-place`, a fix flume launched for a base place, whose recipients are its base place's; `recipients_from` left out for a place an earlier release launched and for a role's run |
+| `recipients`, `recipients_from` | the place's recipients, and where its launch took them from: `from` `launch`, `environment`, `$FLUME_RECIPIENT`, `standing`, the address a standing agent holds whose pane it was launched in, with that agent's name, `agent`, and the `source` that declares it, `session`, the session it ran in, or `answerer` with the `source` that declares the answerer behind its stream, or `base-place`, a fix flume launched for a base place, whose recipients are its base place's; `recipients_from` left out for a place an earlier release launched and for a role's run |
 | `waiting_on`, `stalled` | what the place waits on its caller for, since when and in whose words, or, with `act` `answer` and `why` `dialog`, on a person to answer its agent's dialog, in the dialog's words; for an answer, `open_until`, the time its stage's agent is kept open until, while it is, and `closed`, once a settle let it go, as the stage's `end` gives it; for a base place with no place on its branch live, `act` `retry` and `why` `unsubmitted`, or `submission` with the merge queue's words where its submission failed, conflicted or was withdrawn; whether it is stalled |
 | `waits_on` | whom a live place waits on, as the list gives it: `caller`, `host`, `session`, `merge_queue`, or `places`, a base place's while a place on its branch is live, which is never stalled; left out where it waits on nobody |
 | `worktree` | `false`, for a base place alone, which has no worktree; left out for every other place |
