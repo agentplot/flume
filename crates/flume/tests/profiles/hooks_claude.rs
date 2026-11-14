@@ -804,7 +804,7 @@ fn no_mode_in_the_input() {
 #[test]
 fn a_later_prompt_and_a_compaction_after_the_mode_moved() {
     // A start's first prompt taken in acceptEdits; once started, a person
-    // moves its session's mode. A later prompt, a tell, compares no mode
+    // moves its session's mode. A later prompt, a message, compares no mode
     // and is acked received; the session compacts, SessionStart compares
     // no mode either, so the started ack is written again with the
     // session's transcript, and nothing is unsettled (161, 162).
@@ -816,7 +816,7 @@ fn a_later_prompt_and_a_compaction_after_the_mode_moved() {
     let ran = host.hook(
         &agent,
         "user-prompt-submit",
-        json!({ "prompt": "a tell", "permission_mode": "default" }),
+        json!({ "prompt": "a message", "permission_mode": "default" }),
     );
     assert_eq!(decision(&ran), None, "a later prompt blocked");
     let compacted = host.path("sessions/compacted.jsonl");

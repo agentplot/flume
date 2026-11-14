@@ -76,11 +76,18 @@ enum Command {
     },
     /// The exact prompt a stage would be sent at its next start (29).
     Prompt { place: String, stage: String },
-    /// Hand the place's agent words as a prompt (53 to 55).
-    Tell {
-        place: String,
+    /// Message a place's agent or a role's address: a place's agent is
+    /// handed the words as a prompt once it waits; a role's address,
+    /// `<stream>/<role>`, keeps them as a delivery its session takes at its
+    /// next wait (53 to 55, 214).
+    #[command(alias = "tell")]
+    Message {
+        /// A role's address, `<stream>/<role>`; else a place, by its
+        /// location or `<kind>--<name>` in the repository.
+        target: String,
         words: String,
-        /// How long to wait for the agent, as `<n>`, `<n>s`, `<n>m` or `<n>h`.
+        /// How long to wait for a place's agent, as `<n>`, `<n>s`, `<n>m`
+        /// or `<n>h`.
         #[arg(long)]
         within: Option<String>,
         /// The key of the stop-short the words answer, as the inbox and
@@ -594,13 +601,13 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             let place = named(place)?;
             build()?.prompt(&place, stage)
         }
-        Command::Tell {
-            place,
+        Command::Message {
+            target,
             words,
             within,
             answers,
         } => {
-            let place = named(place)?;
+            let place = named(target)?;
             let within = within.as_deref().map(read_span).transpose()?;
             let key = key_of(answers)?;
             let core = build()?;
@@ -772,7 +779,7 @@ fn recipient_of(core: &Engine, named: &Option<String>) -> Result<String, String>
     })
 }
 
-/// What a retry's or a tell's answer names beside its words: the key of
+/// What a retry's or a message's answer names beside its words: the key of
 /// the stop-short it answers, where `--answers` gives one, and who gives
 /// it, the recipient the command acts as where it names none, recorded on
 /// the stop-short it answers; none where no recipient is read (42).

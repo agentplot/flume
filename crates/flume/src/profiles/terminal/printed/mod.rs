@@ -1,7 +1,7 @@
 //! The terminal profile that prints the command (C.5; design 12): open
 //! answers the command, the prompt carried in it, for a person to run in
 //! the place, and status gives it with the agent; send and close are
-//! refused, so a tell is refused and a prompt not received is never begun
+//! refused, so a message is refused and a prompt not received is never begun
 //! (38, 53), as is every send to a recipient's session, which it holds
 //! none of, so every end stays pending, read from status, a wait or the
 //! inbox (43); state is unknown from the terminal, the core reading the

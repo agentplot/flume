@@ -798,7 +798,7 @@ fn stall_words(of: &EndOf) -> String {
 fn kept_open_line(waiting: &WaitingOn) -> Option<String> {
     if let Some(until) = waiting.open_until {
         return Some(format!(
-            "    its agent kept open for the answer until {until}: retry with --words, or tell it"
+            "    its agent kept open for the answer until {until}: retry with --words, or message it"
         ));
     }
     let closed = waiting.closed?;
@@ -4138,7 +4138,7 @@ mod tests {
             from_the_move(&asking(Some(4600), None)),
             vec![
                 ASKS.to_string(),
-                "    its agent kept open for the answer until 4600: retry with --words, or tell it"
+                "    its agent kept open for the answer until 4600: retry with --words, or message it"
                     .to_string(),
             ]
         );
@@ -4266,7 +4266,7 @@ mod tests {
             vec![
                 "  stage code: begun, started 1 times".to_string(),
                 "    answered by retry, received at 1205: asked Which file holds the log?; answered notes.md".to_string(),
-                "    answered by tell, received at 2405: asked Which test covers it?; answered the walkthrough".to_string(),
+                "    answered by message, received at 2405: asked Which test covers it?; answered the walkthrough".to_string(),
             ]
         );
         // 42: who gave an answer, where it named one.
@@ -4274,7 +4274,7 @@ mod tests {
         from_ops.answers[1].answer.by = Some("east/ops".into());
         assert_eq!(
             stage_lines(&from_ops)[2],
-            "    answered by tell from east/ops, received at 2405: asked Which test covers it?; answered the walkthrough"
+            "    answered by message from east/ops, received at 2405: asked Which test covers it?; answered the walkthrough"
         );
     }
 
@@ -4365,7 +4365,7 @@ mod tests {
                 "change--plan (one of two designs), in east, waits on east/ops; read: flume status /d/places/1/change--plan",
                 "  waits on its caller to retry construct (answer) since 100: Which design does the brief mean?",
                 "  its stop-short stage/construct/1/ended-short needs an answer, asking east/ops",
-                "    its agent kept open for the answer until 3700: retry with --words, or tell it",
+                "    its agent kept open for the answer until 3700: retry with --words, or message it",
                 "  the move it waits on on hold since 160, for 3600 seconds: east-planner has it",
             ]
             .join("\n")

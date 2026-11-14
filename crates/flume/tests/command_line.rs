@@ -1,6 +1,6 @@
 //! A caller's hold and keyed answers through the command line over the
 //! fakes (command-line spec, "needs --to, hold --waiting, retry --answers
-//! and tell --answers"): each command's words parsed as flume's binary
+//! and message --answers"): each command's words parsed as flume's binary
 //! parses them and asked of one core built over the conformance world,
 //! whose change `plan` in `east` waits on construct's stop-short naming
 //! `ops`. The fakes keep construct's agent open for its answer, which the
@@ -148,16 +148,15 @@ fn a_hold_on_the_waiting_move_then_a_retry_naming_its_key() {
     );
 }
 
-#[test]
-fn a_tell_naming_its_key() {
-    // The spec's "A tell's key" (42, 53, 198): construct's agent kept open
-    // takes the tell as its answer, recorded with the key; a second naming
-    // the key is refused, naming the answer taken.
+/// A keyed answer by `verb`, `message` or its alias `tell`: construct's
+/// agent kept open takes it as its answer, recorded by a message with the
+/// key; a second naming the key is refused, naming the answer taken.
+fn answers_naming_its_key(verb: &str) {
     let world = World::new();
     let (id, _) = asks_ops(&world, Some("1h")).expect("construct asks ops");
     let place = &id.to_string();
     let told = acted(
-        answered(&world, &["tell", place, "--answers", KEY, "yes", "--json"]),
+        answered(&world, &[verb, place, "--answers", KEY, "yes", "--json"]),
         Act::Message,
     );
     let answer = answer_on(&told).expect("no answer recorded on the stop-short");
@@ -170,11 +169,58 @@ fn a_tell_naming_its_key() {
         ),
         ("yes", Act::Message, Some(KEY.to_string()), true)
     );
-    let again = refused(&world, &["tell", place, "--answers", KEY, "no", "--json"]);
+    let again = refused(&world, &[verb, place, "--answers", KEY, "no", "--json"]);
     assert!(
         again.contains(KEY) && again.contains("yes") && again.contains("taken once"),
         "{again}"
     );
+}
+
+#[test]
+fn a_tell_naming_its_key() {
+    // The spec's "A tell's key" (42, 53, 198): `tell`, message's alias,
+    // answers as `flume message` does, its act `message`.
+    answers_naming_its_key("tell");
+}
+
+#[test]
+fn a_message_naming_its_key() {
+    // The spec's "A message's key" (42, 53, 198): its act `message`, the
+    // message delivered as the answer to that stop-short.
+    answers_naming_its_key("message");
+}
+
+#[test]
+fn tell_runs_as_message() {
+    // The spec's "A caller not yet moved" (53; record 0069): `flume tell`
+    // runs as `flume message`, the agent receives the words, the answer
+    // is the one `flume message` gives, its act `message`, and the help
+    // lists `message` alone.
+    let world = World::new();
+    let id = world
+        .begun("build", Some(Deliverable::Commits), "one")
+        .expect("build begun");
+    let work = World::identity("build", "one", "work", 1);
+    let place = &id.to_string();
+    let told = answered(&world, &["tell", place, "go on", "--json"]);
+    assert_eq!(
+        world.terminal.sent_to(&work).last().map(String::as_str),
+        Some("go on")
+    );
+    let messaged = answered(&world, &["message", place, "go on", "--json"]);
+    assert_eq!(
+        serde_json::to_value(&told).expect("tell's answer"),
+        serde_json::to_value(&messaged).expect("message's answer")
+    );
+    acted(told, Act::Message);
+    let (help, code) = run(&world, &["--help"]);
+    assert_eq!(code, 0, "{help}");
+    let commands: Vec<&str> = help
+        .lines()
+        .filter_map(|line| line.strip_prefix("  ")?.split_whitespace().next())
+        .collect();
+    assert!(commands.contains(&"message"), "{help}");
+    assert!(!commands.contains(&"tell"), "{help}");
 }
 
 #[test]

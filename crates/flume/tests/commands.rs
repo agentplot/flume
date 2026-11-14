@@ -2959,10 +2959,10 @@ fn needs_to_a_role_and_to_another_streams() {
 }
 
 #[test]
-fn the_helps_of_needs_hold_retry_tell_and_launch() {
+fn the_helps_of_needs_hold_retry_message_and_launch() {
     // 7, 41, 42, 43, 49, 53, 130, 132, 193; core.35: needs --to's help
     // says a role alone is the place's own stream's, hold's names the
-    // waiting move and its bound, retry's and tell's the key an answer
+    // waiting move and its bound, retry's and message's the key an answer
     // names, launch --recipient's a role's address of any stream, a name
     // no pane holds collecting its ends and the answerer behind the
     // place's stream, launch's that it takes no --caller, and inbox's the
@@ -2983,8 +2983,9 @@ fn the_helps_of_needs_hold_retry_tell_and_launch() {
         ("hold", "once it passes, the hold lapses and the place stalls at once"),
         ("retry", "--answers <KEY>"),
         ("retry", "taken only while the place waits on that stop-short and only once"),
-        ("tell", "--answers <KEY>"),
-        ("tell", "its agent kept open for its answer"),
+        ("message", "--answers <KEY>"),
+        ("message", "its agent kept open for its answer"),
+        ("message", "a role's address, `<stream>/<role>`"),
         ("launch", "a role's address, `<stream>/<role>`, of any stream"),
         ("launch", "the answerer behind the place's stream"),
         ("launch", "A name no pane holds is sent no notice"),
@@ -3001,7 +3002,7 @@ fn the_helps_of_needs_hold_retry_tell_and_launch() {
             "{command}'s help says not {said:?}: {words}"
         );
     }
-    for command in ["needs", "hold", "retry", "tell", "launch", "inbox"] {
+    for command in ["needs", "hold", "retry", "message", "launch", "inbox"] {
         let words = help(command);
         assert!(
             !words.contains("partition"),
