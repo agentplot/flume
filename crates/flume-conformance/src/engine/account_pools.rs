@@ -169,7 +169,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "account pools: an account of a program whose profile reports no windows has no reading, status saying its program's profile gives none, and a start of that program on its pool is taken",
-            cites: &["171", "174", "184"],
+            cites: &["184", "211"],
             run: a_program_whose_profile_gives_no_windows,
         },
         Scenario {
@@ -2053,6 +2053,8 @@ fn an_account_no_session_reported_for(_: &()) -> Outcome {
 /// The account-pools spec's scenario "A program whose profile gives no
 /// windows": `other` run by a fake agent scripted to report none, its
 /// account other-1 with no reading and its stage taken (171, 174, 184).
+/// It cites 184 and 211: the list leaves 171 and 174 to record 0026's
+/// change.
 fn a_program_whose_profile_gives_no_windows(_: &()) -> Outcome {
     let world = World::new();
     let other = Arc::new(FakeAgent::new(world.terminal.clone()));

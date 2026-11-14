@@ -251,7 +251,7 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
         },
         Scenario {
             name: "agent: a profile that builds no windows answers not offered, and windows reads unknown for any agent",
-            cites: &["211", "171", "174"],
+            cites: &["211"],
             run: windows_not_offered::<H>,
         },
         Scenario {
@@ -974,7 +974,8 @@ fn windows_reads_each_report<H: AgentHarness>(harness: &H) -> Outcome {
 }
 
 /// The seam-contracts spec's scenario "A profile that reports no
-/// windows" (171, 174).
+/// windows" (171, 174, 211). It cites 211 alone: the list leaves 171 and
+/// 174, a degraded part of the agent seam, to record 0026's change.
 fn windows_not_offered<H: AgentHarness>(harness: &H) -> Outcome {
     let who = started(harness, "code");
     // A profile that builds windows answers by the scenario before.
