@@ -11,3 +11,12 @@ inputs:
     inputs:
       nixpkgs:
         follows: nixpkgs
+  # Rex, which the Rex terminal profile drives: Rex's own flake, by the URL
+  # its release 0.1.0-preview.14 keeps for good, the release whose commands
+  # and fields the profile reads (core.22). It packages Rex's release binary
+  # for aarch64-darwin and Linux.
+  rex:
+    url: https://pkgs.superlogical.com/rex/nix/preview/0.1.0-preview.14.tar.gz
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
