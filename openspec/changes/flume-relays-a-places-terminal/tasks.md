@@ -57,7 +57,7 @@ server it started at its end (core.51).
 
 ## 7. Through the binary
 
-- [ ] 7.1 Add the walkthrough of the place-relay scenario "Through the binary under herdr": a fix launched on a host whose terminal is herdr with the stand-in agent program, `flume relay fix--one` run as a child once the agent said it started, its first line a screen, `{"text":"relay-marker"}` written and lines read until a screen holds `relay-marker`, its input closed, its last line the relayed answer ended by the caller and its exit 0, the place's held state at its version before, and no file under the host's state directory holding `relay-marker` (107, 221, 222, C.5). True when `devenv shell -- cargo test -p flume --features tools --test tools walkthroughs::a_person_reaches_a_fixs_agent_through_a_relay` passes.
+- [x] 7.1 Add the walkthrough of the place-relay scenario "Through the binary under herdr": a fix launched on a host whose terminal is herdr with the stand-in agent program, `flume relay fix--one` run as a child once the agent said it started, its first line a screen, `{"text":"relay-marker"}` written and lines read until a screen holds `relay-marker`, its input closed, its last line the relayed answer ended by the caller and its exit 0, the place's held state at its version before, and no file under the host's state directory holding `relay-marker` (107, 221, 222, C.5). True when `devenv shell -- cargo test -p flume --features tools --test tools walkthroughs::a_person_reaches_a_fixs_agent_through_a_relay` passes.
 
 ## 8. The record, the rules and the site
 

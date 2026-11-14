@@ -93,7 +93,11 @@
 //! SessionStart giving it the place, the question by its key and the ways
 //! on, and five minutes of the walkthrough's clock later the stall reaches
 //! the pane and the answerer behind east, whose run is woken for it (S94;
-//! 43, 130, 193, C.4).
+//! 43, 130, 193, C.4); and a person reaches a fix's code agent under herdr
+//! through `flume relay`, its first line a screen, the text written to its
+//! input shown on a later screen, its input's close ending it by its
+//! caller, the place's held state unwritten and no file of flume's state
+//! holding what was typed (107, 221, 222, C.5).
 
 use super::walk::*;
 use flume::profiles::agent::claude::carry::{UNREACHED, UNREADABLE};
@@ -4218,4 +4222,140 @@ fn flume_open_of_a_rex_streams_session_names_the_socket_to_add() {
         "a place's held state was written under {}",
         places.display()
     );
+}
+
+/// Every file under `folder` holding `text`, by its path.
+fn files_holding(folder: &Path, text: &str) -> Vec<PathBuf> {
+    let mut found = vec![];
+    let mut todo = vec![folder.to_path_buf()];
+    while let Some(directory) = todo.pop() {
+        for entry in std::fs::read_dir(&directory)
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            let path = entry.path();
+            if path.is_dir() && !path.is_symlink() {
+                todo.push(path);
+            } else if std::fs::read(&path)
+                .is_ok_and(|read| read.windows(text.len()).any(|at| at == text.as_bytes()))
+            {
+                found.push(path);
+            }
+        }
+    }
+    found
+}
+
+#[test]
+fn a_person_reaches_a_fixs_agent_through_a_relay() {
+    // The place-relay scenario "Through the binary under herdr" (107, 221,
+    // 222, C.5): a fix's code agent, the stand-in in a pane of flume's own
+    // herdr session, its terminal echoing what is typed as Claude Code's
+    // input shows it; `flume relay fix--one` run as a child once the agent
+    // said it started gives a screen first, types `relay-marker` written
+    // to its input, gives a screen holding it, and, its input closed, ends
+    // by its caller with exit 0, its last line the relayed answer; the
+    // place's held state stands at its version, and no file of flume's
+    // state holds what was typed.
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::Stdio;
+    use std::sync::mpsc::channel;
+    use std::time::{Duration, Instant};
+    let host = Walk::under_herdr("walk-relay");
+    let echoing = host.signal("echoing");
+    host.script(
+        "code",
+        1,
+        json!([
+            [{ "bash": format!("stty echo < /dev/tty && touch '{}'", echoing.display()) }],
+            [],
+        ]),
+    );
+    let place = host.launch("fix", "one", &["--brief", "wait for a person"]);
+    host.until(
+        &place,
+        "code's agent said it started and echoes",
+        |status| stage(status, "code")["state"] == "begun" && echoing.exists(),
+    );
+    let store = StateDir::at(host.home().join("state/flume"));
+    let id = PlaceId::new(&place);
+    let before = store.read(&id).expect("the place's held state").version;
+
+    let mut relay = host
+        .command(env!("CARGO_BIN_EXE_flume"), &host.repository.dir)
+        .args(["relay", "fix--one"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("flume relay runs");
+    let (lines, read) = channel();
+    let stdout = relay.stdout.take().expect("the relay's output");
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if lines.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    let next = |what: &str| -> Value {
+        let line = read
+            .recv_timeout(Duration::from_secs(20))
+            .unwrap_or_else(|_| panic!("no line came: {what}\n{}", host.logs()));
+        serde_json::from_str(&line).unwrap_or_else(|error| panic!("{error}: {line}"))
+    };
+    let first = next("the first screen");
+    assert!(first["screen"].is_string(), "the first line: {first}");
+    let mut input = relay.stdin.take().expect("the relay's input");
+    writeln!(input, r#"{{"text":"relay-marker"}}"#).expect("the input written");
+    input.flush().expect("the input flushed");
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        assert!(Instant::now() < deadline, "no screen held relay-marker");
+        let line = next("a screen holding relay-marker");
+        assert!(line["untyped"].is_null(), "{line}");
+        if line["screen"]
+            .as_str()
+            .is_some_and(|screen| screen.contains("relay-marker"))
+        {
+            break;
+        }
+    }
+    drop(input);
+    let mut last = Value::Null;
+    while let Ok(line) = read.recv_timeout(Duration::from_secs(10)) {
+        last = serde_json::from_str(&line).unwrap_or_else(|error| panic!("{error}: {line}"));
+    }
+    let exit = relay.wait().expect("the relay ends");
+    assert_eq!(
+        last,
+        json!({"relayed": {
+            "place": place,
+            "agent": format!("flume:{}:fix--one:code:1", repository_id(&host)),
+            "ended": "caller",
+        }}),
+        "the last line"
+    );
+    assert!(exit.success(), "{exit:?}");
+    assert_eq!(
+        store.read(&id).expect("the place's held state").version,
+        before,
+        "the relay wrote the held state"
+    );
+    let state = host.home().join("state/flume");
+    assert_eq!(
+        files_holding(&state, "relay-marker"),
+        Vec::<PathBuf>::new(),
+        "files of flume's state holding what was typed"
+    );
+}
+
+/// The repository's id as the walkthrough's agents' identities carry it.
+fn repository_id(host: &Walk) -> String {
+    let common = std::process::Command::new("git")
+        .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
+        .current_dir(&host.repository.dir)
+        .output()
+        .expect("git runs");
+    flume_core::repository_id(String::from_utf8_lossy(&common.stdout).trim())
 }
