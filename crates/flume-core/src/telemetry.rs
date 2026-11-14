@@ -1369,4 +1369,61 @@ pub(crate) mod tests {
             "once, from the write that landed"
         );
     }
+    /// The place `fix--<name>` launched and settled until its stage
+    /// began, its id and its start's identity.
+    fn begun(world: &World, name: &str) -> (flume_seams::PlaceId, Identity) {
+        let id = world.launch(name);
+        world.engine().settle(Some(&id));
+        let held = world.store.held(&id).expect("the place");
+        assert_eq!(held.stages[0].state, StageState::Begun, "{held:?}");
+        let identity = held.stages[0].start.as_ref().unwrap().identity.clone();
+        (id, identity)
+    }
+
+    #[test]
+    fn a_persons_wait_opens_and_ends_at_the_settles_that_read_it() {
+        // A settle that reads the agent asking a person writes since when,
+        // which opens the place's wait on a person; the settle that reads
+        // it working again clears it, which ends the wait (217, 90).
+        let world = World::new();
+        let (id, identity) = begun(&world, "one");
+        world.telemetry.clear();
+        world.host.advance(60);
+        let asked = world.host.now();
+        world.agent.set_asking(&identity, flume_seams::Reading::Yes);
+        world.engine().settle(Some(&id));
+        let held = world.store.held(&id).unwrap();
+        let start = held.stages[0].start.as_ref().unwrap();
+        assert_eq!(start.asking_since, Some(asked));
+        assert_eq!(held.waits.len(), 1, "{:?}", held.waits);
+        assert_eq!(
+            (held.waits[0].on, held.waits[0].for_move.as_str()),
+            (WaitParty::Person, "asking")
+        );
+        assert_eq!(world.telemetry.events(), ["wait.begun"]);
+
+        world.host.advance(120);
+        world.engine().settle(Some(&id));
+        assert_eq!(
+            world.store.held(&id).unwrap().stages[0]
+                .start
+                .as_ref()
+                .unwrap()
+                .asking_since,
+            Some(asked),
+            "a settle that reads it asking again keeps since when"
+        );
+        world.host.advance(600);
+        let answered = world.host.now();
+        world.agent.set_asking(&identity, flume_seams::Reading::No);
+        world.engine().settle(Some(&id));
+        let held = world.store.held(&id).unwrap();
+        assert_eq!(held.stages[0].start.as_ref().unwrap().asking_since, None);
+        assert!(held.waits.is_empty());
+        let spans = world.telemetry.spans();
+        let (_, from, to, attributes) = span_named(&spans, "wait on person");
+        assert_eq!((from, to), (asked, answered));
+        assert_eq!(attributes[keys::WAIT_MOVE], text("asking"));
+        assert_eq!(attributes[keys::STAGE], text("code"));
+    }
 }
