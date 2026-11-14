@@ -106,11 +106,39 @@ pub enum HostDocument {
 }
 
 /// The host's deliveries: every record of weir's C.8 for the ends of the
-/// host's places, in the order added, written whole by compare-and-set
-/// (43, C.7; weir 112).
+/// host's places and the messages to its roles' addresses, in the order
+/// added, and beside them each claim of a delivery being handed, written
+/// whole by compare-and-set (43, 214, C.7; weir 112).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Deliveries {
     pub records: Vec<DeliveryRecord>,
+    /// Each delivery claimed for a recipient before it is handed, none in
+    /// a document written before; flume's own, spelled as no weir record
+    /// and passed over by weir's pack (75, 214, C.7; weir 113; core.4).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub claims: Vec<DeliveryClaim>,
+}
+
+/// A delivery claimed for a recipient before it is handed: the
+/// delivery's key, the recipient, when it was claimed, whether its send is
+/// still unanswered, and, where a start of a role's run claimed it for its
+/// prompt, that start's identity. A claim holds its delivery out of every
+/// later batch to its recipient, so two settles hand it once; it goes once
+/// its hand-over is added or its send refused (43, 75, 214, C.7).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeliveryClaim {
+    pub key: String,
+    pub recipient: String,
+    pub at: Seconds,
+    /// True from the claim until the send is answered; a claim a settle
+    /// ended mid-send leaves sending is recorded by no other settle, since
+    /// the terminal may have typed it, and its delivery waits for the
+    /// recipient's inbox, a wait or its session's start (43, 75).
+    pub sending: bool,
+    /// The start of a role's run whose prompt carries the delivery, read
+    /// received before its hand-over is added (214; design 9).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start: Option<String>,
 }
 
 /// One of weir's delivery records, written as the object weir's

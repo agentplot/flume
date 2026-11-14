@@ -83,6 +83,7 @@ pub fn read(store: &dyn Store) -> Result<(Option<u64>, Vec<Record>), String> {
 fn write(store: &dyn Store, at: Option<u64>, records: &[Record]) -> Written {
     let document = HostDocument::Deliveries(Deliveries {
         records: records.iter().cloned().map(DeliveryRecord).collect(),
+        claims: vec![],
     });
     store.write_host(&HostKey::Deliveries, at, Some(&document))
 }

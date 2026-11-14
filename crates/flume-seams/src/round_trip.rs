@@ -5036,6 +5036,7 @@ fn a_deliveries_document_round_trips() {
         version: 7,
         document: HostDocument::Deliveries(Deliveries {
             records: records.clone(),
+            claims: vec![],
         }),
     };
     round_trips(versioned.clone());
@@ -5049,6 +5050,58 @@ fn a_deliveries_document_round_trips() {
         panic!("the host's deliveries read back as another document")
     };
     assert_eq!(read.records, records, "in order, as written");
+}
+
+#[test]
+fn a_deliveries_document_with_a_claim_round_trips() {
+    // The deliveries spec's "A claim round-trips": a document holding two
+    // records and a claim still sending reads back equal, the claim
+    // spelled as no weir record; a document written before, with no
+    // claims, reads with none (75, C.7; core.4).
+    let records: Vec<DeliveryRecord> = delivery_records().into_iter().take(2).collect();
+    let claim = DeliveryClaim {
+        key: "message/east/planner/0a1b2c3d".into(),
+        recipient: "east/planner".into(),
+        at: 1_794_150_180,
+        sending: true,
+        start: None,
+    };
+    let versioned = HostVersioned {
+        version: 3,
+        document: HostDocument::Deliveries(Deliveries {
+            records: records.clone(),
+            claims: vec![claim.clone()],
+        }),
+    };
+    round_trips(versioned.clone());
+    round_trips(DeliveryClaim {
+        start: Some("acme-ops--east-ops-turn-1".into()),
+        sending: false,
+        ..claim.clone()
+    });
+    let json = serde_json::to_value(&versioned).expect("written");
+    assert_eq!(
+        json["document"]["claims"],
+        serde_json::json!([{
+            "key": "message/east/planner/0a1b2c3d",
+            "recipient": "east/planner",
+            "at": 1_794_150_180,
+            "sending": true,
+        }])
+    );
+    for claim in json["document"]["claims"].as_array().expect("claims") {
+        assert!(claim.get("format").is_none(), "a claim spelled as weir's");
+    }
+    let mut before = json.clone();
+    before["document"]
+        .as_object_mut()
+        .expect("an object")
+        .remove("claims");
+    let read: HostVersioned = serde_json::from_value(before).expect("written before");
+    let HostDocument::Deliveries(read) = read.document else {
+        panic!("the host's deliveries read back as another document")
+    };
+    assert_eq!((read.records, read.claims), (records, vec![]));
 }
 
 #[test]
