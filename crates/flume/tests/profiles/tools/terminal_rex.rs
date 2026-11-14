@@ -1,15 +1,15 @@
 //! The terminal profile over Rex (C.5) against the pinned Rex, on servers
 //! each test starts under a state folder of its own, short enough that
 //! every socket under it fits the 104 bytes a socket's path holds, and
-//! stops at its end, so no Rex server of the host's, the Rex app's among
-//! them, is touched and no `REX_*` of the caller's reaches one (core.29,
-//! core.51).
+//! stops at its end, Rex's runtime root under that folder too, so no Rex
+//! server or runtime root of the host's, the Rex app's among them, is
+//! touched and no `REX_*` of the caller's reaches one (core.29, core.51).
 
 use flume::host::config::HostConfig;
 use flume::host::process::listed;
 use flume::host::RealHost;
 use flume::profiles::store::state_dir::StateDir;
-use flume::profiles::terminal::rex::{rex_name, Block, Rex, NAME, PIECE};
+use flume::profiles::terminal::rex::{rex_name, Block, Rex, NAME, PIECE, RUNTIME_ROOT};
 use flume_conformance::engine::world::{kind, stage, World};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::terminal::{self, TerminalHarness};
@@ -45,16 +45,45 @@ fn rex_program() -> PathBuf {
         )
 }
 
-/// A folder short enough for a state folder whose sockets fit: the
-/// temporary folder, which a sandboxed run may write and which sluice
-/// keeps short, or `/tmp` where the temporary folder is long.
-fn short_folder() -> PathBuf {
+/// The longest session name these tests give a Rex server, whose socket
+/// is `terminal/rex/<name>.sock` under the state folder.
+const LONGEST_SESSION: usize = 16;
+
+/// The state folder `named`, made where every socket beneath it fits a
+/// socket's path on this host: in the temporary folder, which a sandboxed
+/// run may write and the merge queue keeps short, where it fits there,
+/// else in `/tmp` where the run may write there; the test fails naming
+/// what lacked room where neither holds it (core.51).
+fn state_folder(named: &str) -> PathBuf {
+    // SAFETY: an address of all zeros is a valid `sockaddr_un`.
+    let address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+    let limit = address.sun_path.len() - 1;
+    let socket = format!("terminal/rex/{}.sock", "s".repeat(LONGEST_SESSION));
     let temporary = std::env::temp_dir();
-    if temporary.as_os_str().len() <= 40 {
-        temporary
-    } else {
-        PathBuf::from("/tmp")
+    let mut refused = vec![];
+    for folder in [temporary.clone(), PathBuf::from("/tmp")] {
+        let root = folder.join(named);
+        let _ = fs::remove_dir_all(&root);
+        if let Err(error) = fs::create_dir_all(root.join("terminal/rex")) {
+            refused.push(format!("{} cannot be made: {error}", root.display()));
+            continue;
+        }
+        let root = root.canonicalize().expect("the state folder's path");
+        let longest = root.join(&socket);
+        if longest.as_os_str().len() <= limit {
+            return root;
+        }
+        refused.push(format!(
+            "a socket would be {}, {} bytes, past the {limit} a socket's path holds on this host",
+            longest.display(),
+            longest.as_os_str().len()
+        ));
+        let _ = fs::remove_dir_all(&root);
     }
+    panic!(
+        "the Rex tests' state folder finds no room: {}",
+        refused.join("; ")
+    )
 }
 
 /// A state folder of the test's own, as flume's is, its Rex profile's
@@ -66,25 +95,22 @@ struct RexState {
 
 impl RexState {
     fn new() -> RexState {
-        let root = short_folder().join(format!(
+        let root = state_folder(&format!(
             "x{}-{}",
             std::process::id(),
             FOLDERS.fetch_add(1, Ordering::Relaxed)
         ));
-        let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(root.join("terminal/rex")).unwrap_or_else(|error| {
-            panic!(
-                "the Rex tests' state folder {} cannot be made: {error}",
-                root.display()
-            )
-        });
-        let root = root.canonicalize().expect("the state folder's path");
         RexState { root }
     }
 
     /// Where the profile keeps its records and its sessions' sockets.
     fn records(&self) -> PathBuf {
         self.root.join("terminal/rex")
+    }
+
+    /// Rex's runtime root for every server under the folder.
+    fn runtime(&self) -> PathBuf {
+        self.root.join("run")
     }
 
     /// The socket of the session `name`, as the profile names it.
@@ -182,9 +208,21 @@ fn server_pid(socket: &Path) -> Option<i64> {
         .ok()
 }
 
+/// Rex's runtime root for the server at `socket`, the state folder's
+/// that holds it at `terminal/rex/<name>.sock`, as the profile's calls
+/// are given it, so no call reaches the host user's.
+fn runtime_root(socket: &Path) -> PathBuf {
+    socket
+        .ancestors()
+        .nth(3)
+        .expect("a socket under a state folder's terminal/rex")
+        .join("run")
+}
+
 /// Rex's answer for `args` on the server at `socket`, the caller's
-/// `REX_*` stripped and no server started of Rex's choosing; or its
-/// words where it refuses or does not answer within ten seconds.
+/// `REX_*` stripped, Rex's runtime root the state folder's and no server
+/// started of Rex's choosing; or its words where it refuses or does not
+/// answer within ten seconds.
 fn try_rex(socket: &Path, args: &[&str]) -> Result<Value, String> {
     let mut command = Command::new(rex_program());
     command
@@ -192,6 +230,7 @@ fn try_rex(socket: &Path, args: &[&str]) -> Result<Value, String> {
         .arg("-S")
         .arg(format!("unix://{}", socket.display()))
         .args(args)
+        .env(RUNTIME_ROOT, runtime_root(socket))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -316,6 +355,9 @@ if [ -n "$STAND_IN_TRUST" ]; then
 fi
 if [ -n "$STAND_IN_SILENT" ]; then echo "the stand-in says nothing to Rex"; while :; do sleep 1; done; fi
 : > "$log/started"
+# Its prompt drawn, as Claude Code draws its own before it waits: the
+# block shows nothing else, its program started under no login.
+echo "the stand-in waits for a prompt"
 report idle
 stty -icanon -isig -echo -icrnl min 1 time 0 2>/dev/null
 ctrl_c=$(printf '\003')
@@ -398,11 +440,13 @@ impl Fixture {
             .expect("the script made executable");
     }
 
-    /// The profile over the fixture's state, the host user's login
-    /// environment a scratch home, a UTF-8 locale and `/bin/sh`.
+    /// The profile over the fixture's state, Rex's runtime root the
+    /// state's, the host user's login environment a scratch home, a UTF-8
+    /// locale and `/bin/sh`.
     fn profile(&self) -> Rex {
         Rex::new(self.state.records())
             .with_program(rex_program())
+            .with_runtime_root(self.state.runtime())
             .with_bound(BOUND)
             .with_start_timeout(START)
             .with_login(&[
@@ -534,8 +578,10 @@ impl Fixture {
     }
 
     /// A block the test opens in a Rex session of its own, labelled
-    /// `label`, on the session `name`'s server, running `command`, and
-    /// its Rex session.
+    /// `label`, on the session `name`'s server, running `command` with no
+    /// shell and not as a login, since a sandboxed run cannot start the
+    /// `/usr/bin/login` Rex runs a command under otherwise, and its Rex
+    /// session.
     fn own_block(&self, name: &str, label: &str, command: &[&str]) -> (Block, String) {
         self.server(name);
         let layout = json!({
@@ -544,6 +590,7 @@ impl Fixture {
                 "label": label,
                 "options": {
                     "shell": "none",
+                    "login": false,
                     "cwd": self.path("home"),
                     "exit": {"on_completion": false},
                     "command": command,
@@ -1490,7 +1537,7 @@ fn s48_a_persons_block_keeps_the_rex_session_named() {
             "-s",
             &session,
             "session.new_window",
-            &json!({"window_label": "mine", "focus": false, "layout": {"block": {"flavor": "com.superlogical.terminal.shell", "options": {"shell": "none", "command": ["/bin/sleep", "600"], "exit": {"on_completion": false}}}}}).to_string(),
+            &json!({"window_label": "mine", "focus": false, "layout": {"block": {"flavor": "com.superlogical.terminal.shell", "options": {"shell": "none", "login": false, "command": ["/bin/sleep", "600"], "exit": {"on_completion": false}}}}}).to_string(),
         ],
     )["block_ids"][0]
         .as_str()
@@ -2231,6 +2278,7 @@ impl TerminalHarness for Harness {
                         "flavor": "com.superlogical.terminal.shell",
                         "options": {
                             "shell": "none",
+                            "login": false,
                             "command": ["/bin/sleep", "600"],
                             "exit": {"on_completion": false},
                         },
