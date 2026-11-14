@@ -20,7 +20,7 @@
 //! records the agent ended.
 //!
 //! While the agent is kept open, an answer, a retry with words naming its
-//! stage or a tell to its place, is handed to its session as a tell is,
+//! stage or a message to its place, is handed to its session as a message is,
 //! the question then the answer, and recorded on the stop-short it
 //! answers in the one write that carries the stage on there under the
 //! same start, begun again, starting and ending no agent; one the agent
@@ -30,7 +30,7 @@
 use crate::acts::{asked, Answering};
 use crate::reading::AgentReading;
 use crate::start::Starts;
-use crate::{Answer, Engine, Step, TELL_BOUND};
+use crate::{Answer, Engine, Step, MESSAGE_BOUND};
 use flume_seams::*;
 
 impl Engine {
@@ -50,7 +50,7 @@ impl Engine {
     }
 
     /// Hands `words`, the answer to the question the agent `kept` holds
-    /// open stopped short with, to its session as a tell is handed, within
+    /// open stopped short with, to its session as a message is handed, within
     /// `bound`, the question then the answer; once received, in one write,
     /// records it on the stop-short's end with `act`, when it was sent and
     /// received, and who gave it and the key it named as `answering` names
@@ -58,7 +58,7 @@ impl Engine {
     /// on begun under the same start, its quiet and its limit read afresh,
     /// and ends each hold on the stage, then settles the place, which reads
     /// the agent's end where a settle read its session ended once it took
-    /// the answer. Refused with the tell's words, nothing recorded, where
+    /// the answer. Refused with the message's words, nothing recorded, where
     /// the agent does not take it, or where it was let go otherwise before
     /// the write (42, 47 to 50, 53 to 55, 96, 198; core.11).
     pub(crate) fn answer(
@@ -82,11 +82,18 @@ impl Engine {
             state: StageState::EndedShort,
             answered: kept.start.answered,
         };
-        let _claimed = match self.claim_answer(id, &key, answering, bound.unwrap_or(TELL_BOUND)) {
+        let _claimed = match self.claim_answer(id, &key, answering, bound.unwrap_or(MESSAGE_BOUND))
+        {
             Ok(claimed) => claimed,
             Err(reason) => return Answer::refused(reason),
         };
-        let handed = match self.hand(id, &kept.start, &asked(&question, words), bound) {
+        let handed = match self.hand(
+            id,
+            &kept.start,
+            &asked(&question, words),
+            bound,
+            answering.by.as_deref(),
+        ) {
             Ok(handed) => handed,
             Err(reason) => return Answer::refused(reason),
         };

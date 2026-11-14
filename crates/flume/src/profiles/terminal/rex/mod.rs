@@ -1675,10 +1675,17 @@ impl Terminal for Rex {
         let Some(located) = self.reach(session) else {
             return ToSession::NotFound;
         };
-        let clear = match self.read_block(&located) {
+        // Only a block that waits is typed into, its held input cleared
+        // first; one at work is refused as one asking or unread is, with
+        // nothing typed (54, 214; core.11).
+        match self.read_block(&located) {
             Err(reason) => return ToSession::Refused { reason },
-            Ok(AgentState::Waiting) => true,
-            Ok(AgentState::Working) => false,
+            Ok(AgentState::Waiting) => {}
+            Ok(AgentState::Working) => {
+                return ToSession::Refused {
+                    reason: format!("the session {session} works, so nothing was typed into it"),
+                }
+            }
             Ok(AgentState::Stopped) => return ToSession::NotFound,
             Ok(state) => {
                 return ToSession::Refused {
@@ -1687,8 +1694,8 @@ impl Terminal for Rex {
                     ),
                 }
             }
-        };
-        match self.typed(&located, text, clear) {
+        }
+        match self.typed(&located, text, true) {
             Ok(()) => ToSession::Sent,
             Err(reason) => ToSession::Refused { reason },
         }

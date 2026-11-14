@@ -4,11 +4,11 @@
 # read once when a person opens it and again after each key that runs a
 # flume command, never on a timer (56, 60, 122): each place its number
 # and its line, the status line's words, with its location beneath (S14),
-# and the keys that act on one: open focuses its tab, tell, stop and
+# and the keys that act on one: open focuses its tab, message, stop and
 # retry each run one flume command, the words or the force asked for
 # first (53, 56, 60, 107; core.14). No key sends to, opens or closes an
 # agent's pane. Each key acts at once, as sluice's popup's do: the
-# arrows, j and k or a number choose a place, o, t, s or r act on it, q
+# arrows, j and k or a number choose a place, o, m, s or r act on it, q
 # or Escape closes; only words are read as a line. A second with no key
 # redraws from the answer last read.
 set -u
@@ -51,7 +51,7 @@ draw() {
       | "\($mark)\(.key + 1)  \(.value.line.full // .value.name)\n     \(.value.place)"' "$status"
   fi
   echo
-  echo "↑↓, j/k or a number to choose · o open · t tell · s stop · r retry · q close"
+  echo "↑↓, j/k or a number to choose · o open · m message · s stop · r retry · q close"
   [ -n "$unread" ] && [ -f "$status" ] && printf '%s\n' "$unread"
   [ -n "$note" ] && printf '%s\n' "$note"
   return 0
@@ -108,10 +108,10 @@ act() {
     fi
     hd tab focus "$tab" >/dev/null || echo "herdr did not focus its tab"
     ;;
-  t)
+  m)
     ask "words for its agent:"
     [ -n "$answer" ] || return
-    flume tell "$place" "$answer" 2>&1
+    flume message "$place" "$answer" 2>&1
     echo "$acted" >"$acts"
     ;;
   s)
@@ -208,7 +208,7 @@ while :; do
       note="no place $key"
     fi
     ;;
-  o | t | s | r)
+  o | m | s | r)
     rm -f "$acts"
     note=$(act "$sel" "$key")
     if [ -f "$acts" ]; then

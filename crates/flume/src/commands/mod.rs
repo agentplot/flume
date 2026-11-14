@@ -76,11 +76,18 @@ enum Command {
     },
     /// The exact prompt a stage would be sent at its next start (29).
     Prompt { place: String, stage: String },
-    /// Hand the place's agent words as a prompt (53 to 55).
-    Tell {
-        place: String,
+    /// Message a place's agent or a role's address: a place's agent is
+    /// handed the words as a prompt once it waits; a role's address,
+    /// `<stream>/<role>`, keeps them as a delivery its session takes at its
+    /// next wait (53 to 55, 214).
+    #[command(alias = "tell")]
+    Message {
+        /// A role's address, `<stream>/<role>`; else a place, by its
+        /// location or `<kind>--<name>` in the repository.
+        target: String,
         words: String,
-        /// How long to wait for the agent, as `<n>`, `<n>s`, `<n>m` or `<n>h`.
+        /// How long to wait for a place's agent, as `<n>`, `<n>s`, `<n>m`
+        /// or `<n>h`.
         #[arg(long)]
         within: Option<String>,
         /// The key of the stop-short the words answer, as the inbox and
@@ -198,7 +205,8 @@ enum Command {
     /// From an agent program's hook: what the hook for `event` does with
     /// the input on standard input, in an agent flume started; nothing
     /// elsewhere. `status-line` reads no input and prints the place's
-    /// line. It always exits 0 (C.4).
+    /// line, and `deliver` reads none and prints what the agent takes at
+    /// its wait. It always exits 0 (215, C.4).
     Hook {
         /// One of the plugin's hooks; any other does nothing.
         event: String,
@@ -244,11 +252,12 @@ enum Command {
         confirm: bool,
     },
     /// Collect every end pending for a recipient, of every place on the
-    /// host, each handed to it; an inbox naming a place collects that
-    /// place's ends alone (43, 62). A hand-over delivers nothing until its
-    /// recipient confirms it: an end the inbox gives stays pending, and is
-    /// given again by the next inbox, until `--confirm` confirms it on
-    /// receipt or `flume confirm` names its delivery's key.
+    /// host, and every message pending at it, each handed to it; an inbox
+    /// naming a place collects that place's ends alone (43, 62, 214). A
+    /// hand-over delivers nothing until its recipient confirms it: an end
+    /// the inbox gives stays pending, as a message does, and is given again
+    /// by the next inbox, until `--confirm` confirms it on receipt or `flume
+    /// confirm` names its delivery's key.
     Inbox {
         /// The place whose ends alone are collected, named as `flume
         /// status` names one: a location, or `<kind>--<name>` in the
@@ -266,13 +275,14 @@ enum Command {
         confirm: bool,
     },
     /// Confirm, as a recipient, each delivery key given: a notice, a wait,
-    /// the inbox and a session's start hand an end over, and a hand-over
-    /// delivers nothing until its recipient confirms it by its key, which
-    /// `flume inbox`, `flume wait`, `flume status` and the notice give as
-    /// the end's delivery (43). A key confirmed before says when it first
-    /// was; a key no end is under, or one whose end is another
-    /// recipient's, is refused naming it, and the keys after it are not
-    /// confirmed. Exits 1 on a refusal.
+    /// the inbox and a session's start hand an end or a message over, and
+    /// a hand-over delivers nothing until its recipient confirms it by its
+    /// key, which `flume inbox`, `flume wait`, `flume status` and the
+    /// notice give as its delivery's, a message's beginning `message/`
+    /// (43, 214). A key confirmed before says when it first was; a key no
+    /// delivery is under, or one that is another recipient's, is refused
+    /// naming it, and the keys after it are not confirmed. Exits 1 on a
+    /// refusal.
     Confirm {
         /// The delivery keys, `<kind>--<name>/<token>/<end key>`.
         #[arg(required = true, value_name = "KEY")]
@@ -594,18 +604,24 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             let place = named(place)?;
             build()?.prompt(&place, stage)
         }
-        Command::Tell {
-            place,
+        Command::Message {
+            target,
             words,
             within,
             answers,
         } => {
-            let place = named(place)?;
             let within = within.as_deref().map(read_span).transpose()?;
             let key = key_of(answers)?;
-            let core = build()?;
-            let answering = answering(&core, key);
-            core.tell_answering(&place, words, within, &answering)
+            if flume_core::message::names_an_address(target) {
+                let core = build()?;
+                let answering = answering(&core, key);
+                core.message_address(target, words, within, &answering)
+            } else {
+                let place = named(target)?;
+                let core = build()?;
+                let answering = answering(&core, key);
+                core.message_answering(&place, words, within, &answering)
+            }
         }
         Command::Stop(forced) => build_for(forced, &named, build, Engine::stop)?,
         Command::Finish(forced) => build_for(forced, &named, build, Engine::finish)?,
@@ -772,7 +788,7 @@ fn recipient_of(core: &Engine, named: &Option<String>) -> Result<String, String>
     })
 }
 
-/// What a retry's or a tell's answer names beside its words: the key of
+/// What a retry's or a message's answer names beside its words: the key of
 /// the stop-short it answers, where `--answers` gives one, and who gives
 /// it, the recipient the command acts as where it names none, recorded on
 /// the stop-short it answers; none where no recipient is read (42).
@@ -869,6 +885,10 @@ fn launch_of(args: &LaunchArgs, given: Option<&Path>) -> Result<Launch, String> 
         stall_after: args.stall_after.as_deref().map(read_span).transpose()?,
         stream: args.stream.clone(),
         intent: args.intent.clone(),
+        from_place: std::env::var(PLACE)
+            .ok()
+            .filter(|place| !place.is_empty())
+            .map(PlaceId::new),
     })
 }
 

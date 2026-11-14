@@ -2196,7 +2196,6 @@ fn status_over_mcp() {
     assert_eq!(replies[0]["result"]["protocolVersion"], "2025-06-18");
     assert_eq!(replies[0]["result"]["serverInfo"]["name"], "flume");
     let tools = replies[1]["result"]["tools"].as_array().expect("the tools");
-    assert_eq!(tools.len(), 1);
     assert_eq!(tools[0]["name"], "status");
     let text = |reply: &Value| {
         reply["result"]["content"][0]["text"]
@@ -2959,10 +2958,10 @@ fn needs_to_a_role_and_to_another_streams() {
 }
 
 #[test]
-fn the_helps_of_needs_hold_retry_tell_and_launch() {
+fn the_helps_of_needs_hold_retry_message_and_launch() {
     // 7, 41, 42, 43, 49, 53, 130, 132, 193; core.35: needs --to's help
     // says a role alone is the place's own stream's, hold's names the
-    // waiting move and its bound, retry's and tell's the key an answer
+    // waiting move and its bound, retry's and message's the key an answer
     // names, launch --recipient's a role's address of any stream, a name
     // no pane holds collecting its ends and the answerer behind the
     // place's stream, launch's that it takes no --caller, and inbox's the
@@ -2983,8 +2982,9 @@ fn the_helps_of_needs_hold_retry_tell_and_launch() {
         ("hold", "once it passes, the hold lapses and the place stalls at once"),
         ("retry", "--answers <KEY>"),
         ("retry", "taken only while the place waits on that stop-short and only once"),
-        ("tell", "--answers <KEY>"),
-        ("tell", "its agent kept open for its answer"),
+        ("message", "--answers <KEY>"),
+        ("message", "its agent kept open for its answer"),
+        ("message", "a role's address, `<stream>/<role>`"),
         ("launch", "a role's address, `<stream>/<role>`, of any stream"),
         ("launch", "the answerer behind the place's stream"),
         ("launch", "A name no pane holds is sent no notice"),
@@ -3001,7 +3001,7 @@ fn the_helps_of_needs_hold_retry_tell_and_launch() {
             "{command}'s help says not {said:?}: {words}"
         );
     }
-    for command in ["needs", "hold", "retry", "tell", "launch", "inbox"] {
+    for command in ["needs", "hold", "retry", "message", "launch", "inbox"] {
         let words = help(command);
         assert!(
             !words.contains("partition"),
@@ -4316,4 +4316,302 @@ fn the_helps_of_confirm_and_wait() {
             "{command}'s help says not {said:?}: {words}"
         );
     }
+}
+
+/// The replies of a scripted MCP session of `flume mcp` run in `dir` with
+/// `env`: initialize, then each of `calls`, one reply a request (section
+/// 9; design 12).
+fn mcp_session(host: &Host, dir: &Path, env: &[(&str, &str)], calls: &[Value]) -> Vec<Value> {
+    let mut command = host.command(Path::new(env!("CARGO_BIN_EXE_flume")), dir, env);
+    command.arg("mcp");
+    mcp_replies(command, calls)
+}
+
+/// The same session with this test binary as flume, with the stand-ins,
+/// so a launch over MCP starts its agent under the stand-in terminal.
+fn stand_in_mcp_session(
+    host: &Host,
+    dir: &Path,
+    env: &[(&str, &str)],
+    calls: &[Value],
+) -> Vec<Value> {
+    let me = std::env::current_exe().expect("the test binary");
+    let mut command = host.command(&me, dir, env);
+    command
+        .env(AS_FLUME, serde_json::to_string(&["mcp"]).expect("words"))
+        .args([
+            "--exact",
+            "stand_in_flume",
+            "--nocapture",
+            "--test-threads=1",
+            "-q",
+        ]);
+    mcp_replies(command, calls)
+}
+
+/// The replies `command`, a `flume mcp`, gives to initialize and each of
+/// `calls`, the test harness's own lines aside.
+fn mcp_replies(mut command: std::process::Command, calls: &[Value]) -> Vec<Value> {
+    let mut requests = vec![
+        serde_json::json!({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "test", "version": "1"}}}),
+        serde_json::json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+    ];
+    for (id, call) in calls.iter().enumerate() {
+        let mut call = call.clone();
+        call["jsonrpc"] = "2.0".into();
+        call["id"] = (id + 1).into();
+        requests.push(call);
+    }
+    let input: String = requests
+        .iter()
+        .map(|request| format!("{request}\n"))
+        .collect();
+    let mut child = command
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("flume mcp runs");
+    child
+        .stdin
+        .take()
+        .expect("its input")
+        .write_all(input.as_bytes())
+        .expect("the session written");
+    let output = child.wait_with_output().expect("flume mcp ends");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let replies: Vec<Value> = stdout
+        .split_once("running 1 test\n")
+        .map_or(&*stdout, |(_, after)| after)
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| serde_json::from_str(line).expect("a JSON-RPC reply"))
+        .collect();
+    assert_eq!(replies.len(), calls.len() + 1, "{replies:?}");
+    replies[1..].to_vec()
+}
+
+/// A tool's call of the MCP session.
+fn tool_call(name: &str, arguments: Value) -> Value {
+    serde_json::json!({"method": "tools/call", "params": {"name": name, "arguments": arguments}})
+}
+
+/// A tool's result as its JSON, and whether it is marked an error.
+fn tool_result(reply: &Value) -> (Value, bool) {
+    let text = reply["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_else(|| panic!("no tool's text: {reply}"));
+    (
+        serde_json::from_str(text).unwrap_or_else(|error| panic!("{error}: {text}")),
+        reply["result"]["isError"].as_bool().expect("isError"),
+    )
+}
+
+/// A host whose source acme declares the planner's run, `east/planner`,
+/// of its own kind `planner`, locked, in the stream `east` the host
+/// declares, and the repository it runs in (132, 193, C.7).
+fn planner_host(label: &str) -> (Host, Repository) {
+    let host = Host::new(label);
+    let repository = Repository::new(label);
+    repository.write(
+        ".config/flume.toml",
+        "[profiles]\nplace = \"git-worktree\"\n",
+    );
+    repository.commit("the binding");
+    let acme = kinds_dir_of(&host, "acme");
+    write_package(&acme, "planner", 1, false, "Read what is pending for you");
+    let roles = host.scratch.path("state/acme/roles.toml");
+    std::fs::create_dir_all(roles.parent().unwrap()).expect("the roles file's directory");
+    std::fs::write(
+        &roles,
+        format!(
+            "[roles.\"east/planner\"]\nrepository = \"{}\"\nkind = \"planner\"\npriority = 5\n",
+            repository.name()
+        ),
+    )
+    .expect("the roles file");
+    std::fs::create_dir_all(sources_of(&host)).expect("the sources directory");
+    std::fs::write(
+        sources_of(&host).join("acme.toml"),
+        format!(
+            "kinds_dir = \"{}\"\nroles = \"{}\"\n",
+            acme.display(),
+            roles.display()
+        ),
+    )
+    .expect("the source's file");
+    host.configure("[streams.east]\n");
+    answered(
+        &host.flume(
+            &repository.dir,
+            &["kinds", "lock", "--host", "acme/planner@1", "--json"],
+            &[],
+        ),
+        0,
+    );
+    (host, repository)
+}
+
+#[test]
+fn the_mcp_tools_listed() {
+    // The agent program's plugin spec's "The tools listed" (section 9;
+    // design 12): status, message, launch and wake, each with its input
+    // schema, status alone read-only.
+    let host = Host::new("mcp-tools");
+    let repository = repository("mcp-tools", None);
+    let replies = mcp_session(
+        &host,
+        &repository.dir,
+        &[],
+        &[serde_json::json!({"method": "tools/list"})],
+    );
+    let tools = replies[0]["result"]["tools"].as_array().expect("the tools");
+    let names: Vec<&str> = tools
+        .iter()
+        .filter_map(|tool| tool["name"].as_str())
+        .collect();
+    assert_eq!(names, ["status", "message", "launch", "wake"]);
+    for tool in tools {
+        assert_eq!(tool["inputSchema"]["type"], "object", "{tool}");
+        assert_eq!(
+            tool["annotations"]["readOnlyHint"],
+            tool["name"] == "status",
+            "{tool}"
+        );
+    }
+    let required = |name: &str| {
+        tools
+            .iter()
+            .find(|tool| tool["name"] == name)
+            .map(|tool| tool["inputSchema"]["required"].clone())
+            .unwrap_or_default()
+    };
+    assert_eq!(required("message"), serde_json::json!(["target", "words"]));
+    assert_eq!(required("launch"), serde_json::json!(["kind", "name"]));
+    assert_eq!(required("wake"), serde_json::json!(["address"]));
+}
+
+#[test]
+fn message_over_mcp() {
+    // The agent program's plugin spec's "message over MCP" (53, 214,
+    // section 9): the tool's result is the JSON `flume message east/planner
+    // <words> --json` gives, its key `message/east/planner/<token>`.
+    let (host, repository) = planner_host("mcp-message");
+    let replies = mcp_session(
+        &host,
+        &repository.dir,
+        &[],
+        &[tool_call(
+            "message",
+            serde_json::json!({"target": "east/planner", "words": "--look at the nightly job"}),
+        )],
+    );
+    let (over_mcp, error) = tool_result(&replies[0]);
+    assert!(!error, "{over_mcp}");
+    let by_hand = answered(
+        &host.flume(
+            &repository.dir,
+            &["message", "east/planner", "and the weekly one", "--json"],
+            &[],
+        ),
+        0,
+    );
+    for answer in [&over_mcp, &by_hand] {
+        let messaged = &answer["messaged"];
+        assert_eq!(messaged["address"], "east/planner", "{answer}");
+        assert!(
+            messaged["key"]
+                .as_str()
+                .is_some_and(|key| key.starts_with("message/east/planner/")),
+            "{answer}"
+        );
+    }
+    assert_eq!(
+        over_mcp
+            .as_object()
+            .map(|answer| answer.keys().collect::<Vec<_>>()),
+        by_hand
+            .as_object()
+            .map(|answer| answer.keys().collect::<Vec<_>>()),
+    );
+}
+
+#[test]
+fn launch_over_mcp_refused_as_the_command_line_refuses_it() {
+    // The agent program's plugin spec's "launch over MCP, refused as the
+    // command line refuses it" (4, section 9): a kind no declaration
+    // holds, the command line's refusal marked an error, and no place.
+    let host = Host::new("mcp-launch-refused");
+    let repository = repository("mcp-launch-refused", None);
+    let replies = mcp_session(
+        &host,
+        &repository.dir,
+        &[("FLUME_RECIPIENT", CALLER)],
+        &[tool_call(
+            "launch",
+            serde_json::json!({"kind": "nowhere", "name": "one", "brief": "mend it"}),
+        )],
+    );
+    let (over_mcp, error) = tool_result(&replies[0]);
+    assert!(error, "{over_mcp}");
+    let by_hand = answered(
+        &host.flume(
+            &repository.dir,
+            &[
+                "launch", "--kind", "nowhere", "--name", "one", "--brief", "mend it", "--json",
+            ],
+            &[],
+        ),
+        1,
+    );
+    assert_eq!(over_mcp, by_hand);
+    assert!(
+        !Path::new(&host.place_of(&repository, "nowhere--one")).exists(),
+        "a place was made"
+    );
+}
+
+#[test]
+fn a_role_runs_launch_over_mcp_reports_to_its_address() {
+    // The role-waking spec's "Through MCP" (7, 132, 214, section 9): the
+    // run's session calls flume's MCP `launch` for a place naming no
+    // recipient, of a kind of acme's that lands nothing, the server in
+    // its environment, and the place's recipients are east/planner from
+    // role-run. The server is the stand-in flume, as the wake was, so
+    // the launch's agent starts under the stand-in terminal.
+    let (host, repository) = planner_host("mcp-role-launch");
+    let woke = answered(
+        &host.stand_in(&repository.dir, &["wake", "east/planner", "--json"], &[]),
+        0,
+    );
+    let run = woke["woken"]["place"]["place"]
+        .as_str()
+        .expect("the run's place")
+        .to_string();
+    let replies = stand_in_mcp_session(
+        &host,
+        &repository.dir,
+        &[("FLUME_PLACE", &run)],
+        &[tool_call(
+            "launch",
+            serde_json::json!({
+                "kind": "acme/planner",
+                "name": "tidy",
+                "brief": "tidy the notes",
+            }),
+        )],
+    );
+    let (launched, error) = tool_result(&replies[0]);
+    assert!(!error, "{launched}");
+    let place = &launched["launched"]["place"];
+    assert_eq!(
+        place["recipients"],
+        serde_json::json!(["east/planner"]),
+        "{launched}"
+    );
+    assert_eq!(
+        place["recipients_from"],
+        serde_json::json!({"from": "role-run"}),
+        "{launched}"
+    );
 }

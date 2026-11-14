@@ -1,8 +1,9 @@
 $schema: 'https://moonrepo.dev/schemas/project.json'
 
 # flume's Claude Code plugin (design 17): its manifests, its hooks, the
-# /launch command, its MCP server's entry, and the module that pins the
-# place's line under the prompt (hooks/line.ts). The command hooks are the
+# /launch command, its MCP server's entry, and its one hooks module, which
+# pins the place's line under the prompt and holds the deliver part
+# (hooks/flume.ts). The command hooks are the
 # binary's `flume hook <event>`; the module is TypeScript, typed against
 # the engine types the pinned Claude Code writes (engine-types/,
 # tsconfig.json) and tested by the pinned engine. Every check runs the

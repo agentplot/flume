@@ -837,17 +837,21 @@ session, named by `kept`, and nothing it did not make SHALL be closed
 
 The Rex profile SHALL name a recipient's session `rex:<block>@<socket>`
 and reach that block on that server: a block that waits has its held
-input cleared first, one working is typed into without a ctrl+c, one
-asking or unread is refused with nothing typed, and one gone is not
-found. A role run's address given to open SHALL reach the block its live
-start holds. A name in any other form SHALL be no session of Rex's,
-`send_to` answering not found and `session_state` none (7, 43, 132,
-190, C.5).
+input cleared first, one working, asking or unread is refused with
+nothing typed, and one gone is not found. A role run's address given to
+open SHALL reach the block its live start holds. A name in any other
+form SHALL be no session of Rex's, `send_to` answering not found and
+`session_state` none (7, 43, 54, 132, 190, 214, C.5).
 
 #### Scenario: A recipient's block
 
 - **WHEN** a block the test opened, running no agent of flume's and waiting, is sent a notice by `rex:<block>@<socket>`
 - **THEN** it takes the notice, and `session_state` reads it waiting
+
+#### Scenario: A recipient's block at work
+
+- **WHEN** a block the test opened reports working, and a notice is sent to it by `rex:<block>@<socket>`
+- **THEN** it is refused naming that the session works, and nothing is typed into the block (54, 214)
 
 #### Scenario: A role run's address
 
@@ -1017,3 +1021,16 @@ Rex (122).
 
 - **WHEN** status asks the Rex profile what its terminal's configuration lacks
 - **THEN** it gives nothing, and no Rex call is made
+
+### Requirement: herdr types only into a pane that waits
+
+The herdr terminal profile SHALL type into a recipient's pane only
+while herdr reads it waiting, its held input cleared first, and SHALL
+refuse one it reads working, asking or unknown with nothing typed,
+calling neither `agent send-keys` nor `agent prompt` (54, 214, C.5;
+core.11).
+
+#### Scenario: A recipient at work
+
+- **WHEN** `send_to` names a pane whose agent herdr reads working
+- **THEN** it is refused naming that the session works, and no `agent send-keys` and no `agent prompt` is called (54, 214)

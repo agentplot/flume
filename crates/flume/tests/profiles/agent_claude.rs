@@ -1440,7 +1440,7 @@ fn the_plugin_an_agent_loads() {
     );
     assert!(!hooks.contains("\"command\": \"flume\""), "{hooks}");
     // The module runs the same binary by its path (design 4).
-    let module = std::fs::read_to_string(dir.join("hooks/line.ts")).expect("the module");
+    let module = std::fs::read_to_string(dir.join("hooks/flume.ts")).expect("the module");
     assert!(
         module.contains("const FLUME = \"/opt/flume/bin/flume\";"),
         "{module}"

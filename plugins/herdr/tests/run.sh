@@ -386,10 +386,10 @@ cmp -s "$t/want" "$FAKE/flume-calls" || fail "the retry ran: $(cat "$FAKE/flume-
 no_send
 pass
 
-fresh 'keys: tell, stop with the force asked, and open, each one key'
+fresh 'keys: message, stop with the force asked, and open, each one key'
 status_of p1 2 working >"$FAKE/status.json"
-printf 'tthe tests are in tests/\nsy\noq' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
-printf 'status --json\ntell /r/places/change--plan the tests are in tests/\nstatus --json\nstop /r/places/change--plan --force\nstatus --json\n' >"$t/want"
+printf 'mthe tests are in tests/\nsy\noq' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
+printf 'status --json\nmessage /r/places/change--plan the tests are in tests/\nstatus --json\nstop /r/places/change--plan --force\nstatus --json\n' >"$t/want"
 cmp -s "$t/want" "$FAKE/flume-calls" || fail "the keys ran: $(cat "$FAKE/flume-calls")"
 grep -qx 'tab focus t1' "$FAKE/herdr-calls" || fail "open did not focus the place's tab: $(cat "$FAKE/herdr-calls")"
 no_send
@@ -439,9 +439,9 @@ grep -q 'no place 7' "$t/out" || fail "the missing place not said: $(cat "$t/out
 [ "$(cat "$FAKE/flume-calls")" = "status --json" ] || fail "flume was asked: $(cat "$FAKE/flume-calls")"
 pass
 
-fresh 'keys: tell with no words runs nothing'
+fresh 'keys: message with no words runs nothing'
 status_of p1 2 working >"$FAKE/status.json"
-printf 't\nq' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
+printf 'm\nq' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
 [ "$(cat "$FAKE/flume-calls")" = "status --json" ] || fail "flume was asked: $(cat "$FAKE/flume-calls")"
 no_send
 pass

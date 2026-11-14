@@ -906,8 +906,9 @@ impl Engine {
 impl Engine {
     /// A launch's recipients and where they came from, the first of
     /// these that gives any: the recipients it names, `FLUME_RECIPIENT`
-    /// in the launching command's environment, the session the launching
-    /// command runs in as the terminal names it, or the answerer behind
+    /// in the launching command's environment, the address of the role's
+    /// run its `FLUME_PLACE` names, the session the launching command
+    /// runs in as the terminal names it, or the answerer behind
     /// the place's stream as the host's sources declare it; a role's run
     /// has none (7, 132, 190, 193). Refused, before anything is made, a
     /// launch that finds none of the four, one whose stream two roles
@@ -932,6 +933,14 @@ impl Engine {
             (launch.recipients.clone(), RecipientsFrom::Launch)
         } else if let Some(recipient) = self.host.recipient() {
             (vec![recipient], RecipientsFrom::Environment)
+        } else if let Some(address) = launch
+            .from_place
+            .as_ref()
+            .and_then(|place| self.store.read(place))
+            .filter(|read| !matches!(read.state.phase, Phase::Tidied { .. }))
+            .and_then(|read| read.state.role)
+        {
+            (vec![address], RecipientsFrom::RoleRun)
         } else if let Some(session) = self.caller_session() {
             (vec![session], RecipientsFrom::Session)
         } else {

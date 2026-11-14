@@ -1,31 +1,27 @@
-//! Delivering a place's ends (43, 95, core.11, core.25): each end the
-//! held state records is sent once to each recipient the launch named, as
-//! one line of notice through the terminal into the recipient's own
-//! session, only while the terminal reads that session asking no
-//! question, and recorded delivered on the terminal's answer sent, with
-//! no reading back. The delivery is claimed in held state before the
-//! send, as a prompt's sending is, so two settles at once send one
-//! notice (75); a recipient asking, unread or not found, or a send
-//! refused, leaves the end pending for a later settle, a wait or the
-//! inbox. A recipient the host's configuration gives a standing agent is
-//! reached in that agent alone, found by its name in its stream's
-//! terminal and session at each delivery, none or more than one of the
-//! name leaving the end pending with nothing claimed (132, 190, C.7;
-//! core.28). A recipient no pane holds is sent no notice, its ends
-//! pending until it collects them by the inbox or a wait; and no notice
-//! carries a drop's or a done's end, which stands pending for the
-//! place's recipients that are no role's address until each collects it
-//! (43, 52, 114; core.25). A place whose work is over and whose worktree
-//! is gone keeps its document alone, apart from a live place's, while an
-//! end of it stands pending, and it goes once every end is delivered or
-//! its caller drops it (3, 62).
+//! A place's ends and their notices (43, 95, core.11, core.25): each end
+//! the held state records is a delivery to each recipient the launch
+//! named, its notice one line naming the place, the end and how to read
+//! it, handed into the recipient's own session at its next wait with
+//! every other delivery pending for it, as `batch.rs` hands it (214). A
+//! recipient the host's configuration gives a standing agent is reached
+//! in that agent alone, found by its name in its stream's terminal and
+//! session at each delivery, none or more than one of the name leaving
+//! the end pending with nothing claimed (132, 190, C.7; core.28). A
+//! recipient no pane holds is sent no notice, its ends pending until it
+//! collects them by the inbox or a wait; and no notice carries a drop's
+//! or a done's end, which stands pending for the place's recipients that
+//! are no role's address until each collects it (43, 52, 114; core.25).
+//! A notice an earlier flume claimed on the place is read as before, an
+//! answered one recorded once, and none is claimed there now (75). A
+//! place whose work is over and whose worktree is gone keeps its document
+//! alone, apart from a live place's, while an end of it stands pending,
+//! and it goes once every end is delivered or its caller drops it (3,
+//! 62).
 
 use crate::answer::and_list;
 use crate::prompt::group_name;
-use crate::standing::Reached;
 use crate::{Engine, Step};
 use flume_seams::*;
-use std::collections::BTreeMap;
 
 /// How much of a brief's first line a notice gives (43; design 9).
 pub const NOTICE_BRIEF: usize = 60;
@@ -176,166 +172,13 @@ pub fn what_ended(of: &EndOf) -> String {
 }
 
 impl Engine {
-    /// Sends each end of the place a notice carries, pending for a
-    /// recipient whose session asks no question and to which nothing has
-    /// handed it, once, as the message its delivery was recorded with and
-    /// the way that recipient confirms it ([`notice_to`]), through the
-    /// first terminal the host binds that holds the session,
-    /// or, for a recipient the host's standing entries name, read once,
-    /// into the one agent of the entry's name in its stream's terminal and
-    /// session. The notice is claimed on the place before the send, so two
-    /// settles at once send one, and the host's deliveries read again once
-    /// it is claimed, a hand-over by any other way to the recipient taking
-    /// the claim back unsent. The claim is written sending; on the
-    /// terminal's answer sent it is marked answered and kept, and then its
-    /// hand-over is recorded through weir's `hand`, by `notice`; a send not
-    /// made takes the claim back, so the next settle sends the notice; and
-    /// a claim answered whose hand-over the host's deliveries lack is
-    /// recorded by the next settle at the claim's time, once, where that
-    /// settle reads it before the sender's record. A claim still sending is
-    /// recorded by no other settle, since its send may yet be refused and
-    /// a notice never sent would read as handed over. No one agent asking
-    /// no question found claims nothing (43, 75, 132, 190, C.7; weir 103;
-    /// core.11, core.28; design 5).
-    pub(crate) fn deliver_ends(&self, id: &PlaceId) {
-        let Some(held) = self.with_token(id) else {
-            return;
-        };
-        self.record_deliveries(std::slice::from_ref(&held));
-        let mut owing = self.owing();
-        if self.record_claims(&held, &owing) {
-            owing = self.owing();
-        }
-        let mut standing = None;
-        let mut states: BTreeMap<String, Option<Reached>> = BTreeMap::new();
-        for end in held.ends.iter().filter(|end| end.noticed()) {
-            let Some(delivery) = end.delivery(&held.place, &owing) else {
-                continue;
-            };
-            for recipient in end.pending(&held.place, &owing) {
-                if end.handed_to(&held.place, &owing, &recipient) {
-                    continue;
-                }
-                let Some(Reached {
-                    terminal,
-                    state: AgentState::Working | AgentState::Waiting,
-                    at,
-                }) = states
-                    .entry(recipient.clone())
-                    .or_insert_with(|| {
-                        let standing = standing.get_or_insert_with(|| self.standing());
-                        self.reached(standing, &recipient)
-                    })
-                    .clone()
-                else {
-                    continue;
-                };
-                let key = end.of.key();
-                let now = self.host.now();
-                let claimed = self
-                    .update(id, |held| {
-                        let Some(end) = held.ends.iter_mut().find(|end| end.of.key() == key) else {
-                            return Step::Keep(false);
-                        };
-                        if end
-                            .noticing
-                            .iter()
-                            .any(|claim| claim.recipient == recipient)
-                        {
-                            return Step::Keep(false);
-                        }
-                        end.noticing.push(NoticeClaim {
-                            recipient: recipient.clone(),
-                            at: now,
-                            sending: true,
-                        });
-                        Step::Write(true)
-                    })
-                    .unwrap_or(false);
-                if !claimed {
-                    continue;
-                }
-                let take_back = || {
-                    self.update(id, |held| {
-                        if let Some(end) = held.ends.iter_mut().find(|end| end.of.key() == key) {
-                            end.noticing
-                                .retain(|claim| !(claim.recipient == recipient && claim.at == now));
-                        }
-                        Step::Write(())
-                    });
-                };
-                // An inbox, a wait or a session's start that handed the
-                // end over between this settle's reading and its claim is
-                // read now, after the claim, and the notice not sent; one
-                // that hands it after this reading follows the notice, as
-                // an inbox may (43; core.25).
-                if self
-                    .owing()
-                    .deliveries
-                    .get(&delivery.key)
-                    .is_some_and(|read| {
-                        read.handovers.iter().any(|handover| {
-                            handover.recipient == recipient && handover.by != DeliveredBy::Notice
-                        })
-                    })
-                {
-                    take_back();
-                    continue;
-                }
-                let sent = notice_to(&delivery.message, &delivery.key, &recipient);
-                let why = match terminal.send_to(&at, &sent) {
-                    ToSession::Sent => {
-                        self.update(id, |held| {
-                            let claim = held
-                                .ends
-                                .iter_mut()
-                                .find(|end| end.of.key() == key)
-                                .and_then(|end| {
-                                    end.noticing.iter_mut().find(|claim| {
-                                        claim.recipient == recipient && claim.at == now
-                                    })
-                                });
-                            match claim {
-                                Some(claim) if claim.sending => {
-                                    claim.sending = false;
-                                    Step::Write(())
-                                }
-                                _ => Step::Keep(()),
-                            }
-                        });
-                        let handed = self.hand_over(
-                            std::slice::from_ref(&delivery.key),
-                            &recipient,
-                            DeliveredBy::Notice,
-                            now,
-                            false,
-                        );
-                        for refused in handed.into_iter().filter_map(Result::err) {
-                            self.host.log(&format!(
-                                "the notice of {id}'s end {key} to {recipient} was sent, and its hand-over not recorded: {refused}"
-                            ));
-                        }
-                        continue;
-                    }
-                    ToSession::NotFound => format!("no session is named {at}"),
-                    ToSession::Refused { reason } => reason,
-                };
-                states.insert(recipient.clone(), None);
-                self.host.log(&format!(
-                    "the notice of {id}'s end {key} was not sent to {recipient}: {why}"
-                ));
-                take_back();
-            }
-        }
-    }
-
     /// Records, at its time, the hand-over of each notice claimed on the
     /// place whose hand-over the host's deliveries lack, its send answered
     /// sent and its record never written, so it is sent no second time;
     /// a claim still sending it leaves to its sender, which records it
     /// once answered sent or takes it back; true where it recorded any
     /// (43, 75; weir 103; design 5).
-    fn record_claims(&self, held: &HeldState, owing: &Owing) -> bool {
+    pub(crate) fn record_claims(&self, held: &HeldState, owing: &Owing) -> bool {
         let mut recorded = false;
         for end in &held.ends {
             let Some(delivery) = end.delivery(&held.place, owing) else {

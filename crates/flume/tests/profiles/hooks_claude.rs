@@ -804,7 +804,7 @@ fn no_mode_in_the_input() {
 #[test]
 fn a_later_prompt_and_a_compaction_after_the_mode_moved() {
     // A start's first prompt taken in acceptEdits; once started, a person
-    // moves its session's mode. A later prompt, a tell, compares no mode
+    // moves its session's mode. A later prompt, a message, compares no mode
     // and is acked received; the session compacts, SessionStart compares
     // no mode either, so the started ack is written again with the
     // session's transcript, and nothing is unsettled (161, 162).
@@ -816,7 +816,7 @@ fn a_later_prompt_and_a_compaction_after_the_mode_moved() {
     let ran = host.hook(
         &agent,
         "user-prompt-submit",
-        json!({ "prompt": "a tell", "permission_mode": "default" }),
+        json!({ "prompt": "a message", "permission_mode": "default" }),
     );
     assert_eq!(decision(&ran), None, "a later prompt blocked");
     let compacted = host.path("sessions/compacted.jsonl");
@@ -1777,4 +1777,90 @@ fn a_carried_starts_length_kept_at_a_compaction() {
     let started = record.started().expect("the started ack");
     assert_eq!(started.source, "compact");
     assert_eq!(started.from, 4096, "{started:?}");
+}
+
+/// The fix `one` of a one-stage kind begun over the fakes, its agent's
+/// profile a stand-in offering deliver, a message waiting on its start:
+/// the world, the place, the hook's start and the message's words (215).
+fn delivering() -> (
+    flume_conformance::engine::world::World,
+    flume_seams::PlaceId,
+    flume::profiles::agent::claude::hook::Start,
+) {
+    use flume_conformance::engine::world::World;
+    let world = World::new();
+    world.agent.offer_deliver();
+    let id = world
+        .begun("build", Some(flume_seams::Deliverable::Commits), "one")
+        .expect("build begun");
+    let mut held = world.held(&id).expect("the place");
+    let start = held.stages[0].start.as_mut().expect("a start");
+    start.messages.push(flume_seams::MessageHeld {
+        words: "use the second".into(),
+        at: 10,
+        by: Some("ops".into()),
+        taken_at: None,
+    });
+    let hook = flume::profiles::agent::claude::hook::Start {
+        agent: Some(start.identity.to_string()),
+        secret: Some(start.secret.0.clone()),
+        place: Some(id.0.clone()),
+        stage: Some("work".into()),
+        plugin_root: None,
+    };
+    world.store.put(&id, held);
+    (world, id, hook)
+}
+
+/// What `flume hook deliver` prints for `start` over `world`.
+fn deliver_hook(
+    world: &flume_conformance::engine::world::World,
+    start: &flume::profiles::agent::claude::hook::Start,
+) -> String {
+    flume::profiles::agent::claude::hook::hook(
+        flume::profiles::agent::claude::hook::DELIVER,
+        "",
+        start,
+        &|| Ok(world.engine()),
+        Path::new("flume"),
+    )
+}
+
+/// Whether the message waiting on the place's first start was taken.
+fn taken(world: &flume_conformance::engine::world::World, id: &flume_seams::PlaceId) -> bool {
+    world
+        .held(id)
+        .and_then(|held| held.stages[0].start.clone())
+        .is_some_and(|start| start.messages.iter().any(|held| held.taken_at.is_some()))
+}
+
+#[test]
+fn hook_deliver_prints_the_message_waiting() {
+    // The agent-profile spec's "A message waiting for the take" (54, 215,
+    // C.4): the message's words alone, and the message marked taken.
+    let (world, id, start) = delivering();
+    assert_eq!(deliver_hook(&world, &start), "use the second");
+    assert!(taken(&world, &id), "the message was not marked taken");
+    assert_eq!(deliver_hook(&world, &start), "", "a second take");
+}
+
+#[test]
+fn hook_deliver_prints_nothing_for_another_secret() {
+    // The agent-profile spec's "Another start's secret" (41, 215):
+    // nothing printed, and nothing taken or recorded handed.
+    let (world, id, mut start) = delivering();
+    start.secret = Some("another".into());
+    assert_eq!(deliver_hook(&world, &start), "");
+    assert!(!taken(&world, &id), "a message taken under another secret");
+}
+
+#[test]
+fn hook_deliver_prints_nothing_while_the_agent_asks() {
+    // The agent-profile spec's "An agent asking" (215; core.11): nothing
+    // printed, and the message still waits untaken.
+    let (world, id, start) = delivering();
+    let work = flume_conformance::engine::world::World::identity("build", "one", "work", 1);
+    world.agent.set_asking(&work, flume_seams::Reading::Yes);
+    assert_eq!(deliver_hook(&world, &start), "");
+    assert!(!taken(&world, &id), "a message taken while the agent asks");
 }

@@ -83,6 +83,13 @@ pub trait TerminalHarness {
     /// submitted, in order.
     fn received(&self, session: &str) -> Vec<String>;
 
+    /// A recipient's session the harness started, which is no agent of
+    /// flume's, by the name the terminal gives it, reading working; none
+    /// where the terminal can make none, by default (54, 214).
+    fn working_recipient(&self) -> Option<String> {
+        None
+    }
+
     /// A session name the terminal holds no session by.
     fn no_session(&self) -> String;
 
@@ -238,6 +245,11 @@ pub fn scenarios<H: TerminalHarness>() -> Vec<Scenario<H>> {
             name: "terminal: a recipient's session is sent to and read by its name, and a name no session holds is not found",
             cites: &["43", "95", "96", "98"],
             run: a_session_by_its_name::<H>,
+        },
+        Scenario {
+            name: "terminal: send_to refuses a session that reads working, typing nothing, so a role's session is never typed into while it works",
+            cites: &["54", "43", "95"],
+            run: a_session_at_work::<H>,
         },
         Scenario {
             name: "terminal: an agent opened under a session name is reached by it, and no second agent carries it while it lives",
@@ -507,6 +519,28 @@ fn a_session_by_its_name<H: TerminalHarness>(harness: &H) -> Outcome {
         harness.received(&session).last().cloned(),
         Some("a notice".to_string()),
         "what the recipient took"
+    );
+    Ok(())
+}
+
+fn a_session_at_work<H: TerminalHarness>(harness: &H) -> Outcome {
+    let Some(session) = harness.working_recipient() else {
+        return Ok(());
+    };
+    ensure_eq!(
+        harness.seam().session_state(&session),
+        Some(AgentState::Working),
+        "the recipient's session"
+    );
+    let before = harness.received(&session);
+    match harness.seam().send_to(&session, "a notice") {
+        ToSession::Refused { reason } if !harness.sends() || reason.contains("works") => {}
+        other => return Err(format!("a send to a session at work gave {other:?}")),
+    }
+    ensure_eq!(
+        harness.received(&session),
+        before,
+        "what the session at work took"
     );
     Ok(())
 }

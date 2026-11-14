@@ -1,0 +1,354 @@
+//! A message to a role's address (53, 132, 193, 214, C.7; design 3, 4).
+//! A message's target is a role's address where it is `<stream>/<role>`,
+//! each part a word and neither `.` nor `..`, and otherwise a place, as
+//! every command names one. A message to an address that one source of
+//! the host declares, with a run, a standing agent or carried, is recorded
+//! at once through weir's `record` in the host's deliveries, keyed
+//! `message/<stream>/<role>/<token>`, its one reader the address, its
+//! message a first line naming who sent it and then the words, expiring
+//! after `[host] ends_expire`; the act then wakes the address's run where
+//! its source gives it one and none is live or waiting for room, as a
+//! settle's wake does, and answers at once, with no bound: the message is
+//! pending until the address's session takes it and confirms it (43, 132,
+//! 214; weir 100, 101, 102, 104). An address no source declares, two
+//! declare, whose stream the host does not declare or whose entry is at
+//! fault is refused naming why, and so is a bound or an answer's key with
+//! an address, each recording nothing (42, 53, 193).
+
+use crate::deliveries::{time, token, update};
+use crate::{Answer, Answering, CollectedMessage, Engine, Found, Woke};
+use flume_seams::*;
+use weir_delivery::{Record, Recorded};
+
+/// Whether `target` names a role's address, `<stream>/<role>` with each
+/// part a word as an address's is and neither `.` nor `..`, and not a
+/// place; `./east/planner` names a place's location (53, 132; design 3).
+pub fn names_an_address(target: &str) -> bool {
+    is_address(target) && target.split('/').all(|part| part != "." && part != "..")
+}
+
+/// A message's delivery key: `message`, the address and the message's
+/// token joined by `/`, which never begins as an end's does, since a
+/// place's name always holds `--` (C.7; weir 101).
+pub fn message_key(address: &str, token: &str) -> String {
+    format!("message/{address}/{token}")
+}
+
+/// Whether `key` is a message's delivery key (C.7).
+pub fn is_message_key(key: &str) -> bool {
+    key.starts_with("message/")
+}
+
+/// A message's words as its delivery holds them: a first line naming who
+/// sent it, `<from> messages <address>:`, or `A message to <address>:`
+/// where the sending command reads no one, then the words as given on the
+/// lines after it (214, C.7).
+pub fn message_words(address: &str, from: Option<&str>, words: &str) -> String {
+    let first = match from {
+        Some(from) => format!("{from} messages {address}:"),
+        None => format!("A message to {address}:"),
+    };
+    format!("{first}\n{words}")
+}
+
+/// Who sent a message, where its first line names one, and its words, as
+/// its delivery's message holds them (214, C.7).
+pub fn sent(message: &str) -> (Option<String>, String) {
+    let (first, words) = message.split_once('\n').unwrap_or((message, ""));
+    let from = first
+        .strip_suffix(':')
+        .and_then(|first| first.rsplit_once(" messages "))
+        .map(|(from, _)| from.to_string());
+    (from, words.to_string())
+}
+
+impl Engine {
+    /// Collects every message pending for `recipient`, in the order the
+    /// host's deliveries recorded them, each handed to it `by` a way in
+    /// one write, and confirmed on receipt where `confirms`; one the
+    /// recipient confirmed before, or whose hand-over weir refused, is
+    /// left out (43, 214; weir 102, 103).
+    pub(crate) fn collect_messages(
+        &self,
+        recipient: &str,
+        by: DeliveredBy,
+        confirms: bool,
+    ) -> Vec<CollectedMessage> {
+        let owing = self.owing();
+        let pending: Vec<(EndDelivery, bool)> = owing
+            .in_order()
+            .filter(|delivery| is_message_key(&delivery.key))
+            .filter_map(|delivery| {
+                let owed = delivery
+                    .owed
+                    .iter()
+                    .find(|owed| owed.recipient == recipient)?;
+                Some((delivery.clone(), owed.expired))
+            })
+            .collect();
+        if pending.is_empty() {
+            return vec![];
+        }
+        let keys: Vec<String> = pending
+            .iter()
+            .map(|(delivery, _)| delivery.key.clone())
+            .collect();
+        let handed = self.hand_over(&keys, recipient, by, self.host.now(), confirms);
+        let mut collected = vec![];
+        for ((delivery, expired), handed) in pending.into_iter().zip(handed) {
+            match handed {
+                Ok(true) => {}
+                Ok(false) => continue,
+                Err(why) => {
+                    self.host.log(&format!(
+                        "the message {} was not handed to {recipient} by the inbox: {why}",
+                        delivery.key
+                    ));
+                    continue;
+                }
+            }
+            let (from, words) = sent(&delivery.message);
+            collected.push(CollectedMessage {
+                key: delivery.key,
+                address: recipient.into(),
+                from,
+                at: delivery.recorded_at,
+                words,
+                confirmed: confirms,
+                expired,
+            });
+        }
+        collected
+    }
+
+    /// Messages the role's address `address` `words`, from the recipient
+    /// `answering` names as the sending command's: refused, recording
+    /// nothing, with a bound or a key, or for an address no source of the
+    /// host can take; otherwise recorded as a delivery at the address,
+    /// its run woken where its source gives it one and none stands, and
+    /// answered at once with the delivery's key, the address and what the
+    /// act found of it (53, 132, 193, 214, C.7; design 3, 4).
+    pub fn message_address(
+        &self,
+        address: &str,
+        words: &str,
+        bound: Option<Seconds>,
+        answering: &Answering,
+    ) -> Answer {
+        if bound.is_some() {
+            return Answer::refused(format!(
+                "{address} is a role's address, and a bound is how long a message waits for a \
+                 place's agent: a message to an address waits at it, with no bound, until its \
+                 session takes it; nothing was recorded"
+            ));
+        }
+        if let Some(key) = &answering.key {
+            return Answer::refused(format!(
+                "{address} is a role's address, and an answer naming {key} goes to the place that \
+                 asked it: message that place with --answers; nothing was recorded"
+            ));
+        }
+        self.settle_attended();
+        let roles = self.host.roles();
+        let entry = match roles.declared(address) {
+            Ok(entry) => entry,
+            Err(why) => {
+                return Answer::refused(format!(
+                    "{address} takes no message: {why}; nothing was recorded"
+                ))
+            }
+        };
+        let key = match self.record_message(address, answering.by.as_deref(), words) {
+            Ok(key) => key,
+            Err(why) => return Answer::refused(why),
+        };
+        let (found, run, why) = match entry {
+            RoleEntry::Run(_) => match self.wake_address(address, &roles) {
+                Ok((woke, held)) => (
+                    match woke {
+                        Woke::Launched => Found::Woken,
+                        Woke::Live => Found::Live,
+                        Woke::Waiting => Found::Waiting,
+                    },
+                    Some(held.place.id),
+                    None,
+                ),
+                Err(why) => (Found::Unwoken, None, Some(why)),
+            },
+            RoleEntry::Standing(_) => (Found::Standing, None, None),
+            RoleEntry::Carried(_) => (Found::Carried, None, None),
+        };
+        // A session that waits takes its batch now, the message among it
+        // (214; design 4).
+        let found = match found {
+            Found::Live | Found::Standing => {
+                self.hand_batch_to(address);
+                let handed = self.owing().deliveries.get(&key).is_some_and(|delivery| {
+                    delivery
+                        .handovers
+                        .iter()
+                        .any(|handover| handover.recipient == address)
+                });
+                if handed {
+                    Found::Handed
+                } else {
+                    found
+                }
+            }
+            found => found,
+        };
+        Answer::Messaged {
+            key,
+            address: address.into(),
+            found,
+            run,
+            why,
+        }
+    }
+
+    /// The settle's wake for messages: each role's address a message is
+    /// pending for, handed to it by nothing, is woken where its source
+    /// gives it a run and none is live or waiting for room, as an end's
+    /// address is; one its source gives a standing agent or declares
+    /// carried, or no source declares, is passed over (43, 132, 214;
+    /// core.28).
+    pub(crate) fn wake_for_messages(&self) {
+        let owing = self.owing();
+        let mut addresses: Vec<String> = vec![];
+        for delivery in owing.deliveries.values() {
+            if !is_message_key(&delivery.key) {
+                continue;
+            }
+            for owed in &delivery.owed {
+                let handed = delivery
+                    .handovers
+                    .iter()
+                    .any(|handover| handover.recipient == owed.recipient);
+                if !handed && !addresses.contains(&owed.recipient) {
+                    addresses.push(owed.recipient.clone());
+                }
+            }
+        }
+        if addresses.is_empty() {
+            return;
+        }
+        let roles = self.host.roles();
+        for address in addresses {
+            if matches!(roles.declared(&address), Ok(RoleEntry::Run(_))) {
+                if let Err(why) = self.wake_address(&address, &roles) {
+                    self.host.log(&format!(
+                        "{address}, a message pending for it, was not woken: {why}"
+                    ));
+                }
+            }
+        }
+    }
+
+    /// Records, through weir's `record`, the message `words` to `address`
+    /// from `from`: under a key of its own token, its one reader the
+    /// address, expiring the host's span after now; its key, or why it
+    /// was not recorded. flume's log names the delivery recorded, its
+    /// reader and its expiry (43, 214, C.7; weir 100, 101, 104).
+    fn record_message(
+        &self,
+        address: &str,
+        from: Option<&str>,
+        words: &str,
+    ) -> Result<String, String> {
+        let message = message_words(address, from, words);
+        let at = time(self.host.now());
+        let span = self.host.ends_expire();
+        let mut key = String::new();
+        let mut refused: Option<String> = None;
+        let mut expires = String::new();
+        let written = update(&*self.store, |records| {
+            refused = None;
+            // A token another message holds is drawn again, so two
+            // messages never share a key (weir 101).
+            loop {
+                key = message_key(address, &token(&self.host.secret()));
+                let held = records.iter().any(|record| {
+                    matches!(record, Record::Delivery(delivery) if delivery.key().as_str() == key)
+                });
+                if !held {
+                    break;
+                }
+            }
+            match weir_delivery::record(records, &key, &message, &[address], &at, span) {
+                Ok(Recorded::Add(added)) => {
+                    expires = added
+                        .iter()
+                        .find_map(|record| match record {
+                            Record::Delivery(delivery) => {
+                                Some(delivery.expires_at().as_str().to_string())
+                            }
+                            _ => None,
+                        })
+                        .unwrap_or_default();
+                    added
+                }
+                Ok(Recorded::Held(_)) => vec![],
+                Err(refusal) => {
+                    refused = Some(format!(
+                        "the message to {address} was not recorded: {refusal}"
+                    ));
+                    vec![]
+                }
+            }
+        });
+        if let Err(why) = written {
+            return Err(format!("the message to {address} was not recorded: {why}"));
+        }
+        if let Some(why) = refused {
+            return Err(why);
+        }
+        self.host.log(&format!(
+            "recorded the delivery {key}, a message owed to {address}, expiring at {expires}"
+        ));
+        Ok(key)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_address_and_a_place() {
+        assert!(names_an_address("east/planner"));
+        assert!(!names_an_address("./east/planner"));
+        assert!(!names_an_address("../planner"));
+        assert!(!names_an_address("east/.."));
+        assert!(!names_an_address("fix--one"));
+        assert!(!names_an_address("/r/places/fix--one"));
+    }
+
+    #[test]
+    fn a_message_names_who_sent_it() {
+        assert_eq!(
+            message_words("east/planner", Some("ops"), "the nightly job failed"),
+            "ops messages east/planner:\nthe nightly job failed"
+        );
+        assert_eq!(
+            message_words("east/planner", None, "look"),
+            "A message to east/planner:\nlook"
+        );
+        assert_eq!(
+            message_key("east/planner", "0a1b2c3d"),
+            "message/east/planner/0a1b2c3d"
+        );
+        assert!(is_message_key("message/east/planner/0a1b2c3d"));
+        assert_eq!(
+            sent("ops messages east/planner:\nthe nightly job failed\nand more"),
+            (
+                Some("ops".to_string()),
+                "the nightly job failed\nand more".to_string()
+            )
+        );
+        assert_eq!(
+            sent("A message to east/planner:\nlook"),
+            (None, "look".to_string())
+        );
+        assert!(!is_message_key("fix--one/0a1b2c3d/stage/code/1/delivered"));
+    }
+}

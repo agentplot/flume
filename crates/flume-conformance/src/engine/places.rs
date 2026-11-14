@@ -170,7 +170,7 @@ fn no_question_answered(_: &()) -> Outcome {
         world.host.advance(60);
         world.engine().settle(None);
     }
-    let _ = world.engine.tell(&id, "yes, go ahead", Some(30));
+    let _ = world.engine.message(&id, "yes, go ahead", Some(30));
     ensure!(
         world.terminal.sent_to(&code).is_empty(),
         "flume typed into a question: {:?}",

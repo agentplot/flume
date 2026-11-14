@@ -1928,12 +1928,16 @@ impl Terminal for Herdr {
             Found::Gone => return ToSession::NotFound,
             Found::Unknown(reason) => return ToSession::Refused { reason },
         };
-        let mut calls = vec![];
+        // Only a pane that waits is typed into, its held input cleared
+        // first; one at work is refused with nothing typed, so a notice or
+        // a message never lands in a turn under way (54, 214; core.11).
         match self.pane_state(&pane) {
-            AgentState::Waiting => {
-                calls.push(vec!["agent", "send-keys", pane.id.as_str(), "ctrl+c"])
+            AgentState::Waiting => {}
+            AgentState::Working => {
+                return ToSession::Refused {
+                    reason: format!("the session {session} works, so nothing was typed into it"),
+                }
             }
-            AgentState::Working => {}
             AgentState::Stopped => return ToSession::NotFound,
             state => {
                 return ToSession::Refused {
@@ -1943,7 +1947,10 @@ impl Terminal for Herdr {
                 }
             }
         }
-        calls.push(vec!["agent", "prompt", pane.id.as_str(), text]);
+        let calls = [
+            vec!["agent", "send-keys", pane.id.as_str(), "ctrl+c"],
+            vec!["agent", "prompt", pane.id.as_str(), text],
+        ];
         for args in calls {
             if let Err(reason) = self.answered(&pane.socket, &args) {
                 return ToSession::Refused { reason };

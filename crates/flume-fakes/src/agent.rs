@@ -56,6 +56,7 @@ struct AgentModel {
     /// The own values the program names, each passed as written (169).
     own_modes: Vec<String>,
     mode_read_back: bool,
+    deliver: bool,
     /// The mode is named at the start's first prompt, never in the word
     /// that it started (161).
     mode_at_prompt: bool,
@@ -106,6 +107,9 @@ struct Record {
     session: Option<String>,
     /// Its session ends once it stops short, as scripted (96, 134).
     ends_after_stop_short: bool,
+    /// Each text its program's own channel submitted, as a deliver part
+    /// submits what the take gave it, each counted as a sending (215).
+    submitted: Vec<String>,
 }
 
 impl Default for Record {
@@ -126,6 +130,7 @@ impl Default for Record {
             began_in: None,
             session: None,
             ends_after_stop_short: false,
+            submitted: vec![],
         }
     }
 }
@@ -188,6 +193,14 @@ impl FakeAgent {
     }
 
     /// The agent receives a prompt at its `sending`th sending, or never.
+    /// The agent's program submits `text` by its own channel, as a
+    /// deliver part submits what its take gave it: a sending it may read
+    /// received (215).
+    pub fn submits(&self, agent: &Identity, text: &str) {
+        let text = text.to_string();
+        self.with(agent, |record| record.submitted.push(text));
+    }
+
     pub fn receives_at(&self, agent: &Identity, sending: Option<usize>) {
         self.with(agent, |record| record.receives_at = sending);
     }
@@ -359,6 +372,12 @@ impl FakeAgent {
     /// (169).
     pub fn own_mode(&self, value: &str) {
         lock(&self.state).own_modes.push(value.to_string());
+    }
+
+    /// The program takes words by its own channel at its agent's wait:
+    /// its profile offers deliver (215).
+    pub fn offer_deliver(&self) {
+        lock(&self.state).deliver = true;
     }
 
     /// The program's word that it started names the mode it began in
@@ -668,6 +687,7 @@ impl Agent for FakeAgent {
         if carried && command.prompt_args.iter().any(|arg| arg == text) {
             sendings += 1;
         }
+        sendings += model.submitted.iter().filter(|sent| *sent == text).count();
         if model.receives_at.is_some_and(|needed| sendings >= needed) {
             Received::Received { record }
         } else {
@@ -850,6 +870,14 @@ impl Agent for FakeAgent {
 
     fn mode_read_back(&self) -> Offered {
         if lock(&self.state).mode_read_back {
+            Offered::Offered
+        } else {
+            Offered::NotOffered
+        }
+    }
+
+    fn deliver(&self) -> Offered {
+        if lock(&self.state).deliver {
             Offered::Offered
         } else {
             Offered::NotOffered

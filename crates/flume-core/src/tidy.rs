@@ -214,7 +214,7 @@ impl Engine {
             ));
         }
         self.intent_left(&place.intent, id);
-        self.deliver_ends(id);
+        self.hand_batches(Some(id));
         let read = self.store.read(id);
         // A place whose ends stand pending is removed only once the
         // document kept for them stands, so no pending end is left with

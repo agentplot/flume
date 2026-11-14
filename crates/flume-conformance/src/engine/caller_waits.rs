@@ -100,7 +100,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: another_streams_role_named,
         },
         Scenario {
-            name: "caller waits: a place whose one recipient is its stream's answerer stalls to the answerer once",
+            name: "caller waits: a place whose one recipient is its stream's answerer stalls to the answerer once, its question carried in the answerer's run's first prompt and its stall at the run's wait",
             cites: &["130", "43", "193"],
             run: the_answerer_is_the_recipient,
         },
@@ -667,7 +667,7 @@ fn a_lost_stage_waits_on_its_caller(_: &()) -> Outcome {
 
 fn stalled_after_five_minutes(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.add_session("ops", AgentState::Working);
+    world.terminal.add_session("ops", AgentState::Waiting);
     world.terminal.add_session("lead", AgentState::Waiting);
     world.engine.settle_every(30);
     let (id, asked) = construct_asks(&world, "plan", &["ops", "lead"], None)?;
@@ -1028,17 +1028,26 @@ fn the_answerer_is_the_recipient(_: &()) -> Outcome {
         vec!["east/operator".to_string()],
         "the stall's deliveries"
     );
+    // The question woke the answerer's run and went in its first prompt;
+    // the stall came after it, at the run's wait (214).
     ensure_eq!(
         world.terminal.notices("east/operator"),
-        vec![
-            world.confirming(
-                "flume: change--plan (one of two designs) construct needs an answer, its agent kept open for the answer until 1003600 [stage/construct/1/ended-short]; read: flume inbox", "east/operator"
-            ),
-            world.confirming(
-                "flume: change--plan (one of two designs) stalled: a retry of construct [stall/1000000]; read: flume inbox", "east/operator"
-            ),
-        ],
+        vec![world.confirming(
+            "flume: change--plan (one of two designs) stalled: a retry of construct [stall/1000000]; read: flume inbox", "east/operator"
+        )],
         "the notices into the answerer's run's pane"
+    );
+    let prompt = world
+        .held(&World::id("turn", "east-operator"))
+        .and_then(|held| held.stages[0].start.clone())
+        .map(|start| start.prompt.text)
+        .unwrap_or_default();
+    let question = world.confirming(
+        "flume: change--plan (one of two designs) construct needs an answer, its agent kept open for the answer until 1003600 [stage/construct/1/ended-short]; read: flume inbox", "east/operator"
+    );
+    ensure!(
+        prompt.contains(&question),
+        "the answerer's run's first prompt: {prompt}"
     );
     Ok(())
 }

@@ -134,7 +134,7 @@ on any of these accounts (44, 45, 118, 198).
 #### Scenario: Stuck under a program with no send-back
 
 - **WHEN** the fake agent gives no way to send back and stays quiet past the limit with nothing delivered
-- **THEN** status reports the stage stuck naming it and the agent, the agent is not ended, and after a tell wakes it and it ticks the last task the stage ends at its deliverable (S17)
+- **THEN** status reports the stage stuck naming it and the agent, the agent is not ended, and after a message wakes it and it ticks the last task the stage ends at its deliverable (S17)
 
 #### Scenario: Limits after an answer
 

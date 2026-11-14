@@ -132,7 +132,7 @@ multiplexer = "herdr"
 same. With none, or `multiplexer = "printed"`, flume prints each agent's
 command, `cd` into the place and the program with its environment and
 prompt, for you to run. It can send nothing into a pane it does not
-hold, so it cannot deliver a `tell` or a notice, or keep an agent open
+hold, so it cannot deliver a `message` or a notice, or keep an agent open
 for its answer. Ends stay pending
 until `flume wait` or `flume inbox` collects them, and the place moves
 on at each command of flume's that acts, or at a caller's watch
@@ -174,7 +174,7 @@ a command settles every place first: the host's watch does
 
 ## Places under herdr
 
-<Diagram name="herdr" caption="A tell waits while its agent works and reaches it once the agent waits. retry with your words hands an answer to the agent kept open for it, which carries its stage on; stop ends an agent that went the wrong way, and a retry starts its stage again with a fresh agent." />
+<Diagram name="herdr" caption="A message waits while its agent works and reaches it once the agent waits. retry with your words hands an answer to the agent kept open for it, which carries its stage on; stop ends an agent that went the wrong way, and a retry starts its stage again with a fresh agent." />
 
 flume keeps each stream's agents in herdr sessions of the stream's.
 Its own is the one its `session` names, else the one named by the
@@ -242,8 +242,8 @@ answer in time reads as unknown, never as an answer.
 An agent that stops short needing an answer stays in its pane, kept
 open for the answer for its `keep_open`, an hour by default ([the agent
 kept open](/flume/guides/callers-and-holds/#the-agent-kept-open)). A
-retry with words, or a tell, to its place is typed into that pane as a
-tell is: once the agent waits, its input cleared first, read back as
+retry with words, or a message, to its place is typed into that pane as
+a message is: once the agent waits, its input cleared first, read back as
 received or typed once more. The agent reads the question and the
 answer and carries its stage on in the same session, with everything
 it had read. Once its time passes, it stops or its account is spent, a
@@ -333,9 +333,10 @@ never begun, with the block's screen in `flume status`. flume answers
 the folder-trust question from the screen as it does under herdr, and
 checks that the block runs the program the settings name.
 
-A prompt or a notice clears what the agent holds typed with ctrl+c
-only while the agent waits, so a working agent takes a tell as its next
-input. A recipient in a Rex block is named `rex:<block>@<socket>`, the
+A prompt, a message or a notice is typed into a block only while it
+waits, its held input cleared with ctrl+c first; a block at work is
+typed nothing, and a later settle hands it what is pending once it
+waits. A recipient in a Rex block is named `rex:<block>@<socket>`, the
 name a command run in that block gives its own session, from Rex's
 `REX_BLOCK` and `REX_SERVER`.
 
@@ -523,7 +524,7 @@ herdr as the host's multiplexer or a stream's. It brings:
 
   The chosen place is marked `▶`. Each key acts at once, with no Enter:
   the arrow keys or `j` and `k` move the choice, and `1` to `9` choose
-  the place so numbered. `o` opens its tab, `t` tells its agent the
+  the place so numbered. `o` opens its tab, `m` messages its agent the
   words you give, `s` stops its agent and `r` retries its stage; the
   words, and whether to force, are asked for as a line, ended by Enter.
   `q` or Escape closes the popup. Each key runs one flume command or

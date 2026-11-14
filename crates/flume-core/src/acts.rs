@@ -11,7 +11,7 @@ use crate::launch::and_list;
 use crate::open_sessions::waits_on_answer;
 use crate::start::{Start, Starts};
 use crate::status::waiting_on;
-use crate::{Act, Answer, Engine, Step, Tidied, POLL, RECEIVED_WITHIN, TELL_BOUND};
+use crate::{Act, Answer, Engine, Step, Tidied, MESSAGE_BOUND, POLL, RECEIVED_WITHIN};
 use flume_seams::*;
 
 /// What a retry names (49).
@@ -65,6 +65,7 @@ impl Engine {
             agent.as_deref(),
             group.as_ref().map(Option::as_ref),
             &listed,
+            None,
         ) {
             Ok(text) => Answer::Prompt {
                 place: place.clone(),
@@ -248,7 +249,7 @@ impl Engine {
         // answer at once is refused, and let go where it is not recorded
         // (42, 49, 75).
         let _claimed = match &answering.key {
-            Some(key) => match self.claim_answer(place, key, answering, TELL_BOUND) {
+            Some(key) => match self.claim_answer(place, key, answering, MESSAGE_BOUND) {
                 Ok(claimed) => Some(claimed),
                 Err(reason) => return Answer::refused(reason),
             },
@@ -689,23 +690,23 @@ impl Engine {
     /// once it said it started and waits, received or sent once more;
     /// refused with nothing typed when the place has no live agent, its
     /// agent is asking, or the words are not delivered within the bound.
-    /// A tell to a place whose stage ended short needing an answer is that
+    /// A message to a place whose stage ended short needing an answer is that
     /// answer while its agent is kept open for it, carrying the stage on
     /// in its session, and is refused, naming the retry that answers it,
     /// once its agent is not (42, 53 to 55, 198). It names no key and no
-    /// one who gives it: [`Engine::tell_answering`] with neither.
-    pub fn tell(&self, place: &PlaceId, words: &str, bound: Option<Seconds>) -> Answer {
-        self.tell_answering(place, words, bound, &Answering::default())
+    /// one who gives it: [`Engine::message_answering`] with neither.
+    pub fn message(&self, place: &PlaceId, words: &str, bound: Option<Seconds>) -> Answer {
+        self.message_answering(place, words, bound, &Answering::default())
     }
 
-    /// A tell, as [`Engine::tell`] takes one, whose words, where they
+    /// A message, as [`Engine::message`] takes one, whose words, where they
     /// answer the agent kept open, record who gave them and the key they
     /// named, none where they named none, on the stop-short they answer.
     /// One naming a key is taken only while the place waits on the
     /// stop-short the key names, and is otherwise refused with nothing
     /// typed, naming the answer that stop-short took, who gave it and
     /// when, or the move the place waits on now (42, 53, 198).
-    pub fn tell_answering(
+    pub fn message_answering(
         &self,
         place: &PlaceId,
         words: &str,
@@ -724,7 +725,7 @@ impl Engine {
         }
         if let Some(stage) = waits_on_answer(&read.state) {
             return match self.kept_open(&read.state) {
-                Some(kept) => self.answer(place, &kept, words, Act::Tell, bound, answering),
+                Some(kept) => self.answer(place, &kept, words, Act::Message, bound, answering),
                 None => Answer::refused(format!(
                     "the stage {stage} of {place} waits on an answer and its agent is no longer kept open; give the answer as a retry: flume retry {place} --words <answer>"
                 )),
@@ -733,18 +734,18 @@ impl Engine {
         let Some((_, start)) = read.state.live_start() else {
             return Answer::refused(format!("the place {place} has no live agent"));
         };
-        match self.hand(place, start, words, bound) {
-            Ok(_) => self.acted(Act::Tell, place),
+        match self.hand(place, start, words, bound, answering.by.as_deref()) {
+            Ok(_) => self.acted(Act::Message, place),
             Err(reason) => Answer::refused(reason),
         }
     }
 
-    /// Hands the agent of `start` `words` as a prompt, as a tell hands
+    /// Hands the agent of `start` `words` as a prompt, as a message hands
     /// them: once it said it started, waits and asks nothing, within the
     /// bound, ten minutes where none is given, its input cleared by the
     /// terminal's send, and read received within 60 seconds of each
     /// sending or sent once more. When it was last sent and read
-    /// received, or the tell's words saying why nothing more was typed
+    /// received, or the message's words saying why nothing more was typed
     /// (37, 38, 53, 54; core.11).
     pub(crate) fn hand(
         &self,
@@ -752,6 +753,7 @@ impl Engine {
         start: &StartHeld,
         words: &str,
         bound: Option<Seconds>,
+        by: Option<&str>,
     ) -> Result<Handed, String> {
         let identity = &start.identity;
         let Some(agent) = self.agent(&start.program) else {
@@ -761,7 +763,10 @@ impl Engine {
             ));
         };
         let folder = self.store.folder(place);
-        let deadline = self.host.now() + bound.unwrap_or(TELL_BOUND);
+        let deadline = self.host.now() + bound.unwrap_or(MESSAGE_BOUND);
+        if agent.deliver() == Offered::Offered {
+            return self.hand_by_take(place, start, agent.as_ref(), words, deadline, by);
+        }
         loop {
             let state = self.state_of(Some(agent.as_ref()), &folder, start);
             let asking = agent.asking(&folder, identity);
@@ -808,6 +813,149 @@ impl Engine {
             }
         }
         Err(format!("the agent {identity} did not receive the words"))
+    }
+
+    /// Hands the agent of `start`, whose profile offers deliver, `words`
+    /// by its take, nothing sent through the terminal: refused with nothing
+    /// typed while it asks or is not live; otherwise the message written
+    /// on the start and the held state followed until `deadline`. Once
+    /// taken, it is read received within 60 seconds of the take, or put
+    /// back untaken once for one more take and refused after a second;
+    /// where the bound passes untaken, it is taken back by compare-and-set
+    /// and refused with nothing typed, one taken meanwhile read as any
+    /// taken is. A message read received leaves the start (38, 42, 53, 54,
+    /// 198, 215; design 8).
+    fn hand_by_take(
+        &self,
+        place: &PlaceId,
+        start: &StartHeld,
+        agent: &dyn Agent,
+        words: &str,
+        deadline: Seconds,
+        by: Option<&str>,
+    ) -> Result<Handed, String> {
+        let identity = &start.identity;
+        let folder = self.store.folder(place);
+        let state = self.state_of(Some(agent), &folder, start);
+        if state == AgentState::Asking || agent.asking(&folder, identity) == Reading::Yes {
+            return Err(format!(
+                "the agent {identity} is asking a person; nothing was typed"
+            ));
+        }
+        if state == AgentState::Stopped {
+            return Err(format!(
+                "the agent {identity} is not live; nothing was typed"
+            ));
+        }
+        let at = self.host.now();
+        let message = MessageHeld {
+            words: words.to_string(),
+            at,
+            by: by.map(str::to_string),
+            taken_at: None,
+        };
+        let mine = |held: &mut HeldState| -> Option<(usize, usize)> {
+            let index = held.index_of(identity)?;
+            let start = held.stages[index].start.as_ref()?;
+            let at = start
+                .messages
+                .iter()
+                .position(|held| held.words == message.words && held.at == message.at)?;
+            Some((index, at))
+        };
+        let written = self
+            .update(place, |held| {
+                let Some(start) = held
+                    .index_of(identity)
+                    .and_then(|index| held.stages[index].start.as_mut())
+                    .filter(|start| start.live)
+                else {
+                    return Step::Keep(false);
+                };
+                start.messages.push(message.clone());
+                Step::Write(true)
+            })
+            .unwrap_or(false);
+        if !written {
+            return Err(format!(
+                "the agent {identity} is not live; nothing was typed"
+            ));
+        }
+        // Takes the message back off the start, untaken where `untaken`.
+        let take_back = |untaken: bool| -> bool {
+            self.update(place, |held| {
+                let Some((index, at)) = mine(held) else {
+                    return Step::Keep(false);
+                };
+                let start = held.stages[index].start.as_mut().expect("a start");
+                if untaken && start.messages[at].taken_at.is_some() {
+                    return Step::Keep(false);
+                }
+                start.messages.remove(at);
+                Step::Write(true)
+            })
+            .unwrap_or(false)
+        };
+        let mut takes = 0;
+        loop {
+            let taken = self.store.read(place).and_then(|read| {
+                let mut held = read.state;
+                let (index, at) = mine(&mut held)?;
+                held.stages[index].start.as_ref()?.messages[at].taken_at
+            });
+            if let Some(taken_at) = taken {
+                takes += 1;
+                loop {
+                    if let Received::Received { .. } = agent.received(&folder, identity, words) {
+                        take_back(false);
+                        return Ok(Handed {
+                            sent_at: taken_at,
+                            received_at: self.host.now(),
+                        });
+                    }
+                    let waited = self.host.now().saturating_sub(taken_at);
+                    if waited >= RECEIVED_WITHIN {
+                        break;
+                    }
+                    self.host.sleep(POLL.min(RECEIVED_WITHIN - waited));
+                }
+                if takes >= 2 {
+                    take_back(false);
+                    return Err(format!(
+                        "the agent {identity} did not receive the words, taken twice"
+                    ));
+                }
+                // Put back untaken, once, for one more take (38).
+                self.update(place, |held| {
+                    let Some((index, at)) = mine(held) else {
+                        return Step::Keep(());
+                    };
+                    held.stages[index].start.as_mut().expect("a start").messages[at].taken_at =
+                        None;
+                    Step::Write(())
+                });
+                continue;
+            }
+            if self.host.now() >= deadline {
+                if take_back(true) {
+                    return Err(format!(
+                        "the agent {identity} did not take the words within the bound; nothing was typed"
+                    ));
+                }
+                let stands = self.store.read(place).is_some_and(|read| {
+                    let mut held = read.state;
+                    mine(&mut held).is_some()
+                });
+                if !stands {
+                    return Err(format!(
+                        "the agent {identity} is not live; nothing was typed"
+                    ));
+                }
+                // Taken meanwhile: read as any taken is.
+                continue;
+            }
+            self.host.sleep(POLL);
+        }
     }
 
     /// The answer to an act taken: the place's status as it then stands.

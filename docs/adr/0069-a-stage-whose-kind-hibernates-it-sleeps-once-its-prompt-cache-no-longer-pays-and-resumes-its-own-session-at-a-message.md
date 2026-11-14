@@ -148,3 +148,90 @@ for which an agent may pass on, which no host has yet.
   control plane shows each role under its label's column with its live
   places, and its MCP tools answer later when they wake a role
   (boomdrivedev/boomdrive-cloud).
+
+## Construction choices
+
+Dated 2026-11-14, the code stage's of the change
+`every-message-to-a-role-waits-at-its-address`, named for what its
+design (`openspec/changes/every-message-to-a-role-waits-at-its-address/design.md`)
+builds of this record: a message, a role's deliveries, the deliver part
+and a launch from a role's run reporting to its address. Each is the
+construction agent's, within what the operator ruled above, and the
+record stays accepted. Sources beside those above:
+`boomdrivedev/blueprints:design/flume/requirements.md` at main 81288ba,
+clauses 7, 43, 53 to 56, 121, 132, 193, 214 and 215, C.4's deliver
+row and S126 and S128, and C.7's deliveries bullet as the branch
+`design/flume-a-message-to-a-role-is-a-delivery-at-its-address`
+amends it at 9ddd402, a message's delivery key and the claims kept
+beside the records.
+
+- **`tell` stays an alias of `message`** (design section 2). `flume
+  tell` runs as `flume message`, hidden from the help, and an answer's
+  act written `tell` reads as `message`. Not taken: removing `tell` at
+  once, which would break every caller that tells a place before it
+  moves; a later chore drops the alias once no caller uses it.
+- **A message's target is an address or a place** (section 3).
+  `<stream>/<role>`, each part a word and neither `.` nor `..`, is a
+  role's address, and any other target names a place as every command
+  does; a place's relative location of that shape is named by its
+  absolute location or `./` before it. `--within` and `--answers` are
+  refused with an address. Not taken: a flag of its own for an address,
+  `--to`, where an address is the recipient's own name everywhere else.
+- **A message to an address is pending with no bound** (section 4). It
+  is recorded through weir's `record`, keyed
+  `message/<stream>/<role>/<token>`, its one reader the address, its
+  first line naming who sent it, expiring after `[host] ends_expire`; its
+  own act wakes the address's run as a settle does, and answers at once.
+  Not taken: a message to an address that waits within a bound, as one
+  to a place does, which would refuse every message sent while a role's
+  run is woken or waits for room.
+- **A batch is claimed beside the host's deliveries** (section 5). A
+  recipient's batch, every delivery pending for it and handed by
+  nothing, is claimed whole in one write of the host's deliveries
+  document, sent while the recipient waits, and recorded handed with the
+  claims removed in one write; a claim left sending holds its items out
+  of later batches, which the inbox still gives. Not taken: a notice of
+  each end apart, which types two prompts where one would do; claims on
+  each place's document, which leave a message, of no place, nowhere to
+  be claimed.
+- **Claude Code's deliver part is built and not offered** (section 7).
+  The deliver part of the plugin's hooks module runs `flume hook deliver`
+  at a turn's end and on an idle clock, gated by `FLUME_DELIVER`, and
+  submits what it prints as the user's words; the take records the
+  hand-over before the mod submits, since the hook cannot learn whether
+  the submit took, and the inbox gives again what was handed and not
+  confirmed. Claude Code's
+  profile answers deliver not offered while flume pins 2.1.296, which no
+  check of the tree reads running a hooks module's `$.prompt.submit` in
+  an interactive session, so the terminal hands every batch until the
+  chore that moves the pin turns it on. Not taken: offering it on the
+  pinned release unread, against core.39; a module that asks at every
+  idle tick in every session, which would start a process every ten
+  seconds in every agent for a part no pinned release offers; the framed
+  submit, which reads "The flume plugin sent a message" where the
+  terminal types the words bare.
+- **One hooks module holds the line and the deliver part** (section 7).
+  The plugin's one hooks module, `hooks/flume.ts`, registers each event
+  once and holds both the place's line and the deliver part, its tests
+  one file for each part. Not taken: a second module, `hooks/deliver.ts`,
+  named beside `hooks/line.ts`, which the pinned 2.1.296 refuses, read on
+  2026-11-14 by its `plugin test` of this tree: "hooks.json `modules`
+  names one hooks module per plugin; a second entry is refused"; and one
+  module importing a part from another file, which it refuses where an
+  event's hook is registered twice ("registered twice without a
+  matcher") or `$` is passed into an imported function ("$ is followed
+  only into a function declared in this same file, never across an
+  import").
+- **A role's run's first prompt carries its batch** (section 9). Each
+  start of a role's run fills its prompt with its address's batch after
+  the kind's template and before the way to stop short, claimed under
+  the start's identity and recorded handed once the prompt is received;
+  a start that never began lets its claims go. Not taken: handing the
+  batch at the run's first wait after its prompt, which costs the run a
+  turn on its own prompt alone.
+- **The suite cites the clauses its list holds** (section 13). The
+  engine's new scenarios cite clauses the suite's list holds at 31f9f1c
+  and give 214 and 215 in their names' words; the chore that moves the
+  list past 210 finds them to cite. Not taken: moving the list's
+  revision here, which would list fourteen clauses and eleven scenarios
+  that four changes on this bolt build.

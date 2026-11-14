@@ -1,4 +1,4 @@
-// The module that pins the place's line (hooks/line.ts), run by the pinned
+// The module's part that pins the place's line (hooks/flume.ts), run by the pinned
 // engine's `plugin test` over a host whose `flume hook status-line` prints
 // what each test says: the claude-code-plugin spec's module scenarios (56,
 // 60, 72, C.4; core.13).

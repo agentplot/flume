@@ -86,8 +86,8 @@ happens:
 Each end is a **delivery** to each of its recipients, recorded once
 inside the settle that reads it, and **pending** for each recipient
 until that recipient confirms it by its key. flume hands it over: once,
-as a one-line notice through the terminal into the recipient's own
-pane, and again by a wait or the inbox whenever asked. A hand-over
+as a one-line notice into the recipient's own session at its next wait,
+and again by a wait or the inbox whenever asked. A hand-over
 delivers nothing. A recipient that was handed an end and stopped before
 it acted on it is handed it again by its next inbox, and the end stays
 pending until it confirms it. The notice to the recipient `me` reads,
@@ -103,11 +103,23 @@ recipient. The command that reads it is
 `flume inbox` where the place now waits on a move of its caller's,
 which gives the question and how to answer it, and
 `flume status <place>` otherwise. flume records each hand-over, to whom,
-when and by what. A recipient asking a question, or one the terminal
-cannot read or find, gets nothing typed into its pane, and a later
-settle sends the notice once it can. A notice goes to a recipient once,
+when and by what. A notice goes into a session only while it waits:
+a recipient at work, asking a question, or one the terminal cannot read
+or find, gets nothing typed into its pane, and a later settle hands it
+the notice once it waits. At its wait, a recipient takes every end and
+message pending for it, and handed to it by nothing, as **one prompt**,
+in the order they were recorded, each with how to confirm it, the items
+a blank line apart, so two tasks never meet in one turn. flume claims
+each beside the host's deliveries before it sends, so two settles at
+once hand it once; a send the terminal refuses leaves nothing claimed,
+and the next settle hands it again. A notice goes to a recipient once,
 while nothing else has handed it the end. Under the printed command
-nothing is ever typed. Status shows each end, whom it was handed to,
+nothing is ever typed.
+
+Where the recipient's program takes words by its own channel at its
+wait, as flume's Claude Code plugin can, flume types nothing: the agent
+takes what is pending for it itself
+([the deliver part](/flume/guides/claude-code/#the-deliver-part)). Status shows each end, whom it was handed to,
 and whom it is pending for, each recipient under it:
 
 ```text
@@ -355,7 +367,7 @@ whether it needs an answer or found work:
 ```text
   stage code: ended_short, started 2 times, saying: Which README, the root's or the parser's?
   waits on its caller to retry code (answer) since 1793287841: Which README, the root's or the parser's?
-    its agent kept open for the answer until 1793291441: retry with --words, or tell it
+    its agent kept open for the answer until 1793291441: retry with --words, or message it
   ended stage/code/2/ended-short: code needs an answer; pending for me
 ```
 
@@ -440,9 +452,9 @@ as before.
 ### The answer in its session
 
 While the agent is kept open, a retry with `--words` naming its stage,
-or a tell to the place, is the stage's answer. flume hands it to the
-agent that asked, as a tell is handed: once the agent waits, read back
-as received, or sent once more. The agent reads the question and the
+or a message to the place, is the stage's answer. flume hands it to the
+agent that asked, as a message is handed: once the agent waits, read
+back as received, or sent once more. The agent reads the question and the
 answer:
 
 ```text
@@ -453,7 +465,7 @@ The answer: The root's README.
 
 ```console
 $ flume retry chore--tidy-the-readme --words "The root's README."
-$ flume tell chore--tidy-the-readme "The root's README."
+$ flume message chore--tidy-the-readme "The root's README."
 ```
 
 Either way, the stage carries on in that session under the same start,
@@ -468,7 +480,7 @@ the stage's start took in its session beneath the stage:
 ```
 
 An answer the agent does not take within the act's bound, ten minutes
-or a tell's `--within`, is refused with nothing more typed, and the
+or a message's `--within`, is refused with nothing more typed, and the
 stage still waits on its answer.
 
 The stage then runs as any running stage does. Its quiet limit runs
@@ -513,7 +525,7 @@ past.
 
 Once the agent is let go, a retry with `--words` starts a fresh agent,
 whose prompt carries the question and the answer ([retrying](#retrying)).
-A tell is refused with nothing typed, naming that retry:
+A message is refused with nothing typed, naming that retry:
 
 ```text
 refused: the stage code of ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme waits on an answer and its agent is no longer kept open; give the answer as a retry: flume retry ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme --words <answer>
@@ -552,7 +564,7 @@ A retry ends the place's agent first; `--force` ends one that is not
 quiet. A retry never ends an agent whose stage has started or begun:
 it is refused, forced or not, naming the agent, and
 `flume stop <place>` ends it first. `flume retry <place> --submission`
-submits the place's head again and starts no agent. A tell answers a
+submits the place's head again and starts no agent. A message answers a
 stage only while its agent is kept open; otherwise only a retry
 restarts a stage that ended.
 
@@ -604,11 +616,11 @@ A stop-short's key names its start, so a fresh agent that asks again
 asks under a new key.
 
 An answer may name the key of the stop-short it answers, by a retry or,
-while its agent is kept open, a tell:
+while its agent is kept open, a message:
 
 ```sh
 flume retry change--plan --stage construct --answers stage/construct/1/ended-short --words "The second design."
-flume tell change--plan --answers stage/construct/1/ended-short "The second design."
+flume message change--plan --answers stage/construct/1/ended-short "The second design."
 ```
 
 flume takes it only while the place waits on that stop-short and no
@@ -643,6 +655,49 @@ in, else the terminal's session. Status gives it beneath the end:
 An answer with no `--answers` is taken as before, so two answerers
 naming no key can both act. Name the key wherever more than one
 recipient, role or answerer may see the question.
+
+## A message to a role
+
+`flume message <stream>/<role> <words>` leaves your words at a role's
+address as a delivery, beside the ends pending for it. flume records it
+at once, keyed `message/<stream>/<role>/<token>`, its first line naming
+who sent it, `ops messages east/planner:`, or `A message to
+east/planner:` where the command names no one, and answers with the
+key:
+
+```console
+$ flume message east/planner "The nightly job failed."
+messaged east/planner: message/east/planner/0a1b2c3d
+  its run /places/planner--east-planner was woken to take it
+```
+
+The message waits at the address, with no bound, until the address's
+session takes it at its next wait, in one prompt with every other end
+and message pending for it, and confirms it by its key. Where no run of
+the address stands, the message wakes one, and the run's first prompt
+carries what is pending for it after the kind's words; a run that
+waits on the answer to its own question takes nothing until it has its
+answer. The run's `flume inbox` gives the messages pending at its
+address under `messages`, beside its ends, and `flume confirm` takes a
+message's key as it takes an end's. An address no source declares,
+two declare, or whose stream the host does not declare is refused,
+recording nothing.
+
+A place a role's run launches naming no recipient reports to the
+run's address, so its ends join the role's other deliveries. Status
+gives each role's address with the messages pending at it and each
+place whose work is not over that reports to it:
+
+```text
+  0 ends pending for east/ops, its run /places/ops--east-ops
+    messages:
+      message/east/ops/0a1b2c3d from ops: The nightly job failed.; handed to none
+    reporting: fix--one, fix--two
+```
+
+flume's MCP server takes the same message by its `message` tool, and
+a role's session launches its projects as places by its `launch` tool
+([the Claude Code plugin](/flume/guides/claude-code/)).
 
 ## Stalls
 
@@ -685,7 +740,7 @@ stalls.
 | `flume done <place>` | declares the work of a kind that does not land complete, and tidies the place |
 | `flume finish <place>` | ends a conversation's agent; the conversation counts as delivered |
 | `flume priority <place> <n>` | sets the place's priority in the host's queue |
-| `flume tell <place> <words>` | hands the agent your words as a prompt, once it waits; to a stage whose agent is kept open, they are its answer, `--answers <key>` naming the stop-short they answer |
+| `flume message <target> <words>` | hands a place's agent your words as a prompt, once it waits, or leaves them at a role's address as a delivery its session takes at its next wait ([a message to a role](#a-message-to-a-role)); to a stage whose agent is kept open, they are its answer, `--answers <key>` naming the stop-short they answer; `flume tell` runs it too |
 
 `stop`, `drop`, `done` and `finish` end an agent only once it is
 quiet, unless you pass `--force`. Under the printed command flume

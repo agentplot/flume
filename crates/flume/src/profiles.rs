@@ -599,7 +599,7 @@ pub fn hook_events() -> Vec<&'static str> {
 /// hook of the agent program's does, and the status line reads none
 /// (design 5).
 pub fn hook_reads_input(event: &str) -> bool {
-    event != agent::claude::status_line::EVENT
+    event != agent::claude::status_line::EVENT && event != agent::claude::hook::DELIVER
 }
 
 /// What the agent program's hook for `event` answers to `input`, in the

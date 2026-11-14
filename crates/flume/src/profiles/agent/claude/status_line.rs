@@ -1,5 +1,5 @@
 //! `flume hook status-line` (design 5): the line of the place an agent
-//! flume started works in, which the plugin's module (`hooks/line.ts`)
+//! flume started works in, which the plugin's module (`hooks/flume.ts`)
 //! pins under the prompt with `$.ui.status` at the session's events and
 //! on its clock. It is the core's line asked alone, its full form, the
 //! words the core's alone (core.14); it reads no input, writes nothing,

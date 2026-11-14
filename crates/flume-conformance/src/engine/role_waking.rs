@@ -72,7 +72,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_wake_while_the_run_waits_for_room,
         },
         Scenario {
-            name: "role waking: a run's inbox with no recipient named, confirming on receipt, collects every end pending for its address, each handed to it by the inbox and confirmed by it",
+            name: "role waking: a run's inbox with no recipient named, confirming on receipt, collects every end and every message pending for its address, each handed to it by the inbox and confirmed by it, a role's messages waiting at its address",
             cites: &["132", "43"],
             run: the_run_starts,
         },
@@ -152,7 +152,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_run_an_earlier_flume_named,
         },
         Scenario {
-            name: "role waking: an end for east/planner whose run's agent waits in its session before its start took its prompt stays pending, and is delivered into its pane once by the settle after its start is begun",
+            name: "role waking: an end for east/planner whose run's agent waits in its session before its start took its prompt is typed into its pane never, and goes in that prompt, recorded handed to the address once the prompt is received and sent by no settle again, a role's run's first prompt carrying its batch",
             cites: &["37", "38", "43", "132"],
             run: a_run_not_yet_given_its_prompt,
         },
@@ -197,7 +197,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_run_whose_kind_lands,
         },
         Scenario {
-            name: "role waking: the run of east/planner lost and left five minutes stalls to east/operator, the answerer behind east, whose run is woken, and never to its own address",
+            name: "role waking: the run of east/planner lost and left five minutes stalls to east/operator, the answerer behind east, whose run is woken carrying the stall in its first prompt, and never to its own address",
             cites: &["130", "132", "193"],
             run: a_planners_run_is_lost,
         },
@@ -241,7 +241,7 @@ fn standing_and_run_apart(_: &()) -> Outcome {
     Ok(())
 }
 
-const PLANNER: &str = "east/planner";
+pub(crate) const PLANNER: &str = "east/planner";
 
 /// The source that declares the roles, and where its packages lie.
 const ACME: &str = "acme";
@@ -332,12 +332,12 @@ fn declare_turn_landing(world: &World, address: &str, plan: Stage, run: RoleRun,
 }
 
 /// acme declares `run` for the planner, as `configure_at` has it.
-fn configure(world: &World, prompt: &str, run: RoleRun) {
+pub(crate) fn configure(world: &World, prompt: &str, run: RoleRun) {
     configure_at(world, PLANNER, prompt, run);
 }
 
 /// The planner's run, named `<stream>-<role>` as its entry names none.
-fn planner_id() -> PlaceId {
+pub(crate) fn planner_id() -> PlaceId {
     World::id("turn", "east-planner")
 }
 
@@ -350,7 +350,7 @@ fn woken(answer: &Answer) -> Result<(Woke, PlaceStatus), String> {
 }
 
 /// The places of every role's run on the host.
-fn runs(world: &World) -> Vec<PlaceId> {
+pub(crate) fn runs(world: &World) -> Vec<PlaceId> {
     world
         .store
         .places()
@@ -360,7 +360,7 @@ fn runs(world: &World) -> Vec<PlaceId> {
 }
 
 /// A fix named `name` launched for `recipients` and begun.
-fn fix_for(world: &World, name: &str, recipients: &[&str]) -> Result<PlaceId, String> {
+pub(crate) fn fix_for(world: &World, name: &str, recipients: &[&str]) -> Result<PlaceId, String> {
     let mut launch = launch("fix", name, Some("mend it"));
     launch.recipients = recipients.iter().map(|name| name.to_string()).collect();
     launched(&world.engine.launch(&launch))?;
@@ -376,7 +376,7 @@ fn fix_for(world: &World, name: &str, recipients: &[&str]) -> Result<PlaceId, St
 
 /// The fix's code agent stops short needing an answer, and the place is
 /// settled.
-fn asks(world: &World, id: &PlaceId) -> Outcome {
+pub(crate) fn asks(world: &World, id: &PlaceId) -> Outcome {
     let start = world
         .held(id)
         .and_then(|held| held.stages[0].start.clone())
@@ -393,7 +393,7 @@ fn asks(world: &World, id: &PlaceId) -> Outcome {
 }
 
 /// The host's role addresses as status gives them.
-fn addresses(world: &World) -> Result<Vec<AddressStatus>, String> {
+pub(crate) fn addresses(world: &World) -> Result<Vec<AddressStatus>, String> {
     match world.engine().status(None) {
         Answer::Status { host, .. } => Ok(host.addresses),
         other => Err(format!("status answered {other:?}")),
@@ -743,11 +743,41 @@ fn the_run_starts(_: &()) -> Outcome {
     let recipient = run
         .recipient(Some(&planner_id()))
         .ok_or("the run names no recipient")?;
-    let ends = match run.inbox(&recipient, None, true) {
-        Answer::Inbox { ends, .. } => ends,
+    let message = match world.engine.message_address(
+        PLANNER,
+        "the nightly job failed",
+        None,
+        &flume_core::Answering {
+            key: None,
+            by: Some("ops".into()),
+        },
+    ) {
+        Answer::Messaged { key, .. } => key,
+        other => return Err(format!("the message answered {other:?}")),
+    };
+    let (ends, messages) = match run.inbox(&recipient, None, true) {
+        Answer::Inbox { ends, messages, .. } => (ends, messages),
         other => return Err(format!("the inbox answered {other:?}")),
     };
     ensure_eq!(ends.len(), 1, "the ends collected");
+    ensure_eq!(
+        messages
+            .iter()
+            .map(|collected| (collected.key.as_str(), collected.confirmed))
+            .collect::<Vec<_>>(),
+        vec![(message.as_str(), true)],
+        "the messages collected and confirmed"
+    );
+    let owing = world.owing();
+    let delivery = owing.deliveries.get(&message).ok_or("no message")?;
+    ensure!(
+        delivery.owed.is_empty()
+            && delivery
+                .handovers
+                .iter()
+                .any(|handover| handover.recipient == PLANNER && handover.by == DeliveredBy::Inbox),
+        "the message not handed and confirmed: {delivery:?}"
+    );
     let held = world.held(&one).ok_or("no place")?;
     let statuses: Vec<_> = held
         .ends
@@ -1143,7 +1173,7 @@ fn sources(world: &World) -> Result<Vec<flume_core::SourceStatus>, String> {
 }
 
 /// What status gives of `address` among the host's addresses.
-fn address_of(world: &World, address: &str) -> Result<AddressStatus, String> {
+pub(crate) fn address_of(world: &World, address: &str) -> Result<AddressStatus, String> {
     addresses(world)?
         .into_iter()
         .find(|status| status.address == address)
@@ -1370,13 +1400,18 @@ fn a_run_not_yet_given_its_prompt(_: &()) -> Outcome {
         Vec::<String>::new(),
         "the notices into the run's pane before its prompt"
     );
-    ensure_eq!(
+    let end = world
+        .delivery_key("fix--one", "stage/code/1/delivered")
+        .ok_or("no delivery of code's end")?;
+    let handed = |world: &World| {
         world
-            .held(&one)
-            .map(|held| held.pending_for(&world.owing())),
-        Some(vec![PLANNER.to_string()]),
-        "the ends pending before the run's prompt"
-    );
+            .owing()
+            .deliveries
+            .get(&end)
+            .map(|delivery| delivery.handovers.len())
+            .unwrap_or_default()
+    };
+    ensure_eq!(handed(&world), 0, "the end's hand-overs before the prompt");
     world.agent.set_started(&agent, Reading::Yes);
     world.settle(&planner_id());
     ensure_eq!(
@@ -1386,17 +1421,35 @@ fn a_run_not_yet_given_its_prompt(_: &()) -> Outcome {
     );
     world.settle(&one);
     world.settle(&one);
+    let prompt = world
+        .held(&planner_id())
+        .and_then(|held| held.stages[0].start.clone())
+        .map(|start| start.prompt.text)
+        .unwrap_or_default();
+    ensure!(
+        prompt.contains(&world.confirming(&code_delivered("one"), PLANNER)),
+        "the run's prompt carries not the end: {prompt}"
+    );
     ensure_eq!(
         world.terminal.notices(PLANNER),
-        vec![world.confirming(&code_delivered("one"), PLANNER)],
+        Vec::<String>::new(),
         "the notices into the run's pane"
+    );
+    ensure_eq!(
+        world.owing().deliveries.get(&end).map(|delivery| delivery
+            .handovers
+            .iter()
+            .map(|handover| (handover.recipient.clone(), handover.by))
+            .collect::<Vec<_>>()),
+        Some(vec![(PLANNER.to_string(), DeliveredBy::Notice)]),
+        "the end handed to the address in the run's prompt"
     );
     ensure_eq!(
         world
             .held(&one)
             .map(|held| held.pending_for(&world.owing())),
         Some(vec![PLANNER.to_string()]),
-        "the ends pending once the run is begun, handed by notice and not confirmed"
+        "the ends pending once the run is begun, handed and not confirmed"
     );
     Ok(())
 }
@@ -1842,15 +1895,27 @@ fn a_planners_run_is_lost(_: &()) -> Outcome {
         vec!["east/operator".to_string()],
         "the ends pending once the stall is read"
     );
-    // The host's places settled, the operator's run's agent up.
+    // The host's places settled, the operator's run's agent up: the stall
+    // that woke it went in its first prompt, and nothing into its pane
+    // after it (214).
     world.engine().settle(None);
     ensure_eq!(
         world.terminal.notices("east/operator"),
-        vec![world.confirming(
-            "flume: turn--east-planner stalled: a retry of plan [stall/1000000]; read: flume inbox",
-            "east/operator"
-        )],
+        Vec::<String>::new(),
         "the notices into the operator's run's pane"
+    );
+    let prompt = world
+        .held(&operator)
+        .and_then(|held| held.stages[0].start.clone())
+        .map(|start| start.prompt.text)
+        .unwrap_or_default();
+    let stall = world.confirming(
+        "flume: turn--east-planner stalled: a retry of plan [stall/1000000]; read: flume inbox",
+        "east/operator",
+    );
+    ensure!(
+        prompt.contains(&stall),
+        "the operator's run's first prompt: {prompt}"
     );
     let held = world.held(&id).ok_or("no place")?;
     ensure_eq!(

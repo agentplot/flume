@@ -22,13 +22,18 @@ use super::{
 };
 use crate::host::process::{parent_executable, program_path};
 use flume_core::{variable_digest, Answer, Engine};
-use flume_seams::{ModeBegan, Secret, StartRecord, Unsettled};
+use flume_seams::{ModeBegan, PlaceId, Secret, StartRecord, Unsettled};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
 /// The variable Claude Code gives a hook naming the plugin's own
 /// directory.
 pub const PLUGIN_ROOT: &str = "CLAUDE_PLUGIN_ROOT";
+
+/// The word `flume hook` takes from the deliver part of the plugin's hooks module, which
+/// runs it at the session's start, at each turn's end and on an idle
+/// clock: no event of Claude Code's, and it reads no input (215, C.4).
+pub const DELIVER: &str = "deliver";
 
 /// The hooks' events, by the word `flume hook` takes for each and the
 /// event Claude Code names.
@@ -305,6 +310,22 @@ fn began_otherwise(
     )
 }
 
+/// `flume hook deliver`: the words the core's take answers for the
+/// agent `FLUME_AGENT` names, under the secret `FLUME_SECRET` gives, in
+/// the place `FLUME_PLACE` names, which the deliver part submits as the
+/// user's; nothing where it answers none, is refused, or the environment
+/// names no start (41, 54, 215, C.4).
+fn deliver(start: &Start, build: &dyn Fn() -> Result<Engine, String>) -> String {
+    let (Some(agent), Some(secret), Some(place)) = (&start.agent, &start.secret, &start.place)
+    else {
+        return String::new();
+    };
+    match build().map(|core| core.take(&PlaceId::new(place.clone()), agent, secret)) {
+        Ok(Answer::Taken { words: Some(words) }) => words,
+        _ => String::new(),
+    }
+}
+
 /// The words a refused command is answered with (116).
 fn guard_reason(act: &str) -> String {
     format!(
@@ -325,6 +346,9 @@ pub fn hook(
 ) -> String {
     if event == status_line::EVENT {
         return status_line::line(start.place.as_deref(), start.agent.as_deref(), build);
+    }
+    if event == DELIVER {
+        return deliver(start, build);
     }
     if start.agent.is_none() || start.secret.is_none() {
         return match event {

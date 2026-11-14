@@ -4,10 +4,10 @@
 //! spells it.
 
 use flume_core::{
-    group_name, percentage, AgentStatus, Answer, HostStatus, OwnStatus, PlaceStatus, PoolStatus,
-    Queued, ReadingStatus, Reserves, SessionAnswer, SessionWait, SourceStatus, StageStatus,
-    StandingFound, StandingStatus, StreamOpened, StreamStatus, Tidied, TitleFrom, WaitingPlace,
-    WindowOutcome, Woke,
+    group_name, percentage, AgentStatus, Answer, Found, HostStatus, OwnStatus, PlaceStatus,
+    PoolStatus, Queued, ReadingStatus, Reserves, SessionAnswer, SessionWait, SourceStatus,
+    StageStatus, StandingFound, StandingStatus, StreamOpened, StreamStatus, Tidied, TitleFrom,
+    WaitingPlace, WindowOutcome, Woke,
 };
 use flume_seams::{
     AccountFrom, Act, AnswerHeld, BaseFrom, CarryCause, ClosedBy, ConfigLayer, ConfigValue,
@@ -104,8 +104,9 @@ pub fn person(answer: &Answer) -> String {
             recipient,
             ends,
             waiting,
+            messages,
         } => {
-            if ends.is_empty() {
+            if ends.is_empty() && messages.is_empty() {
                 lines.push(format!("nothing pending for {recipient}"));
             }
             for collected in ends {
@@ -124,6 +125,25 @@ pub fn person(answer: &Answer) -> String {
                     collected.end.key,
                     collected.place
                 ));
+            }
+            for message in messages {
+                let state = match (message.confirmed, message.expired) {
+                    (true, _) => "; confirmed".to_string(),
+                    (false, expired) => format!(
+                        "{}; confirm: {}",
+                        if expired { "; expired" } else { "" },
+                        flume_core::confirm_command(recipient, &[message.key.as_str()])
+                    ),
+                };
+                lines.push(format!(
+                    "message from {} at {} [{}]{state}",
+                    message.from.as_deref().unwrap_or("no one named"),
+                    message.at,
+                    message.key
+                ));
+                for line in message.words.lines() {
+                    lines.push(format!("  {line}"));
+                }
             }
             for place in waiting {
                 lines.extend(waiting_place_lines(recipient, place));
@@ -152,6 +172,41 @@ pub fn person(answer: &Answer) -> String {
                 Woke::Waiting => format!("{address}'s run {} waits; nothing made", place.place),
             });
             lines.extend(place_lines(place));
+        }
+        Answer::Taken { words } => {
+            if let Some(words) = words {
+                lines.push(words.clone());
+            }
+        }
+        Answer::Messaged {
+            key,
+            address,
+            found,
+            run,
+            why,
+        } => {
+            let run = run
+                .as_ref()
+                .map(|run| format!(" {run}"))
+                .unwrap_or_default();
+            lines.push(format!("messaged {address}: {key}"));
+            lines.push(match found {
+                Found::Woken => format!("  its run{run} was woken to take it"),
+                Found::Live => format!("  its run{run} is live, and takes it at its next wait"),
+                Found::Waiting => format!("  its run{run} waits, and takes it once its prompt is received"),
+                Found::Unwoken => format!(
+                    "  its run was not woken: {}; the message waits at the address",
+                    why.as_deref().unwrap_or("no reason was read")
+                ),
+                Found::Standing => {
+                    "  its standing agent takes it at its next wait".to_string()
+                }
+                Found::Carried => {
+                    "  it is carried to another host, its message pending for the tool that carries it"
+                        .to_string()
+                }
+                Found::Handed => format!("  handed into its session{run}"),
+            });
         }
         Answer::Held {
             address,
@@ -536,6 +591,7 @@ fn recipients_from_words(from: &RecipientsFrom) -> String {
             format!("from the stream's answerer, declared by {source}")
         }
         RecipientsFrom::BasePlace => "from the base place it fixes".into(),
+        RecipientsFrom::RoleRun => "from the role's run that launched it".into(),
     }
 }
 
@@ -798,7 +854,7 @@ fn stall_words(of: &EndOf) -> String {
 fn kept_open_line(waiting: &WaitingOn) -> Option<String> {
     if let Some(until) = waiting.open_until {
         return Some(format!(
-            "    its agent kept open for the answer until {until}: retry with --words, or tell it"
+            "    its agent kept open for the answer until {until}: retry with --words, or message it"
         ));
     }
     let closed = waiting.closed?;
@@ -1542,6 +1598,7 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
             for end in &address.pending {
                 lines.push(format!("    {}: {}", end.place, end.what));
             }
+            lines.extend(address_messages_lines(address));
             continue;
         }
         let run = match (&address.run, &address.role, &address.carried) {
@@ -1578,6 +1635,7 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
                 stall.place, stall.what
             ));
         }
+        lines.extend(address_messages_lines(address));
     }
     lines.push(watch_line(host));
     for setup in &host.terminal_setup {
@@ -1593,6 +1651,44 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
             end.expires_at,
             flume_core::confirm_command(&end.recipient, &[end.delivery.as_str()])
         ));
+    }
+    lines
+}
+
+/// Under a role's address, each message pending at it, with its key, who
+/// sent it and its first line, handed to none or by what, and each place
+/// whose work is not over that reports to it, by `<kind>--<name>` (56,
+/// 214).
+fn address_messages_lines(address: &flume_core::AddressStatus) -> Vec<String> {
+    let mut lines = vec![];
+    if !address.messages.is_empty() {
+        lines.push("    messages:".to_string());
+    }
+    for message in &address.messages {
+        let handed = match message.handovers.last() {
+            None => "handed to none".to_string(),
+            Some(handover) => format!("handed by {} at {}", word(json!(handover.by)), handover.at),
+        };
+        let expired = if message.expired { ", expired" } else { "" };
+        lines.push(format!(
+            "      {} from {}: {}; {handed}{expired}",
+            message.key,
+            message.from.as_deref().unwrap_or("no one named"),
+            message.line
+        ));
+    }
+    if !address.reporting.is_empty() {
+        let places: Vec<String> = address
+            .reporting
+            .iter()
+            .map(|place| {
+                std::path::Path::new(&place.0).file_name().map_or_else(
+                    || place.0.clone(),
+                    |name| name.to_string_lossy().into_owned(),
+                )
+            })
+            .collect();
+        lines.push(format!("    reporting: {}", places.join(", ")));
     }
     lines
 }
@@ -3185,6 +3281,7 @@ mod tests {
                 expired: false,
             }],
             waiting: vec![],
+            messages: vec![],
         };
         assert_eq!(
             person(&inbox),
@@ -3351,6 +3448,8 @@ mod tests {
             standing: None,
             carried,
             wakes_nothing: wakes_nothing.map(str::to_string),
+            messages: vec![],
+            reporting: vec![],
             stalled: None,
         };
         let lines = host_lines(&HostStatus {
@@ -3383,6 +3482,47 @@ mod tests {
     }
 
     #[test]
+    fn a_roles_messages_and_the_places_reporting_to_it() {
+        // 56, 214: under the address, each message pending at it with its
+        // key, sender and first line, and each place reporting to it.
+        let lines = host_lines(&HostStatus {
+            addresses: vec![AddressStatus {
+                address: "east/ops".into(),
+                role: None,
+                run: Some(PlaceId::new("/places/turn--east-ops")),
+                pending: vec![],
+                unwoken: None,
+                standing: None,
+                carried: None,
+                wakes_nothing: None,
+                messages: vec![flume_core::PendingMessage {
+                    key: "message/east/ops/0a1b2c3d".into(),
+                    from: Some("ops".into()),
+                    at: 120,
+                    line: "the nightly job failed".into(),
+                    handovers: vec![],
+                    expired: false,
+                }],
+                reporting: vec![
+                    PlaceId::new("/places/fix--one"),
+                    PlaceId::new("/places/fix--two"),
+                ],
+                stalled: None,
+            }],
+            ..HostStatus::default()
+        });
+        assert_eq!(
+            lines[1..lines.len() - 1],
+            [
+                "  0 ends pending for east/ops, its run /places/turn--east-ops",
+                "    messages:",
+                "      message/east/ops/0a1b2c3d from ops: the nightly job failed; handed to none",
+                "    reporting: fix--one, fix--two",
+            ]
+        );
+    }
+
+    #[test]
     fn a_doors_run_whose_stall_reached_no_one() {
         // 130, 132, 193: the run of its stream's own answerer, stalled
         // with no one to reach, named under the host's addresses.
@@ -3397,6 +3537,8 @@ mod tests {
                 standing: None,
                 carried: None,
                 wakes_nothing: None,
+                messages: vec![],
+                reporting: vec![],
                 stalled: Some(PendingEnd {
                     place: run,
                     key: "stall/420".parse().unwrap(),
@@ -3648,6 +3790,8 @@ mod tests {
                 standing: Some(standing),
                 carried: None,
                 wakes_nothing: None,
+                messages: vec![],
+                reporting: vec![],
                 stalled: None,
             }],
             ..HostStatus::default()
@@ -4092,6 +4236,7 @@ mod tests {
                 expired: false,
             }],
             waiting: vec![],
+            messages: vec![],
         };
         assert_eq!(
             person(&inbox),
@@ -4138,7 +4283,7 @@ mod tests {
             from_the_move(&asking(Some(4600), None)),
             vec![
                 ASKS.to_string(),
-                "    its agent kept open for the answer until 4600: retry with --words, or tell it"
+                "    its agent kept open for the answer until 4600: retry with --words, or message it"
                     .to_string(),
             ]
         );
@@ -4253,7 +4398,12 @@ mod tests {
             group: None,
             answers: vec![
                 answer("Which file holds the log?", "notes.md", Act::Retry, 1200),
-                answer("Which test covers it?", "the walkthrough", Act::Tell, 2400),
+                answer(
+                    "Which test covers it?",
+                    "the walkthrough",
+                    Act::Message,
+                    2400,
+                ),
             ],
         };
         assert_eq!(
@@ -4261,7 +4411,7 @@ mod tests {
             vec![
                 "  stage code: begun, started 1 times".to_string(),
                 "    answered by retry, received at 1205: asked Which file holds the log?; answered notes.md".to_string(),
-                "    answered by tell, received at 2405: asked Which test covers it?; answered the walkthrough".to_string(),
+                "    answered by message, received at 2405: asked Which test covers it?; answered the walkthrough".to_string(),
             ]
         );
         // 42: who gave an answer, where it named one.
@@ -4269,7 +4419,7 @@ mod tests {
         from_ops.answers[1].answer.by = Some("east/ops".into());
         assert_eq!(
             stage_lines(&from_ops)[2],
-            "    answered by tell from east/ops, received at 2405: asked Which test covers it?; answered the walkthrough"
+            "    answered by message from east/ops, received at 2405: asked Which test covers it?; answered the walkthrough"
         );
     }
 
@@ -4307,6 +4457,7 @@ mod tests {
                 expired: false,
             }],
             waiting: vec![],
+            messages: vec![],
         };
         assert_eq!(
             person(&inbox),
@@ -4352,6 +4503,7 @@ mod tests {
                     lapsed: None,
                 }),
             }],
+            messages: vec![],
         };
         assert_eq!(
             person(&inbox),
@@ -4360,7 +4512,7 @@ mod tests {
                 "change--plan (one of two designs), in east, waits on east/ops; read: flume status /d/places/1/change--plan",
                 "  waits on its caller to retry construct (answer) since 100: Which design does the brief mean?",
                 "  its stop-short stage/construct/1/ended-short needs an answer, asking east/ops",
-                "    its agent kept open for the answer until 3700: retry with --words, or tell it",
+                "    its agent kept open for the answer until 3700: retry with --words, or message it",
                 "  the move it waits on on hold since 160, for 3600 seconds: east-planner has it",
             ]
             .join("\n")

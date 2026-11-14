@@ -24,6 +24,7 @@ pub struct FakeStore {
     /// Whether every write of a host's document is refused, as a store
     /// whose version moves at each write would refuse it.
     refuses_host_writes: Mutex<bool>,
+    refuses_next_host_writes: Mutex<usize>,
     after_read: Mutex<Vec<(Holds, Interleaved)>>,
     /// Acts run once, inside the next read of every place, between its
     /// listing of the documents and its read of each.
@@ -61,6 +62,7 @@ impl FakeStore {
             before_write: Mutex::default(),
             before_host_write: Mutex::default(),
             refuses_host_writes: Mutex::default(),
+            refuses_next_host_writes: Mutex::default(),
             after_read: Mutex::default(),
             during_read_every: Mutex::default(),
             refused: Mutex::default(),
@@ -78,6 +80,12 @@ impl FakeStore {
     /// as moved, and taken again once it is false.
     pub fn refuse_host_writes(&self, refuses: bool) {
         *lock(&self.refuses_host_writes) = refuses;
+    }
+
+    /// The next `count` writes of a host's document refused, as moved, and
+    /// those after them taken.
+    pub fn refuse_next_host_writes(&self, count: usize) {
+        *lock(&self.refuses_next_host_writes) = count;
     }
 
     /// `act` runs once, just before the next write of a host's document is
@@ -319,7 +327,13 @@ impl Store for FakeStore {
         }
         let mut state = lock(&self.state);
         let current = state.host.get(key).map(|versioned| versioned.version);
-        if *lock(&self.refuses_host_writes) {
+        let counted = {
+            let mut left = lock(&self.refuses_next_host_writes);
+            let refused = *left > 0;
+            *left = left.saturating_sub(1);
+            refused
+        };
+        if counted || *lock(&self.refuses_host_writes) {
             let at_text = at.map_or("new".to_string(), |version| version.to_string());
             self.log
                 .push(format!("write_host {key} at {at_text} refused"));

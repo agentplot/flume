@@ -425,6 +425,7 @@ fn held() -> HeldState {
                     passed: Some("--own /state/places/x/agent/own.json".into()),
                 }),
                 answered: 0,
+                messages: vec![],
             }),
             since: Some(120),
         }],
@@ -691,7 +692,15 @@ fn a_launch() {
         stall_after: Some(30 * 60),
         stream: Some("work".into()),
         intent: Some("the-surfaces".into()),
+        from_place: Some(PlaceId::new("/r/places/turn--east-ops")),
     });
+    // A role's run's launch reports to its address, written `role-run`
+    // (7, 214).
+    round_trips(RecipientsFrom::RoleRun);
+    assert_eq!(
+        serde_json::to_value(RecipientsFrom::RoleRun).unwrap(),
+        serde_json::json!({"from": "role-run"})
+    );
 }
 
 #[test]
@@ -732,7 +741,7 @@ fn holds_the_waiting_move_and_the_stall_bound() {
         Act::Drop,
         Act::Done,
         Act::Finish,
-        Act::Tell,
+        Act::Message,
         Act::Needs,
         Act::Priority,
         Act::Hold,
@@ -1991,6 +2000,58 @@ impl Agent for Bare {
 }
 
 #[test]
+fn a_profile_that_names_no_deliver_offers_none() {
+    // The seam-contracts spec's "A profile that names no deliver" (171,
+    // 215): an agent profile that says nothing of it offers none.
+    assert_eq!(Bare.deliver(), Offered::NotOffered);
+}
+
+#[test]
+fn a_start_with_messages_waiting_round_trips() {
+    // The seam-contracts spec's "The fake agent's deliver" (75, 215): a
+    // start holding one message taken and one waiting reads back equal;
+    // a start written before reads with no message waiting.
+    let mut state = held();
+    let start = state.stages[0].start.as_mut().expect("the fixture's start");
+    start.messages = vec![
+        MessageHeld {
+            words: "use the second".into(),
+            at: 40,
+            by: Some("ops".into()),
+            taken_at: Some(45),
+        },
+        MessageHeld {
+            words: "and the third".into(),
+            at: 50,
+            by: None,
+            taken_at: None,
+        },
+    ];
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(
+        json["stages"][0]["start"]["messages"],
+        serde_json::json!([
+            {"words": "use the second", "at": 40, "by": "ops", "taken_at": 45},
+            {"words": "and the third", "at": 50},
+        ])
+    );
+    let mut before = json.clone();
+    before["stages"][0]["start"]
+        .as_object_mut()
+        .expect("a start")
+        .remove("messages");
+    let read: HeldState = serde_json::from_value(before).expect("a start written before");
+    assert_eq!(
+        read.stages[0]
+            .start
+            .as_ref()
+            .map(|start| start.messages.len()),
+        Some(0)
+    );
+}
+
+#[test]
 fn a_profile_that_maps_no_mode() {
     // A profile that keeps the seam's defaults refuses every entry, one
     // of the four or its program's own, naming it, and reads no mode back
@@ -2294,7 +2355,7 @@ fn two_answers() -> HeldState {
             "And its text?",
             AnswerHeld {
                 words: "Hello.".into(),
-                act: Act::Tell,
+                act: Act::Message,
                 at: 400,
                 session: Some(Handed {
                     sent_at: 395,
@@ -2362,7 +2423,7 @@ fn two_answers_in_one_session() {
             "session": {"sent_at": 298, "received_at": 300},
         })
     );
-    assert_eq!(json["ends"][1]["answer"]["act"], "tell");
+    assert_eq!(json["ends"][1]["answer"]["act"], "message");
     assert!(json["ends"][0].get("claim").is_none(), "none unclaimed");
     assert_ne!(state.ends[0].of.key(), state.ends[1].of.key());
     assert!(!state.ends[0].same(&state.ends[1].of));
@@ -2375,6 +2436,27 @@ fn two_answers_in_one_session() {
         by: None,
         key: None,
     });
+}
+
+#[test]
+fn an_answer_by_tell_reads_as_a_message() {
+    // The seam-contracts spec's "An answer by tell": an end whose
+    // answer's act was written `tell`, before `message` replaced it,
+    // reads as `message` and is written back `message` (53).
+    let state = two_answers();
+    let mut json = serde_json::to_value(&state).expect("held state as JSON");
+    json["ends"][1]["answer"]["act"] = serde_json::json!("tell");
+    let read: HeldState = serde_json::from_value(json).expect("held state written before");
+    assert_eq!(
+        read.ends[1].answer.as_ref().map(|a| a.act),
+        Some(Act::Message)
+    );
+    assert_eq!(read, state);
+    let written = serde_json::to_value(&read).expect("held state as JSON");
+    assert_eq!(written["ends"][1]["answer"]["act"], "message");
+    let act: Act = serde_json::from_value(serde_json::json!("tell")).expect("an act");
+    assert_eq!(act, Act::Message);
+    assert_eq!(serde_json::to_value(act).expect("an act"), "message");
 }
 
 #[test]
@@ -5015,6 +5097,7 @@ fn a_deliveries_document_round_trips() {
         version: 7,
         document: HostDocument::Deliveries(Deliveries {
             records: records.clone(),
+            claims: vec![],
         }),
     };
     round_trips(versioned.clone());
@@ -5028,6 +5111,58 @@ fn a_deliveries_document_round_trips() {
         panic!("the host's deliveries read back as another document")
     };
     assert_eq!(read.records, records, "in order, as written");
+}
+
+#[test]
+fn a_deliveries_document_with_a_claim_round_trips() {
+    // The deliveries spec's "A claim round-trips": a document holding two
+    // records and a claim still sending reads back equal, the claim
+    // spelled as no weir record; a document written before, with no
+    // claims, reads with none (75, C.7; core.4).
+    let records: Vec<DeliveryRecord> = delivery_records().into_iter().take(2).collect();
+    let claim = DeliveryClaim {
+        key: "message/east/planner/0a1b2c3d".into(),
+        recipient: "east/planner".into(),
+        at: 1_794_150_180,
+        sending: true,
+        start: None,
+    };
+    let versioned = HostVersioned {
+        version: 3,
+        document: HostDocument::Deliveries(Deliveries {
+            records: records.clone(),
+            claims: vec![claim.clone()],
+        }),
+    };
+    round_trips(versioned.clone());
+    round_trips(DeliveryClaim {
+        start: Some("acme-ops--east-ops-turn-1".into()),
+        sending: false,
+        ..claim.clone()
+    });
+    let json = serde_json::to_value(&versioned).expect("written");
+    assert_eq!(
+        json["document"]["claims"],
+        serde_json::json!([{
+            "key": "message/east/planner/0a1b2c3d",
+            "recipient": "east/planner",
+            "at": 1_794_150_180,
+            "sending": true,
+        }])
+    );
+    for claim in json["document"]["claims"].as_array().expect("claims") {
+        assert!(claim.get("format").is_none(), "a claim spelled as weir's");
+    }
+    let mut before = json.clone();
+    before["document"]
+        .as_object_mut()
+        .expect("an object")
+        .remove("claims");
+    let read: HostVersioned = serde_json::from_value(before).expect("written before");
+    let HostDocument::Deliveries(read) = read.document else {
+        panic!("the host's deliveries read back as another document")
+    };
+    assert_eq!((read.records, read.claims), (records, vec![]));
 }
 
 #[test]

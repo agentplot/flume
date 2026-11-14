@@ -13,6 +13,7 @@ pub mod address;
 mod agent_acts;
 mod answer;
 mod base;
+mod batch;
 mod clues;
 mod deliver;
 pub mod deliveries;
@@ -25,6 +26,7 @@ mod launch;
 mod line;
 mod list;
 mod live;
+pub mod message;
 mod open;
 mod open_sessions;
 mod own;
@@ -85,9 +87,9 @@ const _: () = assert!(
 /// received (38).
 pub const RECEIVED_WITHIN: Seconds = 60;
 
-/// How long a tell waits for its agent where its caller gives no bound
+/// How long a message waits for its agent where its caller gives no bound
 /// (54).
-pub const TELL_BOUND: Seconds = 10 * 60;
+pub const MESSAGE_BOUND: Seconds = 10 * 60;
 
 /// How often a command that waits on an agent reads it again.
 pub const POLL: Seconds = 5;
