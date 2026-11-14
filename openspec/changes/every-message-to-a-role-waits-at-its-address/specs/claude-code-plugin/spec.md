@@ -14,8 +14,8 @@ over MCP by `flume mcp` the tools `status`, answering what `flume status
 `within` and `answers`; `launch`, with `kind`, `name`, `brief` and the
 command's other words and switches by their long names, `base`,
 `recipient`, `hold`, `hold_submission`, `mark`, `priority`,
-`stall_after`, `agent`, `stream`, `intent` and `points`, arrays where
-the flag repeats; and `wake`, with `address`; each of the last three
+`stall_after`, `agent`, `stream` and `intent`, arrays where the flag
+repeats; and `wake`, with `address`; each of the last three
 turned into the command line's arguments and run by its parser and
 act, its result the act's JSON and a refusal marked an error (7, 53,
 57, 60, 132, section 9).

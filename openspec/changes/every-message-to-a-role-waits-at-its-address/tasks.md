@@ -62,7 +62,7 @@ on them (design section 13).
 
 ## 7. MCP
 
-- [ ] 7.1 In `crates/flume/src/commands/mcp.rs`, serve `message`, `launch` and `wake` beside `status`, each with the input schema design section 12 gives, each call turned into the command line's arguments and run through its parser and act, its result the act's JSON and a refusal marked `isError`, `status` alone annotated read-only; and in `crates/flume/tests/commands.rs`, `the_mcp_tools_listed`, `message_over_mcp`, `launch_over_mcp_refused_as_the_command_line_refuses_it` and `a_role_runs_launch_over_mcp_reports_to_its_address` (claude-code-plugin "The tools listed", "message over MCP", "launch over MCP, refused as the command line refuses it"; role-waking "Through MCP"; 7, 53, 60, 132, section 9). True when `devenv shell -- cargo test -p flume --test commands mcp` passes.
+- [x] 7.1 In `crates/flume/src/commands/mcp.rs`, serve `message`, `launch` and `wake` beside `status`, each with the input schema design section 12 gives, each call turned into the command line's arguments and run through its parser and act, its result the act's JSON and a refusal marked `isError`, `status` alone annotated read-only; and in `crates/flume/tests/commands.rs`, `the_mcp_tools_listed`, `message_over_mcp`, `launch_over_mcp_refused_as_the_command_line_refuses_it` and `a_role_runs_launch_over_mcp_reports_to_its_address` (claude-code-plugin "The tools listed", "message over MCP", "launch over MCP, refused as the command line refuses it"; role-waking "Through MCP"; 7, 53, 60, 132, section 9). True when `devenv shell -- cargo test -p flume --test commands mcp` passes.
 
 ## 8. Through the binary
 

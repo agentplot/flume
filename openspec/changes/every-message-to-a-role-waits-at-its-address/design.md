@@ -323,8 +323,8 @@ each key, sender and first line, and `reporting:` with each place's
 `target`, `words`, `within` and `answers`; `launch`, with `kind`,
 `name`, `brief`, and the command's other words and switches by their
 long names, `base`, `recipient`, `hold`, `hold_submission`, `mark`,
-`priority`, `stall_after`, `agent`, `stream`, `intent` and `points`,
-arrays where the flag repeats; and `wake`, with `address`. Each call is
+`priority`, `stall_after`, `agent`, `stream` and `intent`, arrays where
+the flag repeats; and `wake`, with `address`. Each call is
 turned into the command line's arguments and run through the same
 parser and act, so every default, check and refusal is the command
 line's; its result is the act's JSON, a refusal marked `isError`. A
