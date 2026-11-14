@@ -347,10 +347,11 @@ fn a_recipient_unnamed_is_the_herdr_pane_the_command_runs_in() {
 }
 
 /// The content hash of each version of flume's own kinds as this release
-/// records it, the first that reads locks. A version keeps its content in
-/// every later release, so a change to what one holds is a version of its
-/// own (156; design 7).
-const OWN_HASHES: [(&str, &str); 5] = [
+/// records it, the first five as the first release that reads locks
+/// recorded them and change@4, chore@2 and fix@2 as the release that holds
+/// them (record 0064). A version keeps its content in every later release,
+/// so a change to what one holds is a version of its own (156; design 7).
+const OWN_HASHES: [(&str, &str); 8] = [
     (
         "flume/change@1",
         "sha256:2dbf6a11e877872619f56a51c192292b306dc7a8f1b7c2728cccdb8992e7d883",
@@ -364,12 +365,24 @@ const OWN_HASHES: [(&str, &str); 5] = [
         "sha256:faf88896b4bf2be5e0ae9980bc5e17265909f8a6eea3468393548b483c8cb5d3",
     ),
     (
+        "flume/change@4",
+        "sha256:8a726543782e0fe0942128701618308aa1c53e400d27dff524f6be72b8853bc7",
+    ),
+    (
         "flume/chore@1",
         "sha256:49c9a204c18d27348d6ed0c1bb6dbb894bc8816a9ae05c1de3ce7d65e4b61fda",
     ),
     (
+        "flume/chore@2",
+        "sha256:d8f79c6fad766e62153df8ee308d72282de28b02c5999d0e2bc567d57752f112",
+    ),
+    (
         "flume/fix@1",
         "sha256:59dee7a3e1c11f8f0f20abe807812e31cb2398cce047c2a2066636d0e8bfdcf8",
+    ),
+    (
+        "flume/fix@2",
+        "sha256:199d4f15f587f825e8a2ea3dd49ef164817ade98707cdb35d363735ca1e798bb",
     ),
 ];
 
