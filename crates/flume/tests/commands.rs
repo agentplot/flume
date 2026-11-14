@@ -4322,6 +4322,36 @@ fn the_helps_of_confirm_and_wait() {
 /// `env`: initialize, then each of `calls`, one reply a request (section
 /// 9; design 12).
 fn mcp_session(host: &Host, dir: &Path, env: &[(&str, &str)], calls: &[Value]) -> Vec<Value> {
+    let mut command = host.command(Path::new(env!("CARGO_BIN_EXE_flume")), dir, env);
+    command.arg("mcp");
+    mcp_replies(command, calls)
+}
+
+/// The same session with this test binary as flume, with the stand-ins,
+/// so a launch over MCP starts its agent under the stand-in terminal.
+fn stand_in_mcp_session(
+    host: &Host,
+    dir: &Path,
+    env: &[(&str, &str)],
+    calls: &[Value],
+) -> Vec<Value> {
+    let me = std::env::current_exe().expect("the test binary");
+    let mut command = host.command(&me, dir, env);
+    command
+        .env(AS_FLUME, serde_json::to_string(&["mcp"]).expect("words"))
+        .args([
+            "--exact",
+            "stand_in_flume",
+            "--nocapture",
+            "--test-threads=1",
+            "-q",
+        ]);
+    mcp_replies(command, calls)
+}
+
+/// The replies `command`, a `flume mcp`, gives to initialize and each of
+/// `calls`, the test harness's own lines aside.
+fn mcp_replies(mut command: std::process::Command, calls: &[Value]) -> Vec<Value> {
     let mut requests = vec![
         serde_json::json!({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "test", "version": "1"}}}),
         serde_json::json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
@@ -4336,9 +4366,7 @@ fn mcp_session(host: &Host, dir: &Path, env: &[(&str, &str)], calls: &[Value]) -
         .iter()
         .map(|request| format!("{request}\n"))
         .collect();
-    let mut child = host
-        .command(Path::new(env!("CARGO_BIN_EXE_flume")), dir, env)
-        .arg("mcp")
+    let mut child = command
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .spawn()
@@ -4351,8 +4379,12 @@ fn mcp_session(host: &Host, dir: &Path, env: &[(&str, &str)], calls: &[Value]) -
         .expect("the session written");
     let output = child.wait_with_output().expect("flume mcp ends");
     assert!(output.status.success());
-    let replies: Vec<Value> = String::from_utf8_lossy(&output.stdout)
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let replies: Vec<Value> = stdout
+        .split_once("running 1 test\n")
+        .map_or(&*stdout, |(_, after)| after)
         .lines()
+        .filter(|line| !line.trim().is_empty())
         .map(|line| serde_json::from_str(line).expect("a JSON-RPC reply"))
         .collect();
     assert_eq!(replies.len(), calls.len() + 1, "{replies:?}");
@@ -4422,9 +4454,9 @@ fn planner_host(label: &str) -> (Host, Repository) {
 
 #[test]
 fn the_mcp_tools_listed() {
-    // The claude-code-plugin spec's "The tools listed" (section 9; design
-    // 12): status, message, launch and wake, each with its input schema,
-    // status alone read-only.
+    // The agent program's plugin spec's "The tools listed" (section 9;
+    // design 12): status, message, launch and wake, each with its input
+    // schema, status alone read-only.
     let host = Host::new("mcp-tools");
     let repository = repository("mcp-tools", None);
     let replies = mcp_session(
@@ -4461,8 +4493,8 @@ fn the_mcp_tools_listed() {
 
 #[test]
 fn message_over_mcp() {
-    // The claude-code-plugin spec's "message over MCP" (53, 214, section
-    // 9): the tool's result is the JSON `flume message east/planner
+    // The agent program's plugin spec's "message over MCP" (53, 214,
+    // section 9): the tool's result is the JSON `flume message east/planner
     // <words> --json` gives, its key `message/east/planner/<token>`.
     let (host, repository) = planner_host("mcp-message");
     let replies = mcp_session(
@@ -4506,7 +4538,7 @@ fn message_over_mcp() {
 
 #[test]
 fn launch_over_mcp_refused_as_the_command_line_refuses_it() {
-    // The claude-code-plugin spec's "launch over MCP, refused as the
+    // The agent program's plugin spec's "launch over MCP, refused as the
     // command line refuses it" (4, section 9): a kind no declaration
     // holds, the command line's refusal marked an error, and no place.
     let host = Host::new("mcp-launch-refused");
@@ -4545,7 +4577,8 @@ fn a_role_runs_launch_over_mcp_reports_to_its_address() {
     // run's session calls flume's MCP `launch` for a place naming no
     // recipient, of a kind of acme's that lands nothing, the server in
     // its environment, and the place's recipients are east/planner from
-    // role-run.
+    // role-run. The server is the stand-in flume, as the wake was, so
+    // the launch's agent starts under the stand-in terminal.
     let (host, repository) = planner_host("mcp-role-launch");
     let woke = answered(
         &host.stand_in(&repository.dir, &["wake", "east/planner", "--json"], &[]),
@@ -4555,7 +4588,7 @@ fn a_role_runs_launch_over_mcp_reports_to_its_address() {
         .as_str()
         .expect("the run's place")
         .to_string();
-    let replies = mcp_session(
+    let replies = stand_in_mcp_session(
         &host,
         &repository.dir,
         &[("FLUME_PLACE", &run)],
@@ -4565,7 +4598,6 @@ fn a_role_runs_launch_over_mcp_reports_to_its_address() {
                 "kind": "acme/planner",
                 "name": "tidy",
                 "brief": "tidy the notes",
-                "agent": ["program=claude"],
             }),
         )],
     );
