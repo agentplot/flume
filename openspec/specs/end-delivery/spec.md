@@ -14,9 +14,9 @@ The settle that reads a stage's end, a stage lost, never begun or
 stuck, a submission's outcome or a stall SHALL record it on the place
 as an end, with what flume read, and record its delivery to each of its
 recipients, as "An end's recipients" gives them; and SHALL hand it to
-each recipient once, as a notice through the terminal into the
-recipient's own pane, recorded as a hand-over with to whom and when,
-the end pending until the recipient confirms it (7, 43, 46, 95).
+each recipient once, as a notice into the recipient's own session at
+its next wait, recorded as a hand-over with to whom and when, the end
+pending until the recipient confirms it (7, 43, 46, 95, 214, 215).
 
 #### Scenario: A delivery and its record
 
@@ -42,15 +42,20 @@ the end pending until the recipient confirms it (7, 43, 46, 95).
 
 A notice SHALL name the place, the end, the command that reads it and
 the delivery's key. It SHALL be sent only while the terminal reads the
-recipient asking no question, neither asking nor unknown, and SHALL
-count handed over on the terminal's answer sent, with no reading back,
+recipient waiting, never working, asking or unknown, and SHALL count
+handed over on the terminal's answer sent, with no reading back,
 delivering nothing; a send refused, or a recipient not found, SHALL
-record no hand-over (43, 95, core.11).
+record no hand-over (43, 54, 95, 214; core.11).
 
 #### Scenario: A recipient asking
 
 - **WHEN** an end is read while the recipient's session is asking a person a question
-- **THEN** no notice is sent, no hand-over is recorded, and the first settle that reads the session not asking sends it
+- **THEN** no notice is sent, no hand-over is recorded, and the first settle that reads the session waiting sends it
+
+#### Scenario: A recipient at work
+
+- **WHEN** an end is read while the recipient's session reads working, and a later settle reads it waiting
+- **THEN** nothing is typed into it while it works, no hand-over is recorded, and the later settle sends the notice once (54, 214; S126)
 
 #### Scenario: A recipient gone
 
@@ -114,9 +119,12 @@ terminal the host binds (119, 122, 208; core.13).
 
 `flume inbox` SHALL give every end pending for a recipient, of every
 place on the host, with what 43 names, its key and its delivery's key,
-whether expired, and SHALL record a hand-over of each to that recipient,
-confirming each where `--confirm` is given. Status, a wait's read and an
-inbox for another recipient SHALL confirm nothing (43, core.25).
+whether expired, and every message pending at it, with its key, who
+sent it, when and its words, and SHALL record a hand-over of each to
+that recipient, confirming each where `--confirm` is given. An inbox
+naming a place SHALL give that place's ends alone. Status, a wait's
+read and an inbox for another recipient SHALL confirm nothing (43, 214,
+core.25).
 
 #### Scenario: Collected after a restart
 
@@ -127,6 +135,11 @@ inbox for another recipient SHALL confirm nothing (43, core.25).
 
 - **WHEN** `ops` runs `flume inbox --confirm`
 - **THEN** the answer holds both ends, each confirmed by this call, and a third `flume inbox` gives nothing
+
+#### Scenario: A message collected
+
+- **WHEN** a message is pending at `east/planner` with an end of a fix, and `flume inbox --recipient east/planner` runs
+- **THEN** the answer gives the end under `ends` and the message under `messages`, with its key, its sender and its words, each handed to `east/planner` by the inbox and pending for it
 
 ### Requirement: A lost conversation's end says flume left an agent in its pane
 
@@ -149,11 +162,11 @@ each recipient (43, 77).
 
 At each settle that reads an end pending for a standing address and
 handed to it by nothing, the terminal of its address's stream SHALL be
-asked for the session's agents, and the end sent through it as a notice
-to the one agent of the entry's name while it asks no question; none,
-more than one, or a part not read SHALL leave it handed to none; nothing
-of where the agent was SHALL be kept (43, 132, 190, 193, C.7; core.11,
-core.28).
+asked for the session's agents, and the end sent through it as a notice,
+with every other delivery pending for the address in one prompt, to the
+one agent of the entry's name while it waits; none, more than one, or a
+part not read SHALL leave it handed to none; nothing of where the agent
+was SHALL be kept (43, 132, 190, 193, 214, C.7; core.11, core.28).
 
 #### Scenario: A standing agent waiting
 
@@ -199,6 +212,11 @@ core.28).
 
 - **WHEN** an end is pending for `madswan/planner`, whose agent is away, and `flume inbox --recipient madswan/planner` runs
 - **THEN** it collects the end as for any recipient, handed to the address by the inbox and pending for it, and the next settle sends no notice of it (43)
+
+#### Scenario: A message to a standing agent at the watch's settle
+
+- **WHEN** a caller messages `madswan/planner`, whose standing agent works, and the host's watch settles once it reads waiting
+- **THEN** nothing is typed while it works, and the watch's settle hands it the message once, recorded handed by `message` (214)
 
 #### Scenario: A standing agent under herdr through the binary
 
@@ -483,3 +501,60 @@ notice (43, 75; weir 103; core.25).
 
 - **WHEN** a settle claims a notice to `ops`, another settle runs while its send is in flight, and the terminal then refuses the send, nothing typed
 - **THEN** neither settle records a hand-over of the refused send, the claim is taken back, and the delivery that follows, the settle's own later pass or the next settle, sends the notice to `ops` once, its one hand-over recorded by that send (43, 75)
+
+### Requirement: A recipient takes every delivery pending for it as one prompt
+
+At its next wait a recipient SHALL be handed, as one prompt, every
+delivery whose readers name it, owed to it, handed to it by nothing and
+claimed for it by nothing, but a drop's or a done's end, in the order
+the host's deliveries recorded them, each item the delivery's message
+followed by the way that recipient confirms it and the items joined by
+one blank line; each SHALL be recorded handed on the send's answer, an
+end by `notice` and a message by `message` (43, 214, 215; weir 103).
+
+#### Scenario: Two messages and an end while a role works
+
+- **WHEN** a role's run's agent works, two messages for its address and a fix's end come, and its agent then goes quiet and its place settles
+- **THEN** nothing is typed while it works, and the run's session receives one prompt holding the two messages and the end in the order recorded, each with its confirm, each recorded handed to the address (S126)
+
+#### Scenario: Something handed before
+
+- **WHEN** an end was handed to `ops` by its inbox, and a message comes for `ops` after it
+- **THEN** the next batch to `ops` holds the message alone
+
+### Requirement: A delivery is claimed before it is handed
+
+A settle SHALL claim every delivery of a batch beside the host's
+deliveries records in one write at the version read, read the document
+again and drop each item another way handed to the recipient meanwhile,
+and on the send's answer add each hand-over and remove the claims in one
+write; a send refused or not found SHALL remove the claims and record
+nothing; a claim still sending SHALL be recorded by no other settle and
+hold its delivery out of every later batch (43, 75, C.7).
+
+#### Scenario: Two settles at once
+
+- **WHEN** two settles read the same batch for `ops` pending at once
+- **THEN** one claims it and sends it, the other finds it claimed and sends nothing, and `ops` receives one prompt (75)
+
+#### Scenario: A send refused
+
+- **WHEN** the fake terminal refuses the send of a batch to `ops`
+- **THEN** no hand-over is recorded, no claim is left, and the next settle that reads `ops` waiting sends the batch
+
+#### Scenario: A settle ended mid-send
+
+- **WHEN** a claim for `ops` is left sending, and a new end comes for `ops`
+- **THEN** the next batch holds the new end alone, and `ops`'s inbox gives both
+
+### Requirement: The deliver part takes the place of the terminal
+
+Where a recipient is a role's run whose live agent's profile offers
+deliver, a settle SHALL hand it nothing through the terminal, and the
+agent's take SHALL hand it the same batch, claimed and recorded handed
+in one write (214, 215).
+
+#### Scenario: A run whose agent takes its batch
+
+- **WHEN** the fake agent of a role's run offers deliver, an end comes for its address while it works, and it goes quiet and takes
+- **THEN** no notice goes through the fake terminal, its take answers the end's notice with its confirm, and the end is recorded handed to the address by notice

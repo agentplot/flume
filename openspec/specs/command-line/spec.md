@@ -9,7 +9,7 @@ tidy, and the commands the plugin's hooks and an agent call.
 
 ### Requirement: Every command answers from the one core
 
-The binary SHALL offer `launch`, `status`, `list`, `prompt`, `tell`,
+The binary SHALL offer `launch`, `status`, `list`, `prompt`, `message`,
 `stop`, `retry`, `finish`, `drop`, `done`, `tidy`, `settle`, `needs`,
 `priority` and `open`, each building the core over the host's profiles
 and answering the core's answer, printed for a person or as its JSON
@@ -344,12 +344,12 @@ not a positive duration (61, 119, 208).
 - **WHEN** `flume settle fix--one --every 2m` runs
 - **THEN** it is refused naming `--every` and the place, nothing is settled, and no watch is recorded (208)
 
-### Requirement: needs --to, hold --waiting, retry --answers and tell --answers
+### Requirement: needs --to, hold --waiting, retry --answers and message --answers
 
 The command line SHALL take `flume needs [--found] --to <role or
 address> "<words>"`, `flume hold <place> <words> --waiting [--for
 <time>]` with the time in the forms `--stall-after` takes, `flume retry
-<place> --answers <key>` and `flume tell <place> --answers <key>
+<place> --answers <key>` and `flume message <place> --answers <key>
 "<words>"`, each answering from the one core in the JSON form and the
 person's, and each key as the inbox and status give it (41, 42, 49, 53,
 61, 130).
@@ -377,7 +377,12 @@ person's, and each key as the inbox and status give it (41, 42, 49, 53,
 #### Scenario: A tell's key
 
 - **WHEN** `flume tell change--x --answers stage/construct/1/ended-short "yes" --json` runs against the fakes, the place's construct agent kept open for that stop-short
-- **THEN** it answers in the JSON form, the tell delivered as the answer to that stop-short
+- **THEN** it answers in the JSON form as `flume message` does, the words delivered as the answer to that stop-short
+
+#### Scenario: A message's key
+
+- **WHEN** `flume message change--x --answers stage/construct/1/ended-short "yes" --json` runs against the fakes, the place's construct agent kept open for that stop-short
+- **THEN** it answers in the JSON form, its `act` `message`, the message delivered as the answer to that stop-short
 
 #### Scenario: A key in a wrong form
 
@@ -435,3 +440,26 @@ delivers nothing until its recipient confirms it (43, 61; core.35).
 
 - **WHEN** `flume confirm --help` and `flume wait --help` run
 - **THEN** the first names the keys and `--recipient`, the second names `--confirm`, and each says a hand-over delivers nothing until its recipient confirms it
+
+### Requirement: tell is message's alias
+
+`flume tell <place> <words>`, with any flag `flume message` takes, SHALL
+run as `flume message` and answer as it does; `flume --help` SHALL list
+`message` and not `tell` (53; record 0069).
+
+#### Scenario: A caller not yet moved
+
+- **WHEN** `flume tell change--x "go on" --json` runs against the fakes, the place's agent waiting
+- **THEN** the agent receives "go on", the answer is the one `flume message change--x "go on" --json` gives, its `act` `message`, and `flume --help` names `message` alone
+
+### Requirement: message to an address answers with its key
+
+`flume message <stream>/<role> "<words>"` SHALL answer, in the JSON form
+and the person's, the delivery's key, the address and what the act
+found of the address: its run woken, live or waiting for room, its
+standing agent, carried, or its batch handed (53, 61, 214).
+
+#### Scenario: Through the binary
+
+- **WHEN** `flume message east/planner "look at the nightly job" --json` runs against the fakes, the address's run live and working
+- **THEN** the JSON gives the key `message/east/planner/<token>`, the address `east/planner` and its run live, and the exit is 0
