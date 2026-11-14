@@ -10,7 +10,7 @@
 //! stand-in for sluice answers with no entry is followed until it is
 //! taken in, then to its landing, and a failure of the entry taken in
 //! from it goes back to code once and lands on the next (124, C.6); a bare
-//! `change` runs flume's newest, change@3, through construct, code started
+//! `change` runs flume's newest, change@4, through construct, code started
 //! once and verify, its report committed in the archived change (S2, S35,
 //! S119); verify finding work sends the place back to code (131); a fix
 //! whose code finds work waits on an answer, with one agent opened, and
@@ -26,7 +26,7 @@
 //! host's configuration leaves a `codex` account alone while construct
 //! works has code refused, no command printed for it, until a retry once
 //! the configuration is mended (S81; 4, 32, 145); and a change launched
-//! as `change@2`, named since a bare `change` runs change@3, has its
+//! as `change@2`, named since a bare `change` runs change@4, has its
 //! repeating code stage work a change of three task groups one fresh
 //! agent at a time, and a failed submission send it back for one
 //! repetition with no group (S50, S52; 112, 140 to 142); and a fix whose
@@ -276,7 +276,7 @@ fn a_fix_agents_line_is_status_line_and_the_fix_lands() {
     });
 
     let line = status_line(&walk, &place);
-    assert_eq!(line, "fix--one · fix@1 · code · run 1 · working");
+    assert_eq!(line, "fix--one · fix@2 · code · run 1 · working");
     assert_eq!(walk.person(&["status", &place, "--line"]).trim_end(), line);
     assert_eq!(walk.status(&place)["line"]["full"], line.as_str());
 
@@ -594,7 +594,8 @@ fn a_pull_requests_failure_goes_back_to_code_once_and_its_next_request_lands() {
 
 #[test]
 fn a_change_runs_construct_code_and_verify() {
-    // S2, S35, S119: a bare `change` runs flume's newest, change@3;
+    // S2, S35, S119: a bare `change` runs flume's newest, change@4, each
+    // stage's agent in `full` from its kind (record 0064);
     // construct writes the change, code's one agent ticks its tasks, status
     // showing them ticked along the way, and verify commits its report and
     // archives the change, the code stage started once; the place lands
@@ -602,8 +603,8 @@ fn a_change_runs_construct_code_and_verify() {
     let walk = Walk::new("walk-change");
     let place = walk.launch("change", "add-parser", &["--brief", "add a parser"]);
     let status = walk.status(&place);
-    assert_eq!(status["identity"], "flume/change@3", "{status}");
-    assert_eq!(status["version"], 3, "{status}");
+    assert_eq!(status["identity"], "flume/change@4", "{status}");
+    assert_eq!(status["version"], 4, "{status}");
     walk.agent(&place, construct("add-parser"));
     let status = walk.until(&place, "its code stage", |status| {
         status["current"] == "code" && !status["agent"].is_null()
@@ -1872,7 +1873,9 @@ fn a_hosts_mode_over_the_repositorys_and_none_where_no_layer_gives_one() {
     // acceptEdits`, the started ack is taken on the program and the
     // variables, the stand-in's first prompt names `acceptEdits` and is
     // taken as received, so code begins, status names `edits` from
-    // `host-kind` passed as `acceptEdits`, and the fix lands.
+    // `host-kind` passed as `acceptEdits`, and the fix lands. Then fix@1
+    // named with no layer giving a mode, and a bare fix, fix@2, in `full`
+    // from its kind.
     let walk = Walk::new("walk-mode");
     walk.configure("[kinds.fix.agents]\nmode = \"edits\"\n");
     the_repository_gives(&walk, "[kinds.fix.agents]\nmode = \"full\"\n");
@@ -1920,10 +1923,11 @@ fn a_hosts_mode_over_the_repositorys_and_none_where_no_layer_gives_one() {
         Some("fn parse() {}\n")
     );
 
-    // 162: no layer gives a mode, so none is passed, the start records
-    // none, the account's own configuration decides, and the fix lands.
+    // 162: fix@1 named, whose declaration gives no mode, and no other
+    // layer gives one, so none is passed, the start records none, the
+    // account's own configuration decides, and the fix lands.
     let walk = Walk::new("walk-no-mode");
-    let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
+    let place = walk.launch("fix@1", "one", &["--brief", "fix the parser"]);
     let printed = walk.printed(&place);
     assert!(
         !printed.contains("--permission-mode"),
@@ -1933,6 +1937,39 @@ fn a_hosts_mode_over_the_repositorys_and_none_where_no_layer_gives_one() {
     assert!(status["agent"]["mode"].is_null(), "{status}");
     assert!(
         status["agent"]["settings"]["from"]["mode"].is_null(),
+        "{status}"
+    );
+    walk.agent(&place, commits("parser.rs", "fn parse() {}\n"));
+    until_landed(&walk, &place);
+    assert_eq!(
+        walk.on_remote("parser.rs").as_deref(),
+        Some("fn parse() {}\n")
+    );
+
+    // 22, 154, 162; record 0064: a bare fix runs flume's own newest,
+    // fix@2, whose stage gives its agent `full` in the kind's layer, the
+    // last, so with no other layer giving a mode the printed command
+    // passes `--permission-mode bypassPermissions`, status names `full`
+    // from `kind` passed as `bypassPermissions` and read back, and the fix
+    // lands.
+    let walk = Walk::new("walk-own-mode");
+    let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
+    let printed = walk.printed(&place);
+    assert!(
+        printed.contains("--permission-mode bypassPermissions"),
+        "the printed command: {printed}"
+    );
+    let status = walk.status(&place);
+    assert_eq!(status["identity"], "flume/fix@2", "{status}");
+    assert_eq!(
+        (
+            &status["agent"]["settings"]["from"]["mode"],
+            &status["agent"]["mode"]
+        ),
+        (
+            &json!({ "layer": "kind", "value": "full" }),
+            &json!({ "passed": "bypassPermissions", "entry": null, "read_back": true })
+        ),
         "{status}"
     );
     walk.agent(&place, commits("parser.rs", "fn parse() {}\n"));

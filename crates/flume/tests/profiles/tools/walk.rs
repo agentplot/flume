@@ -494,8 +494,9 @@ impl Walk {
     }
 
     /// The prompt the printed command carries, its last word, which
-    /// follows the plugin's folder, the own settings' file and the session
-    /// it resumes, if any, unquoted.
+    /// follows the plugin's folder, the own settings' file, the session it
+    /// resumes, the model, the effort and the mode, if any, in the order
+    /// Claude Code's profile passes them, unquoted.
     pub fn prompt(&self, place: &str) -> String {
         let printed = self.printed(place);
         let (_, after) = printed
@@ -504,7 +505,13 @@ impl Walk {
         let (_, mut quoted) = after
             .split_once(' ')
             .unwrap_or_else(|| panic!("no prompt in {printed}"));
-        for flag in ["--settings ", "--resume "] {
+        for flag in [
+            "--settings ",
+            "--resume ",
+            "--model ",
+            "--effort ",
+            "--permission-mode ",
+        ] {
             if let Some(given) = quoted.strip_prefix(flag) {
                 quoted = given.split_once(' ').map_or(given, |(_, quoted)| quoted);
             }

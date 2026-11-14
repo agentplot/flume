@@ -34,7 +34,7 @@ wake, lock and status, and write nothing there or in a `kinds_dir` (154,
 #### Scenario: No sources directory
 
 - **WHEN** the host's configuration directory holds no `sources/`
-- **THEN** the host declares no source, and a launch of `fix` runs flume's own fix@1 as before (154)
+- **THEN** the host declares no source, and a launch of `fix` runs flume's own newest fix, fix@2, as before (154)
 
 ### Requirement: A source's fault refuses only the launches naming it
 
@@ -119,7 +119,7 @@ hold (19, 154).
 #### Scenario: A source that holds fix
 
 - **WHEN** the host's source acme holds `fix@1`, locked by the host, and launches name `fix` and `acme/fix`
-- **THEN** the first runs flume's own fix@1 and the second acme's, and status names `flume/fix@1` and `acme/fix@1` (S97, 154)
+- **THEN** the first runs flume's own fix@2, its newest, and the second acme's, and status names `flume/fix@2` and `acme/fix@1` (S97, 154)
 
 #### Scenario: A name only the host's sources hold
 
@@ -189,7 +189,7 @@ version (156, 157).
 #### Scenario: The hashes recorded
 
 - **WHEN** the check reads flume's own kinds
-- **THEN** fix@1, chore@1, change@1, change@2 and change@3 each hash to the value the check records, the first four to the values recorded before change@3 (156)
+- **THEN** fix@1, fix@2, chore@1, chore@2 and change@1 to change@4 each hash to the value the check records, fix@1, chore@1 and change@1 to change@3 to the values recorded before change@4, chore@2 and fix@2 (156)
 
 #### Scenario: A lock of flume's own at another hash
 

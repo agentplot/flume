@@ -242,7 +242,7 @@ held, and leave nothing made (4, 19, 22, 154).
 #### Scenario: No version named
 
 - **WHEN** a repository that declares no `change` and locks nothing launches `change`
-- **THEN** the place runs change@3, its code stage one agent for the whole change, and status names `flume/change@3` (22, 154, S119)
+- **THEN** the place runs change@4, its code stage one agent for the whole change and each stage's agent in `full` from `kind`, and status names `flume/change@4` (22, 154, 162, S119; record 0064)
 
 #### Scenario: change@2 named
 
@@ -256,8 +256,8 @@ held, and leave nothing made (4, 19, 22, 154).
 
 #### Scenario: A version flume does not hold
 
-- **WHEN** a launch names `change@4`
-- **THEN** it is refused naming change@4 and the versions held, 1, 2 and 3, and nothing is made (4)
+- **WHEN** a launch names `change@5`
+- **THEN** it is refused naming change@5 and the versions held, 1, 2, 3 and 4, and nothing is made (4)
 
 #### Scenario: A version the repository's declaration does not hold
 

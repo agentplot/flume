@@ -3583,11 +3583,11 @@ fn a_lock_that_cannot_be_read() {
 
 #[test]
 fn a_source_file_with_no_kinds_dir() {
-    // S96, 4, 191: the host's sources hold `bad.toml` with no `kinds_dir`
-    // beside acme's, whose review@1 the host locks; a launch of `bad/x@1`
-    // is refused naming the file and `kinds_dir`, and makes nothing, and
-    // launches of flume's own `fix` and of `acme/review@1` are made;
-    // status names the fault.
+    // S96, 4, 154, 191: the host's sources hold `bad.toml` with no
+    // `kinds_dir` beside acme's, whose review@1 the host locks; a launch
+    // of `bad/x@1` is refused naming the file and `kinds_dir`, and makes
+    // nothing, and launches of flume's own `fix`, its newest, fix@2, and
+    // of `acme/review@1` are made; status names the fault.
     let (host, _) = acme_host("bad-source");
     let repository = repository("bad-source", Some(STAND_IN_QUEUE));
     std::fs::write(sources_of(&host).join("bad.toml"), "# no kinds_dir\n").expect("bad.toml");
@@ -3608,7 +3608,7 @@ fn a_source_file_with_no_kinds_dir() {
     assert!(reason.contains(&*bad.to_string_lossy()), "{reason}");
     assert!(reason.contains("kinds_dir"), "{reason}");
     made_nothing(&host, &repository, "x--one", "x/one");
-    for (kind, identity) in [("fix", "flume/fix@1"), ("acme/review@1", "acme/review@1")] {
+    for (kind, identity) in [("fix", "flume/fix@2"), ("acme/review@1", "acme/review@1")] {
         let launched = answered(
             &host.stand_in(
                 &repository.dir,

@@ -3,6 +3,8 @@
 //! waiting, its kind named with its version or with none, or by its
 //! identity; or the launch refused whole, naming why.
 
+use super::agent_modes::mode_from;
+use super::agent_settings::{to_code, to_verify};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{Act, Retry, WaitingOn, Waits};
@@ -112,8 +114,8 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_change_name_taken,
         },
         Scenario {
-            name: "launch: a change launched naming no version runs change@3, the newest of flume's own, its code stage one agent for the whole change, and status names change@3",
-            cites: &["22", "154", "19", "S119"],
+            name: "launch: a change launched naming no version runs change@4, the newest of flume's own, its code stage one agent for the whole change and each stage's agent in full from the kind, and status names flume/change@4",
+            cites: &["22", "154", "19", "162", "S119"],
             run: no_version_named,
         },
         Scenario {
@@ -127,7 +129,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: change_1_named,
         },
         Scenario {
-            name: "launch: a launch naming change@4 is refused naming it and the versions flume holds, 1, 2 and 3, nothing made",
+            name: "launch: a launch naming change@5 is refused naming it and the versions flume holds, 1, 2, 3 and 4, nothing made",
             cites: &["4", "22", "154"],
             run: a_version_flume_does_not_hold,
         },
@@ -415,7 +417,7 @@ fn launched_as(world: &World, kind: &str, name: &str) -> Result<flume_core::Plac
 }
 
 fn no_version_named(_: &()) -> Outcome {
-    let world = World::new();
+    let world = World::with_every_own_version();
     let status = launched_as(&world, "change", "plan")?;
     ensure_eq!(
         (
@@ -423,13 +425,31 @@ fn no_version_named(_: &()) -> Outcome {
             status.version,
             status.identity.as_deref()
         ),
-        ("change", 3, Some("flume/change@3")),
+        ("change", 4, Some("flume/change@4")),
         "the kind status names"
     );
-    let held = world.held(&World::id("change", "plan")).ok_or("no place")?;
+    let id = World::id("change", "plan");
+    let held = world.held(&id).ok_or("no place")?;
+    let code = &held.place.kind.stages[1];
     ensure!(
-        !held.place.kind.stages[1].repeats,
-        "change@3's code repeats"
+        !code.repeats && code.agents.len() == 1,
+        "change@4's code is not one agent for the whole change: {code:?}"
+    );
+    let full = Some(Given {
+        layer: Layer::Kind,
+        value: "full".into(),
+        file: None,
+    });
+    world.settle(&id);
+    ensure_eq!(mode_from(&world, &id)?, full, "construct's mode");
+    to_code(&world, &id, "plan")?;
+    ensure_eq!(mode_from(&world, &id)?, full, "code's mode");
+    to_verify(&world, &id, "plan")?;
+    ensure_eq!(mode_from(&world, &id)?, full, "verify's mode");
+    ensure_eq!(
+        world.held(&id).ok_or("no place")?.stages[1].starts,
+        1,
+        "code's starts"
     );
     Ok(())
 }
@@ -473,10 +493,10 @@ fn change_1_named(_: &()) -> Outcome {
 }
 
 fn a_version_flume_does_not_hold(_: &()) -> Outcome {
-    let world = World::new();
-    let reason = refused(&world.engine.launch(&launch("change@4", "plan", Some("x"))))?;
+    let world = World::with_every_own_version();
+    let reason = refused(&world.engine.launch(&launch("change@5", "plan", Some("x"))))?;
     ensure!(
-        reason.contains("change@4") && reason.contains("versions 1, 2, 3"),
+        reason.contains("change@5") && reason.contains("versions 1, 2, 3, 4"),
         "the refusal names not the version and the versions held: {reason}"
     );
     nothing_made(&world)

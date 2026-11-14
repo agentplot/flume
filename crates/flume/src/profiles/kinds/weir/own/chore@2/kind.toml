@@ -1,0 +1,21 @@
+# flume's own chore@2, one version of one kind, built into the binary and read
+# through weir-kinds like any other declaration (22, 157, C.2; design 7;
+# record 0064). It is chore@1 at the next version, its stage's agent given
+# `full` in the kind's layer, the last of 32's, and its prompt saying that
+# stopping short is its agent's one way to ask (28, 162; record 0064). Each
+# prompt is a path beside this file, in this version's own directory. A
+# kind a repository or a launch declares by the same name stands over
+# flume's own (19).
+
+[kinds.chore]
+version = 2
+branch = "chore"
+starts_unready = true
+lands = true
+
+[[kinds.chore.stages]]
+name = "code"
+prompt = "prompts/code.md"
+deliverables = ["commits"]
+agents = [{ mode = "full" }]
+on_fail = "code"

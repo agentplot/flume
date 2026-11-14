@@ -482,12 +482,40 @@ the mode never passes to a later layer. Claude Code's own values are the
 as written. A program's own value given bare, as `mode = "auto"`, is
 refused where it is read, naming it: give it under its program's name.
 
+### flume's own kinds
+
+The newest versions of flume's own kinds, `change@4`, `chore@2` and
+`fix@2`, give each stage's agent `full` in the kind's layer, the last of
+the eight. So an agent of a bare `change`, `chore` or `fix` acts without
+asking wherever no other layer gives a mode, passed to Claude Code as
+`--permission-mode bypassPermissions`. A host that wants their agents to
+reach less states the mode in its own layers, which come first:
+
+```toml
+# the host's ~/.config/flume/config.toml
+[agents]
+mode = "edits"
+```
+
+Claude Code warns before an account's first session in
+`bypassPermissions`, and flume never answers that warning
+([what a mode leaves to you](#what-a-mode-leaves-to-you)): accept it
+once for each account before these kinds run. Their earlier versions,
+`change@1` to `change@3`, `chore@1` and `fix@1`, give no mode, and a
+launch or a lock that names one runs it so.
+
+A person's own words for every agent, a way of working each agent
+follows whatever its kind, go in the host's `[agents] instructions`,
+never in a table for one kind. flume's own kinds declare no label, so a
+host that wants one for them gives it ([labels](#labels)).
+
 ### No mode
 
 Where no layer gives a mode, flume passes none, and the account's own
 configuration of its program decides, as it decides everything else
 flume does not give. A host and a repository that say nothing change
-nothing.
+nothing, but for the newest of flume's own kinds, which give `full`
+([flume's own kinds](#flumes-own-kinds)).
 
 ### What refuses
 

@@ -347,10 +347,11 @@ fn a_recipient_unnamed_is_the_herdr_pane_the_command_runs_in() {
 }
 
 /// The content hash of each version of flume's own kinds as this release
-/// records it, the first that reads locks. A version keeps its content in
-/// every later release, so a change to what one holds is a version of its
-/// own (156; design 7).
-const OWN_HASHES: [(&str, &str); 5] = [
+/// records it, the first five as the first release that reads locks
+/// recorded them and change@4, chore@2 and fix@2 as the release that holds
+/// them (record 0064). A version keeps its content in every later release,
+/// so a change to what one holds is a version of its own (156; design 7).
+const OWN_HASHES: [(&str, &str); 8] = [
     (
         "flume/change@1",
         "sha256:2dbf6a11e877872619f56a51c192292b306dc7a8f1b7c2728cccdb8992e7d883",
@@ -364,12 +365,24 @@ const OWN_HASHES: [(&str, &str); 5] = [
         "sha256:faf88896b4bf2be5e0ae9980bc5e17265909f8a6eea3468393548b483c8cb5d3",
     ),
     (
+        "flume/change@4",
+        "sha256:8a726543782e0fe0942128701618308aa1c53e400d27dff524f6be72b8853bc7",
+    ),
+    (
         "flume/chore@1",
         "sha256:49c9a204c18d27348d6ed0c1bb6dbb894bc8816a9ae05c1de3ce7d65e4b61fda",
     ),
     (
+        "flume/chore@2",
+        "sha256:d8f79c6fad766e62153df8ee308d72282de28b02c5999d0e2bc567d57752f112",
+    ),
+    (
         "flume/fix@1",
         "sha256:59dee7a3e1c11f8f0f20abe807812e31cb2398cce047c2a2066636d0e8bfdcf8",
+    ),
+    (
+        "flume/fix@2",
+        "sha256:199d4f15f587f825e8a2ea3dd49ef164817ade98707cdb35d363735ca1e798bb",
     ),
 ];
 
@@ -430,16 +443,66 @@ fn the_hashes_recorded() {
 
 #[test]
 fn flumes_own_kinds_declare_no_label() {
-    // 180: a label is the host's to give flume's own kinds, and none of
-    // them declares one.
+    // 148, 180: a label is the host's to give flume's own kinds, and none
+    // of them declares one, in the seam's kind or in its declaration, read
+    // as TOML so a label the seam never carries is found too (core.4); and
+    // no stage of change@4, chore@2 or fix@2 names standing instructions,
+    // which flume does not yet read (record 0064).
     use flume::profiles::kinds::weir::Weir;
     let own = Weir.flumes_own();
     assert!(!own.is_empty(), "flume holds no kind of its own");
-    for package in own {
+    for package in &own {
         assert_eq!(
             package.kind.label, None,
             "{} declares a label",
             package.identity
         );
     }
+    let own_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/profiles/kinds/weir/own");
+    let mut read = 0;
+    for entry in std::fs::read_dir(&own_dir).expect("flume's own kinds' directory") {
+        let version = entry.expect("an entry").path();
+        let at = version.join("kind.toml");
+        let text = std::fs::read_to_string(&at)
+            .unwrap_or_else(|error| panic!("{}: {error}", at.display()));
+        let declaration: toml::Table = text
+            .parse()
+            .unwrap_or_else(|error| panic!("{}: {error}", at.display()));
+        let named = version
+            .file_name()
+            .expect("a version's name")
+            .to_string_lossy()
+            .into_owned();
+        let newest = ["change@4", "chore@2", "fix@2"].contains(&named.as_str());
+        let kinds = declaration
+            .get("kinds")
+            .and_then(toml::Value::as_table)
+            .unwrap_or_else(|| panic!("{named} declares no kinds"));
+        for (name, kind) in kinds {
+            let kind = kind
+                .as_table()
+                .unwrap_or_else(|| panic!("{named}'s {name} is no table"));
+            assert!(
+                !kind.contains_key("label"),
+                "{named}'s [kinds.{name}] gives a label"
+            );
+            if !newest {
+                continue;
+            }
+            let stages = kind
+                .get("stages")
+                .and_then(toml::Value::as_array)
+                .unwrap_or_else(|| panic!("{named}'s {name} has no stages"));
+            for stage in stages {
+                let stage = stage.as_table().expect("a stage's table");
+                assert!(
+                    !stage.contains_key("standing"),
+                    "{named}'s stage {:?} names standing instructions",
+                    stage.get("name")
+                );
+            }
+        }
+        read += 1;
+    }
+    assert_eq!(read, own.len(), "a declaration for each kind built in");
 }
