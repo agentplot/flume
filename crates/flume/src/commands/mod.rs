@@ -205,7 +205,8 @@ enum Command {
     /// From an agent program's hook: what the hook for `event` does with
     /// the input on standard input, in an agent flume started; nothing
     /// elsewhere. `status-line` reads no input and prints the place's
-    /// line. It always exits 0 (C.4).
+    /// line, and `deliver` reads none and prints what the agent takes at
+    /// its wait. It always exits 0 (215, C.4).
     Hook {
         /// One of the plugin's hooks; any other does nothing.
         event: String,
