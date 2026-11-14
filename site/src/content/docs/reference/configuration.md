@@ -208,6 +208,97 @@ refuses no start. A file that is missing or not in the reading's form
 is no reading either, and status says why. Status gives `usage` as
 `<set>`, never its path.
 
+### `[telemetry]`
+
+Whether flume reports its places to a collector of OpenTelemetry's
+format on the host, and to which
+([what flume reports off the host](#what-flume-reports-off-the-host)).
+The managed layer alone gives it: a local layer that sets any key of it
+is not taken, as for any key the local layer may not set. With no
+`[telemetry]` table, flume sends nothing.
+
+```toml
+[telemetry]
+send = true
+collector = "http://localhost:4318"
+logs = false
+
+[telemetry.attributes]
+"deployment.environment" = "lab"
+```
+
+| Key | Values | Meaning | Left out |
+|---|---|---|---|
+| `send` | `true`, `false` | whether flume sends anything | `false` |
+| `collector` | `http://`, a host of the loopback (`localhost`, an address of `127.0.0.0/8` or `[::1]`), `:` and a port, then at most a path | where flume sends, as OTLP over HTTP in protobuf, at its `/v1/traces`, `/v1/metrics` and `/v1/logs`; a final `/` is taken off | none, and a table whose `send` is `true` refuses |
+| `service` | a string | the service flume reports as | `"flume"` |
+| `traces`, `metrics`, `logs` | `true`, `false` | whether that signal goes | `true` |
+| `[telemetry.attributes]` | a table of strings | attributes every signal's resource names beside flume's own; a `host.name` among them names the host in place of its own name | none |
+
+`OTEL_SDK_DISABLED=true` in a command's environment turns every signal
+off for that command, and `OTEL_TRACES_EXPORTER`, `OTEL_METRICS_EXPORTER`
+or `OTEL_LOGS_EXPORTER` at `none` turns that one off. No variable turns
+a signal on or names where one goes: flume reads no other of
+OpenTelemetry's variables, and a caller's `OTEL_EXPORTER_OTLP_*` never
+reaches what flume sends. Status gives each key with its layer.
+
+### What flume reports off the host
+
+Where `[telemetry]` sends, flume reports each place as one trace. The
+place has a span of its own from its launch to its tidy, its drop or
+its done. Beneath it, each start of a stage is a span from the start to
+how it ended. It ended delivered, short, finished, lost, stopped or
+never begun, or a fresh start replaced it; a short end says whether it
+needs an answer or found work.
+
+Each wait of the place is a span too, naming whom the place waited on
+and for what. Its caller is waited on for an answer, a hold or another
+move, and the host for room. The merge queue is waited on from the
+submission to its landing or its refusal. A person is waited on while
+the agent asks or its program shows a dialog. A wait's span says whether
+a hold stood over it and whether it stalled.
+
+A record goes at each change: a start, an end, a wait begun or ended, a
+hold, a stall and a stuck stage. A backend so shows a place as it stands
+before its spans end.
+
+```text
+place  fix--accounts   intent accounts
+├─ code, start 1        1h00   ended short, needs an answer
+├─ wait: caller, answer 0h40
+├─ code, start 2        0h38   delivered
+└─ wait: merge queue    0h50   landed
+```
+
+Every span and record names the place's repository, kind and its
+version, name, base, stream, intent and mark. It names the stage and
+start it concerns. A start's span also names its agent's program, the
+conversation the agent runs, as `session.id`, and its account.
+
+While flume sends, each agent it starts gets the place's facts, its
+stage and its start in `OTEL_RESOURCE_ATTRIBUTES`, after the pairs its
+own environment gives there. While traces go, it also gets a
+`TRACEPARENT` naming its start's span. What the agent program reports,
+and what a command the agent runs reports, so names the place and nests
+under the start.
+
+No word of a brief, a prompt, a stop-short, an answer, a hold or a
+failure leaves the host, and no path does. flume's own warnings go as
+records in its own words, each path replaced by `<path>` and each value
+shaped as a credential by `<set>`.
+
+flume's metrics give each start's time, each wait's time, the stalls
+and the stuck stages. A settle of every place adds the places standing
+by kind, state and whom they wait on, and each stream's agents and
+room. No metric names a place, an intent, a mark, a conversation or an
+account, so the metrics grow with the kinds a host runs and never with
+its places.
+
+flume reads nothing back. A command writes its answer, then sends what
+it holds, within three seconds. A collector that refuses or never
+answers loses those signals and changes nothing flume does, and nothing
+is sent again. Status and the list send nothing.
+
 ### A repository's name
 
 `[repos."<repository>"]` and every table under it name a repository by
@@ -373,6 +464,11 @@ flume refuses the file, naming the key, for:
   naming the table and `keep_open`;
 - a `[host] ends_expire` that is not such a string, or is `"0"`, naming
   `host.ends_expire`;
+- a `[telemetry]` whose `send` is `true` with no `collector`, a
+  `collector` that is not `http://`, a host of the loopback and a port,
+  a key `[telemetry]` does not read, a value its key does not take, or
+  an attribute shaped as a credential, naming the key and never its
+  value;
 - a `programs` in an agents table that is not a table of entries, an
   entry's key other than `file` and `settings`, or a TOML date or time
   in one, naming the key;
