@@ -194,7 +194,7 @@ impl Host {
             &kinds,
             "[kinds.fix]\nversion = 1\nbranch = \"fix\"\nstarts_unready = true\nlands = false\n\n\
              [[kinds.fix.stages]]\nname = \"code\"\nprompt = \"prompts/work.md\"\n\
-             deliverables = [\"commits\"]\nagents = [{ program = \"claude\" }]\n",
+             deliverables = [\"commits\"]\nagents = [{}]\n",
         )
         .expect("the declaration");
         let repository = Repository::new(label);

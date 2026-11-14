@@ -12,7 +12,7 @@
 //! word left out is no bound, the printed command, a terminal view, the
 //! printed window and a week. Its `[telemetry]`, the managed layer's
 //! alone, says whether flume sends telemetry and to which collector on
-//! the host's loopback, in sluice's words for its own (216, C.7). Its
+//! the host's loopback, in the words C.7 gives it (216, C.7). Its
 //! `[kinds.<kind>.agents]` and `[repos."<repository>".kinds.<kind>.agents]`
 //! tables, each naming one stage's by a further `.stages.<stage>` table,
 //! give a kind's agents in every repository and in one their `model`,
@@ -1659,8 +1659,7 @@ fn ends_expire_of(host: &Table) -> Result<Seconds, String> {
     }
 }
 
-/// The keys `[telemetry]` reads, sluice's own for its table (216, C.7;
-/// sluice record 0106).
+/// The keys `[telemetry]` reads (216, C.7).
 const TELEMETRY_KEYS: [&str; 7] = [
     "send",
     "collector",

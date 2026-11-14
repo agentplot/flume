@@ -174,8 +174,7 @@ fn resource(given: Option<&str>, facts: &Attributes) -> String {
 }
 
 /// A resource attribute's value, percent-encoded where the variable's
-/// own syntax would read it (W3C baggage octets), as sluice encodes its
-/// own (219).
+/// own syntax would read it (W3C baggage octets) (219).
 fn encode(value: &str) -> String {
     let mut encoded = String::new();
     for byte in value.bytes() {

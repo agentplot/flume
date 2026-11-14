@@ -29,7 +29,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 pub const BOUND: Duration = Duration::from_secs(3);
 
 /// The signals OpenTelemetry's own variables in `env` leave on, as its
-/// specification reads them and sluice reads them: `OTEL_SDK_DISABLED` at
+/// specification reads them: `OTEL_SDK_DISABLED` at
 /// `true` turns every signal off, and `OTEL_TRACES_EXPORTER`,
 /// `OTEL_METRICS_EXPORTER` or `OTEL_LOGS_EXPORTER` at `none` that one,
 /// each value read trimmed and in any case; no other variable is read,
@@ -70,7 +70,7 @@ impl Chosen {
     /// process's environment, leave a command on the host named `host` to
     /// send: `service.name`, `service.version` and `host.name`, unless the
     /// table's attributes name one, then those attributes; no variable of
-    /// the caller's read into the resource (216; sluice record 0106).
+    /// the caller's read into the resource (216).
     pub fn choose(table: Option<&TelemetryTable>, host: &str, env: &[(String, String)]) -> Chosen {
         let Some(table) = table.filter(|table| table.send && table.collector.is_some()) else {
             return Chosen {
@@ -197,7 +197,7 @@ pub fn held(table: Option<&TelemetryTable>) -> Arc<Held> {
 /// written: every `OTEL_EXPORTER_OTLP_*` taken out of this process's
 /// environment first, so no caller's collector, header or timeout reaches
 /// an exporter; each signal within what remains of [`BOUND`]; a failure
-/// silent and nothing kept (216; core.13; sluice record 0106).
+/// silent and nothing kept (216; core.13).
 pub fn finish() {
     let Some(held) = HELD.get() else {
         return;
@@ -697,7 +697,7 @@ mod tests {
 
     #[test]
     fn the_resource_reads_no_variable_of_the_callers() {
-        // 216; sluice record 0106: the resource is flume's service, its
+        // 216: the resource is flume's service, its
         // version and the host's name, unless the table's attributes name
         // one, then those attributes; the caller's OTEL_RESOURCE_ATTRIBUTES
         // and OTEL_SERVICE_NAME are not read.
@@ -764,7 +764,7 @@ mod tests {
         start.extend([
             (keys::STAGE.into(), text("code")),
             (keys::START.into(), Value::Number(1)),
-            (keys::PROGRAM.into(), text("claude")),
+            (keys::PROGRAM.into(), text("agent")),
             (keys::SESSION_ID.into(), text("s-1")),
             (keys::ACCOUNT.into(), text("work/work-1")),
             (keys::START_END.into(), text("short")),
