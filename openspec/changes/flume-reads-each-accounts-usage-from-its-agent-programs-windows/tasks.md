@@ -51,7 +51,7 @@ build until its own tasks come.
 
 ## 8. The Nix module
 
-- [ ] 8.1 Drop `usage` from `account` in `nix/modules/options.nix`, and have the case "Only the keys flume reads are declared" in `nix/tests/options.nix` read an account's declared keys, `name`, `program`, `env` and `agents` and no `usage`, the host-module scenario "The declared keys" (C.7; record 0062). True when `sluice exec <base> -- moon run nix:test` passes.
+- [x] 8.1 Drop `usage` from `account` in `nix/modules/options.nix`, and have the case "Only the keys flume reads are declared" in `nix/tests/options.nix` read an account's declared keys, `name`, `program`, `env` and `agents` and no `usage`, the host-module scenario "The declared keys" (C.7; record 0062). True when `sluice exec <base> -- moon run nix:test` passes.
 
 ## 9. The clause list
 

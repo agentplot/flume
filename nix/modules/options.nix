@@ -88,7 +88,6 @@ let
   account = {
     name = unset types.str "The account's name, one of its pool's.";
     program = unset types.str "The agent program the account runs.";
-    usage = unset types.str "The path of the account's reading of its usage (184).";
     env = unset (types.attrsOf types.str) "The account's environment, each value as written, a variable of the host user's login environment named by `$NAME` (29). It holds no credential.";
     agents = unset unsigned "The bound on the account's agents running.";
   };

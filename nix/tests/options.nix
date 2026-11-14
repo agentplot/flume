@@ -1,7 +1,8 @@
 # The host-module spec's settings (the change
 # flume-publishes-its-own-flake-and-module, design 5, 6 and 8), over
 # options.nix evaluated alone beside a system's `assertions`: every key
-# renders its file, only the keys flume reads are declared, an undeclared
+# renders its file, only the keys flume reads are declared, an account's
+# `usage` not among them since flume refuses it (record 0062), an undeclared
 # key passes as written, two modules' tables merge into one file, and a
 # string shaped as a credential fails, naming its path and never its value.
 # A source of `sources` passes an undeclared key to its file as written,
@@ -56,6 +57,7 @@ let
   within = option: option.type.getSubOptions [ ];
   hostKeys = within declared.host;
   streamKeys = within declared.streams;
+  accountKeys = within (within declared.pools).accounts;
 
   undeclared = [
     {
@@ -144,7 +146,23 @@ in
     t.expect (hostKeys ? multiplexer) "host declares no multiplexer"
     ++ t.expect (!(hostKeys ? terminal)) "host declares terminal, the word written before multiplexer"
     ++ t.expect (!(streamKeys ? points)) "a stream declares points, which flume does not read"
-    ++ t.expect (!(streamKeys ? pace)) "a stream declares pace, which flume does not read";
+    ++ t.expect (!(streamKeys ? pace)) "a stream declares pace, which flume does not read"
+    ++
+      t.expect
+        (
+          lib.attrNames (
+            removeAttrs accountKeys [
+              "_module"
+              "_freeformOptions"
+            ]
+          ) == [
+            "agents"
+            "env"
+            "name"
+            "program"
+          ]
+        )
+        "an account declares ${toString (lib.attrNames accountKeys)}, where flume reads name, program, env and agents and refuses usage";
 
   "A key the module does not declare" =
     t.expect (failures undeclared == [ ]) "the undeclared keys fail: ${toString (failures undeclared)}"
