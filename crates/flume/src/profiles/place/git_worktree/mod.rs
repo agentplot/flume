@@ -16,7 +16,10 @@
 //! that is, one an earlier flume made at `<repository>/places/` among
 //! them. Once git holds no worktree there, what still stands at the
 //! location goes, and the `places/<id>` folder with it once it holds no
-//! place (62; record 0057).
+//! place (62; record 0057). A `git worktree remove` that failed having
+//! dropped git's entry of the place is refused, and what it left goes at
+//! a later remove, never in the call git failed in, where a process that
+//! made git fail may still be writing (record 0057's amendment).
 //!
 //! The readiness, the teardown and where the base lives are the merge
 //! queue profile's to declare; the binary's resolver hands them to this
@@ -594,8 +597,11 @@ impl Place for GitWorktree {
         // `git worktree remove` that fails once it began deleting has
         // dropped its entry of the place all the same, leaving the folder
         // with whatever it could not delete or a process wrote into it
-        // meanwhile: the place is gone to git, and what stands goes as a
-        // gone place's (62; record 0057).
+        // meanwhile: the place is gone to git, and is refused here, what
+        // stands going at a later remove as a gone place's, never in this
+        // call, while the writer that made git fail may still be writing
+        // (62, 76; record 0057's amendment). What a process wrote after a
+        // removal that passed goes now (record 0057).
         let removed = Git::at(&place.repository).text(&["worktree", "remove", &place.location]);
         match (removed, self.entry(&place.repository, &place.location)) {
             (_, Err(reason)) => refused(reason),
@@ -604,7 +610,11 @@ impl Place for GitWorktree {
                 "git still holds a worktree at {} once it removed it",
                 place.location
             )),
-            (_, Ok(None)) => self.left(place),
+            (Err(words), Ok(None)) => refused(format!(
+                "{words}; git no longer lists {} as a worktree, and flume removes what is left of it at the next settle",
+                place.location
+            )),
+            (Ok(_), Ok(None)) => self.left(place),
         }
     }
 
