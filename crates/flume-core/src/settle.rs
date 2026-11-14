@@ -140,10 +140,12 @@ impl Engine {
     }
 
     /// What a settle of every place does once for the host, after each
-    /// place's own steps: each role's address a message is pending for,
+    /// place's own steps: each message its reader confirmed let go of, its
+    /// known name kept, and each role's address a message is pending for,
     /// handed to it by nothing, woken where its source gives it a run and
-    /// none stands (132, 214).
+    /// none stands (43, 132, 214; weir 107).
     fn settle_host(&self) {
+        self.let_go_where(crate::message::is_message_key, "its reader confirmed it");
         self.wake_for_messages();
     }
 

@@ -55,6 +55,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["43", "53", "132"],
             run: a_message_collected,
         },
+        Scenario {
+            name: "message: a message at east/planner handed to the address, confirmed by it, and the host settled is let go of with its records, its weir-known/1 kept, and the log names it let go of with east/planner",
+            cites: &["43", "53"],
+            run: confirmed_then_let_go_of,
+        },
+        Scenario {
+            name: "message: a message at east/planner past its expiry and never confirmed stays pending once the host is settled, owed to east/planner expired",
+            cites: &["43", "53"],
+            run: expired_and_kept,
+        },
     ]
 }
 
@@ -409,6 +419,83 @@ fn a_message_collected(_: &()) -> Outcome {
             .get(&key)
             .is_some_and(|delivery| delivery.owed.is_empty()),
         "the message still owed once confirmed"
+    );
+    Ok(())
+}
+
+/// acme declares a standing agent for east/planner, so a message to it
+/// wakes no run (132).
+fn planner_stands(world: &World) {
+    world.host.set_stream("east", Some(Stream::default()));
+    world.host.set_standing(
+        PLANNER,
+        Some(StandingAgent {
+            source: "acme".into(),
+            agent: "east-planner".into(),
+            session: Some("east".into()),
+            answers: None,
+            answerer: false,
+        }),
+    );
+}
+
+fn confirmed_then_let_go_of(_: &()) -> Outcome {
+    let world = World::new();
+    planner_stands(&world);
+    let (key, ..) = messaged(&world.engine.message_address(
+        PLANNER,
+        "the nightly job failed",
+        None,
+        &from(Some("ops")),
+    ))?;
+    world.engine.inbox(PLANNER, None, true);
+    world.engine.settle(None);
+    ensure!(
+        !world.owing().deliveries.contains_key(&key),
+        "the confirmed message kept"
+    );
+    let records = records(&world)?;
+    ensure_eq!(
+        records.iter().map(Record::format).collect::<Vec<_>>(),
+        vec![weir_delivery::KNOWN],
+        "the records left"
+    );
+    ensure!(
+        world.host.logged.calls().iter().any(|line| line
+            == &format!(
+                "let go of the delivery {key}, confirmed by east/planner: its reader confirmed it"
+            )),
+        "the log: {:?}",
+        world.host.logged.calls()
+    );
+    Ok(())
+}
+
+fn expired_and_kept(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_ends_expire(60 * 60);
+    planner_stands(&world);
+    let (key, ..) = messaged(&world.engine.message_address(
+        PLANNER,
+        "the nightly job failed",
+        None,
+        &from(Some("ops")),
+    ))?;
+    world.host.advance(2 * 60 * 60);
+    world.engine.settle(None);
+    let owing = world.owing();
+    let delivery = owing
+        .deliveries
+        .get(&key)
+        .ok_or("the expired message let go of")?;
+    ensure_eq!(
+        delivery
+            .owed
+            .iter()
+            .map(|owed| (owed.recipient.as_str(), owed.expired))
+            .collect::<Vec<_>>(),
+        vec![(PLANNER, true)],
+        "whom it is owed to"
     );
     Ok(())
 }
