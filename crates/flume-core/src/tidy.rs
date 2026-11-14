@@ -209,7 +209,7 @@ impl Engine {
             .map(|(profile, terminal)| (profile.clone(), terminal.tidy(&at)))
             .collect();
         for reason in unreached {
-            self.host.log(&format!(
+            self.log(&format!(
                 "the place {id} was not tidied in a terminal: {reason}"
             ));
         }
@@ -225,8 +225,7 @@ impl Engine {
             .map(|read| self.keep_for_ends(&read.state, &over))
         {
             Some(Err(why)) => {
-                self.host
-                    .log(&format!("the place {id} was not removed: {why}"));
+                self.log(&format!("the place {id} was not removed: {why}"));
                 return false;
             }
             Some(Ok(kept)) => kept,

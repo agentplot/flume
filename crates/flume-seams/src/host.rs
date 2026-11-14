@@ -255,6 +255,42 @@ pub struct HostConfiguration {
     pub passed_over: Vec<PinnedKey>,
 }
 
+/// The managed layer's `[telemetry]` as it reads (216, C.7): whether
+/// flume sends, the collector it sends to, its final `/` taken off, none
+/// where it names none; the service it sends as, `flume` where unset;
+/// whether each of traces, metrics and logs goes, each where unset; and
+/// the attributes its resource names beside flume's own.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TelemetryTable {
+    pub send: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collector: Option<String>,
+    pub service: String,
+    pub traces: bool,
+    pub metrics: bool,
+    pub logs: bool,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub attributes: BTreeMap<String, String>,
+}
+
+/// The service flume sends as where `[telemetry]` names none (216, C.7).
+pub const TELEMETRY_SERVICE: &str = "flume";
+
+impl Default for TelemetryTable {
+    /// The table every key of which is unset: it sends nothing.
+    fn default() -> TelemetryTable {
+        TelemetryTable {
+            send: false,
+            collector: None,
+            service: TELEMETRY_SERVICE.into(),
+            traces: true,
+            metrics: true,
+            logs: true,
+            attributes: BTreeMap::new(),
+        }
+    }
+}
+
 /// How a pool chooses among its usable accounts: the first in order, the
 /// one running the fewest of flume's agents, or the one with the most
 /// left by a fresh reading, equals in order (145, 184).
@@ -922,6 +958,13 @@ pub trait Host: Send + Sync {
     /// (43, C.7; weir 104).
     fn ends_expire(&self) -> Seconds {
         ENDS_EXPIRE
+    }
+
+    /// The managed layer's `[telemetry]` as the host's configuration
+    /// stands now; none where it gives none, and then flume sends nothing
+    /// (216, C.7). None by default.
+    fn telemetry(&self) -> Option<TelemetryTable> {
+        None
     }
 }
 

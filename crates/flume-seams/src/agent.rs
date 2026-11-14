@@ -379,6 +379,15 @@ pub trait Agent: Send + Sync {
         None
     }
 
+    /// The conversation the agent under `agent` runs, by its program's own
+    /// id, as its word that it started names it in its own record in the
+    /// place's own `folder`: none where it has said nothing yet, or its
+    /// profile reads none, so a start's span names none (128, 217). None
+    /// by default.
+    fn conversation(&self, _folder: &str, _agent: &Identity) -> Option<String> {
+        None
+    }
+
     /// The value of its program's own that `entry` maps to, which its
     /// command passes, or words naming the mode where its program has no
     /// setting that means it, never read wider or narrower (88, 169); every

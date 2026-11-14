@@ -106,6 +106,10 @@ struct Record {
     session: Option<String>,
     /// Its session ends once it stops short, as scripted (96, 134).
     ends_after_stop_short: bool,
+    /// The conversation it runs, as the seam reads it for a start's span,
+    /// as scripted; else the session its word that it started names
+    /// (217).
+    conversation: Option<String>,
 }
 
 impl Default for Record {
@@ -126,6 +130,7 @@ impl Default for Record {
             began_in: None,
             session: None,
             ends_after_stop_short: false,
+            conversation: None,
         }
     }
 }
@@ -268,6 +273,13 @@ impl FakeAgent {
     pub fn set_session(&self, agent: &Identity, session: &str) {
         let session = session.to_string();
         self.with(agent, |record| record.session = Some(session));
+    }
+
+    /// The conversation the seam reads `agent` running, for its start's
+    /// span, none where `conversation` is none (217).
+    pub fn set_conversation(&self, agent: &Identity, conversation: Option<&str>) {
+        let conversation = conversation.map(str::to_string);
+        self.with(agent, |record| record.conversation = conversation);
     }
 
     /// The program carries a stopped or lost start's conversation to the
@@ -709,6 +721,17 @@ impl Agent for FakeAgent {
     fn started_without(&self, folder: &str, agent: &Identity) -> Option<Unsettled> {
         self.read_in("started_without", folder, agent)
             .and_then(|record| self.unsettled(agent, &record))
+    }
+
+    /// The conversation scripted, else the session its word that it
+    /// started names; logged by no line, so a settle's calls read as
+    /// before (217).
+    fn conversation(&self, folder: &str, agent: &Identity) -> Option<String> {
+        let record = self.record(agent);
+        if record.folder.as_deref().is_some_and(|kept| kept != folder) {
+            return None;
+        }
+        record.conversation.or(record.session)
     }
 
     /// The answer scripted for the account by its [`FakeAgent::HOME`],

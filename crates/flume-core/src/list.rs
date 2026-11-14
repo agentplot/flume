@@ -58,9 +58,7 @@ impl Engine {
             .then(|| stage_at(held))
             .flatten();
         let stage = at.map(|index| label(&held.stages[index].name, None));
-        let on_branch = self.on_branch_count(held);
-        let state = state_words(held, at, self.asking(held), on_branch);
-        let waits_on = waits_on(held, &state, on_branch);
+        let (state, waits_on) = self.state_of_place(held);
         let kept = kept_words(&held.phase);
         let name = place.short();
         // A base place waiting on the places on its branch says so in its
@@ -86,6 +84,19 @@ impl Engine {
             kept,
             line,
         }
+    }
+
+    /// The place's state in its line's words and whom it waits on, as the
+    /// list gives them, read from its held state and its live agent's
+    /// asking mark (90, 200; core.14).
+    pub(crate) fn state_of_place(&self, held: &HeldState) -> (String, Option<WaitsOn>) {
+        let at = (held.phase == Phase::Live)
+            .then(|| stage_at(held))
+            .flatten();
+        let on_branch = self.on_branch_count(held);
+        let state = state_words(held, at, self.asking(held), on_branch);
+        let waits_on = waits_on(held, &state, on_branch);
+        (state, waits_on)
     }
 
     /// The stream's line: its session as an open resolves it, and each

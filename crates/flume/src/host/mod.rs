@@ -21,7 +21,8 @@ pub mod usage;
 use config::HostConfig;
 use flume_seams::{
     Host, HostConfiguration, HostRoles, HostSettings, HostSource, LabelHeld, Pool, PoolNamed,
-    RepositoryName, RoomGuard, Seconds, Secret, Stream, StreamDisplay, StreamHeld, Usage,
+    RepositoryName, RoomGuard, Seconds, Secret, Stream, StreamDisplay, StreamHeld, TelemetryTable,
+    Usage,
 };
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
@@ -283,6 +284,10 @@ impl Host for RealHost {
 
     fn ends_expire(&self) -> Seconds {
         self.config.ends_expire
+    }
+
+    fn telemetry(&self) -> Option<TelemetryTable> {
+        self.config.telemetry.clone()
     }
 
     fn recipient(&self) -> Option<String> {

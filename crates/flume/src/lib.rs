@@ -1,7 +1,9 @@
 //! flume's binary's library: the profiles of Part C built in, git as
 //! they read a repository, the shell lines the terminal profiles write,
 //! an agents table's mode and its programs' own settings as a declaration,
-//! the host's configuration and a launch write them, and the host's facts and git's history as the core reads them. The binary's commands build the core over
+//! the host's configuration and a launch write them, the host's facts and
+//! git's history as the core reads them, and the telemetry it sends (216).
+//! The binary's commands build the core over
 //! them; the tests under `tests/` run the seams' scenarios against them
 //! (106).
 
@@ -12,6 +14,7 @@ pub mod mode;
 pub mod own;
 pub mod profiles;
 pub mod shell;
+pub mod telemetry;
 
 /// flume's version: the cargo workspace's, 0.0.0 on main and a release's
 /// in the release commit its tag names, which each plugin's manifest

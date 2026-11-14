@@ -3025,3 +3025,81 @@ fn a_fake_agents_session_ended_after_its_stop_short() {
         .collect();
     assert_eq!(ended, vec![format!("session ended {asking}")]);
 }
+
+#[test]
+fn the_fake_telemetry_keeps_every_signal_in_order() {
+    // It sends nothing until a test sets what it sends, and keeps every
+    // signal it is handed, in order, whatever it sends; the fake host
+    // scripts `[telemetry]`, and the fake agent a conversation (216, 217).
+    let telemetry = FakeTelemetry::default();
+    assert_eq!(telemetry.sends(), Sends::default());
+    let record = |event: &str| Signal::Record {
+        trace: "t".into(),
+        span: "s".into(),
+        at: 1,
+        event: event.into(),
+        attributes: Attributes::new(),
+    };
+    telemetry.send(record("start"));
+    telemetry.send(Signal::Warning {
+        at: 2,
+        words: "a teardown failed".into(),
+    });
+    telemetry.set_sends(Sends {
+        traces: true,
+        ..Sends::default()
+    });
+    assert!(telemetry.sends().traces && !telemetry.sends().metrics);
+    let span = Signal::Span {
+        trace: "t".into(),
+        span: "s".into(),
+        parent: None,
+        name: "code".into(),
+        from: 1,
+        to: 3,
+        attributes: Attributes::new(),
+    };
+    telemetry.send(span.clone());
+    telemetry.send(record("end"));
+    assert_eq!(
+        telemetry.signals(),
+        vec![
+            record("start"),
+            Signal::Warning {
+                at: 2,
+                words: "a teardown failed".into(),
+            },
+            span.clone(),
+            record("end"),
+        ]
+    );
+    assert_eq!(telemetry.spans(), vec![span]);
+    assert_eq!(telemetry.events(), vec!["start", "end"]);
+    telemetry.clear();
+    assert!(telemetry.signals().is_empty());
+
+    let host = FakeHost::default();
+    assert_eq!(host.telemetry(), None);
+    let table = TelemetryTable {
+        send: true,
+        collector: Some("http://localhost:4318".into()),
+        ..TelemetryTable::default()
+    };
+    host.set_telemetry(Some(table.clone()));
+    assert_eq!(host.telemetry(), Some(table));
+
+    let agent = FakeAgent::new(Arc::new(FakeTerminal::new(Arc::new(FakeHost::default()))));
+    let who = identity("code", 1);
+    assert_eq!(agent.conversation("/r/places/fix--one", &who), None);
+    agent.set_session(&who, "s-0");
+    assert_eq!(
+        agent.conversation("/r/places/fix--one", &who).as_deref(),
+        Some("s-0")
+    );
+    agent.set_conversation(&who, Some("s-1"));
+    assert_eq!(
+        agent.conversation("/r/places/fix--one", &who).as_deref(),
+        Some("s-1")
+    );
+    assert!(agent.log.calls().is_empty(), "read by no logged call");
+}

@@ -99,7 +99,16 @@ impl Engine {
         let now = self.host.now();
         let limit = declared.quiet_limit.unwrap_or(QUIET_LIMIT);
         let answered = last_answer(&held, index, &start);
+        let asking = reading.asking == Reading::Yes;
         self.with_start(id, &identity, |start, state| {
+            // Since when a settle read the agent asking a person, so the
+            // place's wait on a person opens and ends at the settles that
+            // read it (90, 217).
+            match (asking, start.asking_since) {
+                (true, None) => start.asking_since = Some(now),
+                (false, Some(_)) => start.asking_since = None,
+                _ => {}
+            }
             if start.last_head != facts.head {
                 start.last_head = facts.head.clone();
                 start.last_head_move = now;

@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in boomdrivedev/blueprints
 /// the list was read at.
-pub const REVISION: &str = "31f9f1c";
+pub const REVISION: &str = "81288ba";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -23,6 +23,9 @@ pub fn part_a() -> Vec<u32> {
         .chain([190, 191, 193, 195, 197, 198, 199, 200])
         .chain(202..=204)
         .chain([208])
+        .chain(212..=214)
+        .chain(216..=221)
+        .chain([223, 224])
         .collect()
 }
 
@@ -40,7 +43,7 @@ pub fn part_b() -> Vec<u32> {
         .chain(187..=189)
         .chain([192, 196, 201])
         .chain(205..=207)
-        .chain([210])
+        .chain([210, 211, 215, 222])
         .collect()
 }
 
@@ -62,7 +65,7 @@ pub fn all() -> Vec<String> {
 }
 
 /// The last scenario of section 11.
-pub const SCENARIOS: u32 = 120;
+pub const SCENARIOS: u32 = 131;
 
 /// The numbers section 11 skips at the revision, which designs the
 /// statement does not hold yet keep for their own scenarios: none at
@@ -101,6 +104,39 @@ pub const MCP_SERVERS: &str =
 pub const ORIGIN: &str =
     "a-place-is-cut-from-origins-copy-of-its-base, record 0041, landed before the list held S92";
 
+/// The change that builds record 0062: each account's usage read from the
+/// windows its agent program reports, and the agent seam's windows.
+pub const WINDOWS: &str =
+    "record 0062's change, each account's usage read from the windows its agent program reports";
+
+/// The change that builds record 0069: a stage that hibernates and
+/// resumes its own session, a role's deliveries taken as one prompt, and
+/// the agent seam's deliver.
+pub const HIBERNATE: &str =
+    "record 0069's change, a stage that hibernates and resumes its own session";
+
+/// What builds clauses 221 and 222: a caller's relay of a place's live
+/// agent to a person elsewhere, which no record of flume's holds yet.
+pub const RELAY: &str =
+    "the change that builds the relay of a place's live agent, which no record of flume's holds yet";
+
+/// What builds clauses 223 and 224 and S130: a statechart kind's command
+/// stage and a launch's parameters, from the update-ladder talk of
+/// 2026-11-12, after statechart kinds.
+pub const COMMAND_STAGES: &str =
+    "the update ladder's change, command stages and a launch's parameters, after statechart kinds";
+
+/// The change that builds record 0065: a stage counts what any of its
+/// starts made since it last delivered.
+pub const MADE_SINCE: &str =
+    "record 0065's change, a stage counting what any start made since it last delivered";
+
+/// The changes that built records 0060 and 0061, the caller one more
+/// recipient and a place's ends weir's deliveries, which landed before
+/// the list held S121 to S123: no scenario cites them as data yet.
+pub const DELIVERIES: &str =
+    "records 0060 and 0061's changes, the caller one more recipient and ends as weir's deliveries, landed before the list held S121 to S123";
+
 /// Each clause or scenario no change has built yet, with the change that
 /// builds it: no scenario of the suite cites one, and the coverage check
 /// asks none to be cited.
@@ -129,6 +165,19 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .map(|clause| (clause, STATECHART));
     let mcp_servers = std::iter::once(("183".to_string(), MCP_SERVERS));
     let origin = std::iter::once(("S92".to_string(), ORIGIN));
+    let windows = std::iter::once(("211".to_string(), WINDOWS));
+    let hibernate = (212..=215)
+        .map(|clause| clause.to_string())
+        .chain((124..=128).map(|scenario| format!("S{scenario}")))
+        .map(|clause| (clause, HIBERNATE));
+    let relay = [221, 222].map(|clause| (clause.to_string(), RELAY));
+    let command_stages = [223, 224]
+        .map(|clause| clause.to_string())
+        .into_iter()
+        .chain(["S130".to_string()])
+        .map(|clause| (clause, COMMAND_STAGES));
+    let made_since = std::iter::once(("S131".to_string(), MADE_SINCE));
+    let deliveries = (121..=123).map(|scenario| (format!("S{scenario}"), DELIVERIES));
     standing
         .chain(plan)
         .chain(points)
@@ -136,6 +185,12 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain(statechart)
         .chain(mcp_servers)
         .chain(origin)
+        .chain(windows)
+        .chain(hibernate)
+        .chain(relay)
+        .chain(command_stages)
+        .chain(made_since)
+        .chain(deliveries)
         .collect()
 }
 
@@ -149,9 +204,9 @@ mod tests {
         let b = part_b();
         assert_eq!(
             a.len(),
-            77 + 8 + 3 + 2 + 4 + 1 + 10 + 6 + 3 + 9 + 3 + 7 + 8 + 3 + 1
+            77 + 8 + 3 + 2 + 4 + 1 + 10 + 6 + 3 + 9 + 3 + 7 + 8 + 3 + 1 + 3 + 6 + 2
         );
-        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4 + 2 + 3 + 5 + 3 + 3 + 3 + 1);
+        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4 + 2 + 3 + 5 + 3 + 3 + 3 + 4);
         let gaps = [100, 150, 194, 209];
         for gap in gaps {
             assert!(!a.contains(&gap) && !b.contains(&gap), "{gap} is listed");
@@ -161,34 +216,35 @@ mod tests {
         every.sort();
         assert_eq!(
             every,
-            (1..=210)
+            (1..=224)
                 .filter(|clause| !gaps.contains(clause))
                 .collect::<Vec<_>>()
         );
-        assert_eq!(all().len(), 206 + 8 + 120);
+        assert_eq!(all().len(), 220 + 8 + 131);
         assert!(all().contains(&"S64".to_string()), "S64 is not listed");
         assert!(SKIPPED.is_empty(), "{SKIPPED:?} are skipped");
         for scenario in [
             "S91", "S92", "S93", "S94", "S95", "S96", "S97", "S98", "S99", "S100", "S103", "S104",
             "S105", "S106", "S107", "S108", "S109", "S110", "S111", "S112", "S113", "S114", "S115",
-            "S116", "S117", "S118", "S119", "S120",
+            "S116", "S117", "S118", "S119", "S120", "S121", "S125", "S129", "S130", "S131",
         ] {
             assert!(
                 all().contains(&scenario.to_string()),
                 "{scenario} is not listed"
             );
         }
-        assert_eq!(REVISION, "31f9f1c");
+        assert_eq!(REVISION, "81288ba");
         for clause in [
             129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 155, 156, 157, 158, 159, 161, 162,
             163, 165, 168, 169, 173, 175, 176, 177, 180, 181, 182, 183, 184, 185, 186, 190, 191,
-            193, 195, 197, 198, 199, 200, 202, 203, 204, 208,
+            193, 195, 197, 198, 199, 200, 202, 203, 204, 208, 212, 213, 214, 216, 217, 218, 219,
+            220, 221, 223, 224,
         ] {
             assert!(part_a().contains(&clause), "{clause} is not in Part A");
         }
         for clause in [
             126, 127, 128, 133, 134, 135, 136, 138, 139, 151, 153, 160, 164, 174, 178, 179, 187,
-            188, 189, 192, 196, 201, 205, 206, 207, 210,
+            188, 189, 192, 196, 201, 205, 206, 207, 210, 211, 215, 222,
         ] {
             assert!(part_b().contains(&clause), "{clause} is not in Part B");
         }
@@ -197,7 +253,10 @@ mod tests {
     #[test]
     fn the_clauses_unbuilt_are_named_by_the_changes_that_build_them() {
         let unbuilt = unbuilt();
-        assert_eq!(unbuilt.len(), 3 + 2 + 3 + 6 + 10 + 6 + 1 + 1);
+        assert_eq!(
+            unbuilt.len(),
+            3 + 2 + 3 + 6 + 10 + 6 + 1 + 1 + 1 + 9 + 2 + 3 + 1 + 3
+        );
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
@@ -209,7 +268,7 @@ mod tests {
             "207", "S113", "S114", "S115", "S116", "S117", "195", "196", "S100", "S101", "S102",
             "197", "S103", "198", "S104", "S105", "202", "203", "204", "205", "206", "208", "S109",
             "S110", "S111", "S112", "S118", "193", "S93", "S94", "S98", "S99", "210", "S120",
-            "S119",
+            "S119", "216", "217", "218", "219", "220", "S129",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),

@@ -98,6 +98,70 @@ pub struct HeldState {
     /// written before (203).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fixes: Vec<BaseFix>,
+    /// The place's trace and its own span, named at its launch, or at the
+    /// first write of a document written before; none until then (217).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trace: Option<TraceHeld>,
+    /// Each wait of the place a write read open, with its span, from the
+    /// write that first read it to the one that read it ended; none while
+    /// it waits on nothing, and in a document written before (217).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub waits: Vec<WaitHeld>,
+}
+
+/// A place's trace: its 32 hex digits, its place's span's 16, the time
+/// the place's span runs from, its launch's or, for a document written
+/// before, the first write that named it, and when the place's span went,
+/// none until it did (217).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TraceHeld {
+    pub trace: String,
+    pub span: String,
+    pub from: Seconds,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ended: Option<Seconds>,
+}
+
+/// Whom a place waits on: its caller, the host's room, the merge queue,
+/// or a person, at its agent's question or its program's dialog (217).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WaitParty {
+    Caller,
+    Host,
+    MergeQueue,
+    Person,
+}
+
+impl WaitParty {
+    /// Its word, as a signal names it (217).
+    pub fn word(self) -> &'static str {
+        match self {
+            WaitParty::Caller => "caller",
+            WaitParty::Host => "host",
+            WaitParty::MergeQueue => "merge-queue",
+            WaitParty::Person => "person",
+        }
+    }
+}
+
+/// One open wait of a place: its span, whom it waits on, for which move,
+/// on which stage, none where it is on the submission or the place,
+/// since the write that first read it, and whether a hold stood over it
+/// or it stalled while it was open (217).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WaitHeld {
+    pub span: String,
+    pub on: WaitParty,
+    #[serde(rename = "move")]
+    pub for_move: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage: Option<String>,
+    pub since: Seconds,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub held: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stalled: bool,
 }
 
 /// The newest forecast a settle read of a base place's branch, and when
@@ -1697,6 +1761,15 @@ pub struct StartHeld {
     /// written before (42, 198).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub answered: u32,
+    /// Its span in its place's trace, 16 hex digits, named as the write
+    /// that claims it is made, before its agent's command is built; none
+    /// in a start written before, until its next write (217, 219).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub span: Option<String>,
+    /// Since when a settle read its agent asking a person, none while it
+    /// is not (90, 217).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asking_since: Option<Seconds>,
 }
 
 /// A start's own settings beyond its keys: each file a layer named for

@@ -257,7 +257,7 @@ impl Engine {
                 Ok(true) => {}
                 Ok(false) => continue,
                 Err(why) => {
-                    self.host.log(&format!(
+                    self.log(&format!(
                         "an end of {} was not handed to {recipient} by the inbox: {why}",
                         held.place.id
                     ));

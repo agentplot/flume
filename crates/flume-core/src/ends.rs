@@ -311,7 +311,7 @@ impl Engine {
                             false,
                         );
                         for refused in handed.into_iter().filter_map(Result::err) {
-                            self.host.log(&format!(
+                            self.log(&format!(
                                 "the notice of {id}'s end {key} to {recipient} was sent, and its hand-over not recorded: {refused}"
                             ));
                         }
@@ -321,7 +321,7 @@ impl Engine {
                     ToSession::Refused { reason } => reason,
                 };
                 states.insert(recipient.clone(), None);
-                self.host.log(&format!(
+                self.log(&format!(
                     "the notice of {id}'s end {key} was not sent to {recipient}: {why}"
                 ));
                 take_back();
@@ -364,7 +364,7 @@ impl Engine {
                     match answer {
                         Ok(true) => recorded = true,
                         Ok(false) => {}
-                        Err(why) => self.host.log(&format!(
+                        Err(why) => self.log(&format!(
                             "the notice claimed of {}'s end to {} was not recorded: {why}",
                             held.place.id, claim.recipient
                         )),

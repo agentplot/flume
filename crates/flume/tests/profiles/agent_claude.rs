@@ -1836,6 +1836,29 @@ fn two_homes_of_their_own() {
 }
 
 #[test]
+fn the_conversation_is_the_session_its_started_word_names() {
+    // A start's conversation is the session its started ack names, read
+    // from its record in the place's folder; one that has said nothing
+    // has none (128, 217).
+    let harness = Harness::new();
+    let who = identity("code");
+    let silent = identity("review");
+    let folder = harness.folder();
+    assert_eq!(harness.seam.conversation(&folder, &who), None);
+    harness.start(&AgentCommand::default(), &who, &folder);
+    assert_eq!(
+        harness.seam.conversation(&folder, &who).as_deref(),
+        Some(SESSION)
+    );
+    harness.name_session(&who, "s-1");
+    assert_eq!(
+        harness.seam.conversation(&folder, &who).as_deref(),
+        Some("s-1")
+    );
+    assert_eq!(harness.seam.conversation(&folder, &silent), None);
+}
+
+#[test]
 fn a_start_that_never_said_it_started() {
     // The stopped start has no started ack: carry answers no, saying its
     // conversation is not known; one whose ack's transcript is gone, that
