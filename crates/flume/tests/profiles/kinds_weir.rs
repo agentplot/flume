@@ -2940,8 +2940,11 @@ fn flumes_own_as_packages() {
             ("flume/change@1".to_string(), length),
             ("flume/change@2".to_string(), length),
             ("flume/change@3".to_string(), length),
+            ("flume/change@4".to_string(), length),
             ("flume/chore@1".to_string(), length),
+            ("flume/chore@2".to_string(), length),
             ("flume/fix@1".to_string(), length),
+            ("flume/fix@2".to_string(), length),
         ]
     );
 }
