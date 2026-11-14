@@ -425,6 +425,8 @@ fn held() -> HeldState {
                     passed: Some("--own /state/places/x/agent/own.json".into()),
                 }),
                 answered: 0,
+                span: None,
+                asking_since: None,
             }),
             since: Some(120),
         }],
@@ -514,6 +516,8 @@ fn held() -> HeldState {
         }),
         stall_after: 30 * 60,
         fixes: vec![],
+        trace: None,
+        waits: vec![],
         forecast: None,
     }
 }
@@ -5127,5 +5131,98 @@ fn held_state_written_before_reads_its_old_deliveries() {
         serde_json::to_value(&read).expect("written again"),
         before,
         "its old deliveries written back as they were"
+    );
+}
+
+#[test]
+fn a_held_state_with_its_trace_and_waits() {
+    // A place's trace, its start's span, its start read asking a person
+    // since a time and two open waits are written and read back the same,
+    // each wait's whom and move in its own words (217).
+    let mut held = held();
+    held.trace = Some(TraceHeld {
+        trace: "0af7651916cd43dd8448eb211c80319c".into(),
+        span: "b7ad6b7169203331".into(),
+        from: 100,
+        ended: None,
+    });
+    let start = held.stages[0].start.as_mut().expect("a start");
+    start.span = Some("00f067aa0ba902b7".into());
+    start.asking_since = Some(150);
+    held.waits = vec![
+        WaitHeld {
+            span: "1111111111111111".into(),
+            on: WaitParty::Person,
+            for_move: "asking".into(),
+            stage: Some("code".into()),
+            since: 150,
+            held: false,
+            stalled: false,
+        },
+        WaitHeld {
+            span: "2222222222222222".into(),
+            on: WaitParty::MergeQueue,
+            for_move: "landing".into(),
+            stage: None,
+            since: 160,
+            held: true,
+            stalled: true,
+        },
+    ];
+    round_trips(held.clone());
+    let json = serde_json::to_value(&held).expect("as JSON");
+    assert_eq!(
+        json["waits"][1],
+        serde_json::json!({
+            "span": "2222222222222222",
+            "on": "merge-queue",
+            "move": "landing",
+            "since": 160,
+            "held": true,
+            "stalled": true,
+        })
+    );
+    assert_eq!(json["trace"]["from"], 100);
+    assert!(json["trace"].get("ended").is_none(), "no end until it went");
+    let mut ended = held.clone();
+    ended.trace.as_mut().expect("a trace").ended = Some(900);
+    round_trips(ended);
+    for party in [
+        WaitParty::Caller,
+        WaitParty::Host,
+        WaitParty::MergeQueue,
+        WaitParty::Person,
+    ] {
+        assert_eq!(
+            serde_json::to_value(party).expect("a party"),
+            serde_json::json!(party.word())
+        );
+    }
+}
+
+#[test]
+fn a_held_state_written_before_its_trace() {
+    // A held state written before this change reads with no trace, no
+    // start's span, no asking and no wait, and writes none back (217;
+    // core.16).
+    let before = serde_json::to_value(held()).expect("held state as JSON");
+    for field in ["trace", "waits"] {
+        assert!(before.get(field).is_none(), "{field} written: {before}");
+    }
+    for field in ["span", "asking_since"] {
+        assert!(
+            before["stages"][0]["start"].get(field).is_none(),
+            "{field} written"
+        );
+    }
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
+    assert_eq!(read.trace, None);
+    assert!(read.waits.is_empty());
+    let start = read.stages[0].start.as_ref().expect("a start");
+    assert_eq!((&start.span, start.asking_since), (&None, None));
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "nothing of a trace written where none is held"
     );
 }

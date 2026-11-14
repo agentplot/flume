@@ -754,6 +754,8 @@ impl Engine {
                     passed: None,
                 }),
                 answered: 0,
+                span: None,
+                asking_since: None,
             });
             if !held
                 .terminals

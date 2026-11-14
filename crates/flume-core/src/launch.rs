@@ -845,6 +845,8 @@ impl Engine {
             stall_after: launch.stall_after.unwrap_or(STALL_AFTER),
             fixes: vec![],
             forecast: None,
+            trace: None,
+            waits: vec![],
         };
         let programs = kind
             .stages

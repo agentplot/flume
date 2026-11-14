@@ -176,6 +176,8 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
         priority: 0,
         shown: None,
         fixes: vec![],
+        trace: None,
+        waits: vec![],
         forecast: None,
     }
 }
