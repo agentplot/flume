@@ -54,7 +54,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "labels: what a label is owed, set by the local layer's streams.work.labels.operation.owed, is held from the next start",
-            cites: &["181", "C.7", "S85"],
+            cites: &["181", "S85"],
             run: what_a_label_is_owed_set_locally,
         },
         Scenario {
