@@ -1,10 +1,10 @@
 # Verify: every-message-to-a-role-waits-at-its-address
 
 Verified 2026-11-14 on `change/every-message-to-a-role-waits-at-its-address`
-at 46ea2ecd, cut from `bolt/flumes-roles-sleep-and-wake` at 2d180f0b,
+at 866aaca7, cut from `bolt/flumes-roles-sleep-and-wake` at 2d180f0b,
 which is still the base's head.
 
-## The whole checks: fail
+## The whole checks: pass
 
 The gate's checks ran once, with the host's sluice 0.93.2, as the
 merge queue gates:
@@ -13,35 +13,28 @@ The sluice the tree pins, 0.71.0, cannot read the host's sluice
 configuration, whose `[forge]` gives `credential`. ops answered that
 the checks run with the host's sluice, and that a fix of main moves
 `sluiceVersion` to 0.93.2 for the bolt to take in. As a place on a
-bolt, it ran the bolt's `check-fast`: 38 tasks completed and 2 failed,
-`conformance:test` and `fakes:test`, so the run exited 1. Three tests
-fail:
+bolt, it ran the bolt's `check-fast`: 40 tasks completed, 39 checks
+passed and none failed, and sluice recorded the 39 results under their
+keys for 866aaca7. The run exited 0.
 
-- `flume-conformance`'s `no_tool::no_tool_is_named_outside_a_profile`
-  (core.1). The MCP tests that 7.1 added in
-  `crates/flume/tests/commands.rs` name `claude` outside a profile:
-  the comments at lines 4425, 4464 and 4509, "The claude-code-plugin
-  spec's …", and the argument `"agent": ["program=claude"]` at line
-  4568, in `a_role_runs_launch_over_mcp_reports_to_its_address`.
-- `flume-fakes`'s `fakes::the_terminal_holds_recipients_sessions_by_name`
-  (`crates/flume-fakes/tests/fakes.rs:1584`). After 4.1 the fake
-  terminal's `send_to` refuses a session that reads working, but the
-  test still adds `ops` working and wants `send_to("ops", "four")`
-  `Sent`, and its notices `["two", "four"]`. It gets
-  `Refused { reason: "the session ops works; nothing was typed" }`.
-- `flume-fakes`'s `fakes::two_of_one_name`
-  (`crates/flume-fakes/tests/fakes.rs:1856`). The test wants
-  `send_to(&second, "one")` `Sent` to the second `w-planner`, which
-  reads working. It gets
-  `Refused { reason: "the session fake:2@w works; nothing was typed" }`.
-
-Every other test of the layer passes, `the_engine_passes_its_scenarios`
-among them.
+Among them, `conformance:test` runs
+`no_tool::no_tool_is_named_outside_a_profile` (core.1) and
+`the_engine_passes_its_scenarios`. `fakes:test` runs
+`the_terminal_holds_recipients_sessions_by_name` and `two_of_one_name`,
+each sending only to a waiting session. `flume:test` runs the MCP
+tests `the_mcp_tools_listed`, `message_over_mcp`,
+`launch_over_mcp_refused_as_the_command_line_refuses_it` and
+`a_role_runs_launch_over_mcp_reports_to_its_address`. Every one passes.
 
 ## Tasks
 
-Every task of `tasks.md`, 1.1 to 9.1, is ticked done. Every test a
-task names exists under the name it gives, and `openspec validate
+Every task of `tasks.md`, 1.1 to 9.1 with 4.7 and 7.2, is ticked done,
+36 in all. 4.7 keeps the fakes' own tests to seam-fakes' "Two of one
+name" now that the fake terminal types nothing into a session at work.
+7.2 keeps the MCP tests within core.1: their comments cite the agent
+program's plugin spec by its scenarios, and the role's MCP launch runs
+through the stand-in flume and names no program. Every test a task
+names exists under the name it gives, and `openspec validate
 every-message-to-a-role-waits-at-its-address --strict` passes.
 
 ## Requirements and scenarios
@@ -194,9 +187,9 @@ they said a tell.
 
 ## Outcome
 
-Every task is ticked and every scenario has a test, but the whole
-checks fail, so the work falls short. Two of 4.1's and 7.1's own
-consequences were left unmade. The fakes' own tests still send to a
-working session, which the fake terminal now refuses. The new MCP tests
-name a tool outside a profile, which core.1 rules out. The change is
-not archived and goes back to its code stage with these failures.
+The whole checks pass, every task is ticked and every scenario of the
+delta specs has a test. Each test of `check-fast` passes in them. The
+walkthroughs `s126_…` and `s128_…` are `check-tools`'s, which a place
+on a bolt leaves to the bolt's merge onto main. Each scenario they
+cover also has an engine scenario or a commands test that passed here.
+The work holds, and the change is archived with this report.
