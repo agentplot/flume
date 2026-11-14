@@ -5,8 +5,9 @@
 //! profile to its program's setting that means it, or the launch or the
 //! stage refused naming the mode, the program, the stage and the layer;
 //! `plan` only on a conversation; none passed where no layer gives one;
-//! and nothing answered for an agent in any mode (4, 8, 21, 27, 32, 34,
-//! 90, 109).
+//! flume's own newest kinds giving `full` from the kind, after every
+//! other layer (22, 154; record 0064); and nothing answered for an agent
+//! in any mode (4, 8, 21, 27, 32, 34, 90, 109).
 
 use super::agent_settings::{for_every_stage, for_stage, opened, to_code, to_verify};
 use super::world::*;
@@ -49,9 +50,24 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: the_hosts_table_changes_while_a_stage_works,
         },
         Scenario {
-            name: "agent modes: with no mode in any layer the agent's command carries none, its start's record names none, nothing is mapped, and its started ack is taken whatever mode it reports",
+            name: "agent modes: with no mode in any layer, fix@1 named, the agent's command carries none, its start's record names none, nothing is mapped, and its started ack is taken whatever mode it reports",
             cites: &["S66", "161", "162"],
             run: no_mode_in_any_layer,
+        },
+        Scenario {
+            name: "agent modes: a bare fix, flume holding fix@1 and fix@2 and no layer giving a mode, runs fix@2, its agent's command carrying the value the profile maps full to, its start's record naming that value, and status giving full from kind",
+            cites: &["22", "32", "154", "162"],
+            run: a_bare_fix_in_full,
+        },
+        Scenario {
+            name: "agent modes: the host's [agents] mode edits over flume's own fix@2's full starts its agent with the value the profile maps edits to, status naming host",
+            cites: &["22", "32", "154", "162"],
+            run: the_hosts_mode_over_the_own_kinds,
+        },
+        Scenario {
+            name: "agent modes: fix@1 named, flume holding fix@1 and fix@2 and no layer giving a mode, starts its agent with no mode, status giving none",
+            cites: &["22", "32", "154", "162"],
+            run: an_earlier_own_version_named,
         },
         Scenario {
             name: "agent modes: each of flume's four is passed as the value the profile maps it to and no other, plan on a conversation",
@@ -429,12 +445,16 @@ fn the_hosts_table_changes_while_a_stage_works(_: &()) -> Outcome {
 }
 
 fn no_mode_in_any_layer(_: &()) -> Outcome {
-    let world = World::new();
+    let world = World::with_every_own_version();
     the_fakes_map(&world);
     world.agent.read_mode_back();
     let code = World::identity("fix", "one", "code", 1);
     world.agent.set_began_in(&code, "ask-each");
-    launched(&world.engine.launch(&launch("fix", "one", Some("mend it"))))?;
+    launched(
+        &world
+            .engine
+            .launch(&launch("fix@1", "one", Some("mend it"))),
+    )?;
     let id = World::id("fix", "one");
     world.settle(&id);
     ensure_eq!(passed(&world, &code)?, None, "the value passed");
@@ -452,6 +472,94 @@ fn no_mode_in_any_layer(_: &()) -> Outcome {
         "code, its started ack taken in whatever mode"
     );
     ensure!(held.unsettled.is_empty(), "a start read begun otherwise");
+    let agent = world.status(&id)?.agent.ok_or("no agent")?;
+    ensure_eq!(
+        (agent.settings.settings.mode, agent.mode),
+        (None, None),
+        "the agent's mode"
+    );
+    ensure!(
+        !agent.settings.from.contains_key("mode"),
+        "status names a layer of the mode"
+    );
+    Ok(())
+}
+
+fn a_bare_fix_in_full(_: &()) -> Outcome {
+    let world = World::with_every_own_version();
+    let code = World::identity("fix", "one", "code", 1);
+    let place = launched(&world.engine.launch(&launch("fix", "one", Some("mend it"))))?;
+    ensure_eq!(
+        place.identity.as_deref(),
+        Some("flume/fix@2"),
+        "the kind a bare fix runs"
+    );
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    ensure_eq!(
+        passed(&world, &code)?,
+        Some("full".to_string()),
+        "the value passed"
+    );
+    let held = world.held(&id).ok_or("no held state")?;
+    let start = held.stages[0].start.as_ref().ok_or("no start of code")?;
+    ensure_eq!(
+        start.start_record.mode,
+        Some("full".to_string()),
+        "the record's mode"
+    );
+    ensure_eq!(
+        mode_from(&world, &id)?,
+        given(Layer::Kind, "full"),
+        "where the mode came from"
+    );
+    Ok(())
+}
+
+fn the_hosts_mode_over_the_own_kinds(_: &()) -> Outcome {
+    let world = World::with_every_own_version();
+    the_fakes_map(&world);
+    world.host.set_every_agent(in_mode(Mode::Edits));
+    launched(&world.engine.launch(&launch("fix", "one", Some("mend it"))))?;
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    ensure_eq!(
+        world.status(&id)?.identity,
+        Some("flume/fix@2".to_string()),
+        "the kind a bare fix runs"
+    );
+    ensure_eq!(
+        passed(&world, &World::identity("fix", "one", "code", 1))?,
+        Some("edit-files".to_string()),
+        "the value passed"
+    );
+    ensure_eq!(
+        mode_from(&world, &id)?,
+        given(Layer::Host, "edits"),
+        "where the mode came from"
+    );
+    Ok(())
+}
+
+fn an_earlier_own_version_named(_: &()) -> Outcome {
+    let world = World::with_every_own_version();
+    let code = World::identity("fix", "one", "code", 1);
+    let place = launched(
+        &world
+            .engine
+            .launch(&launch("fix@1", "one", Some("mend it"))),
+    )?;
+    ensure_eq!(
+        place.identity.as_deref(),
+        Some("flume/fix@1"),
+        "the kind run"
+    );
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    ensure_eq!(passed(&world, &code)?, None, "the value passed");
+    let held = world.held(&id).ok_or("no held state")?;
+    let start = held.stages[0].start.as_ref().ok_or("no start of code")?;
+    ensure_eq!(start.start_record.mode, None, "the record's mode");
     let agent = world.status(&id)?.agent.ok_or("no agent")?;
     ensure_eq!(
         (agent.settings.settings.mode, agent.mode),
