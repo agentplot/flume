@@ -129,6 +129,13 @@
 //! pane's own `HERDR_*` left out and bounded at five seconds, in the
 //! states the pinned herdr, 0.9.5, names (core.29).
 //!
+//! Where it runs in a Rex block, `REX_BLOCK` in its environment, it reports
+//! its state to Rex in place of herdr, as Claude Code 2.1.322 reports its
+//! own: OSC 7501 written to its terminal, `app=claude-code`, `idle` once its
+//! session started and waits for its prompt, `working` from the moment it
+//! takes a prompt, and `done` at its turn's end, kept until the next, in the
+//! states the pinned Rex, 0.1.0-preview.14, names (C.5; core.29).
+//!
 //! The prompt is submitted as given, or, where `STAND_IN_PASTE_TAG` names
 //! a four-hex-digit id, inside the paste tags that release wraps a pasted
 //! prompt in where the account's features turn them on.
@@ -361,6 +368,45 @@ impl Drop for Typed {
     }
 }
 
+/// Where the stand-in reports its state: a herdr pane, or a Rex block, by
+/// OSC 7501 to its terminal.
+enum Reporter {
+    Herdr(Pane),
+    Rex,
+}
+
+impl Reporter {
+    /// The Rex block it runs in, where `REX_BLOCK` names one, else the
+    /// herdr pane; none outside both.
+    fn here() -> Option<Reporter> {
+        if std::env::var("REX_BLOCK").is_ok_and(|block| !block.is_empty()) {
+            return Some(Reporter::Rex);
+        }
+        Pane::here().map(Reporter::Herdr)
+    }
+
+    /// `state` reported, in herdr's words or Rex's.
+    fn report(&self, state: &str) {
+        match self {
+            Reporter::Herdr(pane) => pane.report(state),
+            Reporter::Rex => {
+                let mut out = std::io::stdout().lock();
+                let _ = write!(out, "\x1b]7501;state={state}:app=claude-code\x1b\\");
+                let _ = out.flush();
+            }
+        }
+    }
+
+    /// The turn's end reported: herdr reads the release's screen idle, and
+    /// the release reports `done` to Rex, kept until the next turn.
+    fn ended(&self) {
+        match self {
+            Reporter::Herdr(pane) => pane.report("idle"),
+            Reporter::Rex => self.report("done"),
+        }
+    }
+}
+
 /// The herdr pane the stand-in runs in, by `HERDR_PANE_ID`, and the herdr
 /// that runs it, by `HERDR_BIN_PATH`; none outside a herdr pane.
 struct Pane {
@@ -540,8 +586,9 @@ struct Session {
     /// The records written, which number each record's id and its
     /// message's.
     records: u32,
-    /// The herdr pane it runs in, if any, to which it reports its state.
-    pane: Option<Pane>,
+    /// The herdr pane or the Rex block it runs in, if any, to which it
+    /// reports its state.
+    reporter: Option<Reporter>,
 }
 
 impl Session {
@@ -600,7 +647,7 @@ impl Session {
             mode,
             resumed: is_resumed,
             records: calls,
-            pane: Pane::here(),
+            reporter: Reporter::here(),
         }
     }
 
@@ -684,11 +731,11 @@ impl Session {
         failed
     }
 
-    /// The state reported to herdr where the stand-in runs in a herdr
-    /// pane.
+    /// The state reported to herdr or Rex where the stand-in runs in a
+    /// herdr pane or a Rex block.
     fn report(&self, state: &str) {
-        if let Some(pane) = &self.pane {
-            pane.report(state);
+        if let Some(reporter) = &self.reporter {
+            reporter.report(state);
         }
     }
 
@@ -742,7 +789,9 @@ impl Session {
             }
         }
         say("the turn ended");
-        self.report("idle");
+        if let Some(reporter) = &self.reporter {
+            reporter.ended();
+        }
         Turn::Ended(acted)
     }
 

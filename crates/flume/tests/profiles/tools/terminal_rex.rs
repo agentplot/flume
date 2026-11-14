@@ -2144,3 +2144,46 @@ impl TerminalHarness for Harness {
 fn the_rex_profile_passes_the_terminal_scenarios() {
     pass_all("terminal", &terminal::scenarios(), Harness::new);
 }
+
+#[test]
+fn the_stand_in_reports_its_state_to_rex() {
+    // C.5; design 16: the stand-in for Claude Code opened under the
+    // profile reports to Rex by OSC 7501 as Claude Code does: read waiting
+    // once up, working from a prompt's first moment while its turn holds,
+    // then waiting once the turn is done.
+    let fixture = Fixture::new();
+    let profile = fixture.profile();
+    let who = identity(1);
+    let held = fixture.path("held");
+    let script = fixture.path("script.json");
+    fs::write(
+        &script,
+        json!([[{"wait_for": held.to_string_lossy()}], []]).to_string(),
+    )
+    .expect("the stand-in's script");
+    let mut command = fixture.command(&[
+        ("STAND_IN_SCRIPT", &script.to_string_lossy()),
+        (
+            "STAND_IN_LOG",
+            &fixture.path("stand-in.log").to_string_lossy(),
+        ),
+        (
+            "CLAUDE_CONFIG_DIR",
+            &fixture.path("home/.claude").to_string_lossy(),
+        ),
+    ]);
+    command.program = env!("CARGO_BIN_EXE_flume-stand-in").into();
+    command.folder_trust = None;
+    opened(&fixture, &profile, &who, &command);
+    assert_eq!(profile.state(&who), AgentState::Waiting);
+    assert_eq!(profile.send(&who, "the prompt"), Sent::Sent);
+    within("the stand-in did not read working", || {
+        profile.state(&who) == AgentState::Working
+    });
+    fs::write(&held, "").expect("the turn let go");
+    within("the stand-in did not read waiting once done", || {
+        profile.state(&who) == AgentState::Waiting
+    });
+    let log = fs::read_to_string(fixture.path("stand-in.log")).unwrap_or_default();
+    assert!(log.contains("took the prompt: \"the prompt\""), "{log}");
+}

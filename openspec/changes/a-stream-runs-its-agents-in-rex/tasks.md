@@ -47,7 +47,7 @@ its end (core.51).
 
 ## 4. Through the binary under Rex
 
-- [ ] 4.1 Have the stand-in for Claude Code (`crates/flume/tests/profiles/stand-in/claude.rs`), where `REX_BLOCK` is set, write OSC 7501 reports to its terminal in place of herdr's, `app` `claude-code`: `idle` once up, `working` from a prompt's first moment, `done` at its turn's end, in the pinned Rex's words. True when `devenv shell -- cargo test -p flume --features tools --test tools terminal_rex::the_stand_in_reports_its_state_to_rex` passes, opening the stand-in under the profile and reading waiting, working after a prompt, then waiting.
+- [x] 4.1 Have the stand-in for Claude Code (`crates/flume/tests/profiles/stand-in/claude.rs`), where `REX_BLOCK` is set, write OSC 7501 reports to its terminal in place of herdr's, `app` `claude-code`: `idle` once up, `working` from a prompt's first moment, `done` at its turn's end, in the pinned Rex's words. True when `devenv shell -- cargo test -p flume --features tools --test tools terminal_rex::the_stand_in_reports_its_state_to_rex` passes, opening the stand-in under the profile and reading waiting, working after a prompt, then waiting.
 - [ ] 4.2 Give `crates/flume/tests/profiles/tools/walk.rs` a host whose stream names Rex, the pinned `rex` on its `PATH` and flume's state folder short enough for its sockets, stopping each Rex server under it at the walk's end; and add the walkthrough of the stream-terminals scenario "A fix on a stream under Rex" to `walkthroughs.rs` (190, S91). True when `devenv shell -- cargo test -p flume --features tools --test tools walkthroughs::a_fix_on_a_stream_under_rex_lands_through_the_binary` passes.
 
 ## 5. sluice and the tests strip `REX_*`
