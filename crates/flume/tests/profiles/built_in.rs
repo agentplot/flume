@@ -443,16 +443,66 @@ fn the_hashes_recorded() {
 
 #[test]
 fn flumes_own_kinds_declare_no_label() {
-    // 180: a label is the host's to give flume's own kinds, and none of
-    // them declares one.
+    // 148, 180: a label is the host's to give flume's own kinds, and none
+    // of them declares one, in the seam's kind or in its declaration, read
+    // as TOML so a label the seam never carries is found too (core.4); and
+    // no stage of change@4, chore@2 or fix@2 names standing instructions,
+    // which flume does not yet read (record 0064).
     use flume::profiles::kinds::weir::Weir;
     let own = Weir.flumes_own();
     assert!(!own.is_empty(), "flume holds no kind of its own");
-    for package in own {
+    for package in &own {
         assert_eq!(
             package.kind.label, None,
             "{} declares a label",
             package.identity
         );
     }
+    let own_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/profiles/kinds/weir/own");
+    let mut read = 0;
+    for entry in std::fs::read_dir(&own_dir).expect("flume's own kinds' directory") {
+        let version = entry.expect("an entry").path();
+        let at = version.join("kind.toml");
+        let text = std::fs::read_to_string(&at)
+            .unwrap_or_else(|error| panic!("{}: {error}", at.display()));
+        let declaration: toml::Table = text
+            .parse()
+            .unwrap_or_else(|error| panic!("{}: {error}", at.display()));
+        let named = version
+            .file_name()
+            .expect("a version's name")
+            .to_string_lossy()
+            .into_owned();
+        let newest = ["change@4", "chore@2", "fix@2"].contains(&named.as_str());
+        let kinds = declaration
+            .get("kinds")
+            .and_then(toml::Value::as_table)
+            .unwrap_or_else(|| panic!("{named} declares no kinds"));
+        for (name, kind) in kinds {
+            let kind = kind
+                .as_table()
+                .unwrap_or_else(|| panic!("{named}'s {name} is no table"));
+            assert!(
+                !kind.contains_key("label"),
+                "{named}'s [kinds.{name}] gives a label"
+            );
+            if !newest {
+                continue;
+            }
+            let stages = kind
+                .get("stages")
+                .and_then(toml::Value::as_array)
+                .unwrap_or_else(|| panic!("{named}'s {name} has no stages"));
+            for stage in stages {
+                let stage = stage.as_table().expect("a stage's table");
+                assert!(
+                    !stage.contains_key("standing"),
+                    "{named}'s stage {:?} names standing instructions",
+                    stage.get("name")
+                );
+            }
+        }
+        read += 1;
+    }
+    assert_eq!(read, own.len(), "a declaration for each kind built in");
 }
