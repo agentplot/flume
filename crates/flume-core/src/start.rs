@@ -175,6 +175,43 @@ fn conversation(after: &CarryFrom, carry: Option<&Carry>) -> Conversation {
     }
 }
 
+/// The count a start of `stage` carries, its own point `own` where it
+/// begins one: a stage with no count, never started, delivered since, sent
+/// back to by a fix round or held before stages kept their count, begins
+/// its count at this start, which carries none; a repetition given a group
+/// carries the count of the stage's last start where that start was given
+/// the same group, by number and title, and counts from itself otherwise;
+/// every other start, a repetition given no group among them, carries the
+/// stage's count. Nothing asks why the stage starts (25, 140).
+fn carried_count(
+    stage: &mut StageHeld,
+    group: Option<&GroupHeld>,
+    own: Counted,
+) -> Option<Counted> {
+    let Some(counts) = stage.counts.clone() else {
+        stage.counts = Some(own);
+        return None;
+    };
+    match group {
+        Some(group) => stage
+            .start
+            .as_ref()
+            .filter(|last| {
+                last.group
+                    .as_ref()
+                    .is_some_and(|given| same_group(given, group))
+            })
+            .map(StartHeld::counted),
+        None => Some(counts),
+    }
+}
+
+/// Whether two repetitions were given the same group, by its number and
+/// its title, as a group is read at the head (140).
+fn same_group(one: &GroupHeld, other: &GroupHeld) -> bool {
+    one.number == other.number && one.title == other.title
+}
+
 /// What readiness came to, as a prompt's `{{unready}}` gives it (12).
 fn unready(readiness: &Readiness) -> String {
     match readiness.failed() {
@@ -708,6 +745,16 @@ impl Engine {
                 )
             };
             let stage = &mut held.stages[index];
+            let counts = carried_count(
+                stage,
+                group.as_ref().and_then(Option::as_ref),
+                Counted {
+                    start: identity.start,
+                    at: now,
+                    head: head.clone(),
+                    made_from,
+                },
+            );
             stage.state = StageState::Starting;
             stage.starts = identity.start;
             stage.refused_part = None;
@@ -754,6 +801,7 @@ impl Engine {
                     passed: None,
                 }),
                 answered: 0,
+                counts,
             });
             if !held
                 .terminals

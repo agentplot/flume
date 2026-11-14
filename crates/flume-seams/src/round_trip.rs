@@ -315,6 +315,12 @@ fn held() -> HeldState {
                 }),
             }),
             made_from: Some(1),
+            counts: Some(Counted {
+                start: 1,
+                at: 3,
+                head: Revision::new("c1"),
+                made_from: 1,
+            }),
             start: Some(StartHeld {
                 n: 2,
                 started_at: 5,
@@ -425,6 +431,12 @@ fn held() -> HeldState {
                     passed: Some("--own /state/places/x/agent/own.json".into()),
                 }),
                 answered: 0,
+                counts: Some(Counted {
+                    start: 1,
+                    at: 3,
+                    head: Revision::new("c1"),
+                    made_from: 1,
+                }),
             }),
             since: Some(120),
         }],

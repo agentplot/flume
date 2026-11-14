@@ -823,6 +823,7 @@ impl Engine {
                     since: None,
                     room: None,
                     made_from: None,
+                    counts: None,
                 })
                 .collect(),
             current: None,

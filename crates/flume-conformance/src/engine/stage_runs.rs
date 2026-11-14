@@ -2,10 +2,12 @@
 //! filled and delivered, and its end read from its deliverable, its
 //! agent's stop-short or a conversation's finish.
 
+use super::account_pools::{account, account_of, on, pool};
+use super::settling::{construct_begun, fix_begun, write_change};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{Answer, Retry};
-use flume_fakes::Log;
+use flume_fakes::{Log, Plan};
 use flume_seams::*;
 
 pub fn scenarios() -> Vec<Scenario<()>> {
@@ -93,6 +95,41 @@ pub fn scenarios() -> Vec<Scenario<()>> {
                 "end: each of the six forms delivers where it lives, made since the stage started",
             cites: &["24", "25", "123"],
             run: the_six_forms,
+        },
+        Scenario {
+            name: "end: an answered stop-short delivers what its start committed, and the place is submitted (S131)",
+            cites: &["25", "49", "111"],
+            run: an_answered_stop_short_delivers,
+        },
+        Scenario {
+            name: "end: a retry of a stage that has delivered starts afresh, and is not delivered with no commit of its own",
+            cites: &["25", "49", "110"],
+            run: a_delivered_stages_retry_starts_afresh,
+        },
+        Scenario {
+            name: "end: a stage written before it kept its count counts from its next start, as flume did",
+            cites: &["25", "49"],
+            run: a_stage_written_before_counts_from_its_next_start,
+        },
+        Scenario {
+            name: "end: S131, a fix round whose agent makes no commit is not delivered, and the caller's retry of the submission submits the same head with no agent started",
+            cites: &["25", "49", "112", "131", "S52"],
+            run: a_fix_round_counts_only_what_follows,
+        },
+        Scenario {
+            name: "end: the start after a spent account counts the spent agent's commit",
+            cites: &["25", "129", "146"],
+            run: the_start_after_a_spent_account,
+        },
+        Scenario {
+            name: "end: a report an earlier start wrote delivers its stage at the retry",
+            cites: &["24", "25", "49"],
+            run: a_report_an_earlier_start_wrote,
+        },
+        Scenario {
+            name: "end: a retry of construct leaves code's count, and code's next agent delivers on its first start's commit",
+            cites: &["25", "49", "40"],
+            run: a_retry_of_construct_leaves_codes_count,
         },
         Scenario {
             name: "stop-short: a construct stops short, and no code stage starts",
@@ -795,6 +832,493 @@ fn the_six_forms(_: &()) -> Outcome {
             name
         );
     }
+    Ok(())
+}
+
+/// The words a fix's code agent stops short with once its fix is
+/// committed, and its caller's answer (S131).
+const COMMITTED_ASKS: &str = "The fix is committed. Should the old flag stay as an alias?";
+const COMMITTED_ANSWER: &str = "Keep it as an alias for one release.";
+
+/// The secret of the last start of the place's stage at `index`.
+fn secret_of(world: &World, id: &PlaceId, index: usize) -> Result<Secret, String> {
+    world
+        .held(id)
+        .and_then(|held| held.stages[index].start.clone())
+        .map(|start| start.secret)
+        .ok_or_else(|| format!("the stage at {index} never started"))
+}
+
+/// The stage at `index` of the place as held state gives it.
+fn stage_held(world: &World, id: &PlaceId, index: usize) -> Result<StageHeld, String> {
+    world
+        .held(id)
+        .map(|held| held.stages[index].clone())
+        .ok_or_else(|| "the place is gone".into())
+}
+
+/// The start `at` of the place's stage at `index`, working, stops short
+/// needing an answer with `words` and ends its turn, and a settle reads
+/// it.
+fn asks(world: &World, id: &PlaceId, at: &Identity, index: usize, words: &str) -> Outcome {
+    world.terminal.set_state(at, AgentState::Working);
+    let asked = world.engine.needs(
+        &at.to_string(),
+        &secret_of(world, id, index)?.0,
+        words,
+        StopKind::NeedsAnswer,
+    );
+    ensure!(
+        asked.refusal().is_none(),
+        "the stop-short was refused: {asked:?}"
+    );
+    world.terminal.set_state(at, AgentState::Waiting);
+    world.settle(id);
+    ensure_eq!(
+        world.held(id).map(|held| held.stages[index].state),
+        Some(StageState::EndedShort),
+        "the stage once its agent asked"
+    );
+    Ok(())
+}
+
+/// The caller's retry of `stage` with `words`, once the agent that asked
+/// is no longer kept open, so a fresh agent takes them (49, 198).
+fn retried(world: &World, id: &PlaceId, stage: &str, words: &str) -> Outcome {
+    world.host.advance(flume_core::KEEP_OPEN);
+    let retried = world
+        .engine
+        .retry(id, Retry::Stage(stage.into()), Some(words.into()), false);
+    ensure!(
+        retried.refusal().is_none(),
+        "the retry was refused: {retried:?}"
+    );
+    Ok(())
+}
+
+/// The fix `one`, its submissions' outcomes `plans`, whose code agent
+/// commits its fix and then stops short needing an answer, its caller
+/// retrying code with the answer: the head the commit reached (25, 49,
+/// S131).
+fn a_fix_answered_after_its_commit(
+    world: &World,
+    plans: Vec<Plan>,
+) -> Result<(PlaceId, Revision), String> {
+    world.queue.plan_submits(plans);
+    let id = fix_begun(world, "one")?;
+    let first = World::identity("fix", "one", "code", 1);
+    world.terminal.set_state(&first, AgentState::Working);
+    let head = world.commit("fix/one", &["fix.rs"]);
+    asks(world, &id, &first, 0, COMMITTED_ASKS)?;
+    retried(world, &id, "code", COMMITTED_ANSWER)?;
+    Ok((id, head))
+}
+
+fn an_answered_stop_short_delivers(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, head) = a_fix_answered_after_its_commit(&world, vec![Plan::Hold])?;
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.log.count("open"),
+        2,
+        "agents opened: the one that asked and the retry's"
+    );
+    let code = stage_held(&world, &id, 0)?;
+    ensure_eq!(
+        code.state,
+        StageState::Delivered,
+        "code, its retry's agent making no commit"
+    );
+    ensure_eq!(
+        code.end.and_then(|end| end.head),
+        Some(head.clone()),
+        "the head code delivered at, the first start's commit"
+    );
+    ensure_eq!(
+        code.start
+            .and_then(|start| start.counts)
+            .map(|counts| counts.start),
+        Some(1),
+        "the start the retry counted from"
+    );
+    ensure_eq!(code.counts, None, "code's count once it delivered");
+    ensure_eq!(
+        world.queue.log.of("submit"),
+        vec![format!("submit fix/one {head} main")],
+        "the submissions"
+    );
+    Ok(())
+}
+
+fn a_delivered_stages_retry_starts_afresh(_: &()) -> Outcome {
+    let world = World::new();
+    let mut held = launch("change", "plan", Some("plan it"));
+    held.hold = vec!["code".into()];
+    launched(&world.engine.launch(&held))?;
+    let id = World::id("change", "plan");
+    world.settle(&id);
+    write_change(&world, "plan");
+    world.settle(&id);
+    let construct = stage_held(&world, &id, 0)?;
+    ensure_eq!(construct.state, StageState::Delivered, "construct");
+    ensure_eq!(
+        construct.counts,
+        None,
+        "construct's count once it delivered"
+    );
+    let retried = world.engine.retry(
+        &id,
+        Retry::Stage("construct".into()),
+        Some("Weigh the log beside the queue.".into()),
+        false,
+    );
+    ensure!(
+        retried.refusal().is_none(),
+        "the retry was refused: {retried:?}"
+    );
+    world.settle(&id);
+    let again = World::identity("change", "plan", "construct", 2);
+    let construct = stage_held(&world, &id, 0)?;
+    ensure_eq!(
+        construct.state,
+        StageState::Begun,
+        "construct's retry, its agent making no commit"
+    );
+    ensure_eq!(
+        construct.start.and_then(|start| start.counts),
+        None,
+        "the retry's start counts from itself"
+    );
+    ensure_eq!(
+        construct.counts.map(|counts| counts.start),
+        Some(2),
+        "construct's count, begun at its retry"
+    );
+    let words = stop_words(&world, &again).ok_or("the agent was not sent back")?;
+    ensure!(
+        words.contains("change written") && words.contains("since the stage started"),
+        "the words name not the change it lacks: {words}"
+    );
+    Ok(())
+}
+
+fn a_stage_written_before_counts_from_its_next_start(_: &()) -> Outcome {
+    let world = World::new();
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = fix_begun(&world, "one")?;
+    let first = World::identity("fix", "one", "code", 1);
+    world.terminal.set_state(&first, AgentState::Working);
+    world.commit("fix/one", &["fix.rs"]);
+    asks(&world, &id, &first, 0, COMMITTED_ASKS)?;
+    // The document as a flume before stages kept their count wrote it.
+    let read = world.store.read(&id).ok_or("no held state")?;
+    let mut json = serde_json::to_value(&read.state).map_err(|error| error.to_string())?;
+    let code = &mut json["stages"][0];
+    code.as_object_mut().ok_or("a stage")?.remove("counts");
+    code["start"]
+        .as_object_mut()
+        .ok_or("a start")?
+        .remove("counts");
+    let before: HeldState = serde_json::from_value(json).map_err(|error| error.to_string())?;
+    ensure_eq!(before.stages[0].counts, None, "code's count written before");
+    ensure!(
+        matches!(
+            world.store.write(&id, Some(read.version), Some(&before)),
+            Written::Written { .. }
+        ),
+        "the earlier held state was not written"
+    );
+    retried(&world, &id, "code", COMMITTED_ANSWER)?;
+    world.settle(&id);
+    let code = stage_held(&world, &id, 0)?;
+    ensure_eq!(
+        code.state,
+        StageState::Begun,
+        "code, counting from the retry's start"
+    );
+    ensure_eq!(
+        (
+            code.counts.map(|counts| counts.start),
+            code.start.and_then(|start| start.counts)
+        ),
+        (Some(2), None),
+        "code's count and its retry's"
+    );
+    let second = World::identity("fix", "one", "code", 2);
+    let words = stop_words(&world, &second).ok_or("the agent was not sent back")?;
+    ensure!(
+        words.contains("commits"),
+        "the words name not commits: {words}"
+    );
+    ensure_eq!(world.queue.log.count("submit"), 0, "submissions");
+    Ok(())
+}
+
+fn a_fix_round_counts_only_what_follows(_: &()) -> Outcome {
+    let world = World::new();
+    let failed = "check test-x failed";
+    let (id, head) =
+        a_fix_answered_after_its_commit(&world, vec![Plan::Fail(failed.into()), Plan::Hold])?;
+    world.settle(&id);
+    let round = World::identity("fix", "one", "code", 3);
+    let prompt = world
+        .prompt(&id, &round)
+        .ok_or("the fix round did not start code")?;
+    ensure!(prompt.contains(failed), "{failed} is not in {prompt}");
+    world.settle(&id);
+    let code = stage_held(&world, &id, 0)?;
+    ensure_eq!(
+        code.state,
+        StageState::Begun,
+        "code, the fix round's agent making no commit"
+    );
+    ensure_eq!(
+        (
+            code.counts.map(|counts| (counts.start, counts.head)),
+            code.start.and_then(|start| start.counts)
+        ),
+        (Some((3, head.clone())), None),
+        "code's count, begun afresh at the fix round"
+    );
+    let words = stop_words(&world, &round).ok_or("the agent was not sent back")?;
+    ensure!(
+        words.contains("commits"),
+        "the words name not the commit it lacks: {words}"
+    );
+    asks(
+        &world,
+        &id,
+        &round,
+        0,
+        "test-x fails on the base too; the fix stands. Submit it again?",
+    )?;
+    let opened = world.terminal.log.count("open");
+    let retried = world.engine.retry(&id, Retry::Submission, None, false);
+    ensure!(
+        retried.refusal().is_none(),
+        "the retry of the submission was refused: {retried:?}"
+    );
+    let submitted = format!("submit fix/one {head} main");
+    ensure_eq!(
+        world.queue.log.of("submit"),
+        vec![submitted.clone(), submitted],
+        "the submissions, each at the head the first start's commit reached"
+    );
+    ensure_eq!(
+        world.terminal.log.count("open"),
+        opened,
+        "agents opened by the retry of the submission"
+    );
+    Ok(())
+}
+
+fn the_start_after_a_spent_account(_: &()) -> Outcome {
+    let world = World::new();
+    pool(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        vec![account("work-1", None), account("work-2", None)],
+    );
+    world.host.set_host_pool(Some("work"));
+    world.queue.plan_submits(vec![Plan::Hold]);
+    // A stage that makes a preview besides its commits, so the spent
+    // agent's commit alone does not deliver it (129).
+    let mut code = stage(
+        "code",
+        Some(Deliverable::Commits),
+        "{{brief}}\n\nRecord what you made at {{made}}.",
+    );
+    code.makes = vec!["preview".into()];
+    world
+        .kinds
+        .set_kinds(REPOSITORY, vec![kind("spike", true, vec![code])]);
+    launched(&world.engine.launch(&launch("spike", "one", Some("try it"))))?;
+    let id = World::id("spike", "one");
+    world.settle(&id);
+    ensure_eq!(
+        account_of(&world, &id, "code"),
+        on("work", "work-1"),
+        "code's first start"
+    );
+    let head = world.commit("spike/one", &["spike.rs"]);
+    world.agent.set_spent(
+        &World::identity("spike", "one", "code", 1),
+        Spent::Yes {
+            until: Some(world.host.now() + 3600),
+            words: "a usage limit this test writes".into(),
+        },
+    );
+    world.settle(&id);
+    world.settle(&id);
+    let code = stage_held(&world, &id, 0)?;
+    let next = code.start.ok_or("code never started")?;
+    ensure_eq!(
+        (next.n, next.live, code.state),
+        (2, true, StageState::Begun),
+        "code's next start"
+    );
+    ensure_eq!(
+        account_of(&world, &id, "code"),
+        on("work", "work-2"),
+        "the account of code's next start"
+    );
+    // The next agent records the preview the spent agent committed, and
+    // makes no commit.
+    let line = format!(
+        r#"{{"name":"preview","what":"preview","branch":"spike/one","revision":"{}"}}"#,
+        head.0
+    );
+    world.store.record_made(&id, &line);
+    world.settle(&id);
+    let code = stage_held(&world, &id, 0)?;
+    ensure_eq!(
+        code.state,
+        StageState::Delivered,
+        "code, its next agent making no commit"
+    );
+    ensure_eq!(
+        code.end.and_then(|end| end.head),
+        Some(head.clone()),
+        "the head code delivered at, the spent agent's commit"
+    );
+    ensure_eq!(
+        code.start
+            .and_then(|start| start.counts)
+            .map(|counts| counts.start),
+        Some(1),
+        "the start code's next start counted from"
+    );
+    ensure_eq!(
+        world.queue.log.of("submit"),
+        vec![format!("submit spike/one {head} main")],
+        "the submissions"
+    );
+    Ok(())
+}
+
+fn a_report_an_earlier_start_wrote(_: &()) -> Outcome {
+    let world = World::new();
+    let id = world.begun(
+        "notes",
+        Some(Deliverable::Report {
+            path: "{{state}}/conclusion.md".into(),
+        }),
+        "one",
+    )?;
+    let first = World::identity("notes", "one", "work", 1);
+    world.terminal.set_state(&first, AgentState::Working);
+    world.host.advance(1);
+    let report = format!("{}/conclusion.md", world.store.folder(&id));
+    world.host.write_file(&report);
+    asks(
+        &world,
+        &id,
+        &first,
+        0,
+        "The report is written. Should it weigh the old queue too?",
+    )?;
+    retried(&world, &id, "work", "Leave the old queue out.")?;
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.log.count("open"),
+        2,
+        "agents opened: the one that asked and the retry's"
+    );
+    let work = stage_held(&world, &id, 0)?;
+    ensure_eq!(
+        work.state,
+        StageState::Delivered,
+        "the stage, its retry's agent leaving the report as it stands"
+    );
+    ensure_eq!(
+        work.end.and_then(|end| end.report),
+        Some(report),
+        "the report it delivered"
+    );
+    Ok(())
+}
+
+fn a_retry_of_construct_leaves_codes_count(_: &()) -> Outcome {
+    let world = World::new();
+    let id = construct_begun(&world, "plan")?;
+    write_change(&world, "plan");
+    world.settle(&id);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "code"
+    );
+    let code = World::identity("change", "plan", "code", 1);
+    world.terminal.set_state(&code, AgentState::Working);
+    world.tick("change/plan", "plan", 1, 1);
+    asks(
+        &world,
+        &id,
+        &code,
+        1,
+        "Every task is ticked. Should the design say why the log was left out?",
+    )?;
+    retried(&world, &id, "construct", "Yes: say why in the design.")?;
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "construct"),
+        Some(StageState::Begun),
+        "construct's retry"
+    );
+    ensure_eq!(
+        stage_held(&world, &id, 1)?
+            .counts
+            .map(|counts| counts.start),
+        Some(1),
+        "code's count while construct runs again"
+    );
+    // Construct's agent commits a change to the design, every task left
+    // ticked, and delivers.
+    let revision = world.commit("change/plan", &["plans/plan/design.md"]);
+    world.change.set(
+        REPOSITORY,
+        &revision,
+        "plan",
+        ChangeFacts {
+            exists: true,
+            planning_complete: true,
+            tasks: vec![Task {
+                text: "1.1 do it".into(),
+                ticked: true,
+                group: None,
+            }],
+            archived: false,
+            groups: vec![],
+        },
+    );
+    world.settle(&id);
+    world.settle(&id);
+    let code = stage_held(&world, &id, 1)?;
+    ensure_eq!(
+        code.state,
+        StageState::Delivered,
+        "code, its next agent making no commit"
+    );
+    ensure_eq!(
+        code.start
+            .as_ref()
+            .map(|start| (start.n, start.counts.as_ref().map(|counts| counts.start))),
+        Some((2, Some(1))),
+        "code's next start and the start it counted from"
+    );
+    ensure_eq!(
+        code.end.and_then(|end| end.head),
+        Some(revision),
+        "the head code delivered at"
+    );
+    ensure!(
+        world
+            .stage_state(&id, "verify")
+            .is_some_and(StageState::running),
+        "verify did not start"
+    );
     Ok(())
 }
 

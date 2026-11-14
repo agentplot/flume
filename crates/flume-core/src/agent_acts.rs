@@ -110,7 +110,7 @@ impl Engine {
             }
         }
         let id = held.place.id.clone();
-        let made = self.made_since(&id, &start);
+        let made = self.stage_made(&held, &start);
         let answers =
             kind == StopKind::NeedsAnswer || !crate::submit::found_goes_back(&held, index);
         let open_until = (answers && self.sends(&start))

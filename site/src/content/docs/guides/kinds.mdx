@@ -268,6 +268,14 @@ flume reads a deliverable at one head of the place's branch and counts
 it only when made since the stage started. Once it exists flume waits
 until the agent is quiet, then ends the agent.
 
+A stage started, for its deliverable, at the first of its starts since
+it last delivered, so a retry counts what an earlier start made. Where
+an agent commits its work and then stops short to ask, the retry's
+agent finds the work done and ends its turn, and the stage delivers
+with no commit of its own. A repetition counts from the first start
+given its group. A fix round, and a retry of a stage that has
+delivered, count only what is made after them.
+
 ### What a stage makes
 
 `makes` names things a stage leaves besides its deliverable: a
