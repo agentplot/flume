@@ -1,7 +1,8 @@
 # The-gate spec's CI build of the flake's package (the change
-# flume-publishes-its-own-flake-and-module, design 11), held by the
-# workflow's text: .github/workflows/ci.yml read line by line, as yamlfmt
-# lays it out. GitHub runs it; the gate holds what it says.
+# flume-publishes-its-own-flake-and-module, design 11) and its conventional
+# check's convco (the change ci-checks-commits-with-the-hooks-convco), held
+# by the workflow's text: .github/workflows/ci.yml read line by line, as
+# yamlfmt lays it out. GitHub runs it; the gate holds what it says.
 t:
 let
   inherit (t) lib;
@@ -25,7 +26,9 @@ let
   on = blockAfter "" "on:" lines;
   jobs = blockAfter "" "jobs:" lines;
   flake = blockAfter "  " "flake:" jobs;
+  conventional = blockAfter "  " "conventional:" jobs;
   has = line: from: builtins.elem line from;
+  hasInfix = part: lib.any (lib.hasInfix part);
 in
 {
   "The workflow's build job" =
@@ -38,4 +41,14 @@ in
       has "  push:" on && has "    branches: [main]" on && has "  pull_request:" on
     ) "the workflow runs on no push to main and pull request: ${builtins.toJSON on}"
     ++ t.expect (!lib.any (lib.hasPrefix "    if:") flake) "the job flake runs on a condition";
+
+  "The workflow's conventional check" =
+    t.expect (conventional != [ ]) "the workflow holds no job conventional"
+    ++ t.expect (
+      hasInfix "jq -r '.nodes.nixpkgs.locked | " conventional && hasInfix "' devenv.lock)" conventional
+    ) "the job conventional reads no nixpkgs devenv.lock pins"
+    ++ t.expect (hasInfix "nix shell \"$nixpkgs#convco\" -c convco check --ignore-reverts " conventional) "the job conventional runs no convco check --ignore-reverts of the nixpkgs devenv.lock pins"
+    ++ t.expect (
+      !hasInfix " nixpkgs#convco" conventional
+    ) "the job conventional runs the flake registry's convco";
 }
