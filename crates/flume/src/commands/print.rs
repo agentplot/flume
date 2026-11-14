@@ -536,6 +536,9 @@ fn recipients_from_words(from: &RecipientsFrom) -> String {
             format!("from the stream's answerer, declared by {source}")
         }
         RecipientsFrom::BasePlace => "from the base place it fixes".into(),
+        RecipientsFrom::Standing { agent, source } => {
+            format!("from the standing agent {agent} that launched it, declared by {source}")
+        }
     }
 }
 
@@ -3019,9 +3022,10 @@ mod tests {
 
     #[test]
     fn recipients_with_where_they_came_from() {
-        // 7, 56, 193: each place's recipients with where its launch took
-        // them, the answerer with its source; a place launched before
-        // flume kept it gives them alone.
+        // 7, 56, 132, 193: each place's recipients with where its launch
+        // took them, the answerer with its source and the standing agent
+        // with its name and source; a place launched before flume kept it
+        // gives them alone.
         let line = |recipients: &[&str], from: Option<RecipientsFrom>| {
             place_lines(&PlaceStatus {
                 recipients: recipients.iter().map(|name| name.to_string()).collect(),
@@ -3052,6 +3056,20 @@ mod tests {
         assert_eq!(
             line(&["pane-7"], Some(RecipientsFrom::Session)).as_deref(),
             Some("  recipients: pane-7, from the session that launched it")
+        );
+        assert_eq!(
+            line(
+                &["east/planner"],
+                Some(RecipientsFrom::Standing {
+                    agent: "east-planner".into(),
+                    source: "acme".into()
+                })
+            )
+            .as_deref(),
+            Some(
+                "  recipients: east/planner, from the standing agent east-planner \
+                 that launched it, declared by acme"
+            )
         );
         assert_eq!(line(&["ops"], None).as_deref(), Some("  recipients: ops"));
         assert_eq!(line(&[], None), None);
