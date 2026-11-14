@@ -5075,6 +5075,8 @@ mod tests {
             queue: vec![],
             labels: vec![flume_core::LabelStatus {
                 name: "operation".into(),
+                owed: 2,
+                reserved: 1,
                 reserve: 2,
                 keep_free: 1,
                 running: 1,

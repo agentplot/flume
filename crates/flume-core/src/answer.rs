@@ -1140,12 +1140,19 @@ pub struct TerminalStatus {
     pub watch: Watch,
 }
 
-/// A label of a stream (181): its reserve, the slots of the stream it
-/// keeps free while it runs fewer, its agents running, each counted by
-/// the label it started under, and its stages waiting for room.
+/// A label of a stream (181): the stream's agents it is owed, those of
+/// them it holds reserved, its agents running, each counted by the label
+/// it started under, and its stages waiting for room. `reserve` and
+/// `keep_free` give the same numbers as `owed` and `reserved`, under the
+/// names a label's table gave before record 0063, kept since the form
+/// only ever gains fields (61; core.14).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LabelStatus {
     pub name: String,
+    #[serde(default)]
+    pub owed: u32,
+    #[serde(default)]
+    pub reserved: u32,
     pub reserve: u32,
     pub keep_free: u32,
     pub running: u32,

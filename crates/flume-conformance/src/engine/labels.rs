@@ -601,7 +601,7 @@ fn a_labels_table_naming_reserve(_: &()) -> Outcome {
         "the refusal names not the key: {words}"
     );
     ensure_eq!(
-        label_in_status(&world, "operation")?.reserve,
+        label_in_status(&world, "operation")?.owed,
         0,
         "what operation is owed"
     );
@@ -625,7 +625,7 @@ fn a_labels_table_naming_keep_free(_: &()) -> Outcome {
         "the refusal names not the key: {words}"
     );
     ensure_eq!(
-        label_in_status(&world, "operation")?.keep_free,
+        label_in_status(&world, "operation")?.reserved,
         0,
         "what operation holds reserved"
     );
@@ -725,6 +725,8 @@ fn the_labels_in_status(_: &()) -> Outcome {
         vec![
             LabelStatus {
                 name: "construction".into(),
+                owed: 1,
+                reserved: 0,
                 reserve: 1,
                 keep_free: 0,
                 running: 1,
@@ -732,6 +734,8 @@ fn the_labels_in_status(_: &()) -> Outcome {
             },
             LabelStatus {
                 name: "operation".into(),
+                owed: 2,
+                reserved: 1,
                 reserve: 2,
                 keep_free: 1,
                 running: 0,
@@ -751,6 +755,8 @@ fn the_labels_in_status(_: &()) -> Outcome {
         json[1],
         serde_json::json!({
             "name": "operation",
+            "owed": 2,
+            "reserved": 1,
             "reserve": 2,
             "keep_free": 1,
             "running": 0,

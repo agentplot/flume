@@ -741,6 +741,8 @@ fn host_status() -> HostStatus {
             queue: vec![queued()],
             labels: vec![LabelStatus {
                 name: "operation".into(),
+                owed: 2,
+                reserved: 1,
                 reserve: 2,
                 keep_free: 1,
                 running: 1,
@@ -1477,7 +1479,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.streams[].labels",
             "status.host.streams[].labels[].keep_free",
             "status.host.streams[].labels[].name",
+            "status.host.streams[].labels[].owed",
             "status.host.streams[].labels[].reserve",
+            "status.host.streams[].labels[].reserved",
             "status.host.streams[].labels[].running",
             "status.host.streams[].labels[].waiting",
             "status.host.streams[].name",

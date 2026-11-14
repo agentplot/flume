@@ -1124,6 +1124,8 @@ impl Engine {
                     .iter()
                     .map(|(label, room)| LabelStatus {
                         name: label.clone(),
+                        owed: room.owed,
+                        reserved: room.reserved,
                         reserve: room.owed,
                         keep_free: room.reserved,
                         running: room.running,
