@@ -4382,3 +4382,135 @@ fn s126_a_role_at_work_takes_two_messages_and_an_end_as_one_prompt() {
         "the fix's end not handed to w/ops: {code}"
     );
 }
+
+#[test]
+fn s128_a_roles_run_launches_two_places_that_report_to_its_address() {
+    // S128; 7, 56, 132, 214: the run of `w/ops` launches two fixes naming
+    // no recipient, one through the binary and one through `flume mcp`'s
+    // `launch`, each reporting to `w/ops` from its run; status gives both
+    // under `w/ops`'s `reporting` while they run; both land while the run
+    // works, and their ends reach its pane as one prompt at its next wait.
+    let host = Walk::under_herdr("walk-s128");
+    w_with_its_ops(&host);
+    let out = host.walk.repository.scratch.path("ops");
+    std::fs::create_dir_all(&out).expect("the run's folder");
+    let (by_hand, requests, over_mcp) = (
+        out.join("one.json"),
+        out.join("mcp-in.jsonl"),
+        out.join("mcp-out.jsonl"),
+    );
+    std::fs::write(
+        &requests,
+        [
+            json!({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "run", "version": "1"}}}),
+            json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "launch", "arguments": {"kind": "fix", "name": "s128-two", "brief": "Mend the second job."}}}),
+        ]
+        .iter()
+        .map(|request| format!("{request}\n"))
+        .collect::<String>(),
+    )
+    .expect("the MCP session's requests");
+    let (quiet, mend) = (host.signal("quiet"), host.signal("mend"));
+    host.script(
+        "answer",
+        1,
+        json!([
+            [
+                { "bash": format!(
+                    "flume launch --kind fix --name s128-one --brief 'Mend the first job.' --json > '{}'",
+                    by_hand.display()
+                ) },
+                { "bash": format!("flume mcp < '{}' > '{}'", requests.display(), over_mcp.display()) },
+                { "wait_for": quiet },
+            ],
+            [{ "bash": "true" }],
+        ]),
+    );
+    host.script(
+        "code",
+        1,
+        json!([
+            { "wait_for": mend },
+            { "bash": "f=$(basename \"$PWD\").md && echo fixed > \"$f\" && git add -A && git commit --quiet -m \"write $f\"" },
+        ]),
+    );
+    host.walk.flume(&["wake", "w/ops"]);
+    let (one, two) = (
+        location(&host, "fix--s128-one"),
+        location(&host, "fix--s128-two"),
+    );
+    settled_until(&host, "the run's two launches, their code at work", || {
+        std::fs::read_to_string(&over_mcp).is_ok_and(|text| text.lines().count() == 2)
+            && host.log("code", 1).matches("took the prompt").count() >= 1
+            && [&one, &two]
+                .iter()
+                .all(|place| stage(&host.status(place), "code")["state"] == "begun")
+    });
+    let launched = json_in(&by_hand);
+    assert_eq!(
+        (
+            &launched["launched"]["place"]["recipients"],
+            &launched["launched"]["place"]["recipients_from"]["from"]
+        ),
+        (&json!(["w/ops"]), &json!("role-run")),
+        "{launched}"
+    );
+    let replies: Vec<Value> = std::fs::read_to_string(&over_mcp)
+        .expect("the MCP session's replies")
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("a JSON-RPC reply"))
+        .collect();
+    let text = replies[1]["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_else(|| panic!("no tool's text: {replies:?}"));
+    let launched: Value = serde_json::from_str(text).expect("the launch's JSON");
+    assert_eq!(replies[1]["result"]["isError"], false, "{launched}");
+    assert_eq!(
+        (
+            &launched["launched"]["place"]["recipients"],
+            &launched["launched"]["place"]["recipients_from"]["from"]
+        ),
+        (&json!(["w/ops"]), &json!("role-run")),
+        "{launched}"
+    );
+
+    let host_status = host.host();
+    let ops = host_status["addresses"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|address| address["address"] == "w/ops")
+        .unwrap_or_else(|| panic!("status names no w/ops: {host_status}"));
+    let mut reporting: Vec<&str> = ops["reporting"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect();
+    reporting.sort_unstable();
+    let mut both = vec![one.as_str(), two.as_str()];
+    both.sort_unstable();
+    assert_eq!(reporting, both, "{ops}");
+
+    std::fs::write(&mend, "").expect("the fixes' signal");
+    until_landed(&host.walk, &one);
+    until_landed(&host.walk, &two);
+    assert_eq!(
+        host.prompts("answer", 1).len(),
+        1,
+        "something typed into the run's pane while it works: {}",
+        host.log("answer", 1)
+    );
+    std::fs::write(&quiet, "").expect("the run's signal");
+    settled_until(&host, "the run's next prompt", || {
+        host.prompts("answer", 1).len() == 2
+    });
+    let prompt = &host.prompts("answer", 1)[1];
+    for place in ["fix--s128-one", "fix--s128-two"] {
+        assert!(
+            prompt.contains(&format!("flume: {place} ")),
+            "the batch lacks {place}'s ends: {prompt}"
+        );
+    }
+    assert_eq!(prompt.matches("submission landed").count(), 2, "{prompt}");
+}
