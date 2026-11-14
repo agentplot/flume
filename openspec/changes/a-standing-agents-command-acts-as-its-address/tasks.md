@@ -21,7 +21,7 @@ on a scratch socket and a scratch session home.
 
 ## 3. The command line
 
-- [ ] 3.1 In `crates/flume/src/commands/mod.rs`, have `recipient_of`'s refusal where `Engine::recipient` finds no recipient name `--recipient`, `$FLUME_RECIPIENT`, a terminal's session, a role's run and a standing agent's pane; and have the `--recipient` help of `wait`, `inbox` and `confirm`, and the launch's, name the address a standing agent holds in design 2's and design 3's place (7, 132; core.14). Verify with `devenv shell -- cargo test -p flume --test commands the_recipient_a_wait_and_an_inbox_default_to`.
+- [x] 3.1 In `crates/flume/src/commands/mod.rs`, have `recipient_of`'s refusal where `Engine::recipient` finds no recipient name `--recipient`, `$FLUME_RECIPIENT`, a terminal's session, a role's run and a standing agent's pane; and have the `--recipient` help of `wait`, `inbox` and `confirm`, and the launch's, name the address a standing agent holds in design 2's and design 3's place (7, 132; core.14). Verify with `devenv shell -- cargo test -p flume --test commands the_recipient_a_wait_and_an_inbox_default_to`.
 
 ## 4. The terminals' caller panes
 

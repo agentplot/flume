@@ -2623,8 +2623,9 @@ fn a_wait_exits_by_its_outcome() {
 fn the_recipient_a_wait_and_an_inbox_default_to() {
     // 7, 132, design 7: $FLUME_RECIPIENT, then a role's run's address read
     // from the place $FLUME_PLACE names, and a refusal where none names
-    // one; the terminal's session is its profile's to name, tested beside
-    // it under profiles/.
+    // one, naming each way to; the terminal's session and the standing
+    // agent's pane are the terminal profile's to name, tested beside it
+    // under profiles/.
     let host = Host::new("recipients");
     let repository = repository("recipients", None);
     let kinds = kinds_file(&host, false);
@@ -2664,12 +2665,21 @@ fn the_recipient_a_wait_and_an_inbox_default_to() {
         &host.stand_in(&repository.dir, &["inbox", "--json"], &[]),
         1,
     );
-    assert!(
-        unnamed["refused"]["refusal"]["reason"]
-            .as_str()
-            .is_some_and(|reason| reason.contains("--recipient")),
-        "{unnamed}"
-    );
+    let reason = unnamed["refused"]["refusal"]["reason"]
+        .as_str()
+        .unwrap_or_default();
+    for way in [
+        "--recipient",
+        "$FLUME_RECIPIENT",
+        "a terminal's session",
+        "a role's run",
+        "a standing agent's pane",
+    ] {
+        assert!(
+            reason.contains(way),
+            "the refusal names no {way}: {unnamed}"
+        );
+    }
 
     let by_variable = answered(
         &host.stand_in(
