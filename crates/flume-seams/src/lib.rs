@@ -1,8 +1,9 @@
 //! The eight seams of Part B of flume's statement, one trait each, the
-//! types they pass, and git's history and the host's facts beside them
-//! (section 9). A profile depends on this crate alone, so it implements
-//! its interface and nothing of the core (core.2), and no type or trait
-//! here names a tool (core.1).
+//! types they pass, and git's history, the host's facts and the
+//! telemetry the core hands its signals to beside them (section 9, 216).
+//! A profile depends on this crate alone, so it implements its interface
+//! and nothing of the core (core.2), and no type or trait here names a
+//! tool (core.1).
 
 mod agent;
 mod change;
@@ -16,6 +17,7 @@ mod place;
 mod prompt;
 mod resolver;
 mod store;
+pub mod telemetry;
 mod terminal;
 mod window;
 
@@ -31,6 +33,9 @@ pub use place::*;
 pub use prompt::*;
 pub use resolver::*;
 pub use store::*;
+pub use telemetry::{
+    Attributes, HostReading, PlacesStanding, Sends, Signal, StreamAgents, Telemetry,
+};
 pub use terminal::*;
 pub use window::*;
 
