@@ -2063,6 +2063,67 @@ fn world_with_own_kinds(version: u32) -> World {
     world
 }
 
+/// A world whose own kinds are every version the profile builds in, as
+/// its packages, its fake agent mapping `full` to `all` and `edits` to
+/// `edit-files`, so the newest three's agents start (162, 169; record
+/// 0064).
+fn world_with_every_own_version() -> World {
+    let world = World::new();
+    world.kinds.set_own_packages(Weir.flumes_own());
+    world.agent.map_mode(Mode::Full, "all");
+    world.agent.map_mode(Mode::Edits, "edit-files");
+    world
+}
+
+/// The prompts of a fix's code, a chore's code and a change's construct,
+/// code and verify, each rendered for a place launched by its bare name in
+/// `world`, named by the version its place runs and its stage.
+fn rendered_own(world: &World) -> Vec<(String, String)> {
+    fix_begun(world, "one").expect("a fix begun");
+    launched(
+        &world
+            .engine
+            .launch(&launch("chore", "two", Some("tidy the lock"))),
+    )
+    .expect("a chore launched");
+    world.settle(&World::id("chore", "two"));
+    change_at_verify(world, "plan").expect("a change at verify");
+    let mut prompts = vec![];
+    for (kind, name, stages) in [
+        ("fix", "one", &["code"][..]),
+        ("chore", "two", &["code"][..]),
+        ("change", "plan", &["construct", "code", "verify"][..]),
+    ] {
+        let version = world
+            .held(&World::id(kind, name))
+            .expect("the place")
+            .place
+            .kind
+            .version;
+        for stage in stages {
+            prompts.push((
+                format!("{kind}@{version}'s {stage}"),
+                opened(world, kind, name, stage, 1),
+            ));
+        }
+    }
+    prompts
+}
+
+/// The value the command of the start under `identity` passed for its
+/// mode, none where it passed none.
+fn mode_passed(world: &World, identity: &Identity) -> Option<String> {
+    let (command, _) = world
+        .terminal
+        .opened(identity)
+        .unwrap_or_else(|| panic!("{identity} was not opened"));
+    command
+        .args
+        .windows(2)
+        .find(|pair| pair[0] == "--mode")
+        .map(|pair| pair[1].clone())
+}
+
 /// The prompt the start `n` of the place's stage was opened with.
 fn opened(world: &World, kind: &str, name: &str, stage: &str, n: u32) -> String {
     let id = World::id(kind, name);
@@ -2131,6 +2192,153 @@ fn no_prompt_of_flumes_own_asks_to_submit() {
     assert!(prompts[0].contains("commits") && prompts[1].contains("commits"));
 }
 
+#[test]
+fn the_newest_own_prompts_say_their_one_way_to_ask() {
+    // 28, 156; record 0064: change@4's construct, code and verify and
+    // fix@2's and chore@2's code rendered for a place each hold the way to
+    // stop short and, after it, the one way to ask, and ask nothing the
+    // earlier versions' may not; no prompt of change@3, fix@1 or chore@1
+    // holds that sentence.
+    let newest = rendered_own(&world_with_every_own_version());
+    let named: Vec<&str> = newest.iter().map(|(named, _)| named.as_str()).collect();
+    assert_eq!(
+        named,
+        [
+            "fix@2's code",
+            "chore@2's code",
+            "change@4's construct",
+            "change@4's code",
+            "change@4's verify"
+        ],
+        "the versions a bare name runs"
+    );
+    for (named, prompt) in &newest {
+        assert!(!prompt.contains("{{"), "{named}: a part left unfilled");
+        asks_nothing_it_may_not(prompt);
+        assert!(
+            !prompt.to_lowercase().contains("merge"),
+            "{named}: a merge asked with no conflict's words: {prompt}"
+        );
+        let needs = prompt
+            .find("flume needs")
+            .unwrap_or_else(|| panic!("{named} has no way to stop short: {prompt}"));
+        let ask = prompt
+            .find(ONE_WAY_TO_ASK)
+            .unwrap_or_else(|| panic!("{named} says not its one way to ask: {prompt}"));
+        assert!(needs < ask, "{named}: the one way to ask before its needs");
+    }
+    let earlier = rendered_own(&world_with_own_kinds(3));
+    let named: Vec<&str> = earlier.iter().map(|(named, _)| named.as_str()).collect();
+    assert_eq!(
+        named,
+        [
+            "fix@1's code",
+            "chore@1's code",
+            "change@3's construct",
+            "change@3's code",
+            "change@3's verify"
+        ],
+        "the earlier versions"
+    );
+    for (named, prompt) in &earlier {
+        assert!(
+            !prompt.contains(ONE_WAY_TO_ASK),
+            "{named} holds the one way to ask: {prompt}"
+        );
+    }
+}
+
+#[test]
+fn flumes_newest_own_kinds_give_full_from_the_kind() {
+    // 22, 32, 154, 162; record 0064: with the profile's own kinds and the
+    // fake agent mapping `full`, a bare fix runs flume/fix@2, its agent's
+    // command carrying full's value, its start's settings giving `full`
+    // and its record that value, and status `full` from `kind`; the host's
+    // `[agents] mode = "edits"` comes first, from `host`; and fix@1 named
+    // starts with no mode.
+    let world = world_with_every_own_version();
+    let id = fix_begun(&world, "one").expect("a fix begun");
+    let code = World::identity("fix", "one", "code", 1);
+    let status = world.status(&id).expect("status");
+    assert_eq!(
+        status.identity.as_deref(),
+        Some("flume/fix@2"),
+        "a bare fix"
+    );
+    assert_eq!(
+        mode_passed(&world, &code).as_deref(),
+        Some("all"),
+        "the value passed"
+    );
+    let held = world.held(&id).expect("the place");
+    let start = held.stages[0].start.as_ref().expect("code's start");
+    assert_eq!(
+        (start.settings.mode.clone(), start.start_record.mode.clone()),
+        (
+            Some(ModeSetting::Flume(Mode::Full)),
+            Some("all".to_string())
+        ),
+        "the start's mode and its record's"
+    );
+    assert_eq!(
+        status.agent.expect("an agent").settings.from.get("mode"),
+        Some(&Given {
+            layer: Layer::Kind,
+            value: "full".into(),
+            file: None,
+        }),
+        "where the mode came from"
+    );
+
+    let world = world_with_every_own_version();
+    world.host.set_every_agent(Settings {
+        mode: Some(ModeSetting::Flume(Mode::Edits)),
+        ..Settings::default()
+    });
+    let id = fix_begun(&world, "one").expect("a fix begun");
+    assert_eq!(
+        mode_passed(&world, &code).as_deref(),
+        Some("edit-files"),
+        "the host's value passed"
+    );
+    assert_eq!(
+        world
+            .status(&id)
+            .expect("status")
+            .agent
+            .expect("an agent")
+            .settings
+            .from
+            .get("mode"),
+        Some(&Given {
+            layer: Layer::Host,
+            value: "edits".into(),
+            file: None,
+        }),
+        "the host's mode over the kind's"
+    );
+
+    let world = world_with_every_own_version();
+    launched(&world.engine.launch(&launch("fix@1", "one", Some("x")))).expect("fix@1 launched");
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    let status = world.status(&id).expect("status");
+    assert_eq!(status.identity.as_deref(), Some("flume/fix@1"), "fix@1");
+    assert_eq!(mode_passed(&world, &code), None, "fix@1's value passed");
+    let held = world.held(&id).expect("the place");
+    let start = held.stages[0].start.as_ref().expect("code's start");
+    assert_eq!(start.start_record.mode, None, "fix@1's record's mode");
+    assert!(
+        !status
+            .agent
+            .expect("an agent")
+            .settings
+            .from
+            .contains_key("mode"),
+        "status names a layer of fix@1's mode"
+    );
+}
+
 /// The code prompt a conflict sends `kind`'s place back with, and the
 /// base's revision the conflict names.
 fn sent_back_with_a_conflict(world: &World, kind: &str, name: &str) -> (String, Revision) {
@@ -2147,8 +2355,8 @@ fn sent_back_with_a_conflict(world: &World, kind: &str, name: &str) -> (String, 
 
 #[test]
 fn a_code_prompt_sent_back_with_a_conflict_merges_the_base_never_rebasing() {
-    // 112: fix@1's, chore@1's, change@2's and change@3's code prompts sent
-    // back with a conflict's words.
+    // 112: fix@1's, chore@1's, change@2's, change@3's, fix@2's, chore@2's
+    // and change@4's code prompts sent back with a conflict's words.
     let world = world_with_own_kinds(2);
     let mut prompts = vec![];
 
@@ -2178,6 +2386,26 @@ fn a_code_prompt_sent_back_with_a_conflict_merges_the_base_never_rebasing() {
     archive(&world, "plan");
     prompts.push((
         "change@3",
+        sent_back_with_a_conflict(&world, "change", "plan"),
+    ));
+
+    let world = world_with_every_own_version();
+    let fix = fix_begun(&world, "one").expect("a fix@2 begun");
+    deliver_fix(&world, &fix);
+    prompts.push(("fix@2", sent_back_with_a_conflict(&world, "fix", "one")));
+    launched(
+        &world
+            .engine
+            .launch(&launch("chore", "two", Some("tidy the lock"))),
+    )
+    .expect("a chore@2 launched");
+    world.settle(&World::id("chore", "two"));
+    world.commit("chore/two", &["chore.rs"]);
+    prompts.push(("chore@2", sent_back_with_a_conflict(&world, "chore", "two")));
+    change_at_verify(&world, "plan").expect("a change@4 at verify");
+    archive(&world, "plan");
+    prompts.push((
+        "change@4",
         sent_back_with_a_conflict(&world, "change", "plan"),
     ));
 
@@ -2446,7 +2674,7 @@ fn a_place_launched_at_change_1_keeps_it() {
 #[test]
 fn a_place_launched_at_change_2_keeps_it() {
     // 21, 22: a place launched by a flume holding change@1 and change@2
-    // alone is settled by one holding all three; it keeps change@2's
+    // alone is settled by one holding every version; it keeps change@2's
     // stages, its code stage repeating per task group, and status names
     // change@2.
     let world = World::new();
