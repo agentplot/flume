@@ -241,7 +241,7 @@ fn standing_and_run_apart(_: &()) -> Outcome {
     Ok(())
 }
 
-const PLANNER: &str = "east/planner";
+pub(crate) const PLANNER: &str = "east/planner";
 
 /// The source that declares the roles, and where its packages lie.
 const ACME: &str = "acme";
@@ -332,12 +332,12 @@ fn declare_turn_landing(world: &World, address: &str, plan: Stage, run: RoleRun,
 }
 
 /// acme declares `run` for the planner, as `configure_at` has it.
-fn configure(world: &World, prompt: &str, run: RoleRun) {
+pub(crate) fn configure(world: &World, prompt: &str, run: RoleRun) {
     configure_at(world, PLANNER, prompt, run);
 }
 
 /// The planner's run, named `<stream>-<role>` as its entry names none.
-fn planner_id() -> PlaceId {
+pub(crate) fn planner_id() -> PlaceId {
     World::id("turn", "east-planner")
 }
 
@@ -350,7 +350,7 @@ fn woken(answer: &Answer) -> Result<(Woke, PlaceStatus), String> {
 }
 
 /// The places of every role's run on the host.
-fn runs(world: &World) -> Vec<PlaceId> {
+pub(crate) fn runs(world: &World) -> Vec<PlaceId> {
     world
         .store
         .places()
@@ -360,7 +360,7 @@ fn runs(world: &World) -> Vec<PlaceId> {
 }
 
 /// A fix named `name` launched for `recipients` and begun.
-fn fix_for(world: &World, name: &str, recipients: &[&str]) -> Result<PlaceId, String> {
+pub(crate) fn fix_for(world: &World, name: &str, recipients: &[&str]) -> Result<PlaceId, String> {
     let mut launch = launch("fix", name, Some("mend it"));
     launch.recipients = recipients.iter().map(|name| name.to_string()).collect();
     launched(&world.engine.launch(&launch))?;
@@ -376,7 +376,7 @@ fn fix_for(world: &World, name: &str, recipients: &[&str]) -> Result<PlaceId, St
 
 /// The fix's code agent stops short needing an answer, and the place is
 /// settled.
-fn asks(world: &World, id: &PlaceId) -> Outcome {
+pub(crate) fn asks(world: &World, id: &PlaceId) -> Outcome {
     let start = world
         .held(id)
         .and_then(|held| held.stages[0].start.clone())
@@ -393,7 +393,7 @@ fn asks(world: &World, id: &PlaceId) -> Outcome {
 }
 
 /// The host's role addresses as status gives them.
-fn addresses(world: &World) -> Result<Vec<AddressStatus>, String> {
+pub(crate) fn addresses(world: &World) -> Result<Vec<AddressStatus>, String> {
     match world.engine().status(None) {
         Answer::Status { host, .. } => Ok(host.addresses),
         other => Err(format!("status answered {other:?}")),
@@ -1143,7 +1143,7 @@ fn sources(world: &World) -> Result<Vec<flume_core::SourceStatus>, String> {
 }
 
 /// What status gives of `address` among the host's addresses.
-fn address_of(world: &World, address: &str) -> Result<AddressStatus, String> {
+pub(crate) fn address_of(world: &World, address: &str) -> Result<AddressStatus, String> {
     addresses(world)?
         .into_iter()
         .find(|status| status.address == address)

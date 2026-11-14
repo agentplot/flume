@@ -19,6 +19,7 @@ pub mod labels;
 pub mod launching;
 pub mod list;
 pub mod made_things;
+pub mod messages;
 pub mod open;
 pub mod open_sessions;
 pub mod own_settings;
@@ -65,6 +66,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(caller_waits::scenarios());
     every.extend(made_things::scenarios());
     every.extend(role_waking::scenarios());
+    every.extend(messages::scenarios());
     every.extend(repeating_stages::scenarios());
     every.extend(streams::scenarios());
     every.extend(sessions::scenarios());

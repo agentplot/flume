@@ -4,10 +4,10 @@
 //! spells it.
 
 use flume_core::{
-    group_name, percentage, AgentStatus, Answer, HostStatus, OwnStatus, PlaceStatus, PoolStatus,
-    Queued, ReadingStatus, Reserves, SessionAnswer, SessionWait, SourceStatus, StageStatus,
-    StandingFound, StandingStatus, StreamOpened, StreamStatus, Tidied, TitleFrom, WaitingPlace,
-    WindowOutcome, Woke,
+    group_name, percentage, AgentStatus, Answer, Found, HostStatus, OwnStatus, PlaceStatus,
+    PoolStatus, Queued, ReadingStatus, Reserves, SessionAnswer, SessionWait, SourceStatus,
+    StageStatus, StandingFound, StandingStatus, StreamOpened, StreamStatus, Tidied, TitleFrom,
+    WaitingPlace, WindowOutcome, Woke,
 };
 use flume_seams::{
     AccountFrom, Act, AnswerHeld, BaseFrom, CarryCause, ClosedBy, ConfigLayer, ConfigValue,
@@ -152,6 +152,36 @@ pub fn person(answer: &Answer) -> String {
                 Woke::Waiting => format!("{address}'s run {} waits; nothing made", place.place),
             });
             lines.extend(place_lines(place));
+        }
+        Answer::Messaged {
+            key,
+            address,
+            found,
+            run,
+            why,
+        } => {
+            let run = run
+                .as_ref()
+                .map(|run| format!(" {run}"))
+                .unwrap_or_default();
+            lines.push(format!("messaged {address}: {key}"));
+            lines.push(match found {
+                Found::Woken => format!("  its run{run} was woken to take it"),
+                Found::Live => format!("  its run{run} is live, and takes it at its next wait"),
+                Found::Waiting => format!("  its run{run} waits, and takes it once its prompt is received"),
+                Found::Unwoken => format!(
+                    "  its run was not woken: {}; the message waits at the address",
+                    why.as_deref().unwrap_or("no reason was read")
+                ),
+                Found::Standing => {
+                    "  its standing agent takes it at its next wait".to_string()
+                }
+                Found::Carried => {
+                    "  it is carried to another host, its message pending for the tool that carries it"
+                        .to_string()
+                }
+                Found::Handed => format!("  handed into its session{run}"),
+            });
         }
         Answer::Held {
             address,

@@ -85,6 +85,19 @@ pub enum Answer {
         standing: StandingStatus,
         pending: Vec<PendingEnd>,
     },
+    /// A message to a role's address: its delivery's key, the address,
+    /// what the act found of it, the run that stands for it where one
+    /// does, and why its run was not woken where it was not (53, 132,
+    /// 214, C.7).
+    Messaged {
+        key: String,
+        address: String,
+        found: Found,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        run: Option<PlaceId>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        why: Option<String>,
+    },
     /// `flume kinds lock`'s act: the lock it wrote, each kind it recorded
     /// at its content's hash, and each it removed (155).
     Locked {
@@ -271,6 +284,23 @@ pub enum Woke {
     Launched,
     Live,
     Waiting,
+}
+
+/// What a message to a role's address found of it (53, 132, 214): its
+/// run launched by the message, its run's agent live, its run waiting,
+/// for room, on its caller or for its launch, its run not woken, with
+/// why, a standing agent of its source's, the address carried to another
+/// host, or the address's batch handed into its session by the act.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Found {
+    Woken,
+    Live,
+    Waiting,
+    Unwoken,
+    Standing,
+    Carried,
+    Handed,
 }
 
 impl Answer {

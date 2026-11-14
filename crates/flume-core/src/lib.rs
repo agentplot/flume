@@ -25,6 +25,7 @@ mod launch;
 mod line;
 mod list;
 mod live;
+pub mod message;
 mod open;
 mod open_sessions;
 mod own;
