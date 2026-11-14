@@ -141,8 +141,11 @@ for which an agent may pass on, which no host has yet.
   defined in a source's roles package or the host's configuration; the
   word for a standing role, which the operator wants to be "agent",
   where the statement gives that word to one process of one stage.
-- Elsewhere: the host's setup sets `cleanupPeriodDays` in every home
-  (boomdrivedev/boomdrive); crew's tells become deliveries, its roles move
+- Elsewhere: Boomdrive's set keeps every session's transcripts a year,
+  by `cleanupPeriodDays` in a document of its own in Claude Code's
+  managed settings, which every home reads, a new one among them
+  (boomdrivedev/boomdrive's the-set-keeps-claude-codes-transcripts-a-year,
+  as its record 0013 does telemetry); crew's tells become deliveries, its roles move
   into a roles package, each entry naming its related kinds, and their
   instructions launch their projects as places (boomdrivedev/crew); the
   control plane shows each role under its label's column with its live
