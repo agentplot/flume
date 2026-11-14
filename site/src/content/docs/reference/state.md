@@ -134,7 +134,8 @@ Once a settle lets the agent go, the end records `closed`:
 
 flume records the answer to a stop-short on its end in the place's
 `ends`, as `answer`. It holds `words`, the answer; `act`, `retry` or
-`tell`; `at`, when the act began; `by`, who gave it, as the answering
+`message`, an answer an earlier flume recorded by `tell` read as
+`message`; `at`, when the act began; `by`, who gave it, as the answering
 command's recipient named it, left out where it named none; `key`, the
 key the answer named, left out where it named none; and `session`,
 where the agent kept open took it. That holds `sent_at`, when flume

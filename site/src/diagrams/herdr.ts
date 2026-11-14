@@ -2,14 +2,14 @@
 // The sidebar lists every place in flight, each with its kind, its stage and
 // its agent's state, and a change's tasks ticked. A fix lands and leaves the
 // list once tidied. The open key shows a place's pane beside its status. A
-// tell waits while its agent works and reaches it once it waits; a retry
+// message waits while its agent works and reaches it once it waits; a retry
 // with your words hands the answer to the agent kept open for it, which
 // carries its stage on; stop ends an agent that went the wrong way, and its
 // stage waits for a retry, which starts it again with a fresh agent. A review, a repository's own conversation kind, waiting on you
 // shows as a row too.
 //
 // Timeline, percent of the loop:
-//   0-20 a change's tasks tick · 8-22 a fix lands, leaves · 24-34 tell
+//   0-20 a change's tasks tick · 8-22 a fix lands, leaves · 24-34 message
 //   36-62 open, retry · 62-96 open, stop, retry
 import { Diagram, esc, type Layout } from "./kit";
 
@@ -20,7 +20,7 @@ const END = 99.2;
 
 const KEYS: [string, number[]][] = [
   ["open", [36, 62]],
-  ["tell", [24]],
+  ["message", [24]],
   ["stop", [68]],
   ["retry", [42, 76]],
 ];
@@ -159,7 +159,7 @@ export function herdr(layout: Layout) {
     add("</g></g>");
   };
 
-  // change/csv-export: its tasks tick, it moves on to verify, and a tell
+  // change/csv-export: its tasks tick, it moves on to verify, and a message
   // reaches its agent once the agent is waiting.
   row(
     "a",
@@ -278,7 +278,7 @@ export function herdr(layout: Layout) {
       );
     });
   };
-  // A tell or a retry's words: typed at the pane's foot, then what became
+  // A message or a retry's words: typed at the pane's foot, then what became
   // of them.
   const words = (
     k: string,
@@ -346,15 +346,15 @@ export function herdr(layout: Layout) {
       ["prompt in its transcript", "ok", 21],
       ["checking the code against", "t", 22],
       ["the change, task by task", "t", 22],
-      ["your tell, in its transcript", "ok", 32],
+      ["your message, in its transcript", "ok", 32],
       ["checking fields with commas", "t", 33.5],
     ],
     20,
     36,
     "a2",
   );
-  // The tell waits while the agent works, and reaches it once it waits.
-  words("a", "tell change/csv-export", "check fields with commas too", 24, [24.5, 28.5], 34, [
+  // The message waits while the agent works, and reaches it once it waits.
+  words("a", "message change/csv-export", "check fields with commas too", 24, [24.5, 28.5], 34, [
     ["held: the agent is working", "m", 28.5, 31],
     ["sent: the agent is waiting", "ok", 31, 34],
   ]);
@@ -513,7 +513,7 @@ export function herdr(layout: Layout) {
       "A herdr window. Its sidebar lists every place in flight with its kind, its stage and its agent’s state: change/csv-export in code, its tasks ticking from 3 of 6 to 6 of 6 before it moves on to verify; " +
       "fix/bump-mise in sluice, which lands, is tidied and leaves the list; fix/flaky-test, whose code stage ended short; review/parquet, a review waiting on you; and fix/lint-config, working. " +
       "Beside the selected place’s pane, its status gives the kind, the stage, the agent’s state, the deliverable and the submission. " +
-      "The tell key sends check fields with commas too to change/csv-export: flume holds it while the agent works and sends it once the agent waits, and it reaches the transcript. " +
+      "The message key sends check fields with commas too to change/csv-export: flume holds it while the agent works and sends it once the agent waits, and it reaches the transcript. " +
       "The open key shows fix/flaky-test, whose agent stopped short asking which CSV its test should read and is kept open for the answer; the retry key hands that agent the words use fixtures/small.csv, and it carries the stage on in the same session. " +
       "The open key shows fix/lint-config, whose agent rewrote the wrong files and waits; the stop key ends it, and the stage waits; the retry key starts it again with a fresh agent and the words one root eslint.config.js.",
     still: 40,

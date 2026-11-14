@@ -1,6 +1,6 @@
 ---
 title: The Claude Code plugin
-description: The plugin flume hands every agent it starts, how its hooks tell flume an agent started and received its prompt, the place's line it pins under the prompt, and the plugin for your own sessions, with /launch and status over MCP.
+description: The plugin flume hands every agent it starts, how its hooks tell flume an agent started and received its prompt, the place's line it pins under the prompt, how a message reaches a session at its wait, and the plugin for your own sessions, with /launch and flume's status, message, launch and wake over MCP.
 sidebar:
   order: 3
 ---
@@ -11,7 +11,8 @@ Every agent flume starts is Claude Code with flume's own plugin. Its
 hooks are how flume knows what the agent did: that it started, that it
 received its prompt, that it is asking a person something, and that it
 went quiet. The same plugin, installed in your own sessions, gives you
-`/launch` and flume's status over MCP, and its hooks do nothing there.
+`/launch` and flume's status, message, launch and wake over MCP, and its
+hooks do nothing there.
 
 ## The plugin flume hands its agents
 
@@ -122,7 +123,7 @@ three ways on:
 
 - answer it naming the key, by `flume retry <place> --stage <stage>
   --answers <key> --words "<answer>"`, or, while its agent is kept
-  open, `flume tell <place> --answers <key> "<answer>"`;
+  open, `flume message <place> --answers <key> "<answer>"`;
 - hold the move with your words, `flume hold <place> "<words>"
   --waiting --for <time>`;
 - or leave it, and once the place stalls the answerer behind its stream
@@ -141,7 +142,7 @@ Its stop-short stage/construct/1/ended-short needs an answer:
 Its agent is kept open for the answer until 1793291441.
 Ways on:
 - answer it, naming its key: flume retry change--plan --stage construct --answers stage/construct/1/ended-short --words "<answer>"
-  or, while its agent is kept open: flume tell change--plan --answers stage/construct/1/ended-short "<answer>"
+  or, while its agent is kept open: flume message change--plan --answers stage/construct/1/ended-short "<answer>"
 - hold the move with your words, saying who has it: flume hold change--plan "<words>" --waiting --for <time>
 - leave it: once it stalls, the answerer behind its stream has it.
 ```
@@ -151,8 +152,9 @@ session, or where flume cannot be reached, it gives nothing. It holds
 up the start no longer than its 20 seconds' timeout.
 
 Beside the command hooks the plugin carries one hooks module,
-`hooks/line.ts`, which pins the place's line under the prompt ([the
-status line](#the-status-line)).
+`hooks/flume.ts`, which pins the place's line under the prompt ([the
+status line](#the-status-line)) and holds the deliver part ([the
+deliver part](#the-deliver-part)).
 
 **The guard.** flume submits the place once its last stage delivers,
 so an agent never submits, merges or pushes its branch itself. The
@@ -266,13 +268,40 @@ its one sending counts from the started ack. A prompt that is a slash
 command fires no UserPromptSubmit hook, so flume reads it as received
 from the transcript instead.
 
-Text left typed in a pane is never a stage's state. A `flume tell`,
+Text left typed in a pane is never a stage's state. A `flume message`,
 your words to a place's agent, reaches it the same way: as a prompt the
-agent says it received, or not at all. flume holds a tell while the
+agent says it received, or not at all. flume holds a message while the
 agent works and sends it once the agent waits, for up to ten minutes or
-the `--within` you give. It refuses a tell, with nothing typed, when no
-agent is live or the agent is asking a person a question. A tell never
-starts, ends or moves a stage.
+the `--within` you give. It refuses a message, with nothing typed, when
+no agent is live or the agent is asking a person a question. A message
+never starts, ends or moves a stage.
+
+A notice of an end, and a message to a role's address, reach a session
+only at its wait too, never while it works: at its wait the session
+takes every end and message pending for it as one prompt, in the order
+they were recorded, each with how to confirm it
+([ends](/flume/guides/callers-and-holds/#ends)).
+
+### The deliver part
+
+The plugin's hooks module holds a deliver part: in a session whose
+environment names `FLUME_PLACE`, `FLUME_AGENT` and `FLUME_DELIVER`, it
+runs `flume hook deliver` at the session's start and at each turn's
+end, and every ten seconds while no turn runs, one run at a time, and
+submits what it prints as your own words, a turn of its own once the
+session is idle, leaving the prompt box as you left it. What it prints
+is flume's take for the agent: a message to its place waiting on its
+start, else, for a role's run, every end and message pending at its
+address, recorded handed as it is taken. Where the agent's program
+takes words so, flume types nothing into its pane.
+
+flume sets `FLUME_DELIVER` only where the agent's profile offers the
+part. The deliver row was read on Claude Code 2.1.322, and flume pins
+2.1.296, which no check has read running a hooks module's
+`$.prompt.submit` in an interactive session; so Claude Code's profile
+offers no deliver part yet, and the multiplexer hands every batch and
+message, as above, until a release flume pins is read doing it. Outside
+such a session the part registers no clock and runs nothing.
 
 ## How flume reads an agent
 
@@ -358,9 +387,15 @@ the release's version: `/plugin marketplace update flume`, then
   in the repository, and reports the place, its branch, and whether its
   first stage started, waits for room or is held. It passes `--base`
   only when you name a base other than the default branch.
-- **The `flume` MCP server** runs `flume mcp` and serves one tool,
+- **The `flume` MCP server** runs `flume mcp` and serves four tools:
   `status`, which answers as `flume status --json` does and settles
-  nothing.
+  nothing; and `message`, `launch` and `wake`, each run as the command
+  line runs the same words, every default, check and refusal the
+  command's, its answer the command's JSON. A launch takes no file over
+  MCP: its brief is text. Run from a role's run, a launch naming no
+  recipient reports to the run's address, so a role's session launches
+  its projects as places from its tools
+  ([a message to a role](/flume/guides/callers-and-holds/#a-message-to-a-role)).
 
 The launching session is the place's recipient unless the launch names
 another, so under herdr each end of its stages reaches that session's
