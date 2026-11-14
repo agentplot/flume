@@ -447,7 +447,12 @@ or is done and whose agent stopped:
 
 - its worktree, through the repository's teardown and
   `git worktree remove`, then whatever a tool left in its folder, and
-  its repository's folder under `places/` once that holds no place;
+  its repository's folder under `places/` once that holds no place.
+  Where `git worktree remove` fails having let the place go, the place
+  is kept with git's words, and the next settle removes what is left
+  of its folder. flume removes a folder so only where it is in a
+  `places/` folder flume makes places in and holds nothing of another
+  repository's;
 - its branch, where the base holds every commit of it;
 - in each multiplexer its agents opened in, under herdr its tab, and
   its base's workspace once that holds nothing else of flume's or

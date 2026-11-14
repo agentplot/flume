@@ -643,7 +643,12 @@ place or all. flume:
    flume names what holds it. Once git lets the place go, flume removes
    whatever still stands in its folder, such as the state a development
    shell wrote there as the worktree went, and then the repository's
-   folder under `places/` once it holds no place;
+   folder under `places/` once it holds no place. Where
+   `git worktree remove` fails having let the place go, flume keeps the
+   place with git's words and removes what is left of its folder at the
+   next settle, since what made git fail may still be writing there. It
+   removes a folder so only where the folder is in a `places/` folder
+   flume makes places in and holds nothing of another repository's;
 3. removes the branch only when `git cherry` against the base finds no
    commit the base lacks, judged against the remote's copy of the base
    where it lands on one. A branch with commits not landed stays, and

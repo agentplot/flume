@@ -21,7 +21,7 @@ the tree touched, citing record 0057's amendment and the clauses.
 
 ## 3. The site
 
-- [ ] 3.1 Say it in `site/src/content/docs/reference/commands.md` (`flume tidy`, the worktree's bullet) and `site/src/content/docs/guides/places-and-herdr.mdx` ("Tidying", step 2), as Task notes 3.1 give it. True when `sluice exec bolt/flumes-places-need-no-hand -- moon run site:prose` passes.
+- [x] 3.1 Say it in `site/src/content/docs/reference/commands.md` (`flume tidy`, the worktree's bullet) and `site/src/content/docs/guides/places-and-herdr.mdx` ("Tidying", step 2), as Task notes 3.1 give it. True when `sluice exec bolt/flumes-places-need-no-hand -- moon run site:prose` passes.
 
 ## 4. The spec
 
