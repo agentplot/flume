@@ -44,3 +44,24 @@ libc = "0.2"
 # (design 6 of record 0020's change).
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 chrono-tz = { version = "0.10", default-features = false }
+# OpenTelemetry at sluice's versions, OTLP over HTTP in protobuf through
+# the crate's blocking reqwest client and no TLS, since the collector is
+# on the host's loopback; the binary's alone, the core naming no crate of
+# them (216; design 2, 6).
+opentelemetry = { version = "0.33", default-features = false, features = [
+  "trace",
+  "metrics",
+  "logs",
+] }
+opentelemetry_sdk = { version = "0.33", default-features = false, features = [
+  "trace",
+  "metrics",
+  "logs",
+] }
+opentelemetry-otlp = { version = "0.33", default-features = false, features = [
+  "trace",
+  "metrics",
+  "logs",
+  "http-proto",
+  "reqwest-blocking-client",
+] }

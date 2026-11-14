@@ -27,6 +27,9 @@ clap.workspace = true
 libc.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+opentelemetry-otlp.workspace = true
 
 [features]
 # The profiles' tests against the tools the tree pins, the check-tools
@@ -57,3 +60,4 @@ required-features = ["live"]
 [dev-dependencies]
 flume-conformance = { path = "../flume-conformance" }
 flume-fakes = { path = "../flume-fakes" }
+opentelemetry_sdk = { workspace = true, features = ["testing"] }
