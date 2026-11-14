@@ -40,6 +40,7 @@ pub mod agent {
 
 // ---- the terminal seam's profiles: a profile unit appends its module line below ----
 pub mod terminal {
+    pub mod common;
     pub mod herdr;
     pub mod printed;
 }
