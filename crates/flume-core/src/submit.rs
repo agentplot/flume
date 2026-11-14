@@ -603,7 +603,9 @@ pub(crate) fn fix_round_of(held: &HeldState) -> Option<usize> {
 /// [`fix_round_of`] reads, and every stage from it not reached again,
 /// counted as one going-back against the last stage's bound, flume's
 /// default where it sets none; past the bound, the place waits on its
-/// caller with `cause` and the words (23, 112, 130, 131). The stage to
+/// caller with `cause` and the words (23, 112, 130, 131). The fix round
+/// lets go of its stage's count, so it counts only what is made after
+/// it, and leaves every later stage's as it stands (25). The stage to
 /// start and its words.
 fn fix_round(
     held: &mut HeldState,
@@ -629,6 +631,7 @@ fn fix_round(
     held.submission.send_backs += 1;
     held.submission.waiting = None;
     held.submission.due = false;
+    held.stages[target].counts = None;
     for stage in held.stages.iter_mut().skip(target) {
         stage.state = StageState::NotReached;
         stage.made_from = None;

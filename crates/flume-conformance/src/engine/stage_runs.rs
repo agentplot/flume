@@ -111,6 +111,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_stage_written_before_counts_from_its_next_start,
         },
         Scenario {
+            name: "end: S131, a fix round whose agent makes no commit is not delivered, and the caller's retry of the submission submits the same head with no agent started",
+            cites: &["25", "49", "112", "131", "S52"],
+            run: a_fix_round_counts_only_what_follows,
+        },
+        Scenario {
             name: "stop-short: a construct stops short, and no code stage starts",
             cites: &["S4", "41", "42", "36", "92"],
             run: s4_a_construct_stops_short,
@@ -1030,6 +1035,64 @@ fn a_stage_written_before_counts_from_its_next_start(_: &()) -> Outcome {
         "the words name not commits: {words}"
     );
     ensure_eq!(world.queue.log.count("submit"), 0, "submissions");
+    Ok(())
+}
+
+fn a_fix_round_counts_only_what_follows(_: &()) -> Outcome {
+    let world = World::new();
+    let failed = "check test-x failed";
+    let (id, head) =
+        a_fix_answered_after_its_commit(&world, vec![Plan::Fail(failed.into()), Plan::Hold])?;
+    world.settle(&id);
+    let round = World::identity("fix", "one", "code", 3);
+    let prompt = world
+        .prompt(&id, &round)
+        .ok_or("the fix round did not start code")?;
+    ensure!(prompt.contains(failed), "{failed} is not in {prompt}");
+    world.settle(&id);
+    let code = stage_held(&world, &id, 0)?;
+    ensure_eq!(
+        code.state,
+        StageState::Begun,
+        "code, the fix round's agent making no commit"
+    );
+    ensure_eq!(
+        (
+            code.counts.map(|counts| (counts.start, counts.head)),
+            code.start.and_then(|start| start.counts)
+        ),
+        (Some((3, head.clone())), None),
+        "code's count, begun afresh at the fix round"
+    );
+    let words = stop_words(&world, &round).ok_or("the agent was not sent back")?;
+    ensure!(
+        words.contains("commits"),
+        "the words name not the commit it lacks: {words}"
+    );
+    asks(
+        &world,
+        &id,
+        &round,
+        0,
+        "test-x fails on the base too; the fix stands. Submit it again?",
+    )?;
+    let opened = world.terminal.log.count("open");
+    let retried = world.engine.retry(&id, Retry::Submission, None, false);
+    ensure!(
+        retried.refusal().is_none(),
+        "the retry of the submission was refused: {retried:?}"
+    );
+    let submitted = format!("submit fix/one {head} main");
+    ensure_eq!(
+        world.queue.log.of("submit"),
+        vec![submitted.clone(), submitted],
+        "the submissions, each at the head the first start's commit reached"
+    );
+    ensure_eq!(
+        world.terminal.log.count("open"),
+        opened,
+        "agents opened by the retry of the submission"
+    );
     Ok(())
 }
 
