@@ -158,7 +158,7 @@ fn a_tell_naming_its_key() {
     let place = &id.to_string();
     let told = acted(
         answered(&world, &["tell", place, "--answers", KEY, "yes", "--json"]),
-        Act::Tell,
+        Act::Message,
     );
     let answer = answer_on(&told).expect("no answer recorded on the stop-short");
     assert_eq!(
@@ -168,7 +168,7 @@ fn a_tell_naming_its_key() {
             answer.key.map(|key| key.to_string()),
             answer.session.is_some()
         ),
-        ("yes", Act::Tell, Some(KEY.to_string()), true)
+        ("yes", Act::Message, Some(KEY.to_string()), true)
     );
     let again = refused(&world, &["tell", place, "--answers", KEY, "no", "--json"]);
     assert!(

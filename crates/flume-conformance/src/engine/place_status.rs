@@ -1056,7 +1056,7 @@ fn two_answers_in_one_session(_: &()) -> Outcome {
                 question: Some(again.into()),
                 answer: AnswerHeld {
                     words: "the first line".into(),
-                    act: Act::Tell,
+                    act: Act::Message,
                     at: second,
                     session: handed(second),
                     by: None,

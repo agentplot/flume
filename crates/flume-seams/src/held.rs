@@ -324,7 +324,11 @@ pub enum Act {
     Drop,
     Done,
     Finish,
-    Tell,
+    /// A message to a place's agent, written `message` and read from
+    /// `tell`, the verb it replaced, so held state that recorded an
+    /// answer by a tell reads it as a message's (53; record 0069).
+    #[serde(alias = "tell")]
+    Message,
     Needs,
     Priority,
     Hold,

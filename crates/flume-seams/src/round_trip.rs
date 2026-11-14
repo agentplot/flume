@@ -732,7 +732,7 @@ fn holds_the_waiting_move_and_the_stall_bound() {
         Act::Drop,
         Act::Done,
         Act::Finish,
-        Act::Tell,
+        Act::Message,
         Act::Needs,
         Act::Priority,
         Act::Hold,
@@ -2294,7 +2294,7 @@ fn two_answers() -> HeldState {
             "And its text?",
             AnswerHeld {
                 words: "Hello.".into(),
-                act: Act::Tell,
+                act: Act::Message,
                 at: 400,
                 session: Some(Handed {
                     sent_at: 395,
@@ -2362,7 +2362,7 @@ fn two_answers_in_one_session() {
             "session": {"sent_at": 298, "received_at": 300},
         })
     );
-    assert_eq!(json["ends"][1]["answer"]["act"], "tell");
+    assert_eq!(json["ends"][1]["answer"]["act"], "message");
     assert!(json["ends"][0].get("claim").is_none(), "none unclaimed");
     assert_ne!(state.ends[0].of.key(), state.ends[1].of.key());
     assert!(!state.ends[0].same(&state.ends[1].of));
@@ -2375,6 +2375,27 @@ fn two_answers_in_one_session() {
         by: None,
         key: None,
     });
+}
+
+#[test]
+fn an_answer_by_tell_reads_as_a_message() {
+    // The seam-contracts spec's "An answer by tell": an end whose
+    // answer's act was written `tell`, before `message` replaced it,
+    // reads as `message` and is written back `message` (53).
+    let state = two_answers();
+    let mut json = serde_json::to_value(&state).expect("held state as JSON");
+    json["ends"][1]["answer"]["act"] = serde_json::json!("tell");
+    let read: HeldState = serde_json::from_value(json).expect("held state written before");
+    assert_eq!(
+        read.ends[1].answer.as_ref().map(|a| a.act),
+        Some(Act::Message)
+    );
+    assert_eq!(read, state);
+    let written = serde_json::to_value(&read).expect("held state as JSON");
+    assert_eq!(written["ends"][1]["answer"]["act"], "message");
+    let act: Act = serde_json::from_value(serde_json::json!("tell")).expect("an act");
+    assert_eq!(act, Act::Message);
+    assert_eq!(serde_json::to_value(act).expect("an act"), "message");
 }
 
 #[test]

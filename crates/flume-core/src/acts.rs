@@ -724,7 +724,7 @@ impl Engine {
         }
         if let Some(stage) = waits_on_answer(&read.state) {
             return match self.kept_open(&read.state) {
-                Some(kept) => self.answer(place, &kept, words, Act::Tell, bound, answering),
+                Some(kept) => self.answer(place, &kept, words, Act::Message, bound, answering),
                 None => Answer::refused(format!(
                     "the stage {stage} of {place} waits on an answer and its agent is no longer kept open; give the answer as a retry: flume retry {place} --words <answer>"
                 )),
@@ -734,7 +734,7 @@ impl Engine {
             return Answer::refused(format!("the place {place} has no live agent"));
         };
         match self.hand(place, start, words, bound) {
-            Ok(_) => self.acted(Act::Tell, place),
+            Ok(_) => self.acted(Act::Message, place),
             Err(reason) => Answer::refused(reason),
         }
     }

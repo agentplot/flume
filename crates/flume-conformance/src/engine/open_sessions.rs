@@ -1027,7 +1027,7 @@ fn a_tells_answer(_: &()) -> Outcome {
     let (id, _) = asking(&world, "one")?;
     let at = world.host.now();
     taken(&world.engine.tell(&id, "notes.md", None))?;
-    answered_in_session(&world, &id, &code("one", 1), Act::Tell, at)
+    answered_in_session(&world, &id, &code("one", 1), Act::Message, at)
 }
 
 /// A settle's reading of a stage's agent kept open: its close, and
@@ -1085,7 +1085,7 @@ fn an_answer_taken_before_its_session_ended(_: &()) -> Outcome {
         short_end(&world, &id, "code", 1)?.answer,
         Some(AnswerHeld {
             words: "notes.md".into(),
-            act: Act::Tell,
+            act: Act::Message,
             at,
             session: Some(Handed {
                 sent_at: at,

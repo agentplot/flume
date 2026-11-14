@@ -4253,7 +4253,12 @@ mod tests {
             group: None,
             answers: vec![
                 answer("Which file holds the log?", "notes.md", Act::Retry, 1200),
-                answer("Which test covers it?", "the walkthrough", Act::Tell, 2400),
+                answer(
+                    "Which test covers it?",
+                    "the walkthrough",
+                    Act::Message,
+                    2400,
+                ),
             ],
         };
         assert_eq!(
