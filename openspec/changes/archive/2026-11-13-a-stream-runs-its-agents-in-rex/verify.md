@@ -158,12 +158,12 @@ once in the tree.
 - 3.1 to 3.16, 4.1, 4.2: the profile against the pinned Rex and through the binary, each passing in the tools run above.
 - 5.1 to 5.3: `REX_*` stripped by the sluice profile and by the tests' lists, `flume:lint`, `flume:test` and `plugin-claude:test` passing in the gate.
 - 6.1 to 6.5: `cmux` the uncarried multiplexer in `commands.rs`, `list.rs`, `print.rs`, `fakes.rs` and the conformance scenarios; no `"rex"` stands uncarried in `flume-core`, `flume-fakes` or `flume-conformance`.
-- 7.1: record 0067, proposed; core.29 reads as the task gives it, its details naming `--autostart=false`, the socket and the caller's `REX_*`; core.1's details name `rex` and the common module; `root:adrs` passed.
+- 7.1: record 0068, proposed; core.29 reads as the task gives it, its details naming `--autostart=false`, the socket and the caller's `REX_*`; core.1's details name `rex` and the common module; `root:adrs` passed.
 - 7.2: the site names `rex` among `multiplexer`'s values with its socket, the roadmap's terminals row and paragraph, and a section "Places under Rex" in the guide; `site:prose` and `site:build` passed.
 
 ## Of note, not findings
 
-- Record 0067 is proposed, awaiting the operator's yes, as the rules
+- Record 0068 is proposed, awaiting the operator's yes, as the rules
   ask of a record; core.29's amendment cites it as proposed.
 - The site's guide says flume refuses a session's name that "holds a
   `/`" beside its 104-byte socket rule; the profile also refuses an

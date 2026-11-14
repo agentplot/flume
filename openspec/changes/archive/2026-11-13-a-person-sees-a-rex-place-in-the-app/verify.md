@@ -110,7 +110,7 @@ it names passed:
 
 ## The rest of the work
 
-- **The record**, 0067: still proposed. Its decision item 6 says what
+- **The record**, 0068: still proposed. Its decision item 6 says what
   attach for the app and show do, citing C.5's attach and show rows at
   blueprints 6557c33. Its deciders and sources name this change's
   design. The choices of design sections 3, 4, 6 and 7 join the
@@ -129,5 +129,5 @@ it names passed:
 ## Not read by any check
 
 The app's own answer to `session.select`, as design section 8 and
-record 0067's consequences say: no app runs on a gate's host. A person
+record 0068's consequences say: no app runs on a gate's host. A person
 reads it.

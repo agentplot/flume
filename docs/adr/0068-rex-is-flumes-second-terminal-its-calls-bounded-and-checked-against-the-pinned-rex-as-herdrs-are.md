@@ -1,5 +1,5 @@
 ---
-number: 67
+number: 68
 title: Rex is flume's second terminal, its calls bounded, stripped of the caller's REX_* and checked against the Rex the tree pins, as herdr's are
 status: proposed
 date: 2026-11-13
