@@ -738,6 +738,32 @@ mod tests {
     }
 
     #[test]
+    fn the_plugin_written_carries_its_module_naming_the_binary() {
+        // The claude-code-plugin spec's "The plugin written for an agent"
+        // (C.4): hooks.json names the one module, flume.ts, which names
+        // the binary by its absolute path, and no line.ts is written.
+        let dir = scratch("written");
+        let claude = Claude::new(&dir, Path::new("/opt/flume/bin/flume"));
+        let plugin = claude.plugin().expect("the plugin written");
+        let hooks = fs::read_to_string(plugin.join("hooks/hooks.json")).expect("the hooks");
+        let hooks: serde_json::Value = serde_json::from_str(&hooks).expect("the hooks as JSON");
+        assert_eq!(hooks["modules"], serde_json::json!(["./flume.ts"]));
+        let module = fs::read_to_string(plugin.join("hooks/flume.ts")).expect("the module");
+        assert!(
+            module.contains("const FLUME = \"/opt/flume/bin/flume\";"),
+            "{module}"
+        );
+        assert!(!module.contains("const FLUME = \"flume\";"), "{module}");
+        assert!(module.contains("\"hook\", \"deliver\""), "{module}");
+        assert!(!plugin.join("hooks/line.ts").exists(), "a line.ts written");
+        assert!(
+            !plugin.join("hooks/deliver.ts").exists(),
+            "a deliver.ts written"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn deliver_is_not_offered_at_the_pinned_release() {
         // The agent-profile spec's "The pinned release" (215, C.4;
         // record 0069): not offered, and no FLUME_DELIVER in the command.
