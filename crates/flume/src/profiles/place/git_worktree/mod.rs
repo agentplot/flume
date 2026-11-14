@@ -300,18 +300,15 @@ impl GitWorktree {
     /// folder, `places/<id>` under flume's own data directory, once that
     /// holds no other place (62; record 0057): the `.devenv` or `.moon` a
     /// process wrote there while `git worktree remove` deleted it, or
-    /// what that removal could not delete. A `.git` file whose git
-    /// directory still stands is a worktree git knows, and is refused.
+    /// what an earlier removal that failed left. Only a folder flume made
+    /// goes, as [`foreign`] reads it, and anything else is refused, left
+    /// whole (64; core.17, core.18; record 0057's amendment).
     fn left(&self, place: &PlaceRef) -> Removed {
         let location = Path::new(&place.location);
-        if let Some(gitdir) = linked(location) {
+        if let Some(words) = foreign(location, self.own.as_deref(), &place.repository) {
             return Removed::Refused {
                 step: REMOVE_STEP.into(),
-                words: format!(
-                    "{} is the worktree of {}, which git still holds",
-                    place.location,
-                    gitdir.display()
-                ),
+                words,
             };
         }
         if let Err(words) = clear(location) {
@@ -330,12 +327,87 @@ impl GitWorktree {
     }
 }
 
-/// The git directory a `.git` file at `location` names, where it still
-/// stands.
-fn linked(location: &Path) -> Option<PathBuf> {
-    let text = std::fs::read_to_string(location.join(".git")).ok()?;
-    let gitdir = location.join(text.trim().strip_prefix("gitdir:")?.trim());
-    gitdir.exists().then_some(gitdir)
+/// Why what stands at `location`, a place of `repository` git holds no
+/// worktree for, is not flume's to remove, where something stands there
+/// and it is not (64; core.17, core.18; record 0057's amendment): its
+/// folder is in no group folder directly under `own`'s `places/`, nor in
+/// the repository's own `places/` where an earlier flume made places, or
+/// what it holds says it is another's, as [`claimed`] reads it.
+fn foreign(location: &Path, own: Option<&Path>, repository: &str) -> Option<String> {
+    location.symlink_metadata().ok()?;
+    if !in_places(location, own, repository) {
+        return Some(format!(
+            "{} is in no folder flume makes places in, and flume leaves what stands there",
+            location.display()
+        ));
+    }
+    claimed(location, repository)
+}
+
+/// Whether `location` is directly in a group folder under `own`'s
+/// `places/`, under any id, or directly in `repository`'s own `places/`
+/// (C.1; records 0027, 0053), compared as the file system resolves them.
+fn in_places(location: &Path, own: Option<&Path>, repository: &str) -> bool {
+    let (Some(parent), Some(_)) = (location.parent(), location.file_name()) else {
+        return false;
+    };
+    let parent = canonical(parent);
+    let flumes = own.map(|own| canonical(&own.join("places")));
+    matches!((parent.parent(), flumes), (Some(group), Some(flumes)) if group == flumes)
+        || parent == canonical(&Path::new(repository).join("places"))
+}
+
+/// Why what stands at `location` is another's, where its `.git` says so:
+/// a `.git` folder, a repository of its own; a `.git` file naming a git
+/// directory that stands, a worktree git still holds; one naming a git
+/// directory outside `repository`'s own `<common>/worktrees`, another
+/// repository's worktree; or a `.git` file that cannot be judged. None
+/// where no `.git` stands, or where its file names the repository's own
+/// worktree entry, which no longer stands, as git's failed removal
+/// leaves it. A relative `gitdir:` is read against the location.
+fn claimed(location: &Path, repository: &str) -> Option<String> {
+    let shown = location.display();
+    let dotgit = location.join(".git");
+    let metadata = dotgit.symlink_metadata().ok()?;
+    if metadata.is_dir() {
+        return Some(format!("{shown} holds a repository of its own"));
+    }
+    let text = match std::fs::read_to_string(&dotgit) {
+        Ok(text) => text,
+        Err(error) => {
+            return Some(format!(
+                "the .git file at {shown} could not be read, so what stands there is kept: {error}"
+            ))
+        }
+    };
+    let Some(named) = text.lines().find_map(|line| line.strip_prefix("gitdir:")) else {
+        return Some(format!(
+            "the .git file at {shown} names no gitdir, so what stands there is kept"
+        ));
+    };
+    let gitdir = location.join(named.trim());
+    if gitdir.exists() {
+        return Some(format!(
+            "{shown} is the worktree of {}, which git still holds",
+            gitdir.display()
+        ));
+    }
+    let common = match Git::at(repository).common_dir() {
+        Ok(common) => common,
+        Err(reason) => {
+            return Some(format!(
+                "the common git directory of {repository} could not be read, so what stands at {shown} is kept: {reason}"
+            ))
+        }
+    };
+    let entries = canonical(&Path::new(&common).join("worktrees"));
+    if gitdir.parent().map(canonical) != Some(entries) {
+        return Some(format!(
+            "{shown} is a worktree of another repository, {}",
+            gitdir.display()
+        ));
+    }
+    None
 }
 
 /// `location` removed with all it holds, never following a link, each
