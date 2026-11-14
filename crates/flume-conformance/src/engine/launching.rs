@@ -1154,14 +1154,14 @@ fn a_change_name_taken(_: &()) -> Outcome {
 
 fn a_streams_multiplexer_flume_does_not_carry(_: &()) -> Outcome {
     let world = World::new();
-    world.host.set_display("trial", Some("rex"), None, None);
+    world.host.set_display("trial", Some("cmux"), None, None);
     let reason = refused(&world.engine.launch(&Launch {
         stream: Some("trial".into()),
         ..launch("fix", "one", Some("x"))
     }))?;
     ensure!(
         reason.contains("trial")
-            && reason.contains("rex")
+            && reason.contains("cmux")
             && reason.contains("the terminal profiles there are: fake"),
         "the refusal: {reason}"
     );

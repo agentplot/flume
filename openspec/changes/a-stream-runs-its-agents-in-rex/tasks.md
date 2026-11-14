@@ -62,7 +62,7 @@ its end (core.51).
 - [x] 6.2 Have `crates/flume-core/src/list.rs`'s tests name `cmux` where they held `rex` uncarried (190, 200). True when `devenv shell -- cargo test -p flume-core --lib list::tests` passes.
 - [x] 6.3 Have `crates/flume/src/commands/print.rs`'s `every_stream` and `the_list_by_repository_then_the_streams` name `cmux` (190, 200). True when `devenv shell -- cargo test -p flume --lib commands::print::tests::the_list_by_repository_then_the_streams` passes.
 - [x] 6.4 Have `crates/flume-fakes/tests/fakes.rs`'s `the_resolver_holds_terminals_and_windows_by_name` ask for `cmux` (105, 190). True when `devenv shell -- cargo test -p flume-fakes --test fakes the_resolver_holds_terminals_and_windows_by_name` passes.
-- [ ] 6.5 Have the conformance scenarios in `crates/flume-conformance/src/engine/launching.rs`, `list.rs` and `stream_terminals.rs` that held `rex` uncarried name `cmux`, in their words and their checks, as the stream-terminals, the-list and seam-contracts scenarios say (4, 190, 200, S91). True when `sluice exec bolt/rex-is-flumes-second-terminal -- moon run conformance:test` passes.
+- [x] 6.5 Have the conformance scenarios in `crates/flume-conformance/src/engine/launching.rs`, `list.rs` and `stream_terminals.rs` that held `rex` uncarried name `cmux`, in their words and their checks, as the stream-terminals, the-list and seam-contracts scenarios say (4, 190, 200, S91). True when `sluice exec bolt/rex-is-flumes-second-terminal -- moon run conformance:test` passes.
 
 ## 7. The record, the rules and the site
 

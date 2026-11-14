@@ -112,7 +112,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_session_two_streams_words_give,
         },
         Scenario {
-            name: "open: a stream whose multiplexer names rex is refused naming rex and the terminal profiles carried, nothing attached",
+            name: "open: a stream whose multiplexer names cmux is refused naming cmux and the terminal profiles carried, nothing attached",
             cites: &["4", "190", "S91"],
             run: a_multiplexer_no_profile_carries,
         },
@@ -684,11 +684,11 @@ fn a_session_two_streams_words_give(_: &()) -> Outcome {
 
 fn a_multiplexer_no_profile_carries(_: &()) -> Outcome {
     let world = World::new();
-    world.host.set_display("trial", Some("rex"), None, None);
+    world.host.set_display("trial", Some("cmux"), None, None);
     refused_with(
         &world,
         Some("trial"),
-        &["trial", "rex", "the terminal profiles there are: fake"],
+        &["trial", "cmux", "the terminal profiles there are: fake"],
         0,
     )
 }
