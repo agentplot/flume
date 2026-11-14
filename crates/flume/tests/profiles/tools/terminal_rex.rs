@@ -9,7 +9,7 @@ use flume::host::config::HostConfig;
 use flume::host::process::listed;
 use flume::host::RealHost;
 use flume::profiles::store::state_dir::StateDir;
-use flume::profiles::terminal::rex::{rex_name, Block, Rex, NAME, PIECE, RUNTIME_ROOT};
+use flume::profiles::terminal::rex::{caller, rex_name, Block, Rex, NAME, PIECE, RUNTIME_ROOT};
 use flume_conformance::engine::world::{kind, stage, World};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::terminal::{self, TerminalHarness};
@@ -295,7 +295,8 @@ fn the_pinned_rex_runs_at_api_revision_twelve_or_later() {
 }
 
 /// The stand-in agent, run as `claude`: it keeps what it was started
-/// with and every line it took under its log, by its block, and reports
+/// with, the `REX_BLOCK` and `REX_SERVER` it ran under among it, and
+/// every line it took under its log, by its block, and reports
 /// its state to Rex by OSC 7501 as Claude Code does, `app=claude-code`:
 /// `idle` once up, `working` from a line's first moment, `done` once the
 /// line is taken, or after `STAND_IN_WORK` seconds of work. It reads its
@@ -315,6 +316,7 @@ printf '%s\0' "$@" > "$log/argv"
 printf '%s\n' "$0" > "$log/program"
 if [ -n "$A_SECRET" ]; then printf '%s' "$A_SECRET" > "$log/secret"; fi
 if [ -n "$REX_BLOCK" ]; then printf '%s' "$REX_BLOCK" > "$log/block"; fi
+if [ -n "$REX_SERVER" ]; then printf '%s' "$REX_SERVER" > "$log/server"; fi
 report() { printf '\033]7501;state=%s:app=claude-code\033\\' "$1"; }
 if [ -n "$STAND_IN_EXIT" ]; then echo "the stand-in exits"; exit 3; fi
 if [ -n "$STAND_IN_TRUST" ]; then
@@ -1678,6 +1680,67 @@ fn a_standing_agent_is_given_by_its_label() {
     assert!(
         !fixture.state.socket("desk").exists(),
         "a server was started for desk"
+    );
+}
+
+/// The session a command run under the `REX_BLOCK` and `REX_SERVER`
+/// this process is given names, by a profile built with the caller those
+/// variables give, written where `FLUME_REX_SESSION_OUT` says: the half
+/// of `a_command_in_a_labelled_block_is_named_as_its_agent_is_given` that
+/// runs as a command in the block does.
+#[test]
+fn rex_session_child() {
+    let Some(out) = std::env::var_os("FLUME_REX_SESSION_OUT") else {
+        return;
+    };
+    let session = Rex::new(PathBuf::from(&out).with_extension("records"))
+        .with_caller(caller())
+        .session()
+        .unwrap_or_default();
+    fs::write(out, session).expect("the session written");
+}
+
+#[test]
+fn a_command_in_a_labelled_block_is_named_as_its_agent_is_given() {
+    // The terminal-profiles spec's "A command in a labelled Rex block" (7,
+    // 132, C.5; core.29): a stand-in block labelled ops in east, and a
+    // profile built with the REX_BLOCK and REX_SERVER that block's program
+    // ran under names the session the profile's agents_in of east gives
+    // ops at, so a command in a standing agent's block names that agent's
+    // session.
+    let fixture = Fixture::new();
+    let profile = fixture.profile();
+    let block = fixture.stand_in_block("east", "ops", &[]);
+    let ran_under = |name: &str| {
+        fixture
+            .kept_text(&block.id, name)
+            .unwrap_or_else(|| panic!("the stand-in kept no {name}"))
+    };
+    let (rex_block, rex_server) = (ran_under("block"), ran_under("server"));
+    let out = fixture.path("caller-session");
+    let child = Command::new(std::env::current_exe().expect("the test binary"))
+        .args(["--exact", "terminal_rex::rex_session_child", "--nocapture"])
+        .env("FLUME_REX_SESSION_OUT", &out)
+        .env("REX_BLOCK", &rex_block)
+        .env("REX_SERVER", &rex_server)
+        .env_remove("REX_SESSION")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .expect("the child runs");
+    assert!(child.success(), "the child failed");
+    let AgentsIn::Read { agents } = profile.agents_in(Some("east")) else {
+        panic!("the agents of east were not read");
+    };
+    let at = agents
+        .into_iter()
+        .find(|agent| agent.name == "ops")
+        .map(|agent| agent.at)
+        .expect("ops given");
+    assert_eq!(
+        fs::read_to_string(&out).expect("the child's session"),
+        at,
+        "the session a command in ops's block names, run under {rex_block} on {rex_server}"
     );
 }
 
