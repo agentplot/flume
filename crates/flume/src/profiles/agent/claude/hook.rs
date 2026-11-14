@@ -30,7 +30,7 @@ use std::path::{Path, PathBuf};
 /// directory.
 pub const PLUGIN_ROOT: &str = "CLAUDE_PLUGIN_ROOT";
 
-/// The word `flume hook` takes from the plugin's deliver module, which
+/// The word `flume hook` takes from the deliver part of the plugin's hooks module, which
 /// runs it at the session's start, at each turn's end and on an idle
 /// clock: no event of Claude Code's, and it reads no input (215, C.4).
 pub const DELIVER: &str = "deliver";
@@ -312,7 +312,7 @@ fn began_otherwise(
 
 /// `flume hook deliver`: the words the core's take answers for the
 /// agent `FLUME_AGENT` names, under the secret `FLUME_SECRET` gives, in
-/// the place `FLUME_PLACE` names, which the deliver module submits as the
+/// the place `FLUME_PLACE` names, which the deliver part submits as the
 /// user's; nothing where it answers none, is refused, or the environment
 /// names no start (41, 54, 215, C.4).
 fn deliver(start: &Start, build: &dyn Fn() -> Result<Engine, String>) -> String {

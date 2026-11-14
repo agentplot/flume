@@ -81,8 +81,9 @@ pub const SECRET: &str = "FLUME_SECRET";
 pub const PLACE: &str = "FLUME_PLACE";
 pub const STAGE: &str = "FLUME_STAGE";
 
-/// The variable that gates the plugin's deliver module, set in the agent's
-/// environment only where the profile offers deliver (215, C.4).
+/// The variable that gates the deliver part of the plugin's hooks module,
+/// set in the agent's environment only where the profile offers deliver
+/// (215, C.4).
 pub const DELIVER_VARIABLE: &str = "FLUME_DELIVER";
 
 /// Whether the pinned Claude Code offers the deliver part: not offered.
@@ -92,13 +93,14 @@ pub const DELIVER_VARIABLE: &str = "FLUME_DELIVER";
 /// an interactive session but the live walkthroughs, by hand, so nothing
 /// shows that 2.1.296 runs a hooks module's `$.prompt.submit` there, and
 /// the terminal hands every batch and message until the chore that moves
-/// the pin reads one taken through the plugin's deliver module (215, C.4;
+/// the pin reads one taken through the plugin's deliver part (215, C.4;
 /// core.39; record 0069).
 pub const DELIVER: Offered = Offered::NotOffered;
 
 /// The plugin's files, as `plugins/claude` holds them, by their path in
-/// the plugin: its manifests, its hooks, the module that pins the place's
-/// line under the prompt (design 4) and the /launch command.
+/// the plugin: its manifests, its hooks, its one hooks module, which pins
+/// the place's line under the prompt and holds the deliver part (design 4;
+/// 215), and the /launch command.
 pub const PLUGIN: [(&str, &str); 5] = [
     (
         ".claude-plugin/plugin.json",
@@ -109,8 +111,8 @@ pub const PLUGIN: [(&str, &str); 5] = [
         include_str!("../../../../../../plugins/claude/hooks/hooks.json"),
     ),
     (
-        "hooks/line.ts",
-        include_str!("../../../../../../plugins/claude/hooks/line.ts"),
+        "hooks/flume.ts",
+        include_str!("../../../../../../plugins/claude/hooks/flume.ts"),
     ),
     (
         ".mcp.json",
@@ -238,7 +240,7 @@ impl Claude {
     }
 
     /// The profile answering deliver offered, as the chore that moves the
-    /// pin to a release read running the deliver module builds it (215;
+    /// pin to a release read running the deliver part builds it (215;
     /// record 0069).
     pub fn offering_deliver(self) -> Claude {
         Claude {
@@ -378,7 +380,7 @@ impl Agent for Claude {
         env.insert(SECRET.into(), secret.0.clone());
         env.insert(PLACE.into(), place.location.clone());
         env.insert(STAGE.into(), identity.stage.clone());
-        // The deliver module runs only where the profile offers deliver
+        // The deliver part runs only where the profile offers deliver
         // (215, C.4; core.13).
         if self.deliver == Offered::Offered {
             env.insert(DELIVER_VARIABLE.into(), "1".into());

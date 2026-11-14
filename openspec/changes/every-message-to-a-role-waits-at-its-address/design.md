@@ -216,9 +216,12 @@ It answers the words, or nothing.
 
 **Claude Code.** `flume hook deliver` reads `FLUME_AGENT`,
 `FLUME_SECRET` and `FLUME_PLACE`, asks the take, prints its words, and
-exits 0 whatever it answers. The plugin's second module,
-`hooks/deliver.ts`, does nothing in a session whose environment does not
-name `FLUME_PLACE`, `FLUME_AGENT` and `FLUME_DELIVER`; in one that does,
+exits 0 whatever it answers. The deliver part of the plugin's one hooks
+module, `hooks/flume.ts`, which pins the place's line beside it since the
+pinned engine takes one hooks module per plugin, each event's hook once
+in it and `$` into no function of another file, does nothing in a
+session whose environment does not name `FLUME_PLACE`, `FLUME_AGENT` and
+`FLUME_DELIVER`; in one that does,
 it runs `flume hook deliver` at `session.start` and at `turn.complete`,
 each after its `next`, and every ten seconds while no turn runs, read
 from `turn.start` and `turn.complete`, one run at a time, each bounded
@@ -227,8 +230,8 @@ by `$.prompt.submit({ text, asUser: true })`, which the engine runs as a
 turn once the session is idle and which leaves the prompt box as it
 stands. A run that fails submits nothing. The profile's command sets
 `FLUME_DELIVER=1` only where the profile offers deliver; the plugin
-carries the module either way, its binary named by its absolute path as
-`line.ts`'s is.
+carries the part either way, its binary named by its absolute path as
+the line's is.
 
 **The pinned release.** The deliver row was read on 2.1.322, and flume
 pins 2.1.296, which is sluice's too, so every host runs one engine

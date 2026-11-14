@@ -48,8 +48,9 @@ pushes.
   first prompt; one whose stage waits on an answer takes nothing until
   it has its answer.
 - **The agent seam's deliver part (215, C.4).** A profile says whether
-  its program takes words by its own channel. Claude Code's is a hooks
-  module of flume's plugin, `hooks/deliver.ts`, which at each turn's end
+  its program takes words by its own channel. Claude Code's is the
+  deliver part of flume's plugin's hooks module, `hooks/flume.ts`, beside
+  the place's line, which at each turn's end
   and while its session is idle runs `flume hook deliver` and submits
   what it prints by `$.prompt.submit`, leaving the input box as the
   person left it. The pinned 2.1.296 is not yet checked to run a hooks
@@ -127,7 +128,8 @@ None.
 - `crates/flume`: `commands/mod.rs`, `commands/mcp.rs`, `print.rs`,
   `profiles/agent/claude/` (deliver, its hook), the herdr and Rex
   profiles' `send_to`.
-- `plugins/claude`: `hooks/deliver.ts`, its tests, `hooks/hooks.json`,
+- `plugins/claude`: `hooks/flume.ts`, in place of `hooks/line.ts`, its
+  tests, `hooks/hooks.json`,
   `tests/hooks.sh`; `plugins/herdr`: its key and its tests.
 - `docs/architecture/core.md` and the site's copy of the rules;
   `docs/adr/0069-…`; the site's guides and command reference.

@@ -59,8 +59,8 @@ at the agent's start and a started session's mode is its own (161,
 ### Requirement: The deliver mod runs the hook at the session's wait
 
 In a session whose environment names `FLUME_PLACE`, `FLUME_AGENT` and
-`FLUME_DELIVER`, flume's plugin SHALL run `flume hook deliver` from a
-hooks module, `hooks/deliver.ts`, at the session's start and at each
+`FLUME_DELIVER`, flume's plugin SHALL run `flume hook deliver` from its
+hooks module, `hooks/flume.ts`, at the session's start and at each
 turn's end, each after the engine's own, and every ten seconds while no
 turn runs, one run at a time, each bounded at ten seconds; outside such
 a session it SHALL register no clock and run nothing (54, 214, 215,
@@ -93,14 +93,17 @@ and SHALL submit nothing for a run that fails or prints nothing (54,
 - **WHEN** the module runs in a session naming `FLUME_PLACE` and `FLUME_AGENT` but no `FLUME_DELIVER`, and in one flume did not start
 - **THEN** it registers no clock and runs nothing in either
 
-### Requirement: The plugin carries its two modules
+### Requirement: The plugin carries its one hooks module
 
-`hooks/hooks.json` SHALL name `./line.ts` and `./deliver.ts` as its
-modules, and the binary SHALL write both into the plugin it gives each
-agent, each naming the binary by its absolute path, the plugin passing
-the pinned Claude Code's strict validation (C.4).
+`hooks/hooks.json` SHALL name `./flume.ts` as its one module, which
+pins the place's line and holds the deliver part, since the pinned
+Claude Code takes one hooks module per plugin, each event's hook once
+in it and `$` into no function of another file; and the binary SHALL
+write it into the plugin it gives each agent, naming the binary by its
+absolute path, the plugin passing the pinned Claude Code's strict
+validation (C.4).
 
 #### Scenario: The plugin written for an agent
 
 - **WHEN** the binary writes the plugin for a start
-- **THEN** its `hooks/deliver.ts` names the binary's absolute path where `plugins/claude` names `flume`, and `claude plugin validate --strict` passes over it
+- **THEN** its `hooks/flume.ts` names the binary's absolute path where `plugins/claude` names `flume`, it holds no `hooks/line.ts`, and `claude plugin validate --strict` passes over it

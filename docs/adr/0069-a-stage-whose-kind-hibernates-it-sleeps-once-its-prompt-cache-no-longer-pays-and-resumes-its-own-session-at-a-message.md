@@ -195,11 +195,12 @@ beside the records.
   each place's document, which leave a message, of no place, nowhere to
   be claimed.
 - **Claude Code's deliver part is built and not offered** (section 7).
-  The mod `hooks/deliver.ts` runs `flume hook deliver` at a turn's end
-  and on an idle clock, gated by `FLUME_DELIVER`, and submits what it
-  prints as the user's words; the take records the hand-over before the
-  mod submits, since the hook cannot learn whether the submit took, and
-  the inbox gives again what was handed and not confirmed. Claude Code's
+  The deliver part of the plugin's hooks module runs `flume hook deliver`
+  at a turn's end and on an idle clock, gated by `FLUME_DELIVER`, and
+  submits what it prints as the user's words; the take records the
+  hand-over before the mod submits, since the hook cannot learn whether
+  the submit took, and the inbox gives again what was handed and not
+  confirmed. Claude Code's
   profile answers deliver not offered while flume pins 2.1.296, which no
   check of the tree reads running a hooks module's `$.prompt.submit` in
   an interactive session, so the terminal hands every batch until the
@@ -209,6 +210,18 @@ beside the records.
   seconds in every agent for a part no pinned release offers; the framed
   submit, which reads "The flume plugin sent a message" where the
   terminal types the words bare.
+- **One hooks module holds the line and the deliver part** (section 7).
+  The plugin's one hooks module, `hooks/flume.ts`, registers each event
+  once and holds both the place's line and the deliver part, its tests
+  one file for each part. Not taken: a second module, `hooks/deliver.ts`,
+  named beside `hooks/line.ts`, which the pinned 2.1.296 refuses, read on
+  2026-11-14 by its `plugin test` of this tree: "hooks.json `modules`
+  names one hooks module per plugin; a second entry is refused"; and one
+  module importing a part from another file, which it refuses where an
+  event's hook is registered twice ("registered twice without a
+  matcher") or `$` is passed into an imported function ("$ is followed
+  only into a function declared in this same file, never across an
+  import").
 - **A role's run's first prompt carries its batch** (section 9). Each
   start of a role's run fills its prompt with its address's batch after
   the kind's template and before the way to stop short, claimed under
