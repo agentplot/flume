@@ -231,7 +231,9 @@ enum Command {
         #[arg(long)]
         submission: bool,
         /// The recipient waited as; `$FLUME_RECIPIENT`, a role's run's
-        /// address, or the terminal's session, where none is named.
+        /// address, the address the standing agent whose pane it runs in
+        /// holds, or the terminal's session, where none is named. In the
+        /// pane of an agent standing for several addresses, name which.
         #[arg(long)]
         recipient: Option<String>,
         /// How long to follow the host's state, as `<n>`, `<n>s`, `<n>m`
@@ -257,7 +259,10 @@ enum Command {
         /// alone; every place on the host where none is named.
         place: Option<String>,
         /// The recipient collected for; `$FLUME_RECIPIENT`, a role's
-        /// run's address, or the terminal's session, where none is named.
+        /// run's address, the address the standing agent whose pane it
+        /// runs in holds, or the terminal's session, where none is named.
+        /// In the pane of an agent standing for several addresses, name
+        /// which.
         #[arg(long)]
         recipient: Option<String>,
         /// Confirm each end given as its recipient, on receipt, so it is
@@ -278,7 +283,9 @@ enum Command {
         #[arg(required = true, value_name = "KEY")]
         keys: Vec<String>,
         /// The recipient confirmed as; `$FLUME_RECIPIENT`, a role's run's
-        /// address, or the terminal's session, where none is named.
+        /// address, the address the standing agent whose pane it runs in
+        /// holds, or the terminal's session, where none is named. In the
+        /// pane of an agent standing for several addresses, name which.
         #[arg(long)]
         recipient: Option<String>,
     },
@@ -414,9 +421,11 @@ struct LaunchArgs {
     /// a drop's or a done's among them, wait for it, the place's record
     /// kept once it is tidied, until it collects them by `flume inbox` or
     /// `flume wait` as that name. Where none is named, `$FLUME_RECIPIENT`,
+    /// else the address the standing agent whose pane it runs in holds,
     /// else the terminal's session, else the answerer behind the place's
     /// stream, the role a source of the host declares to stand behind it;
-    /// a launch none of them gives is refused. Every stall reaches the
+    /// a launch none of them gives, or one in the pane of an agent
+    /// standing for several addresses, is refused. Every stall reaches the
     /// answerer behind the place's stream too (7, 43, 62, 130, 132, 193).
     #[arg(long, value_name = "SESSION OR ADDRESS")]
     recipient: Vec<String>,
@@ -758,7 +767,10 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
 
 /// The recipient named, else the one the core reads for a command that
 /// names none: `$FLUME_RECIPIENT`, the address of the role's run
-/// `$FLUME_PLACE` names, or the terminal's session (7, 132; design 7).
+/// `$FLUME_PLACE` names, the address the standing agent the command runs
+/// in holds, or the terminal's session; the core's refusal, where the
+/// agent stands for several addresses, is the command's (7, 132;
+/// core.28).
 fn recipient_of(core: &Engine, named: &Option<String>) -> Result<String, String> {
     if let Some(named) = named {
         return Ok(named.clone());
@@ -767,15 +779,17 @@ fn recipient_of(core: &Engine, named: &Option<String>) -> Result<String, String>
         .ok()
         .filter(|place| !place.is_empty())
         .map(PlaceId::new);
-    core.recipient(here.as_ref()).ok_or_else(|| {
-        format!("no recipient is named: name one with --recipient or ${}, or run in a terminal's session or a role's run", crate::host::RECIPIENT)
+    core.recipient(here.as_ref())?.ok_or_else(|| {
+        format!("no recipient is named: name one with --recipient or ${}, or run in a terminal's session, a role's run or a standing agent's pane", crate::host::RECIPIENT)
     })
 }
 
 /// What a retry's or a tell's answer names beside its words: the key of
 /// the stop-short it answers, where `--answers` gives one, and who gives
 /// it, the recipient the command acts as where it names none, recorded on
-/// the stop-short it answers; none where no recipient is read (42).
+/// the stop-short it answers; none where no recipient is read or the
+/// reading is refused, so a retry or a tell is never refused for its
+/// giver (42, 49, 132).
 fn answering(core: &Engine, key: Option<EndKey>) -> Answering {
     Answering {
         key,

@@ -926,14 +926,19 @@ fn a_held_state_with_a_stream_an_account_and_a_record() {
 
 #[test]
 fn a_held_state_with_where_its_recipients_came_from() {
-    // Each of the four a launch takes its recipients from reads back
-    // unchanged, the answerer with its source; a state written before
-    // reads with none, and writes none (7, 193).
+    // Each of the five a launch takes its recipients from reads back
+    // unchanged, the answerer with its source and the standing agent
+    // with its name and source; a state written before reads with none,
+    // and writes none (7, 132, 193).
     for from in [
         RecipientsFrom::Launch,
         RecipientsFrom::Environment,
         RecipientsFrom::Session,
         RecipientsFrom::Answerer {
+            source: "acme".into(),
+        },
+        RecipientsFrom::Standing {
+            agent: "east-planner".into(),
             source: "acme".into(),
         },
     ] {
@@ -949,6 +954,18 @@ fn a_held_state_with_where_its_recipients_came_from() {
     let json = serde_json::to_value(&state).expect("held state as JSON");
     assert_eq!(json["place"]["recipients_from"]["from"], "answerer");
     assert_eq!(json["place"]["recipients_from"]["source"], "acme");
+    let mut standing = held();
+    standing.place.recipients_from = Some(RecipientsFrom::Standing {
+        agent: "east-planner".into(),
+        source: "acme".into(),
+    });
+    let standing = serde_json::to_value(&standing).expect("held state as JSON");
+    assert_eq!(standing["place"]["recipients_from"]["from"], "standing");
+    assert_eq!(
+        standing["place"]["recipients_from"]["agent"],
+        "east-planner"
+    );
+    assert_eq!(standing["place"]["recipients_from"]["source"], "acme");
     let mut before = json;
     before["place"]
         .as_object_mut()

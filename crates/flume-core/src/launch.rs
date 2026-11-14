@@ -11,11 +11,13 @@
 //! are read with its kinds and kept, and every stage's agent is resolved
 //! with the host's configuration as it stands, so a program no agent
 //! profile runs refuses the launch (4, 32). Its recipients are the launch's, or the
-//! one the caller's environment names, or the session the terminal says
-//! launched it, or the answerer behind its stream, with where they came
-//! from kept, and a launch that finds none, or names an address that
-//! wakes nothing where no answerer stands behind its stream, is refused
-//! (7, 8, 193); a role's run has none, its agents' session named by its
+//! one the caller's environment names, or the address the standing agent
+//! that launched it holds, or the session the terminal says launched it,
+//! or the answerer behind its stream, with where they came
+//! from kept, and a launch that finds none, runs in the pane of an agent
+//! standing for several addresses, or names an address that wakes
+//! nothing where no answerer stands behind its stream, is refused (7, 8,
+//! 132, 193); a role's run has none, its agents' session named by its
 //! address (132). The newest submission the merge queue
 //! holds of the branch at the launch is an earlier place's of the same
 //! name, kept so it is never read as this place's (3, 99). A refusal
@@ -37,6 +39,7 @@
 use crate::own::Table;
 use crate::reading::reads_change;
 use crate::settings::no_stage_lacking;
+use crate::standing::{Standing, StandingHere};
 use crate::{Answer, Bound, Engine, Step};
 use flume_seams::*;
 use std::collections::BTreeMap;
@@ -906,13 +909,18 @@ impl Engine {
 
 impl Engine {
     /// A launch's recipients and where they came from, the first of
-    /// these that gives any: the recipients it names, `FLUME_RECIPIENT`
-    /// in the launching command's environment, the session the launching
+    /// these five that gives any: the recipients it names,
+    /// `FLUME_RECIPIENT` in the launching command's environment, the
+    /// address a source gives the standing agent the launching command
+    /// runs in, with that agent and its source, the session the launching
     /// command runs in as the terminal names it, or the answerer behind
     /// the place's stream as the host's sources declare it; a role's run
-    /// has none (7, 132, 190, 193). Refused, before anything is made, a
-    /// launch that finds none of the four, one whose stream two roles
-    /// stand behind where it comes to the fourth, and one whose recipients
+    /// has none (7, 132, 190, 193; core.28). Refused, before anything is
+    /// made, a launch from the pane of an agent its sources give several
+    /// addresses, naming the agent, each address and `--recipient`, one
+    /// that finds none of the five, a command in no session finding no
+    /// standing agent's pane, one whose stream two roles stand behind
+    /// where it comes to the fifth, and one whose recipients
     /// hold a role's address no source declares, or two declare, where no
     /// answerer stands behind its stream; an address a source declares
     /// carried, or gives a standing agent, is taken (4, 8, 132, 193;
@@ -929,10 +937,18 @@ impl Engine {
         }
         let read = std::cell::OnceCell::new();
         let roles = || read.get_or_init(|| self.host.roles());
+        let standing = || self.standing_here(Standing::of(roles()));
         let (recipients, from) = if !launch.recipients.is_empty() {
             (launch.recipients.clone(), RecipientsFrom::Launch)
         } else if let Some(recipient) = self.host.recipient() {
             (vec![recipient], RecipientsFrom::Environment)
+        } else if let StandingHere::One {
+            address,
+            agent,
+            source,
+        } = standing().refused()?
+        {
+            (vec![address], RecipientsFrom::Standing { agent, source })
         } else if let Some(session) = self.caller_session() {
             (vec![session], RecipientsFrom::Session)
         } else {

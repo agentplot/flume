@@ -1032,9 +1032,11 @@ impl DeliveredBy {
 
 /// Where a launch took a place's recipients from, the first of these
 /// that gave any: the recipients the launch named, `FLUME_RECIPIENT` in
-/// the launching command's environment, the session the launching
-/// command ran in as the terminal names it, or the answerer behind the
-/// place's stream, with the source that declares it (7, 190, 193).
+/// the launching command's environment, the address the standing agent
+/// the launching command ran in holds, with that agent and the source
+/// that declares it, the session the launching command ran in as the
+/// terminal names it, or the answerer behind the place's stream, with
+/// the source that declares it (7, 132, 190, 193).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "from", rename_all = "kebab-case")]
 pub enum RecipientsFrom {
@@ -1042,6 +1044,13 @@ pub enum RecipientsFrom {
     Environment,
     Session,
     Answerer {
+        source: String,
+    },
+    /// The address a source gives the standing agent the launch ran in:
+    /// `agent` the agent's name in its session, `source` the source that
+    /// declares it standing for the address (7, 132; core.28).
+    Standing {
+        agent: String,
         source: String,
     },
     /// A base place's fix takes its base place's recipients, who asked for

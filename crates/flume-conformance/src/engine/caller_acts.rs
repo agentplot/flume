@@ -1320,7 +1320,7 @@ fn s93_a_question_for_ops_answered_once(_: &()) -> Outcome {
     world.host.advance(20 * 60);
     let by = world
         .engine
-        .recipient(Some(&ops))
+        .recipient(Some(&ops))?
         .ok_or("the run's command names no recipient")?;
     ensure_eq!(by.as_str(), "east/ops", "the run's command's recipient");
     let at = world.host.now();

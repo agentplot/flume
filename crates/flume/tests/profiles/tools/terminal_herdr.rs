@@ -1758,6 +1758,62 @@ fn a_command_run_in_a_herdr_pane_names_its_pane() {
 }
 
 #[test]
+fn a_command_in_a_herdr_sessions_pane_is_named_as_its_agents_are_given() {
+    // The terminal-profiles spec's "A command in a herdr session's pane"
+    // (7, 132, C.5; core.29): the standing agent `w-planner` started in
+    // `w`, a workspace of the test's own made on `w`'s server, and a
+    // command run in its pane names `herdr:<that pane>@<socket>`, the
+    // socket the profile's `agents_in` of `w` gives `w-planner` at, so a
+    // command in a standing agent's pane names that agent's session.
+    let server = TestServer::start("herdr-caller-in-w");
+    let home = SessionHome::new(&["w"]);
+    let profile = server.profile().with_session_home(home.path());
+    let planner = standing(&server, &home, "w", Some("w-planner"));
+    let made = server.herdr_on(
+        &planner.socket,
+        &["workspace", "create", "--label", "caller", "--no-focus"],
+    );
+    let pane = made["root_pane"]["pane_id"]
+        .as_str()
+        .unwrap_or_else(|| panic!("herdr gave no pane in {made}"))
+        .to_string();
+    let out = server.scratch.path("session");
+    let line = format!(
+        "FLUME_HERDR_SESSION_OUT={} XDG_STATE_HOME={} {} --exact terminal_herdr::session_child --nocapture",
+        out.display(),
+        server.scratch.path("state").display(),
+        std::env::current_exe().unwrap().display()
+    );
+    server.herdr_on(&planner.socket, &["pane", "run", &pane, &line]);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !out.exists() {
+        assert!(
+            Instant::now() < deadline,
+            "the command in the pane wrote nothing"
+        );
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    std::thread::sleep(Duration::from_millis(200));
+    let at = match profile.agents_in(Some("w")) {
+        AgentsIn::Read { agents } => agents
+            .into_iter()
+            .find(|agent| agent.name == "w-planner")
+            .map(|agent| agent.at)
+            .expect("w-planner given"),
+        unread => panic!("w's agents were not read: {unread:?}"),
+    };
+    let socket = Pane::named(&at)
+        .unwrap_or_else(|| panic!("w-planner at no pane: {at}"))
+        .socket;
+    assert_eq!(at, planner.session(), "where w-planner is given");
+    assert_eq!(
+        fs::read_to_string(&out).unwrap(),
+        Pane { id: pane, socket }.session(),
+        "the session the command in w's pane names"
+    );
+}
+
+#[test]
 fn herdrs_readings_as_the_profile_reads_them() {
     let server = TestServer::start("herdr-states");
     let profile = server.profile();
