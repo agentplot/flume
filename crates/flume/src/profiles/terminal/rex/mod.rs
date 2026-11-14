@@ -554,6 +554,7 @@ impl Rex {
             .into_iter()
             .flatten()
             .filter_map(Result::ok)
+            .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "json"))
             .filter_map(|entry| Some((entry.path(), read_json(&entry.path())?)))
             .collect()
     }
@@ -1190,26 +1191,36 @@ fn close_args(located: &Located) -> Vec<String> {
     args
 }
 
-/// `value` written as the record at `path` only where none stands there:
-/// whether it was; the words naming the path where it could not be.
+/// `value` written as the record at `path` only where none stands there,
+/// whole at once, so no reader finds it half written: written beside it,
+/// then linked to its name, which fails where a record stands; whether it
+/// was; the words naming the path where it could not be.
 fn create_json(path: &Path, value: &Value) -> Result<bool, String> {
-    let made = path
-        .parent()
+    static CLAIMS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let beside = path.with_extension(format!(
+        "{}-{}.claim",
+        std::process::id(),
+        CLAIMS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let failed = |error: std::io::Error| format!("{}: {error}", path.display());
+    path.parent()
         .map_or(Ok(()), fs::create_dir_all)
         .and_then(|()| {
-            fs::OpenOptions::new()
+            let mut file = fs::OpenOptions::new()
                 .write(true)
-                .create_new(true)
+                .create(true)
+                .truncate(true)
                 .mode(0o600)
-                .open(path)
-        });
-    match made {
-        Ok(mut file) => file
-            .write_all(value.to_string().as_bytes())
-            .map(|()| true)
-            .map_err(|error| format!("{}: {error}", path.display())),
+                .open(&beside)?;
+            file.write_all(value.to_string().as_bytes())
+        })
+        .map_err(failed)?;
+    let linked = fs::hard_link(&beside, path);
+    let _ = fs::remove_file(&beside);
+    match linked {
+        Ok(()) => Ok(true),
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
-        Err(error) => Err(format!("{}: {error}", path.display())),
+        Err(error) => Err(failed(error)),
     }
 }
 
