@@ -42,8 +42,8 @@ server it started at its end (core.51).
 ## 5. The printed command and Rex
 
 - [x] 5.1 Have the printed command's relay refuse saying it holds no part of a terminal a person can be shown, running nothing; its harness says it offers no relay (222, C.5). True when `devenv shell -- cargo test -p flume --test profiles terminal_printed::relay_under_the_printed_command_is_refused_and_runs_nothing` and `devenv shell -- cargo test -p flume --test profiles terminal_printed::the_printed_command_passes_the_terminal_scenarios` pass.
-- [ ] 5.2 Have the Rex profile's relay refuse before any call, saying flume's Rex profile offers no relay, and its module doc say so as C.5 gives Rex no relay row (222; core.19). True when `devenv shell -- cargo test -p flume --lib profiles::terminal::rex::tests::relay_is_refused_and_calls_nothing` passes over a stand-in `rex` that logs every call.
-- [ ] 5.3 Have the Rex seam harness in `crates/flume/tests/profiles/tools/terminal_rex.rs` say it offers no relay (222). True when `devenv shell -- cargo test -p flume --features tools --test tools terminal_rex::the_rex_profile_passes_the_terminal_scenarios` passes.
+- [x] 5.2 Have the Rex profile's relay refuse before any call, saying flume's Rex profile offers no relay, and its module doc say so as C.5 gives Rex no relay row (222; core.19). True when `devenv shell -- cargo test -p flume --lib profiles::terminal::rex::tests::relay_is_refused_and_calls_nothing` passes over a stand-in `rex` that logs every call.
+- [x] 5.3 Have the Rex seam harness in `crates/flume/tests/profiles/tools/terminal_rex.rs` say it offers no relay (222). True when `devenv shell -- cargo test -p flume --features tools --test tools terminal_rex::the_rex_profile_passes_the_terminal_scenarios` passes.
 
 ## 6. herdr's relay
 

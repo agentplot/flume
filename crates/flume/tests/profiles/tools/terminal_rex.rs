@@ -2375,6 +2375,12 @@ impl TerminalHarness for Harness {
         self.fixture.stand_in_block(session, name, &[]);
         true
     }
+
+    /// C.5 gives Rex no relay row, so flume's Rex profile offers none
+    /// (222).
+    fn relays(&self) -> bool {
+        false
+    }
 }
 
 #[test]
