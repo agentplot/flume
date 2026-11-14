@@ -1833,4 +1833,31 @@ pub(crate) mod tests {
             "{warnings:?}"
         );
     }
+    #[test]
+    fn a_clue_that_does_not_show_goes_as_a_warning() {
+        // A settle whose clues the terminal refuses writes that line to
+        // the host's log and hands it on as a warning, as every line of
+        // flume's log goes (139, 218).
+        let world = World::new();
+        world.terminal.shows_fail(true);
+        let id = world.launch("one");
+        world.telemetry.clear();
+        let logged = world.host.logged.calls().len();
+        world.engine().settle(Some(&id));
+        let line = format!("the clues of {id} did not show: the terminal refused the clues");
+        assert_eq!(
+            &world.host.logged.calls()[logged..],
+            std::slice::from_ref(&line)
+        );
+        let warnings: Vec<String> = world
+            .telemetry
+            .signals()
+            .into_iter()
+            .filter_map(|signal| match signal {
+                Signal::Warning { words, .. } => Some(words),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(warnings, [line]);
+    }
 }

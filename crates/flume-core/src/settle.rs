@@ -237,8 +237,7 @@ impl Engine {
         };
         match shown {
             Shown::Failed { reason } => {
-                self.host
-                    .log(&format!("the clues of {id} did not show: {reason}"));
+                self.log(&format!("the clues of {id} did not show: {reason}"));
             }
             Shown::Shown | Shown::ShowsNone => {
                 self.update(id, |held| {
