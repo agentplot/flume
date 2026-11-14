@@ -61,6 +61,7 @@ const BINDING: &str =
 fn a_callers(name: &str) -> bool {
     [
         "HERDR_",
+        "REX_",
         "TMUX",
         "ZELLIJ",
         "SLUICE_",

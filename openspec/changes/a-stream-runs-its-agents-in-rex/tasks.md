@@ -52,7 +52,7 @@ its end (core.51).
 
 ## 5. sluice and the tests strip `REX_*`
 
-- [ ] 5.1 Have `a_session` in `crates/flume/src/profiles/merge_queue/sluice/mod.rs` take `REX_*` (C.6; core.6), and the tools tests' lists of variables they strip take `REX_` beside `HERDR_` (`merge_queue_sluice.rs`, `walk.rs`, `terminal_herdr.rs`). True when `devenv shell -- cargo test -p flume --features tools --test tools merge_queue_sluice::a_submission_from_a_rex_block_names_no_session` passes and `sluice exec bolt/rex-is-flumes-second-terminal -- moon run flume:lint` passes.
+- [x] 5.1 Have `a_session` in `crates/flume/src/profiles/merge_queue/sluice/mod.rs` take `REX_*` (C.6; core.6), and the tools tests' lists of variables they strip take `REX_` beside `HERDR_` (`merge_queue_sluice.rs`, `walk.rs`, `terminal_herdr.rs`). True when `devenv shell -- cargo test -p flume --features tools --test tools merge_queue_sluice::a_submission_from_a_rex_block_names_no_session` passes and `sluice exec bolt/rex-is-flumes-second-terminal -- moon run flume:lint` passes.
 - [ ] 5.2 Have the lists of variables the binary's and the profiles' tests strip take `REX_` beside `HERDR_` (`crates/flume/tests/commands.rs`, `profiles/built_in.rs`, `profiles/hooks_claude.rs`). True when `sluice exec bolt/rex-is-flumes-second-terminal -- moon run flume:test` passes.
 - [ ] 5.3 Have `plugins/claude/tests/hooks.sh` strip `REX_*` beside `FLUME_`, `HERDR_` and `CLAUDE`. True when `sluice exec bolt/rex-is-flumes-second-terminal -- moon run plugin-claude:test` passes.
 

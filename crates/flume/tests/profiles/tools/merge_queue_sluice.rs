@@ -180,7 +180,10 @@ impl Harness {
         let mut command = Command::new("sluice");
         command.args(args).current_dir(dir).stdin(Stdio::null());
         for (name, _) in std::env::vars() {
-            if name.starts_with("SLUICE_") || name.starts_with("HERDR_") || name.starts_with("TMUX")
+            if name.starts_with("SLUICE_")
+                || name.starts_with("HERDR_")
+                || name.starts_with("REX_")
+                || name.starts_with("TMUX")
             {
                 command.env_remove(name);
             }
@@ -882,6 +885,44 @@ fn a_submission_from_a_herdr_panes_hook_names_the_place_and_no_session() {
 }
 
 #[test]
+fn a_submission_from_a_rex_block_names_no_session() {
+    // C.6; core.6: the merge-queue-profile scenario "A submission from a
+    // Rex block": a submission from a process whose environment carries
+    // REX_SERVER, REX_SESSION and REX_BLOCK, as a hook's in a Rex block
+    // does, names the place's worktree as its submitter and no session, and
+    // answers before any verdict.
+    let harness = Harness::new();
+    let (place, head) = harness.place();
+    let seam = harness
+        .seam
+        .clone()
+        .with_env("REX_SERVER", Some("unix:///nowhere/rex.sock"))
+        .with_env(
+            "REX_SESSION",
+            Some("session:01a1d7f4-c985-7f17-ade1-a7707e974087"),
+        )
+        .with_env(
+            "REX_BLOCK",
+            Some("block:01a1d7f4-c986-716b-904e-a3b017e8d18f"),
+        );
+    let Submitted::Submitted { submission } = seam.submit(&place, &from_worktree(&head)) else {
+        panic!("the submit was refused");
+    };
+    assert_eq!(submission.state, SubmissionState::Waiting, "the answer");
+    let record = harness.record("fix/one").expect("sluice's entry");
+    assert_eq!(
+        record["from"]["path"].as_str(),
+        Some(place.location.as_str()),
+        "the entry's submitter"
+    );
+    assert!(
+        record["from"].get("session").is_none(),
+        "the entry names a session: {record}"
+    );
+    assert_eq!(record["state"], "queued", "the entry before any verdict");
+}
+
+#[test]
 fn a_failed_entry_is_collected_once_with_sluices_notice() {
     let harness = Harness::new();
     let (place, head) = harness.place();
@@ -1015,7 +1056,11 @@ fn a_step_beside_a_live_driver_does_nothing_and_answers() {
     let mut run = Command::new("sluice");
     run.arg("run").current_dir(&harness.repository.dir);
     for (name, _) in std::env::vars() {
-        if name.starts_with("SLUICE_") || name.starts_with("HERDR_") || name.starts_with("TMUX") {
+        if name.starts_with("SLUICE_")
+            || name.starts_with("HERDR_")
+            || name.starts_with("REX_")
+            || name.starts_with("TMUX")
+        {
             run.env_remove(name);
         }
     }
@@ -1237,7 +1282,11 @@ fn a_pull_request_with_no_entry_is_held_and_the_entry_taken_in_from_it_is_read_t
     );
     let mut take_in = Command::new(bin.join("sluice"));
     for (name, _) in std::env::vars() {
-        if name.starts_with("SLUICE_") || name.starts_with("HERDR_") || name.starts_with("TMUX") {
+        if name.starts_with("SLUICE_")
+            || name.starts_with("HERDR_")
+            || name.starts_with("REX_")
+            || name.starts_with("TMUX")
+        {
             take_in.env_remove(name);
         }
     }
