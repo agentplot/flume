@@ -279,10 +279,11 @@ impl Strategy {
 
 /// An account of a pool: its name, the agent program it runs, the
 /// environment that signs that program in, each value as the
-/// configuration wrote it, how many agents run on it at once, none where
-/// it states none, and the path of its reading as the configuration wrote
-/// it, none where it names none (144, 184, C.7). Its environment is an
-/// agent's whole environment beyond the login environment (32).
+/// configuration wrote it, and how many agents run on it at once, none
+/// where it states none (144, C.7). Its environment is an agent's whole
+/// environment beyond the login environment (32). It names no reading:
+/// its reading is what its program reports in a session flume started,
+/// kept in the account's own document (184, 211; record 0062).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Account {
     pub name: String,
@@ -291,8 +292,6 @@ pub struct Account {
     pub env: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agents: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub usage: Option<String>,
 }
 
 /// A pool of accounts, in order, the strategy by which one is chosen at
@@ -307,23 +306,125 @@ pub struct Pool {
     pub accounts: Vec<Account>,
 }
 
-/// An account's reading as the host last wrote it: when the host read the
-/// account's allowance, and each of its usage windows (184, C.7).
+/// An account's reading, kept in its own document by flume alone: when
+/// flume took it, by the host's clock, the agent whose start's program
+/// reported it, by its identity, the session it came from, none where the
+/// agent's record names none, and each of its usage windows (153, 184,
+/// 211, C.7). It is written in C.7's form: `taken_at` RFC 3339's with its
+/// offset, UTC written `Z`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Usage {
-    pub read_at: Seconds,
+pub struct AccountReading {
+    #[serde(with = "rfc3339")]
+    pub taken_at: Seconds,
+    pub agent: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
     pub windows: Vec<UsageWindow>,
 }
 
-/// One usage window of an account's allowance: its name as the host gives
-/// it, how much of it is used in hundredths of a percent, 0 to 10000, and
-/// when it resets, none where the reading gives none (184, C.7).
+/// One usage window of an account's allowance: its name as the program
+/// gives it, how much of it is used in hundredths of a percent, 0 to
+/// 10000, and when it resets, none where the report gives none (184, 211,
+/// C.7). It is written in C.7's form: `used` a share from 0 to 100,
+/// written from its hundredths, 42 or 23.5, and `resets_at` RFC 3339's
+/// with its offset, UTC written `Z`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageWindow {
     pub name: String,
+    #[serde(with = "share")]
     pub used: u32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "rfc3339_or_none"
+    )]
     pub resets_at: Option<Seconds>,
+}
+
+/// A time by the host's clock as RFC 3339 writes it, UTC written `Z`, the
+/// seconds whole (C.7).
+pub fn rfc3339_of(seconds: Seconds) -> String {
+    i64::try_from(seconds)
+        .ok()
+        .and_then(|seconds| chrono::DateTime::<chrono::Utc>::from_timestamp(seconds, 0))
+        .map(|at| at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+        .unwrap_or_else(|| seconds.to_string())
+}
+
+/// A time RFC 3339 writes with its offset, read as seconds by the host's
+/// clock, a fraction of a second dropped; none where RFC 3339 cannot read
+/// it or it is before 1970 (C.7).
+pub fn rfc3339_read(written: &str) -> Option<Seconds> {
+    chrono::DateTime::parse_from_rfc3339(written)
+        .ok()
+        .and_then(|at| Seconds::try_from(at.timestamp()).ok())
+}
+
+/// A time written as RFC 3339's (C.7).
+mod rfc3339 {
+    use crate::Seconds;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(seconds: &Seconds, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&super::rfc3339_of(*seconds))
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Seconds, D::Error> {
+        let written = String::deserialize(deserializer)?;
+        super::rfc3339_read(&written).ok_or_else(|| {
+            serde::de::Error::custom(format!("`{written}` is no time RFC 3339 reads"))
+        })
+    }
+}
+
+/// A time written as RFC 3339's where there is one (C.7).
+mod rfc3339_or_none {
+    use crate::Seconds;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(
+        seconds: &Option<Seconds>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        match seconds {
+            Some(seconds) => super::rfc3339::serialize(seconds, serializer),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Seconds>, D::Error> {
+        match Option::<String>::deserialize(deserializer)? {
+            Some(written) => super::rfc3339_read(&written).map(Some).ok_or_else(|| {
+                serde::de::Error::custom(format!("`{written}` is no time RFC 3339 reads"))
+            }),
+            None => Ok(None),
+        }
+    }
+}
+
+/// Hundredths of a percent written as a share from 0 to 100, a whole
+/// number where it is one (C.7).
+mod share {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(hundredths: &u32, serializer: S) -> Result<S::Ok, S::Error> {
+        match hundredths % 100 {
+            0 => serializer.serialize_u32(hundredths / 100),
+            _ => serializer.serialize_f64(f64::from(*hundredths) / 100.0),
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u32, D::Error> {
+        let share = f64::deserialize(deserializer)?;
+        if !(0.0..=100.0).contains(&share) {
+            return Err(serde::de::Error::custom(format!(
+                "{share} is not a share from 0 to 100"
+            )));
+        }
+        Ok((share * 100.0).round() as u32)
+    }
 }
 
 /// A repository as the host's configuration names it: by its address,
@@ -878,10 +979,6 @@ pub trait Host: Send + Sync {
     /// The pool the host's configuration declares under `name`, as it
     /// stands now (144, C.7).
     fn pool(&self, name: &str) -> Option<Pool>;
-
-    /// The reading in the file at `path`, an absolute path, as it stands
-    /// now; or why there is none, in words that name no path (184, C.7).
-    fn usage(&self, path: &str) -> Result<Usage, String>;
 
     /// A variable of the host user's login environment, `HOME` among
     /// them, never of the calling command's session; none where it lacks

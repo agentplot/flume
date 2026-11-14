@@ -3,25 +3,24 @@
 //! random bytes, a file's write time, a command of flume's named by its
 //! process and that process's start, the bound and the agents' settings
 //! the host's configuration states, the role runs, streams, pools and
-//! labels it names, its values with their layers, an account's reading
-//! from the file its `usage` names, the sources of kinds it declares and
-//! its lock of kinds beside them, the recipient the calling command's
+//! labels it names, its values with their layers, the sources of kinds
+//! it declares and its lock of kinds beside them, the recipient the calling command's
 //! environment names, the host user's login environment, the room lock
 //! at `$XDG_STATE_HOME/flume/room.lock`, and the lock `flume kinds lock`
 //! holds while it writes a lock of kinds, at
-//! `$XDG_STATE_HOME/flume/kinds-lock.lock` (41, 70, 75, 155, 184, 191;
-//! design 6, 10). No tool is named here (core.1).
+//! `$XDG_STATE_HOME/flume/kinds-lock.lock` (41, 70, 75, 155, 191; design
+//! 6, 10). It reads no file a host writes for an account's reading (184).
+//! No tool is named here (core.1).
 
 pub mod config;
 pub mod history;
 pub mod process;
 pub mod roles;
-pub mod usage;
 
 use config::HostConfig;
 use flume_seams::{
     Host, HostConfiguration, HostRoles, HostSettings, HostSource, LabelHeld, Pool, PoolNamed,
-    RepositoryName, RoomGuard, Seconds, Secret, Stream, StreamDisplay, StreamHeld, Usage,
+    RepositoryName, RoomGuard, Seconds, Secret, Stream, StreamDisplay, StreamHeld,
 };
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
@@ -355,12 +354,6 @@ impl Host for RealHost {
 
     fn pool(&self, name: &str) -> Option<Pool> {
         self.config.pools.get(name).cloned()
-    }
-
-    /// The reading in the file at `path` as it stands now, read and never
-    /// written (184, C.7).
-    fn usage(&self, path: &str) -> Result<Usage, String> {
-        usage::read(Path::new(path))
     }
 
     fn login(&self, name: &str) -> Option<String> {

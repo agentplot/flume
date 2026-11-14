@@ -38,6 +38,11 @@ fn the_fake_agent_passes_the_agent_scenarios() {
         &agent::scenarios(),
         FakeAgentHarness::taking_no_effort,
     );
+    pass_all(
+        "agent",
+        &agent::scenarios(),
+        FakeAgentHarness::reporting_no_windows,
+    );
 }
 
 #[test]

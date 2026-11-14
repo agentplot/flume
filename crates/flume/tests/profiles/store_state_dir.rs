@@ -307,11 +307,14 @@ fn world_caller() -> String {
 
 /// The account `work-1` of the pool `work` spent until `until`.
 fn spent_until(until: Seconds) -> HostDocument {
-    HostDocument::Account(AccountSpent {
-        until,
-        words: Some("You've hit your session limit · resets 3pm (UTC)".into()),
-        recorded_at: until - 3600,
-        unread: false,
+    HostDocument::Account(AccountDocument {
+        spent: Some(AccountSpent {
+            until,
+            words: Some("You've hit your session limit · resets 3pm (UTC)".into()),
+            recorded_at: until - 3600,
+            unread: false,
+        }),
+        reading: None,
     })
 }
 

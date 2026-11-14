@@ -8,7 +8,9 @@
 //! written, from which every reading of the start's transcript reads, so
 //! a start that carries a conversation reads none of its earlier agent's
 //! records as its own (31, 179). Beside them, the command writes the
-//! standing prompt the start carries (148, C.4).
+//! standing prompt the start carries (148, C.4), and `flume hook usage`
+//! keeps the usage windows the program last reported, with when it took
+//! them (211).
 
 use flume_seams::Identity;
 use serde::{Deserialize, Serialize};
@@ -71,6 +73,19 @@ pub struct Unsettled {
     #[serde(default)]
     pub from: u64,
 }
+
+/// The usage windows the program last reported, as `flume hook usage`
+/// keeps them: when the hook took them, by the host's clock, and each
+/// window (184, 211).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeptWindows {
+    pub taken_at: u64,
+    pub windows: Vec<flume_seams::UsageWindow>,
+}
+
+/// The file in a start's record that holds the windows its program last
+/// reported (211).
+pub const WINDOWS: &str = "windows.json";
 
 /// One start's record in one folder.
 #[derive(Clone, Debug)]
@@ -263,5 +278,32 @@ impl Record {
     pub fn set_failure(&self, failure: &Failure) -> std::io::Result<()> {
         let text = serde_json::to_string(failure).expect("the failure as JSON");
         self.write("failure.json", &text)
+    }
+
+    /// The windows the program last reported, as `flume hook usage` kept
+    /// them: none where none was kept, and an error where a file is kept
+    /// that cannot be read (211).
+    pub fn windows(&self) -> Result<Option<KeptWindows>, String> {
+        match fs::read_to_string(self.file(WINDOWS)) {
+            Ok(text) => serde_json::from_str(&text)
+                .map(Some)
+                .map_err(|error| error.to_string()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error.to_string()),
+        }
+    }
+
+    /// The windows `kept` written whole, beside the file and renamed over
+    /// it, where the file holds none taken later; false where it kept a
+    /// later one (211; core.17).
+    pub fn keep_windows(&self, kept: &KeptWindows) -> std::io::Result<bool> {
+        if let Ok(Some(standing)) = self.windows() {
+            if standing.taken_at > kept.taken_at {
+                return Ok(false);
+            }
+        }
+        let text = serde_json::to_string(kept).expect("the windows as JSON");
+        self.write(WINDOWS, &text)?;
+        Ok(true)
     }
 }

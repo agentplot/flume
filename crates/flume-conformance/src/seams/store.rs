@@ -73,7 +73,7 @@ pub fn scenarios<H: StoreHarness>() -> Vec<Scenario<H>> {
             run: one_store_outside_the_repository::<H>,
         },
         Scenario {
-            name: "store: the host's own documents are read and written by key, a write at a moved version refused, and every flume process reaches them",
+            name: "store: the host's own documents are read and written by key, an account's holding its spent time and its reading, a write at a moved version refused, and every flume process reaches them",
             cites: &["102", "103", "104", "153"],
             run: the_hosts_own_documents::<H>,
         },
@@ -219,11 +219,30 @@ fn the_hosts_own_documents<H: StoreHarness>(harness: &H) -> Outcome {
         "a document read before any was written"
     );
     let spent = |until| {
-        HostDocument::Account(AccountSpent {
-            until,
-            words: Some("You've hit your session limit".into()),
-            recorded_at: 100,
-            unread: false,
+        HostDocument::Account(AccountDocument {
+            spent: Some(AccountSpent {
+                until,
+                words: Some("You've hit your session limit".into()),
+                recorded_at: 100,
+                unread: false,
+            }),
+            reading: Some(AccountReading {
+                taken_at: 90,
+                agent: "flume:r:fix--one:code:1".into(),
+                session: Some("s-1".into()),
+                windows: vec![
+                    UsageWindow {
+                        name: "five_hour".into(),
+                        used: 4_200,
+                        resets_at: Some(until),
+                    },
+                    UsageWindow {
+                        name: "seven_day".into(),
+                        used: 2_350,
+                        resets_at: None,
+                    },
+                ],
+            }),
         })
     };
     let first = written(harness.seam().write_host(&account, None, Some(&spent(500))))?;

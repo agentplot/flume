@@ -93,13 +93,13 @@ pub struct HostVersioned {
     pub document: HostDocument,
 }
 
-/// A host's own document: an account's spent time, an intent's
-/// affinity, the host's watch, or the host's deliveries (43, 146, 147,
-/// 153, 208, C.7).
+/// A host's own document: an account's spent time and reading, an
+/// intent's affinity, the host's watch, or the host's deliveries (43,
+/// 146, 147, 153, 184, 208, C.7).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "of", rename_all = "snake_case")]
 pub enum HostDocument {
-    Account(AccountSpent),
+    Account(AccountDocument),
     Intent(Affinity),
     Watch(Watched),
     Deliveries(Deliveries),
@@ -166,6 +166,20 @@ impl Watched {
     pub fn lapses(&self) -> Seconds {
         self.began.saturating_add(self.bound.saturating_mul(2))
     }
+}
+
+/// An account's own document: the time it is spent until, none where it
+/// is not spent, its keys at the document's top as an earlier release
+/// wrote them, and its reading, none where no session flume started has
+/// reported its windows, under `reading` (146, 153, 184, C.7). A document
+/// an earlier release wrote reads as spent with no reading; one with a
+/// reading and no spent time reads with none.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccountDocument {
+    #[serde(flatten)]
+    pub spent: Option<AccountSpent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reading: Option<crate::AccountReading>,
 }
 
 /// An account spent until a time by the host's clock, with the words its

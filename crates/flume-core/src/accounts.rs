@@ -1,12 +1,13 @@
 //! A pool's accounts as the queue reads them under the room lock (144,
 //! 145): each account's agents of flume's running, the time it stays
 //! spent until where the host's own document records it spent, its
-//! reading as the host last wrote it and the threshold that reading holds
-//! it past, and the choice of an account at a start, the strategy over
-//! the usable accounts in order (184, 185; core.32).
+//! reading as that document holds it, the windows its agent program last
+//! reported in a session flume started, and the threshold that reading
+//! holds it past, and the choice of an account at a start, the strategy
+//! over the usable accounts in order (184, 185, 211; core.32).
 
 use crate::room::Queue;
-use crate::{settings, Engine, Past, ReadingStatus, WindowStatus};
+use crate::{Engine, Past, ReadingStatus, WindowStatus};
 use flume_seams::*;
 use std::collections::BTreeMap;
 
@@ -14,9 +15,17 @@ use std::collections::BTreeMap;
 /// start, where its pool states none (185, C.7).
 pub const THRESHOLD: u32 = 90;
 
-/// How long a reading is fresh from when the host read it, by the host's
+/// How long a reading is fresh from when flume took it, by the host's
 /// clock (184).
 pub const FRESH: Seconds = 15 * 60;
+
+/// Why an account whose program's profile builds no windows, or that no
+/// profile binds, has no reading (171, 174, 184).
+pub const NO_WINDOWS: &str = "its program's profile gives no windows";
+
+/// Why an account of a program whose profile builds windows has no
+/// reading: no session flume started has reported them for it (184).
+pub const NONE_REPORTED: &str = "no session flume started has reported its windows";
 
 /// A pool as the queue reads it: its strategy, its threshold, 90 where
 /// it states none, and its accounts in order (185).
@@ -44,16 +53,16 @@ pub(crate) struct AccountRoom {
     pub now: Seconds,
 }
 
-/// An account's reading as the queue reads it (184).
+/// An account's reading as the queue reads it from the account's own
+/// document (184).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Reading {
-    /// The account names no reading.
-    None,
-    /// It names one that cannot be read, with why, in words that name no
-    /// path.
-    Unread(String),
-    /// Its reading, as read now.
-    Read(Usage),
+    /// The document holds none, with why: [`NO_WINDOWS`] or
+    /// [`NONE_REPORTED`].
+    None(String),
+    /// The reading flume took from a session it started, as the document
+    /// holds it.
+    Taken(AccountReading),
 }
 
 /// The window's use now in hundredths of a percent: none where its reset
@@ -65,25 +74,25 @@ pub(crate) fn used_now(window: &UsageWindow, now: Seconds) -> u32 {
     }
 }
 
-/// When the host read the reading, a time later than `now` read as `now`
+/// When flume took the reading, a time later than `now` read as `now`
 /// (184).
-fn read_at(usage: &Usage, now: Seconds) -> Seconds {
-    usage.read_at.min(now)
+fn taken_at(reading: &AccountReading, now: Seconds) -> Seconds {
+    reading.taken_at.min(now)
 }
 
 /// Whether the reading is fresh at `now`: less than [`FRESH`] past when
-/// the host read it (184).
-pub(crate) fn fresh(usage: &Usage, now: Seconds) -> bool {
-    now < read_at(usage, now).saturating_add(FRESH)
+/// flume took it (184).
+pub(crate) fn fresh(reading: &AccountReading, now: Seconds) -> bool {
+    now < taken_at(reading, now).saturating_add(FRESH)
 }
 
-/// Until when `window` of `usage` holds its account past `threshold`, a
-/// whole percentage, at `now`: where its use now is at the threshold or
+/// Until when `window` of `reading` holds its account past `threshold`,
+/// a whole percentage, at `now`: where its use now is at the threshold or
 /// past it, until its reset whatever the reading's age, and, where it
 /// names none, until the reading stops being fresh, while it is; none
 /// otherwise (185).
 pub(crate) fn holds_until(
-    usage: &Usage,
+    reading: &AccountReading,
     window: &UsageWindow,
     threshold: u32,
     now: Seconds,
@@ -93,19 +102,19 @@ pub(crate) fn holds_until(
     }
     match window.resets_at {
         Some(resets_at) => Some(resets_at),
-        None => fresh(usage, now).then(|| read_at(usage, now).saturating_add(FRESH)),
+        None => fresh(reading, now).then(|| taken_at(reading, now).saturating_add(FRESH)),
     }
 }
 
-/// What holds the account whose reading is `usage` past `threshold` at
+/// What holds the account whose reading is `reading` past `threshold` at
 /// `now`: of the windows that hold it, the one that holds it latest,
 /// equals in the reading's order; none where none holds it (185).
-pub(crate) fn past(usage: &Usage, threshold: u32, now: Seconds) -> Option<Past> {
-    usage
+pub(crate) fn past(reading: &AccountReading, threshold: u32, now: Seconds) -> Option<Past> {
+    reading
         .windows
         .iter()
         .filter_map(|window| {
-            holds_until(usage, window, threshold, now).map(|until| Past {
+            holds_until(reading, window, threshold, now).map(|until| Past {
                 window: window.name.clone(),
                 until,
             })
@@ -116,14 +125,14 @@ pub(crate) fn past(usage: &Usage, threshold: u32, now: Seconds) -> Option<Past> 
         })
 }
 
-/// What the account whose reading is `usage` has left at `now`, in
+/// What the account whose reading is `reading` has left at `now`, in
 /// hundredths of a percent: 10000 less the most use now of its windows,
 /// for a fresh reading with a window; none otherwise (145, 184).
-pub(crate) fn left(usage: &Usage, now: Seconds) -> Option<u32> {
-    if !fresh(usage, now) {
+pub(crate) fn left(reading: &AccountReading, now: Seconds) -> Option<u32> {
+    if !fresh(reading, now) {
         return None;
     }
-    usage
+    reading
         .windows
         .iter()
         .map(|window| used_now(window, now))
@@ -135,43 +144,44 @@ impl AccountRoom {
     /// What holds it past its threshold, none where nothing does (185).
     pub fn past(&self) -> Option<Past> {
         match &self.reading {
-            Reading::Read(usage) => past(usage, self.threshold, self.now),
-            Reading::None | Reading::Unread(_) => None,
+            Reading::Taken(reading) => past(reading, self.threshold, self.now),
+            Reading::None(_) => None,
         }
     }
 
-    /// Its reading as status gives it, none where it names none: when the
-    /// host read it, whether it is fresh, and each window with whether it
-    /// holds the account past its threshold; or why it cannot be read
+    /// Its reading as status gives it: when flume took it, from which
+    /// agent and session, whether it is fresh, and each window with
+    /// whether it holds the account past its threshold; or why it has none
     /// (184, 185).
     pub fn reading_status(&self) -> Option<ReadingStatus> {
-        match &self.reading {
-            Reading::None => None,
-            Reading::Unread(why) => Some(ReadingStatus::Unread {
+        Some(match &self.reading {
+            Reading::None(why) => ReadingStatus::Unread {
                 unread: why.clone(),
-            }),
-            Reading::Read(usage) => Some(ReadingStatus::Read {
-                read_at: usage.read_at,
-                fresh: fresh(usage, self.now),
-                windows: usage
+            },
+            Reading::Taken(reading) => ReadingStatus::Read {
+                read_at: reading.taken_at,
+                agent: reading.agent.clone(),
+                session: reading.session.clone(),
+                fresh: fresh(reading, self.now),
+                windows: reading
                     .windows
                     .iter()
                     .map(|window| WindowStatus {
                         name: window.name.clone(),
                         used: window.used,
                         resets_at: window.resets_at,
-                        past: holds_until(usage, window, self.threshold, self.now).is_some(),
+                        past: holds_until(reading, window, self.threshold, self.now).is_some(),
                     })
                     .collect(),
-            }),
-        }
+            },
+        })
     }
 
     /// What it has left by a fresh reading, none where it has none (184).
     pub fn left(&self) -> Option<u32> {
         match &self.reading {
-            Reading::Read(usage) => left(usage, self.now),
-            Reading::None | Reading::Unread(_) => None,
+            Reading::Taken(reading) => left(reading, self.now),
+            Reading::None(_) => None,
         }
     }
 
@@ -480,24 +490,14 @@ impl Engine {
 }
 
 impl Engine {
-    /// The account's reading as the host's file holds it now: none where
-    /// it names none, and where its `usage`, its `~` and `$VAR` read
-    /// against the host user's login environment, names a variable that
-    /// environment lacks, or a file the host gives no reading of, why, in
-    /// words that name no path; flume writes, keeps and renews nothing of
-    /// it (29, 184; core.30, core.32).
-    pub(crate) fn reading(&self, account: &Account) -> Reading {
-        let Some(usage) = &account.usage else {
-            return Reading::None;
-        };
-        match settings::expand(usage, |variable| self.host.login(variable)) {
-            Err(variable) => Reading::Unread(format!(
-                "its usage names ${variable}, which the host user's login environment lacks"
-            )),
-            Ok(path) => match self.host.usage(&path) {
-                Ok(usage) => Reading::Read(usage),
-                Err(why) => Reading::Unread(why),
-            },
+    /// Why the account `account` has no reading: its program's profile
+    /// gives no windows, or no profile binds its program, else no session
+    /// flume started has reported them; nothing is asked of the program
+    /// (171, 174, 184; core.32).
+    pub(crate) fn no_reading(&self, account: &Account) -> String {
+        match self.agent(&account.program) {
+            Some(agent) if agent.reports_windows() == Offered::Offered => NONE_REPORTED.into(),
+            _ => NO_WINDOWS.into(),
         }
     }
 }
@@ -703,8 +703,14 @@ mod tests {
         }
     }
 
-    fn usage(read_at: Seconds, windows: Vec<UsageWindow>) -> Usage {
-        Usage { read_at, windows }
+    /// A reading flume took at `taken_at` from a fix's code agent.
+    fn taken(taken_at: Seconds, windows: Vec<UsageWindow>) -> AccountReading {
+        AccountReading {
+            taken_at,
+            agent: "flume:r:fix--one:code:1".into(),
+            session: Some("s-1".into()),
+            windows,
+        }
     }
 
     #[test]
@@ -717,23 +723,23 @@ mod tests {
             9_500
         );
         assert_eq!(used_now(&window("7-day", 9_500, None), NOW), 9_500);
-        let read = usage(NOW - 2 * 3600, vec![passed]);
+        let read = taken(NOW - 2 * 3600, vec![passed]);
         assert_eq!(past(&read, THRESHOLD, NOW), None);
     }
 
     #[test]
-    fn a_reading_is_fresh_for_fifteen_minutes() {
-        assert!(fresh(&usage(NOW - 120, vec![]), NOW));
-        assert!(fresh(&usage(NOW - FRESH + 1, vec![]), NOW));
-        assert!(!fresh(&usage(NOW - FRESH, vec![]), NOW));
-        assert!(!fresh(&usage(NOW - 20 * 60, vec![]), NOW));
-        assert!(fresh(&usage(NOW + 3600, vec![]), NOW), "a read_at to come");
+    fn a_reading_is_fresh_for_fifteen_minutes_from_when_flume_took_it() {
+        assert!(fresh(&taken(NOW - 120, vec![]), NOW));
+        assert!(fresh(&taken(NOW - FRESH + 1, vec![]), NOW));
+        assert!(!fresh(&taken(NOW - FRESH, vec![]), NOW));
+        assert!(!fresh(&taken(NOW - 20 * 60, vec![]), NOW));
+        assert!(fresh(&taken(NOW + 3600, vec![]), NOW), "a taken_at to come");
     }
 
     #[test]
     fn a_window_with_a_reset_holds_until_it_whatever_the_readings_age() {
         let monday = NOW + 3 * 24 * 3600;
-        let old = usage(NOW - 3 * 3600, vec![window("7-day", 9_500, Some(monday))]);
+        let old = taken(NOW - 3 * 3600, vec![window("7-day", 9_500, Some(monday))]);
         assert_eq!(
             past(&old, THRESHOLD, NOW),
             Some(Past {
@@ -746,7 +752,7 @@ mod tests {
 
     #[test]
     fn a_window_with_no_reset_holds_while_the_reading_is_fresh() {
-        let read = usage(NOW, vec![window("weekly", 9_500, None)]);
+        let read = taken(NOW, vec![window("weekly", 9_500, None)]);
         assert_eq!(
             past(&read, THRESHOLD, NOW + 60),
             Some(Past {
@@ -759,7 +765,7 @@ mod tests {
 
     #[test]
     fn the_threshold_is_held_at_its_own_share() {
-        let at = |used| usage(NOW, vec![window("5-hour", used, Some(NOW + 3600))]);
+        let at = |used| taken(NOW, vec![window("5-hour", used, Some(NOW + 3600))]);
         assert!(past(&at(9_000), THRESHOLD, NOW).is_some(), "90% at 90");
         assert!(past(&at(8_999), THRESHOLD, NOW).is_none(), "89.99% at 90");
         assert!(past(&at(9_900), 100, NOW).is_none(), "99% at 100");
@@ -770,7 +776,7 @@ mod tests {
 
     #[test]
     fn the_window_that_holds_latest_is_named() {
-        let read = usage(
+        let read = taken(
             NOW,
             vec![
                 window("5-hour", 9_200, Some(NOW + 3600)),
@@ -790,9 +796,9 @@ mod tests {
 
     #[test]
     fn what_a_fresh_reading_leaves() {
-        let read = |read_at| {
-            usage(
-                read_at,
+        let read = |taken_at| {
+            taken(
+                taken_at,
                 vec![
                     window("5-hour", 4_000, Some(NOW + 3600)),
                     window("7-day", 8_000, Some(NOW + 3 * 24 * 3600)),
@@ -801,8 +807,8 @@ mod tests {
         };
         assert_eq!(left(&read(NOW - 120), NOW), Some(2_000), "20 left");
         assert_eq!(left(&read(NOW - 20 * 60), NOW), None, "stale");
-        assert_eq!(left(&usage(NOW, vec![]), NOW), None, "no window");
-        let reset = usage(NOW, vec![window("5-hour", 9_000, Some(NOW))]);
+        assert_eq!(left(&taken(NOW, vec![]), NOW), None, "no window");
+        let reset = taken(NOW, vec![window("5-hour", 9_000, Some(NOW))]);
         assert_eq!(left(&reset, NOW), Some(10_000), "a window reset");
     }
 
@@ -813,7 +819,6 @@ mod tests {
                 program: "agent".into(),
                 env: BTreeMap::new(),
                 agents,
-                usage: Some("~/.local/state/usage/work-1.json".into()),
             },
             running: 1,
             spent_until,
@@ -826,8 +831,8 @@ mod tests {
 
     #[test]
     fn short_answers_spent_then_threshold_then_full() {
-        let past = Reading::Read(usage(NOW, vec![window("5-hour", 9_200, Some(NOW + 3600))]));
-        let under = Reading::Read(usage(NOW, vec![window("5-hour", 4_000, Some(NOW + 3600))]));
+        let past = Reading::Taken(taken(NOW, vec![window("5-hour", 9_200, Some(NOW + 3600))]));
+        let under = Reading::Taken(taken(NOW, vec![window("5-hour", 4_000, Some(NOW + 3600))]));
         let spent = Some(NOW + 600);
         assert_eq!(
             room(spent, past.clone(), Some(1)).short(),
@@ -843,11 +848,62 @@ mod tests {
         );
         assert_eq!(room(None, under, None).short(), None);
         assert_eq!(
-            room(None, Reading::Unread("the file is missing".into()), None).short(),
+            room(None, Reading::None(NONE_REPORTED.into()), None).short(),
             None
         );
         assert_eq!(room(spent, past.clone(), None).back(), Some(NOW + 3600));
         assert_eq!(room(Some(NOW + 7200), past, None).back(), Some(NOW + 7200));
-        assert_eq!(room(None, Reading::None, Some(1)).back(), None);
+        assert_eq!(
+            room(None, Reading::None(NO_WINDOWS.into()), Some(1)).back(),
+            None
+        );
+    }
+
+    #[test]
+    fn status_gives_the_reading_with_its_agent_or_why_it_has_none() {
+        let read = taken(
+            NOW - 120,
+            vec![window("five_hour", 4_200, Some(NOW + 3600))],
+        );
+        assert_eq!(
+            room(None, Reading::Taken(read), None).reading_status(),
+            Some(ReadingStatus::Read {
+                read_at: NOW - 120,
+                agent: "flume:r:fix--one:code:1".into(),
+                session: Some("s-1".into()),
+                fresh: true,
+                windows: vec![WindowStatus {
+                    name: "five_hour".into(),
+                    used: 4_200,
+                    resets_at: Some(NOW + 3600),
+                    past: false,
+                }],
+            })
+        );
+        let stale = taken(NOW - 20 * 60, vec![]);
+        assert!(matches!(
+            room(None, Reading::Taken(stale), None).reading_status(),
+            Some(ReadingStatus::Read { fresh: false, .. })
+        ));
+        assert_eq!(
+            room(None, Reading::None(NONE_REPORTED.into()), None).reading_status(),
+            Some(ReadingStatus::Unread {
+                unread: "no session flume started has reported its windows".into(),
+            })
+        );
+        let json = serde_json::to_value(
+            room(
+                None,
+                Reading::Taken(AccountReading {
+                    session: None,
+                    ..taken(NOW, vec![])
+                }),
+                None,
+            )
+            .reading_status(),
+        )
+        .unwrap();
+        assert!(json.get("session").is_none(), "{json}");
+        assert_eq!(json["agent"], "flume:r:fix--one:code:1");
     }
 }

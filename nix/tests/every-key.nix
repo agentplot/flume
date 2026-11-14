@@ -53,7 +53,6 @@
         program = "scribe";
         env.SCRIBE_HOME = "$HOME/.scribe-work-1";
         agents = 4;
-        usage = "~/.local/state/usage/work-1.json";
       }
       {
         name = "work-2";

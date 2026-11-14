@@ -9,7 +9,7 @@
 //! stage waiting on its answer still (31, 70, 77, 96, 130, 134, 146).
 
 use super::account_pools::{account, account_of, fill_first_at_homes};
-use super::account_pools::{fix_in, on, pool, pool_at, reading_at, reads, stops_at_limit, window};
+use super::account_pools::{fix_in, on, pool, pool_at, reads, stops_at_limit, window};
 use super::agent_settings::kept_open;
 use super::carried_conversations::{by_hand, carries_lost, carries_none, carries_to};
 use super::carried_conversations::{resumed_prompt, retry_talk, start_of, talk, talking};
@@ -876,10 +876,7 @@ fn past_its_pools_threshold_within_its_time(_: &()) -> Outcome {
         "work",
         Strategy::FillFirst,
         Some(50),
-        vec![
-            reading_at(account("work-1", None)),
-            reading_at(account("work-2", None)),
-        ],
+        vec![account("work-1", None), account("work-2", None)],
     );
     let resets = Some(now + 5 * 3600);
     reads(&world, "work-1", now, vec![window("5-hour", 1_000, resets)]);
@@ -1537,7 +1534,6 @@ fn unsettled_after_a_retry(_: &()) -> Outcome {
                 .into_iter()
                 .collect(),
             agents: None,
-            usage: None,
         }],
     );
     world.host.set_host_pool(Some("work"));

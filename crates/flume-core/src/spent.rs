@@ -20,16 +20,30 @@ use flume_seams::*;
 /// reset (146).
 pub const SPENT_FOR: Seconds = 60 * 60;
 
-/// How often a write of an account's spent time reads it again when its
+/// How often a write of an account's document reads it again when its
 /// version moved under it (103).
-const TRIES: usize = 8;
+pub(crate) const TRIES: usize = 8;
+
+/// The account's document as `read` holds it: none read, or a document
+/// of another kind under its key, read as an empty one, no spent time and
+/// no reading (153).
+pub(crate) fn account_document(read: Option<&HostVersioned>) -> AccountDocument {
+    match read {
+        Some(HostVersioned {
+            document: HostDocument::Account(document),
+            ..
+        }) => document.clone(),
+        _ => AccountDocument::default(),
+    }
+}
 
 impl Engine {
     /// Records the account `account` spent until `until`, or for an hour
     /// from now where the words gave none its profile read, marked so
     /// status gives the words (56), by compare-and-set: a later time
-    /// already recorded is kept, and a pause standing with no reset read
-    /// is not lengthened by reading the same limit again (146, 153).
+    /// already recorded is kept, a pause standing with no reset read is
+    /// not lengthened by reading the same limit again, and the reading the
+    /// account's document holds is kept as it stood (146, 153, 185).
     pub(crate) fn record_spent(&self, account: &AccountHeld, until: Option<Seconds>, words: &str) {
         let key = HostKey::Account {
             pool: account.pool.clone(),
@@ -38,24 +52,26 @@ impl Engine {
         for _ in 0..TRIES {
             let now = self.host.now();
             let read = self.store.read_host(&key);
-            let standing = match &read {
-                Some(HostVersioned {
-                    document: HostDocument::Account(spent),
-                    ..
-                }) => Some(spent.until).filter(|until| *until > now),
-                _ => None,
-            };
+            let document = account_document(read.as_ref());
+            let standing = document
+                .spent
+                .as_ref()
+                .map(|spent| spent.until)
+                .filter(|until| *until > now);
             let (until, unread) = match (until, standing) {
                 (Some(until), Some(standing)) if standing >= until => return,
                 (Some(until), _) => (until, false),
                 (None, Some(_)) => return,
                 (None, None) => (now + SPENT_FOR, true),
             };
-            let next = HostDocument::Account(AccountSpent {
-                until,
-                words: Some(words.to_string()),
-                recorded_at: now,
-                unread,
+            let next = HostDocument::Account(AccountDocument {
+                spent: Some(AccountSpent {
+                    until,
+                    words: Some(words.to_string()),
+                    recorded_at: now,
+                    unread,
+                }),
+                reading: document.reading,
             });
             let at = read.map(|read| read.version);
             if let Written::Written { .. } = self.store.write_host(&key, at, Some(&next)) {
@@ -72,13 +88,9 @@ impl Engine {
             pool: account.pool.clone(),
             account: account.name.clone(),
         };
-        matches!(
-            self.store.read_host(&key),
-            Some(HostVersioned {
-                document: HostDocument::Account(spent),
-                ..
-            }) if spent.until > self.host.now()
-        )
+        account_document(self.store.read_host(&key).as_ref())
+            .spent
+            .is_some_and(|spent| spent.until > self.host.now())
     }
 
     /// The live start `start` of the stage at `index` read spent: its

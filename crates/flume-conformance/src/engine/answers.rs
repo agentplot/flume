@@ -783,7 +783,7 @@ fn host_status() -> HostStatus {
                     spent_until: None,
                     spent_unread: None,
                     reading: Some(ReadingStatus::Unread {
-                        unread: "the file is missing".into(),
+                        unread: flume_core::NONE_REPORTED.into(),
                     }),
                     past: None,
                 },
@@ -796,6 +796,8 @@ fn host_status() -> HostStatus {
                     spent_unread: Some("You've hit your limit".into()),
                     reading: Some(ReadingStatus::Read {
                         read_at: 53_880,
+                        agent: "flume:r:fix--one:code:1".into(),
+                        session: Some("s-1".into()),
                         fresh: true,
                         windows: vec![WindowStatus {
                             name: "5-hour".into(),
@@ -1522,6 +1524,8 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.pools[].accounts[].spent_unread",
             "status.host.pools[].accounts[].reading",
             "status.host.pools[].accounts[].reading.read_at",
+            "status.host.pools[].accounts[].reading.agent",
+            "status.host.pools[].accounts[].reading.session",
             "status.host.pools[].accounts[].reading.fresh",
             "status.host.pools[].accounts[].reading.windows",
             "status.host.pools[].accounts[].reading.windows[].name",

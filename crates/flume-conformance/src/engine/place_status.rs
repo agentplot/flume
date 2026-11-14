@@ -6,8 +6,8 @@
 
 use super::account_pools::{
     account, account_at_home, account_of, begun_fix, code_delivered, fill_first_at_homes, fix_in,
-    fix_of, home, host, of_the_surfaces, on, pool, pool_at, reading_at, reads, spent,
-    stops_at_limit, two_programs, window, UNREACHED,
+    fix_of, home, host, of_the_surfaces, on, pool, pool_at, reads, spent, stops_at_limit,
+    two_programs, window, READER, READER_SESSION, UNREACHED,
 };
 use super::agent_effort::effort;
 use super::agent_modes::{in_mode, in_programs, the_fakes_map};
@@ -19,8 +19,8 @@ use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{
     AccountStatus, Act, AddressStatus, AgentStatus, Answer, Cache, EffortStatus, ModeStatus,
-    MoveStatus, PlaceStatus, PoolStatus, Retry, SessionAnswer, StandingFound, WaitingOn, Waits,
-    KEEP_OPEN,
+    MoveStatus, PlaceStatus, PoolStatus, ReadingStatus, Retry, SessionAnswer, StandingFound,
+    WaitingOn, Waits, KEEP_OPEN,
 };
 use flume_seams::*;
 
@@ -152,7 +152,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_pool_with_a_spent_account,
         },
         Scenario {
-            name: "status: a most-left pool stating no threshold gives most-left and 90, an account's fresh reading with its window's use as a percentage and its reset, another's stale reading, and a third's missing file with why, in the JSON form, and no reading's path",
+            name: "status: a most-left pool stating no threshold gives most-left and 90, an account's fresh reading with its window's use as a percentage and its reset, when flume took it and from which agent's session, another's stale reading, and a third's none with why, in the JSON form, and no path",
             cites: &["56", "184", "185"],
             run: a_pool_with_readings,
         },
@@ -1667,7 +1667,9 @@ fn a_pool_with_a_spent_account(_: &()) -> Outcome {
                     bound: Some(4),
                     spent_until: None,
                     spent_unread: None,
-                    reading: None,
+                    reading: Some(ReadingStatus::Unread {
+                        unread: flume_core::NONE_REPORTED.into(),
+                    }),
                     past: None,
                 },
                 AccountStatus {
@@ -1677,7 +1679,9 @@ fn a_pool_with_a_spent_account(_: &()) -> Outcome {
                     bound: None,
                     spent_until: Some(until),
                     spent_unread: None,
-                    reading: None,
+                    reading: Some(ReadingStatus::Unread {
+                        unread: flume_core::NONE_REPORTED.into(),
+                    }),
                     past: None,
                 },
             ],
@@ -1703,20 +1707,20 @@ fn a_pool_with_readings(_: &()) -> Outcome {
         None,
         ["work-1", "work-2", "work-3"]
             .into_iter()
-            .map(|name| reading_at(account(name, None)))
+            .map(|name| account(name, None))
             .collect(),
     );
     reads(
         &world,
         "work-1",
         now - 120,
-        vec![window("5-hour", 4_200, Some(seventeen))],
+        vec![window("five_hour", 4_200, Some(seventeen))],
     );
     reads(
         &world,
         "work-2",
         now - 20 * 60,
-        vec![window("5-hour", 1_250, Some(seventeen))],
+        vec![window("five_hour", 1_250, Some(seventeen))],
     );
     let json = serde_json::to_value(host(&world)?).map_err(|error| error.to_string())?;
     let unbound = |name: &str, reading| {
@@ -1738,23 +1742,30 @@ fn a_pool_with_readings(_: &()) -> Outcome {
             "accounts": [
                 unbound("work-1", serde_json::json!({
                     "read_at": now - 120,
+                    "agent": READER,
+                    "session": READER_SESSION,
                     "fresh": true,
-                    "windows": [{"name": "5-hour", "used": 42, "resets_at": seventeen, "past": false}],
+                    "windows": [{"name": "five_hour", "used": 42, "resets_at": seventeen, "past": false}],
                 })),
                 unbound("work-2", serde_json::json!({
                     "read_at": now - 20 * 60,
+                    "agent": READER,
+                    "session": READER_SESSION,
                     "fresh": false,
-                    "windows": [{"name": "5-hour", "used": 12.5, "resets_at": seventeen, "past": false}],
+                    "windows": [{"name": "five_hour", "used": 12.5, "resets_at": seventeen, "past": false}],
                 })),
-                unbound("work-3", serde_json::json!({"unread": "the file is missing"})),
+                unbound("work-3", serde_json::json!({
+                    "unread": "no session flume started has reported its windows",
+                })),
             ],
         }]),
         "the host's pools in the JSON form"
     );
     let answer = world.engine().status(None).to_json();
     ensure!(
-        !answer.contains(".local/state/usage"),
-        "status gives a reading's path: {answer}"
+        !answer.contains(&world.store.folder(&World::id("fix", "reader")))
+            && !answer.contains("accounts/work"),
+        "status gives a path: {answer}"
     );
     Ok(())
 }
@@ -1768,7 +1779,7 @@ fn an_account_past_its_threshold(_: &()) -> Outcome {
         "work",
         Strategy::FillFirst,
         None,
-        vec![reading_at(account("work-1", None)), account("work-2", None)],
+        vec![account("work-1", None), account("work-2", None)],
     );
     reads(
         &world,
@@ -1795,9 +1806,12 @@ fn an_account_past_its_threshold(_: &()) -> Outcome {
         "work-1's windows"
     );
     ensure_eq!(
-        (accounts[1].get("past"), accounts[1].get("reading")),
-        (None, None),
-        "work-2, which names no reading"
+        (accounts[1].get("past"), &accounts[1]["reading"]),
+        (
+            None,
+            &serde_json::json!({"unread": "no session flume started has reported its windows"})
+        ),
+        "work-2, for which no session has reported"
     );
     Ok(())
 }
@@ -1811,7 +1825,7 @@ fn an_intents_move_past_a_threshold(_: &()) -> Outcome {
         "work",
         Strategy::FillFirst,
         None,
-        vec![reading_at(account("work-1", None)), account("work-2", None)],
+        vec![account("work-1", None), account("work-2", None)],
     );
     let first = fix_of(&world, None, "a", Some("the-surfaces"))?;
     ensure_eq!(

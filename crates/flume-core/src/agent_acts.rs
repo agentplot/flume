@@ -24,7 +24,7 @@ pub const ANSWER_RECORDED_WITHIN: Seconds = 2 * POLL;
 impl Engine {
     /// The place and stage index whose live current start `identity`
     /// names.
-    fn current_start(&self, identity: &str) -> Option<(HeldState, usize)> {
+    pub(crate) fn current_start(&self, identity: &str) -> Option<(HeldState, usize)> {
         self.store.read_every().into_iter().find_map(|read| {
             let held = read.state;
             let (index, start) = held.live_start()?;

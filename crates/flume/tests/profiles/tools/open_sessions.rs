@@ -14,7 +14,7 @@
 
 use super::walk::*;
 use flume::profiles::store::state_dir::StateDir;
-use flume_seams::{AccountSpent, HostDocument, HostKey, Store, Written};
+use flume_seams::{AccountDocument, AccountSpent, HostDocument, HostKey, Store, Written};
 use serde_json::{json, Value};
 use std::time::Duration;
 
@@ -328,11 +328,14 @@ fn s105_the_agents_account_spent_within_the_hour_and_a_retry_answers() {
         pool: "stand-in".into(),
         account: "stand-in-1".into(),
     };
-    let spent = HostDocument::Account(AccountSpent {
-        until: now + 3600,
-        words: Some("You've hit your session limit".into()),
-        recorded_at: now,
-        unread: false,
+    let spent = HostDocument::Account(AccountDocument {
+        spent: Some(AccountSpent {
+            until: now + 3600,
+            words: Some("You've hit your session limit".into()),
+            recorded_at: now,
+            unread: false,
+        }),
+        reading: None,
     });
     let store = StateDir::at(host.home().join("state/flume"));
     let at = store.read_host(&key).map(|read| read.version);

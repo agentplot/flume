@@ -3005,14 +3005,12 @@ fn streams_and_pools_as_the_configuration_names_them() {
                 program: "agent".into(),
                 env: BTreeMap::from([("AGENT_HOME".into(), "~/.agent-work-1".into())]),
                 agents: Some(4),
-                usage: None,
             },
             Account {
                 name: "work-2".into(),
                 program: "agent".into(),
                 env: BTreeMap::new(),
                 agents: None,
-                usage: None,
             },
         ],
     };
@@ -3067,47 +3065,63 @@ fn a_pool_and_a_reading() {
             program: "agent".into(),
             env: BTreeMap::new(),
             agents: None,
-            usage: Some("~/.local/state/usage/work-1.json".into()),
         }],
     };
     round_trips(pool.clone());
     let json = serde_json::to_value(&pool).unwrap();
     assert_eq!(json["strategy"], serde_json::json!("most-left"));
     assert_eq!(json["threshold"], serde_json::json!(85));
-    assert_eq!(
-        json["accounts"][0]["usage"],
-        serde_json::json!("~/.local/state/usage/work-1.json")
-    );
+    assert!(json["accounts"][0].get("usage").is_none());
     assert_eq!(Strategy::MostLeft.name(), "most-left");
-    let usage = Usage {
-        read_at: 1_000,
+    // 2026-11-05T14:02:00Z, and its 5-hour window's reset at 17:00.
+    let reading = AccountReading {
+        taken_at: 1_793_887_320,
+        agent: "flume:6c61b9842ad5:fix--a-fix:code:1".into(),
+        session: Some("4e3c05c8-51c4-4449-8577-4f7038e394bf".into()),
         windows: vec![
             UsageWindow {
-                name: "5-hour".into(),
+                name: "five_hour".into(),
                 used: 4_200,
-                resets_at: Some(12_000),
+                resets_at: Some(1_793_898_000),
             },
             UsageWindow {
-                name: "7-day".into(),
-                used: 7_150,
+                name: "seven_day".into(),
+                used: 2_350,
                 resets_at: None,
             },
         ],
     };
-    round_trips(usage.clone());
-    let json = serde_json::to_value(&usage).unwrap();
+    round_trips(reading.clone());
+    let json = serde_json::to_value(&reading).unwrap();
+    assert_eq!(json["taken_at"], serde_json::json!("2026-11-05T14:02:00Z"));
+    assert_eq!(json["windows"][0]["used"], serde_json::json!(42));
+    assert_eq!(
+        json["windows"][0]["resets_at"],
+        serde_json::json!("2026-11-05T17:00:00Z")
+    );
+    assert_eq!(json["windows"][1]["used"], serde_json::json!(23.5));
     assert!(json["windows"][1].get("resets_at").is_none());
+    let offset: AccountReading = serde_json::from_value(serde_json::json!({
+        "taken_at": "2026-11-05T09:02:00-05:00",
+        "agent": "flume:6c61b9842ad5:fix--a-fix:code:1",
+        "windows": [{"name": "five_hour", "used": 42, "resets_at": "2026-11-05T17:00:00.000Z"}],
+    }))
+    .unwrap();
+    assert_eq!(offset.taken_at, reading.taken_at);
+    assert_eq!(offset.session, None);
+    assert_eq!(offset.windows[0], reading.windows[0]);
+    let unnamed = serde_json::to_value(AccountReading {
+        session: None,
+        ..reading
+    })
+    .unwrap();
+    assert!(unnamed.get("session").is_none());
     let unstated = serde_json::to_value(Pool {
         threshold: None,
-        accounts: vec![Account {
-            usage: None,
-            ..pool.accounts[0].clone()
-        }],
         ..pool
     })
     .unwrap();
     assert!(unstated.get("threshold").is_none());
-    assert!(unstated["accounts"][0].get("usage").is_none());
 }
 
 /// The seam-contracts spec's scenario "A move past a threshold" (147,
@@ -3359,11 +3373,14 @@ fn the_hosts_own_documents_and_their_keys() {
     }
     round_trips(HostVersioned {
         version: 3,
-        document: HostDocument::Account(AccountSpent {
-            until: 54_000,
-            words: Some("You've hit your session limit".into()),
-            recorded_at: 47_400,
-            unread: false,
+        document: HostDocument::Account(AccountDocument {
+            spent: Some(AccountSpent {
+                until: 54_000,
+                words: Some("You've hit your session limit".into()),
+                recorded_at: 47_400,
+                unread: false,
+            }),
+            reading: None,
         }),
     });
     let unread = AccountSpent {
@@ -5161,4 +5178,78 @@ fn the_windows_an_agent_reported() {
     assert!(json["reported"].get("session").is_none(), "{json}");
     round_trips(Windows::NoneYet);
     round_trips(Windows::Unknown);
+}
+
+/// The seam-contracts spec's scenario "An account's document" (153,
+/// C.7): one holding a spent time and a reading reads back unchanged, the
+/// spent keys at its top and the reading under `reading`; one an earlier
+/// release wrote reads spent with no reading; and one holding a reading
+/// alone reads with no spent time.
+#[test]
+fn an_accounts_document() {
+    let reading = AccountReading {
+        taken_at: 1_793_887_320,
+        agent: "flume:6c61b9842ad5:fix--a-fix:code:1".into(),
+        session: Some("s-1".into()),
+        windows: vec![
+            UsageWindow {
+                name: "five_hour".into(),
+                used: 4_200,
+                resets_at: Some(1_793_898_000),
+            },
+            UsageWindow {
+                name: "seven_day".into(),
+                used: 1_800,
+                resets_at: None,
+            },
+        ],
+    };
+    let both = HostVersioned {
+        version: 5,
+        document: HostDocument::Account(AccountDocument {
+            spent: Some(AccountSpent {
+                until: 1_793_890_800,
+                words: Some("You've hit your session limit".into()),
+                recorded_at: 1_793_887_000,
+                unread: false,
+            }),
+            reading: Some(reading.clone()),
+        }),
+    };
+    round_trips(both.clone());
+    let json = serde_json::to_value(&both).unwrap();
+    assert_eq!(json["document"]["of"], serde_json::json!("account"));
+    assert_eq!(json["document"]["until"], serde_json::json!(1_793_890_800));
+    assert_eq!(
+        json["document"]["reading"]["taken_at"],
+        serde_json::json!("2026-11-05T14:02:00Z")
+    );
+    let before: HostDocument = serde_json::from_value(serde_json::json!({
+        "of": "account",
+        "until": 54_000,
+        "words": "You've hit your session limit",
+        "recorded_at": 47_400,
+    }))
+    .expect("an account's document an earlier release wrote");
+    assert_eq!(
+        before,
+        HostDocument::Account(AccountDocument {
+            spent: Some(AccountSpent {
+                until: 54_000,
+                words: Some("You've hit your session limit".into()),
+                recorded_at: 47_400,
+                unread: false,
+            }),
+            reading: None,
+        })
+    );
+    let alone = HostDocument::Account(AccountDocument {
+        spent: None,
+        reading: Some(reading),
+    });
+    round_trips(alone.clone());
+    let json = serde_json::to_value(&alone).unwrap();
+    assert!(json.get("until").is_none(), "{json}");
+    let empty = HostDocument::Account(AccountDocument::default());
+    round_trips(empty);
 }

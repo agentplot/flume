@@ -1,8 +1,8 @@
 use crate::{lock, FakeTerminal, Log};
 use flume_seams::{
     no_effort, Agent, AgentCommand, Carry, FolderTrust, Guarded, Identity, Live, LiveProcess, Mode,
-    ModeBegan, ModeEntry, Offered, PlaceRef, Reading, Received, Reserved, Secret, Settings, Spent,
-    Unsettled, NO_OWN, READS_NO_SESSION,
+    ModeBegan, ModeEntry, Offered, PlaceRef, Reading, Received, Reserved, Seconds, Secret,
+    Settings, Spent, Unsettled, UsageWindow, Windows, NO_OWN, READS_NO_SESSION,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -35,7 +35,11 @@ use std::sync::{Arc, Mutex};
 /// the effort its settings give as `--effort <word>`, and each effort
 /// asked of it is logged (197). An agent scripted to end its session
 /// after a stop-short reads stopped and ended once a test says it
-/// stopped short (96, 134).
+/// stopped short (96, 134). Its program reports the windows a test
+/// scripts for a start, read in the folder the start's record is kept in
+/// with the session its word names, the later of two reports standing,
+/// each read logged `windows`, until it is scripted to report none, after
+/// which its profile builds no windows (171, 211).
 pub struct FakeAgent {
     terminal: Arc<FakeTerminal>,
     /// The other terminals its agents may open in, a stream's (190).
@@ -83,6 +87,8 @@ struct AgentModel {
     efforts: Vec<String>,
     /// The variable the program reads over its effort, as scripted (197).
     effort_variable: Option<&'static str>,
+    /// The profile builds no windows, as scripted (171, 211).
+    no_windows: bool,
 }
 
 #[derive(Clone)]
@@ -106,6 +112,9 @@ struct Record {
     session: Option<String>,
     /// Its session ends once it stops short, as scripted (96, 134).
     ends_after_stop_short: bool,
+    /// The windows its program last reported, with when they were taken,
+    /// as scripted (211).
+    windows: Option<(Seconds, Vec<UsageWindow>)>,
 }
 
 impl Default for Record {
@@ -126,6 +135,7 @@ impl Default for Record {
             began_in: None,
             session: None,
             ends_after_stop_short: false,
+            windows: None,
         }
     }
 }
@@ -268,6 +278,32 @@ impl FakeAgent {
     pub fn set_session(&self, agent: &Identity, session: &str) {
         let session = session.to_string();
         self.with(agent, |record| record.session = Some(session));
+    }
+
+    /// The agent's program reported `windows` for its account, taken at
+    /// `taken_at`, kept with its record, in the folder its start recorded;
+    /// a report taken before the one kept leaves it standing. Logged
+    /// `reported windows <agent> at <taken_at>`, which no read of the
+    /// windows is (211).
+    pub fn report_windows(&self, agent: &Identity, taken_at: Seconds, windows: &[UsageWindow]) {
+        self.log
+            .push(format!("reported windows {agent} at {taken_at}"));
+        let windows = windows.to_vec();
+        self.with(agent, |record| {
+            if record
+                .windows
+                .as_ref()
+                .is_none_or(|(kept, _)| *kept <= taken_at)
+            {
+                record.windows = Some((taken_at, windows));
+            }
+        });
+    }
+
+    /// The program's profile builds no windows: `reports_windows` answers
+    /// not offered and `windows` unknown for every start (171, 174).
+    pub fn reports_no_windows(&self) {
+        lock(&self.state).no_windows = true;
     }
 
     /// The program carries a stopped or lost start's conversation to the
@@ -704,6 +740,38 @@ impl Agent for FakeAgent {
     fn spent(&self, folder: &str, agent: &Identity) -> Spent {
         self.read_in("spent", folder, agent)
             .map_or(Spent::Unknown, |record| record.spent)
+    }
+
+    /// The windows scripted for the start, with the session its word
+    /// names, read in the folder its record is kept in; none yet where none
+    /// is scripted, unknown in another folder or where its profile is
+    /// scripted to build none (171, 211).
+    fn windows(&self, folder: &str, agent: &Identity) -> Windows {
+        let record = self.read_in("windows", folder, agent);
+        if lock(&self.state).no_windows {
+            return Windows::Unknown;
+        }
+        match record {
+            None => Windows::Unknown,
+            Some(Record {
+                windows: Some((taken_at, windows)),
+                session,
+                ..
+            }) => Windows::Reported {
+                taken_at,
+                windows,
+                session,
+            },
+            Some(_) => Windows::NoneYet,
+        }
+    }
+
+    fn reports_windows(&self) -> Offered {
+        if lock(&self.state).no_windows {
+            Offered::NotOffered
+        } else {
+            Offered::Offered
+        }
     }
 
     fn started_without(&self, folder: &str, agent: &Identity) -> Option<Unsettled> {

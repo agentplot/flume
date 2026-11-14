@@ -1356,14 +1356,16 @@ fn pool_lines(pool: &PoolStatus) -> Vec<String> {
 }
 
 /// An account's reading as a person reads it: each window's use and
-/// reset, then when the host read it, stale where it is not fresh; or why
-/// there is none (184).
+/// reset, then when flume took it and from which agent, stale where it is
+/// not fresh; or why there is none (56, 184, 185).
 fn reading_line(reading: &ReadingStatus) -> String {
     match reading {
         ReadingStatus::Read {
             read_at,
+            agent,
             fresh,
             windows,
+            ..
         } => {
             let mut parts: Vec<String> = windows
                 .iter()
@@ -1376,9 +1378,9 @@ fn reading_line(reading: &ReadingStatus) -> String {
                 })
                 .collect();
             parts.push(if *fresh {
-                format!("read at {read_at}")
+                format!("taken at {read_at} from {agent}")
             } else {
-                format!("stale, read at {read_at}")
+                format!("stale, taken at {read_at} from {agent}")
             });
             parts.join(" · ")
         }
@@ -3484,6 +3486,9 @@ mod tests {
         }
     }
 
+    /// A pool's threshold and its accounts' readings, each taken from an
+    /// agent, stale where it is not fresh, and an account no session
+    /// reported for with why it has none (56, 184, 185).
     #[test]
     fn a_pools_threshold_and_its_accounts_readings() {
         let window = |name: &str, used, resets_at, past| WindowStatus {
@@ -3492,6 +3497,7 @@ mod tests {
             resets_at,
             past,
         };
+        let code = "flume:r:fix--one:code:1";
         let pool = PoolStatus {
             name: "work".into(),
             strategy: Strategy::MostLeft,
@@ -3501,10 +3507,12 @@ mod tests {
                     "work-1",
                     Some(ReadingStatus::Read {
                         read_at: 53_880,
+                        agent: code.into(),
+                        session: Some("s-1".into()),
                         fresh: true,
                         windows: vec![
-                            window("5-hour", 4_200, Some(61_200), false),
-                            window("7-day", 7_150, None, false),
+                            window("five_hour", 4_200, Some(61_200), false),
+                            window("seven_day", 7_150, None, false),
                         ],
                     }),
                     None,
@@ -3513,15 +3521,17 @@ mod tests {
                     "work-2",
                     Some(ReadingStatus::Read {
                         read_at: 52_800,
+                        agent: code.into(),
+                        session: None,
                         fresh: false,
-                        windows: vec![window("5-hour", 1_000, Some(61_200), false)],
+                        windows: vec![window("five_hour", 1_000, Some(61_200), false)],
                     }),
                     None,
                 ),
                 read(
                     "work-3",
                     Some(ReadingStatus::Unread {
-                        unread: "the file is missing".into(),
+                        unread: flume_core::NONE_REPORTED.into(),
                     }),
                     None,
                 ),
@@ -3529,11 +3539,13 @@ mod tests {
                     "work-4",
                     Some(ReadingStatus::Read {
                         read_at: 54_000,
+                        agent: code.into(),
+                        session: Some("s-4".into()),
                         fresh: true,
-                        windows: vec![window("7-day", 9_500, Some(313_200), true)],
+                        windows: vec![window("seven_day", 9_500, Some(313_200), true)],
                     }),
                     Some(Past {
-                        window: "7-day".into(),
+                        window: "seven_day".into(),
                         until: 313_200,
                     }),
                 ),
@@ -3545,14 +3557,14 @@ mod tests {
             vec![
                 "  pool work, most-left, threshold 80%:",
                 "    work-1 (agent): 0 agents running, no bound of its own",
-                "      5-hour 42% (resets 61200) · 7-day 71.5% · read at 53880",
+                "      five_hour 42% (resets 61200) · seven_day 71.5% · taken at 53880 from flume:r:fix--one:code:1",
                 "    work-2 (agent): 0 agents running, no bound of its own",
-                "      5-hour 10% (resets 61200) · stale, read at 52800",
+                "      five_hour 10% (resets 61200) · stale, taken at 52800 from flume:r:fix--one:code:1",
                 "    work-3 (agent): 0 agents running, no bound of its own",
-                "      no reading: the file is missing",
+                "      no reading: no session flume started has reported its windows",
                 "    work-4 (agent): 0 agents running, no bound of its own",
-                "      7-day 95% (resets 313200) · read at 54000",
-                "      past its threshold in 7-day until 313200",
+                "      seven_day 95% (resets 313200) · taken at 54000 from flume:r:fix--one:code:1",
+                "      past its threshold in seven_day until 313200",
                 "    work-5 (agent): 0 agents running, no bound of its own",
             ]
         );

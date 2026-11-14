@@ -11,9 +11,10 @@
 //! transcript's records, its folder-trust dialog and the keys that answer
 //! it, the words of its usage limits, its permission modes ([`mode`]),
 //! the efforts it takes and the variable it reads over them ([`effort`]),
-//! where it keeps a session and how it resumes one ([`carry`]), and how it
+//! where it keeps a session and how it resumes one ([`carry`]), how it
 //! takes its own settings and which of them another setting owns
-//! ([`settings`]).
+//! ([`settings`]), and the usage windows its engine reports to a plugin's
+//! module ([`windows`]).
 
 pub mod carry;
 pub mod effort;
@@ -26,12 +27,13 @@ pub mod record;
 pub mod settings;
 pub mod status_line;
 pub mod transcript;
+pub mod windows;
 pub mod withheld;
 pub mod wrapper;
 
 use flume_seams::{
     Agent, AgentCommand, Carry, FolderTrust, Guarded, Identity, Live, ModeEntry, Offered, PlaceRef,
-    Reading, Received, Reserved, Secret, Settings, Spent, Unsettled,
+    Reading, Received, Reserved, Secret, Settings, Spent, Unsettled, Windows,
 };
 use record::Record;
 use sha2::{Digest, Sha256};
@@ -520,6 +522,19 @@ impl Agent for Claude {
             },
             _ => Spent::No,
         }
+    }
+
+    /// The windows `flume hook usage` kept beside the start's record, with
+    /// the session its started ack names; none yet where the record holds
+    /// none; unknown where it cannot be read ([`windows`]; 171, 211, C.4).
+    fn windows(&self, folder: &str, agent: &Identity) -> Windows {
+        windows::windows(folder, agent)
+    }
+
+    /// The plugin's module passes each report of the windows to `flume
+    /// hook usage` (211, C.4).
+    fn reports_windows(&self) -> Offered {
+        Offered::Offered
     }
 
     /// Yes with the stopped start's session where the chosen account's

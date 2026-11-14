@@ -258,6 +258,59 @@ fn the_agents_record_is_read_in_its_folder_alone() {
     );
 }
 
+/// The seam-fakes spec's scenarios "A scripted report" and "A profile
+/// scripted to report none" (171, 174, 211).
+#[test]
+fn the_agents_windows_are_scripted() {
+    let host = Arc::new(FakeHost::default());
+    let terminal = Arc::new(FakeTerminal::new(host));
+    let agent = FakeAgent::new(terminal.clone());
+    let who = identity("code", 1);
+    terminal.open(
+        &place_ref(),
+        "/state/fix--one",
+        &AgentCommand::default(),
+        &who,
+        &OpenIn::Own,
+        None,
+    );
+    agent.keep_record_in(&who, "/state/fix--one");
+    agent.set_session(&who, "s-1");
+    assert_eq!(agent.reports_windows(), Offered::Offered);
+    assert_eq!(agent.windows("/state/fix--one", &who), Windows::NoneYet);
+    let window = |used| UsageWindow {
+        name: "five_hour".into(),
+        used,
+        resets_at: None,
+    };
+    agent.report_windows(&who, 14 * 3600 + 2 * 60, &[window(4_200)]);
+    agent.report_windows(&who, 14 * 3600 + 5 * 60, &[window(5_000)]);
+    agent.report_windows(&who, 14 * 3600 + 3 * 60, &[window(4_600)]);
+    let latest = Windows::Reported {
+        taken_at: 14 * 3600 + 5 * 60,
+        windows: vec![window(5_000)],
+        session: Some("s-1".into()),
+    };
+    assert_eq!(agent.windows("/state/fix--one", &who), latest);
+    assert_eq!(agent.windows("/state/fix--two", &who), Windows::Unknown);
+    assert_eq!(
+        agent.log.of("windows"),
+        vec![
+            format!("windows {who} in /state/fix--one"),
+            format!("windows {who} in /state/fix--one"),
+            format!("windows {who} in /state/fix--two"),
+        ],
+        "each read logged, and no report"
+    );
+    agent.reports_no_windows();
+    assert_eq!(agent.reports_windows(), Offered::NotOffered);
+    assert_eq!(agent.windows("/state/fix--one", &who), Windows::Unknown);
+    assert_eq!(
+        agent.windows("/state/fix--one", &identity("code", 2)),
+        Windows::Unknown
+    );
+}
+
 #[test]
 fn the_agents_modes_are_scripted() {
     // Unscripted, the fake maps no mode and reads none back, as the
@@ -2166,7 +2219,6 @@ fn a_streams_pool_and_the_hosts() {
             program: "agent".into(),
             env: BTreeMap::from([("AGENT_HOME".into(), "/scratch/work-1".into())]),
             agents: Some(4),
-            usage: None,
         }],
     };
     host.set_pool("work", Some(pool.clone()));
