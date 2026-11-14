@@ -87,7 +87,7 @@ impl Engine {
                 return;
             }
         }
-        self.host.log(&format!(
+        self.log(&format!(
             "the host's watch was not written: its version moved {TRIES} times"
         ));
     }
@@ -376,7 +376,7 @@ impl Engine {
                 if let BranchClosed::Kept { reason } =
                     queue.close(&place.repository, &place.branch, &place.base)
                 {
-                    self.host.log(&format!(
+                    self.log(&format!(
                         "the branch {} of {}, whose launch died, was kept: {reason}",
                         place.branch, place.id
                     ));

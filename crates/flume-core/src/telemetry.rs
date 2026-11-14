@@ -81,6 +81,18 @@ impl crate::Engine {
 }
 
 impl crate::Engine {
+    /// Writes `line`, flume's own words for what fails nothing, to the
+    /// host's log, and hands it on as a warning, which the binary scrubs
+    /// of each path and each value shaped as a credential (139, 218;
+    /// core.56).
+    pub(crate) fn log(&self, line: &str) {
+        self.host.log(line);
+        self.telemetry.send(Signal::Warning {
+            at: self.host.now(),
+            words: line.to_string(),
+        });
+    }
+
     /// Hands on the host's reading at a settle of every place: the places
     /// standing, counted by kind, state in the list's words and whom they
     /// wait on, a tidied place's kept document none of them; and each
@@ -1780,5 +1792,46 @@ pub(crate) mod tests {
         world.telemetry.clear();
         world.engine().settle_all();
         assert_eq!(hosts(&world).len(), 1, "settle_all reads the host once");
+    }
+    #[test]
+    fn a_log_line_goes_as_a_warning() {
+        // Each line flume writes to the host's log, in its own words, goes
+        // as a warning too, at the time it was written (139, 218).
+        let world = World::new();
+        let id = world.launch("one");
+        world.telemetry.clear();
+        world.engine().log(&format!(
+            "the place {id} was not tidied in a terminal: gone"
+        ));
+        assert_eq!(
+            world.host.logged.calls(),
+            [format!("the place {id} was not tidied in a terminal: gone")]
+        );
+        assert_eq!(
+            world.telemetry.signals(),
+            [Signal::Warning {
+                at: world.host.now(),
+                words: format!("the place {id} was not tidied in a terminal: gone"),
+            }]
+        );
+        world.telemetry.clear();
+        world.store.refuse_host_writes(true);
+        world.engine().settle_every(60);
+        let warnings: Vec<String> = world
+            .telemetry
+            .signals()
+            .into_iter()
+            .filter_map(|signal| match signal {
+                Signal::Warning { words, .. } => Some(words),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(warnings, world.host.logged.calls()[1..], "every line goes");
+        assert!(
+            warnings
+                .iter()
+                .any(|line| line.starts_with("the host's watch was not written")),
+            "{warnings:?}"
+        );
     }
 }
