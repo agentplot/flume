@@ -43,3 +43,38 @@ Option 1.
 - Good: a tidy repeated after a refused removal converges, because a place read gone is removed rather than forgotten (74).
 - Bad: a process that writes into the place after its last removal, once the held state is gone, still leaves a folder. Nothing of flume's reads that location again.
 - Bad: a leftover whose first removal is refused is walked twice, once to make it writable and once to remove it.
+
+## Amendment, 2026-11-14: what git left of a failed removal goes at a later settle, and only from a folder flume made
+
+Status: proposed. The direction is the brief of the change `a-place-whose-folder-git-dropped-is-removed`, which the planner queued from agentplot-design's signal. The choices below are that change's construct stage's own, each cheap to change and none of them the user's alone, so the design settles them.
+
+Deciders: the planner's brief, afterthought/crew-state `plan.rec` at `agentplot/main` 8bd54b10: "A folder of Flume's own place that git no longer lists reads as removed, and Flume removes what is left of it itself at a later settle, never in the same call as git's failed removal and never a folder it did not make, so no place is held for good". agentplot-design's signal 2026-11-12-agentplot-design-a25d71de/01: "Flume's own teardown of its places runs the same git removal and could hit the same leftover; that is Flume's and is left open here, reported to the orchestrator." The construct stage.
+
+Sources: `boomdrivedev/blueprints:design/flume/requirements.md` at main 81288ba, clauses 64 to 66, 74, 76, 80, 81 and C.1; boomdrivedev/sluice's change `a-place-whose-folder-is-gone-is-freed` and its record 0115, on sluice's main since 7ce112b; `crates/flume/src/profiles/place/git_worktree/mod.rs` at 4e7fa04d.
+
+### Context and problem statement
+
+From 2026-11-10, sluice held three of agentplot/sluice's try checkouts on deneb for good. git's removal of each stopped at `Directory not empty`, dropped git's entry for the worktree, and every later try was refused with `is not a working tree` (sluice's record 0115). flume never asks git again to remove a place git no longer lists. It reads the place gone (80), and this record's removal takes what is left. But it took what was left in the same call as git's failed removal, three tries 100 ms apart, while the process that made git fail may still be writing there. It also took whatever stood at the location the place's held state names. It refused only a `.git` folder, or a `.git` file whose git directory stands.
+
+### Considered options
+
+1. **Refuse the failed removal, and take what is left at a later settle, only at a location of flume's that holds nothing of another's** (chosen).
+2. **This record as it stood: take what is left in the same call.** It races the writer that made git fail. sluice takes the next round for that reason (its record 0115).
+3. **Answer that the remove passed, and leave the folder.** The held state would go, and nothing would name the folder (76; core.17).
+4. **Trust the location the held state names.** A document naming a folder flume never made, by a hand's edit or a fault, would have that folder removed whole.
+
+### Decision outcome
+
+Option 1.
+
+- **Refused, at git's step.** Where `git worktree remove` fails and git then lists no worktree at the location, the remove is refused at `git worktree remove`. Its words are git's, then that git no longer lists the place and flume removes what is left of it at the next settle. Nothing more is removed in that call. The tidy keeps the place in its held state, named so in status (66, 76).
+- **At a later settle.** Each settle steps a place whose work is over, a kept one among them, with no caller's word. The next reads the place gone, and its remove takes what is left as this record says. It runs no teardown again, since the teardown ran once, before git's removal. A `flume tidy` on a host a caller keeps watch over settles every place before the one it names, so its second settle may be the later one. That is still a later remove, never the one git failed in.
+- **Where git passed.** A `git worktree remove` that passed is followed in the same call by the removal of what a process wrote there after it, as before.
+- **Only from a folder flume made.** What stands at a location goes only where the location is directly in a group folder under flume's own `places/`, or in its repository's own `places/`, where an earlier flume made it (record 0027). It goes only where it holds no `.git` folder, and no `.git` file but one naming its repository's own worktree entry that no longer stands. Anything else is refused naming why, and what stands is left whole. A group folder under any id is flume's, so a place of a repository whose clone moved (record 0053) is still removed where it stands.
+
+### Consequences
+
+- Good: a writer still at work when git failed has until the next settle to finish. No place is held for good by git's refusal, since flume never asks git again for a place git no longer lists.
+- Good: a held document naming a folder flume did not make has nothing removed.
+- Bad: a place whose git removal failed stays listed, kept, until the next settle.
+- Bad: a place made under a data directory the host has since moved has its leftover refused, named in status, and left to the host's operator.

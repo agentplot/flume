@@ -38,8 +38,8 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_scripted_refusal,
         },
         Scenario {
-            name: "tidy: a place read gone is removed through the place seam all the same, kept while that remove is refused",
-            cites: &["62", "66", "81"],
+            name: "tidy: a place read gone is removed through the place seam all the same, kept while that remove is refused and removed by the next settle",
+            cites: &["62", "66", "76", "81"],
             run: a_place_read_gone,
         },
         Scenario {
@@ -296,7 +296,8 @@ fn a_scripted_refusal(_: &()) -> Outcome {
 fn a_place_read_gone(_: &()) -> Outcome {
     // A place whose worktree its repository no longer holds may still
     // leave something at its location: its remove clears it, and a
-    // refused remove keeps the place for the next tidy (62; record 0057).
+    // refused remove keeps the place, which the next settle tidies again
+    // with no caller's word (62, 76; record 0057 and its amendment).
     let world = World::new();
     let id = world.begun("notes", Some(Deliverable::Commits), "one")?;
     world.place.vanish(&id.0);
@@ -321,7 +322,10 @@ fn a_place_read_gone(_: &()) -> Outcome {
         "the removes"
     );
     world.place.mend_teardown(&id.0);
-    let tidy = tidied(world.engine.tidy(Some(&id)))?;
+    let tidy = match world.engine.settle(Some(&id)) {
+        Answer::Settled { tidy, .. } => tidy,
+        other => return Err(format!("the settle answered {other:?}")),
+    };
     ensure_eq!(
         tidy.removed,
         vec![id.clone()],

@@ -8,7 +8,8 @@
 //! its launch read through the resolver over a stand-in for sluice,
 //! nothing of a readiness kept in the place's git directory, nothing left
 //! at a removed place's location or in its empty group folder whatever
-//! git could not delete or a process wrote there (record 0057), and a
+//! git could not delete or a process wrote there, what a failed removal
+//! left taken at the next remove (record 0057 and its amendment), and a
 //! base place launched and tidied through the core with only its location
 //! asked of the profile. No sluice runs here: the pinned one equips a
 //! place in the tools layer.
@@ -935,13 +936,25 @@ fn devenv_writes(repository: &Repository, location: &Path) -> PathBuf {
 }
 
 #[test]
-fn a_place_git_half_removes_leaves_no_folder() {
+fn what_git_left_of_a_failed_removal_goes_at_the_next_remove() {
     // `git worktree remove` drops its entry of a place and fails where it
     // cannot delete what the place holds, here a folder of ignored state
-    // it may not write in; what stands goes with the place, and its group
-    // folder once empty (62; record 0057).
+    // it may not write in: the remove is refused with git's words and
+    // takes nothing more, and the next remove reads the place gone and
+    // takes what stands and the empty group folder, running no teardown
+    // again (62, 74, 76; record 0057's amendment).
     let repository = Repository::new("half-removed");
-    let profile = profile(PlaceData::default(), &repository.scratch);
+    let mark = repository.scratch.path("torn-down");
+    let profile = profile(
+        PlaceData {
+            teardown: vec![Step::run(
+                "pre-remove",
+                &format!("echo torn down >> '{}'", mark.display()),
+            )],
+            ..PlaceData::default()
+        },
+        &repository.scratch,
+    );
     let place = made(&profile, &repository, "half");
     let location = Path::new(&place.location);
     let outputs = devenv_writes(&repository, location);
@@ -949,18 +962,41 @@ fn a_place_git_half_removes_leaves_no_folder() {
     std::fs::create_dir_all(&stuck).unwrap();
     std::fs::write(stuck.join("state"), "kept\n").unwrap();
     std::fs::set_permissions(&stuck, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let torn_down = || {
+        std::fs::read_to_string(&mark)
+            .expect("the teardown's mark")
+            .lines()
+            .count()
+    };
 
-    assert_eq!(profile.remove(&place), Removed::Removed);
+    match profile.remove(&place) {
+        Removed::Refused { step, words } => {
+            assert_eq!(step, "git worktree remove");
+            assert!(words.contains("failed to delete"), "{words}");
+            assert!(words.contains("no longer lists"), "{words}");
+        }
+        other => panic!("a removal git failed was {other:?}"),
+    }
+    assert!(location.exists(), "what git left went in the same call");
+    assert_eq!(profile.read(&place), PlaceRead::Gone);
+    assert_eq!(torn_down(), 1, "the teardown's runs");
+
+    assert_eq!(profile.remove(&place), Removed::Removed, "the next remove");
     assert!(!location.exists(), "the place's folder still stands");
     assert!(
         !group(&place).exists(),
         "the empty group folder still stands"
     );
     assert!(own(&repository.scratch).join("places").is_dir());
-    assert_eq!(profile.read(&place), PlaceRead::Gone);
     assert!(
         outputs.join("archive").is_file(),
         "a link was followed out of the place"
+    );
+    assert_eq!(torn_down(), 1, "the teardown ran again");
+    assert_eq!(
+        profile.remove(&place),
+        Removed::Removed,
+        "a remove repeated"
     );
 }
 
@@ -1040,6 +1076,106 @@ fn a_worktree_another_repository_holds_at_a_places_location_is_kept() {
         other => panic!("another repository's worktree was {other:?}"),
     }
     assert!(Path::new(&location).join("README").is_file());
+}
+
+/// The worktree entry the `.git` file at `location` names removed by
+/// hand, as a `git worktree remove` that failed leaves it.
+fn drop_entry(location: &Path) {
+    let text = std::fs::read_to_string(location.join(".git")).expect("the .git file");
+    let gitdir = text
+        .trim()
+        .strip_prefix("gitdir:")
+        .expect("a gitdir")
+        .trim()
+        .to_string();
+    std::fs::remove_dir_all(location.join(gitdir)).expect("the worktree's entry removed");
+}
+
+/// The words a remove refused with, or a panic naming what it was.
+fn refused(removed: Removed, what: &str) -> String {
+    match removed {
+        Removed::Refused { words, .. } => words,
+        other => panic!("{what} was {other:?}"),
+    }
+}
+
+#[test]
+fn only_a_folder_flume_made_goes_from_a_places_location() {
+    // What stands at a place's location git holds no worktree for goes
+    // only where the location is in a folder flume makes places in and
+    // nothing there says it is another's; the place's own folder, whose
+    // worktree entry is gone, goes (62, 64; core.17, core.18; record
+    // 0057's amendment).
+    let stray = Repository::new("flumes-stray");
+    let profile_of = |repository: &Repository| profile(PlaceData::default(), &repository.scratch);
+    let elsewhere = stray.scratch.path("elsewhere/fix--stray");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    std::fs::write(elsewhere.join("kept"), "kept\n").unwrap();
+    let place = PlaceRef {
+        repository: stray.name(),
+        location: elsewhere.to_string_lossy().into_owned(),
+        branch: "fix/stray".into(),
+        base: "main".into(),
+    };
+    let profile = profile_of(&stray);
+    assert_eq!(profile.read(&place), PlaceRead::Gone);
+    let words = refused(profile.remove(&place), "a folder outside every places/");
+    assert!(words.contains(&place.location), "{words}");
+    assert!(words.contains("no folder flume makes places in"), "{words}");
+    assert!(elsewhere.join("kept").is_file(), "the stray folder went");
+
+    let repository = Repository::new("flumes-theirs");
+    let other = Repository::new("flumes-theirs-other");
+    let profile = profile_of(&repository);
+    let location = profile
+        .location(&repository.name(), "fix--theirs")
+        .expect("the place's location");
+    other.git(&["worktree", "add", "--quiet", "-b", "theirs", &location]);
+    drop_entry(Path::new(&location));
+    let place = PlaceRef {
+        repository: repository.name(),
+        location: location.clone(),
+        branch: "fix/theirs".into(),
+        base: "main".into(),
+    };
+    assert_eq!(profile.read(&place), PlaceRead::Gone);
+    let words = refused(
+        profile.remove(&place),
+        "another repository's dropped worktree",
+    );
+    assert!(words.contains("another repository"), "{words}");
+    assert!(Path::new(&location).join("README").is_file());
+
+    let repository = Repository::new("flumes-clone");
+    let profile = profile_of(&repository);
+    let location = profile
+        .location(&repository.name(), "fix--clone")
+        .expect("the place's location");
+    std::fs::create_dir_all(&location).unwrap();
+    git(Path::new(&location), &["init", "--quiet"]);
+    std::fs::write(Path::new(&location).join("mine"), "mine\n").unwrap();
+    let place = PlaceRef {
+        repository: repository.name(),
+        location: location.clone(),
+        branch: "fix/clone".into(),
+        base: "main".into(),
+    };
+    assert_eq!(profile.read(&place), PlaceRead::Gone);
+    refused(profile.remove(&place), "a repository of its own");
+    assert!(Path::new(&location).join("mine").is_file());
+
+    let repository = Repository::new("flumes-own");
+    let profile = profile_of(&repository);
+    let place = made(&profile, &repository, "own");
+    let location = Path::new(&place.location);
+    drop_entry(location);
+    std::fs::write(location.join("left"), "left\n").unwrap();
+    assert_eq!(profile.read(&place), PlaceRead::Gone);
+    assert_eq!(profile.remove(&place), Removed::Removed);
+    assert!(
+        location.symlink_metadata().is_err(),
+        "the place's folder still stands"
+    );
 }
 
 /// The profile, each call of the place seam named in `asked` before it
