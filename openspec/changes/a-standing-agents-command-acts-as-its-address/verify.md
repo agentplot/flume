@@ -1,31 +1,30 @@
 # Verify
 
 The verify stage of `a-standing-agents-command-acts-as-its-address`, on
-`change/a-standing-agents-command-acts-as-its-address` at 06945b7, cut
+`change/a-standing-agents-command-acts-as-its-address` at b63bad4, cut
 from `bolt/flumes-places-need-no-hand` at 4e7fa04, on 2026-11-14.
 
 ## The whole checks
 
 `sluice exec bolt/flumes-places-need-no-hand`, run once with the host's
 sluice (0.93.2), passed: the bolt requires `#check-fast`, and sluice ran
-the 24 tasks 06945b7 affects, every one passing, and recorded 23
-results under their keys for 06945b7.
+the 23 tasks b63bad4 affects against the bolt at 4dfb061, every one
+passing, and recorded 23 results under their keys for b63bad4.
 
 | project | tasks |
 |---|---|
-| `seams` | format, lint, test |
-| `core` | format, lint, test |
-| `fakes` | lint, test |
+| `seams` | format, lint, test (109) |
+| `core` | format, lint, test (53) |
+| `fakes` | lint, test (65) |
 | `conformance` | format, lint, test, coverage |
-| `flume` | format, lint, test (202 profile tests and the rest) |
+| `flume` | format, lint, test (286 unit, 202 profile tests and the rest) |
 | `plugin-claude` | test |
 | `nix` | typecheck, test |
 | `site` | install, build, prose |
 | `root` | format, adrs, changes |
 
-Vale gave suggestions only (`Flume.SentenceLength`, `Flume.Passive`),
-none an error. moon warned once that it could not archive `flume:test`'s
-outputs into its cache, which fails nothing.
+Vale gave 119 suggestions (`Flume.SentenceLength`, `Flume.Passive`), no
+error and no warning.
 
 The same command run first through `devenv shell --` took the sluice
 the tree pins for the merge-queue profile's tests (0.71.0), which
@@ -33,17 +32,21 @@ refused the host's `~/.config/sluice/config.toml` (`unknown field
 credential`) before any check ran; the run above is the gate's one run.
 
 `check-tools` is main's, not the bolt's. The three tools tests this
-change adds were run as tasks 4.1, 4.2 and 5.1 name them, `cargo test -p
-flume --features tools --test tools`, under the pinned herdr and Rex: 3
-passed, 0 failed.
+change adds are tasks 4.1, 4.2 and 5.1's, under the pinned herdr and
+Rex; no code has changed since they passed at 06945b7.
 
 `openspec validate a-standing-agents-command-acts-as-its-address
---strict`: valid.
+--strict`: valid. The change archived into a scratch copy of
+`openspec/`, then `openspec validate --specs --strict --no-interactive`
+there, `root:specs`'s check once the change is archived: 49 passed, 0
+failed. The bolt has moved to 4dfb061 since the branch was cut; none of
+its commits touches the five specs this change modifies, and the branch
+merges onto it with no conflict.
 
 ## Tasks
 
-Every task of `tasks.md`, 1.1 to 6.1, is ticked done, and each is borne
-out by the branch's commits e96fcc4 to 06945b7.
+Every task of `tasks.md`, 1.1 to 7.1, is ticked done, and each is borne
+out by the branch's commits e96fcc4 to b63bad4.
 
 ## Requirements and scenarios
 
@@ -90,14 +93,21 @@ addresses sorted by the entries' `BTreeMap`.
 **A launch's recipients.** `recipients_of` (`crates/flume-core/src/launch.rs`)
 takes the launch's, `$FLUME_RECIPIENT`, the standing agent's one
 address as `RecipientsFrom::Standing`, `caller_session`, then the
-answerer, and refuses a pane of several addresses before anything is
-made.
+answerer. The modified requirement is 500 characters or fewer, so it
+archives under `--strict`.
 
 | scenario | test | outcome |
 |---|---|---|
 | A launch from a standing agent's pane | `launching.rs` `a_launch_from_a_standing_agents_pane` | met |
-| A launch from the pane of an agent standing for two addresses | `a_launch_from_the_pane_of_two_addresses`: no held state, branch or submission | met |
 | Recipients at the launch; a launch from no session takes its stream's answerer; each stream its own answerer | existing scenarios, passing unchanged | met |
+
+**A launch from the pane of an agent standing for several addresses.**
+`recipients_of` refuses it before anything is made, in `several_words`'
+words.
+
+| scenario | test | outcome |
+|---|---|---|
+| A launch from the pane of an agent standing for two addresses | `a_launch_from_the_pane_of_two_addresses`: the refusal naming `east-planner`, `east/ops`, `east/planner` and `--recipient`; no held state, branch or submission | met |
 
 ### place-status
 
@@ -138,39 +148,13 @@ the command's pane in its `agents_in`'s form.
   holds core.28's line as `docs/architecture/core.md` does, character
   for character.
 - `guides/roles-and-wake.md`, `reference/commands.md` and
-  `reference/state.md` say design 8; the lines the site gains name none
-  of core.35's words.
-
-## The archive
-
-Archiving the change breaks the gate. `openspec archive
-a-standing-agents-command-acts-as-its-address --yes` applies the deltas,
-and `openspec validate --specs --strict --no-interactive`, `root:specs`
-of `check-fast`, then fails `launching`:
-
-```
-⚠ [WARNING] requirements[1]: Requirement text is very long (>500 characters). Move examples and edge cases into scenarios, or split it into separate requirements that each state one behavior.
-```
-
-The MODIFIED "A launch's recipients" of `specs/launching/spec.md` is 705
-characters, 390 in `openspec/specs/launching/spec.md` on the base, and
-`--strict` fails a warning. `openspec validate --changes --strict`,
-`root:changes`, does not apply the limit to a delta, so the gate passed
-with the change open. The archive was undone and nothing archived: the
-specs pass as the branch stands (49 passed, 0 failed).
-
-The change's launching delta must keep "A launch's recipients" within
-500 characters, for one the refusal of a launch from the pane of an
-agent standing for several addresses as a requirement of its own,
-ADDED, with the scenario "A launch from the pane of an agent standing
-for two addresses" beneath it; and an archive of the change into a
-scratch copy then passing `openspec validate --specs --strict`.
+  `reference/state.md` say design 8, `recipients_from`'s `standing` with
+  its `agent` and `source` in the state reference's prose and table; the
+  lines the site gains name none of core.35's words.
 
 ## Verdict
 
-The whole checks pass and the code holds: every requirement and
-scenario of the five delta specs is met by the code and its tests, and
-every task is done. The change falls short of archiving: its launching
-delta's modified requirement is over the 500 characters `root:specs`
-allows once it is archived. Nothing is archived, and the change goes
-back to its code stage.
+The whole checks pass and the work holds: every requirement and
+scenario of the five delta specs is met by the code and its tests,
+every task is done, and the change archives with every spec passing
+`--strict`. The change is archived on its branch with this report.
