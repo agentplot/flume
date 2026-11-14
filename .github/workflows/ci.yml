@@ -73,6 +73,10 @@ jobs:
   # Merge commits are not checked, nor a commit `git revert` wrote, its
   # message starting `Revert "`, which the commit-msg hook takes too
   # (devenv.nix) and git-cliff leaves out of a release (cliff.toml).
+  # convco is the hook's: the one of the nixpkgs devenv.lock pins, which
+  # the binary cache holds, so a session and CI hold a commit to one
+  # convco (core.22). The registry's nixpkgs floats, and its convco 0.7.2
+  # built from source on 2026-11-14 and failed, finding no libgit2 it takes.
   conventional:
     runs-on: ubuntu-latest
     steps:
@@ -82,7 +86,8 @@ jobs:
       - uses: cachix/install-nix-action@v31
       - run: |
           last="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
-          nix shell nixpkgs#convco -c convco check --ignore-reverts ${last:+"$last..HEAD"}
+          nixpkgs="$(jq -r '.nodes.nixpkgs.locked | "github:\(.owner)/\(.repo)/\(.rev)"' devenv.lock)"
+          nix shell "$nixpkgs#convco" -c convco check --ignore-reverts ${last:+"$last..HEAD"}
 
   # The next version from the commits since the newest v* tag; empty when
   # it is already tagged. `--unreleased` starts the range at the newest tag,
