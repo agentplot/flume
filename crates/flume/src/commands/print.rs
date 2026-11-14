@@ -1592,6 +1592,7 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
             for end in &address.pending {
                 lines.push(format!("    {}: {}", end.place, end.what));
             }
+            lines.extend(address_messages_lines(address));
             continue;
         }
         let run = match (&address.run, &address.role, &address.carried) {
@@ -1628,6 +1629,7 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
                 stall.place, stall.what
             ));
         }
+        lines.extend(address_messages_lines(address));
     }
     lines.push(watch_line(host));
     for setup in &host.terminal_setup {
@@ -1643,6 +1645,44 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
             end.expires_at,
             flume_core::confirm_command(&end.recipient, &[end.delivery.as_str()])
         ));
+    }
+    lines
+}
+
+/// Under a role's address, each message pending at it, with its key, who
+/// sent it and its first line, handed to none or by what, and each place
+/// whose work is not over that reports to it, by `<kind>--<name>` (56,
+/// 214).
+fn address_messages_lines(address: &flume_core::AddressStatus) -> Vec<String> {
+    let mut lines = vec![];
+    if !address.messages.is_empty() {
+        lines.push("    messages:".to_string());
+    }
+    for message in &address.messages {
+        let handed = match message.handovers.last() {
+            None => "handed to none".to_string(),
+            Some(handover) => format!("handed by {} at {}", word(json!(handover.by)), handover.at),
+        };
+        let expired = if message.expired { ", expired" } else { "" };
+        lines.push(format!(
+            "      {} from {}: {}; {handed}{expired}",
+            message.key,
+            message.from.as_deref().unwrap_or("no one named"),
+            message.line
+        ));
+    }
+    if !address.reporting.is_empty() {
+        let places: Vec<String> = address
+            .reporting
+            .iter()
+            .map(|place| {
+                std::path::Path::new(&place.0).file_name().map_or_else(
+                    || place.0.clone(),
+                    |name| name.to_string_lossy().into_owned(),
+                )
+            })
+            .collect();
+        lines.push(format!("    reporting: {}", places.join(", ")));
     }
     lines
 }
@@ -3402,6 +3442,8 @@ mod tests {
             standing: None,
             carried,
             wakes_nothing: wakes_nothing.map(str::to_string),
+            messages: vec![],
+            reporting: vec![],
             stalled: None,
         };
         let lines = host_lines(&HostStatus {
@@ -3434,6 +3476,47 @@ mod tests {
     }
 
     #[test]
+    fn a_roles_messages_and_the_places_reporting_to_it() {
+        // 56, 214: under the address, each message pending at it with its
+        // key, sender and first line, and each place reporting to it.
+        let lines = host_lines(&HostStatus {
+            addresses: vec![AddressStatus {
+                address: "east/ops".into(),
+                role: None,
+                run: Some(PlaceId::new("/places/turn--east-ops")),
+                pending: vec![],
+                unwoken: None,
+                standing: None,
+                carried: None,
+                wakes_nothing: None,
+                messages: vec![flume_core::PendingMessage {
+                    key: "message/east/ops/0a1b2c3d".into(),
+                    from: Some("ops".into()),
+                    at: 120,
+                    line: "the nightly job failed".into(),
+                    handovers: vec![],
+                    expired: false,
+                }],
+                reporting: vec![
+                    PlaceId::new("/places/fix--one"),
+                    PlaceId::new("/places/fix--two"),
+                ],
+                stalled: None,
+            }],
+            ..HostStatus::default()
+        });
+        assert_eq!(
+            lines[1..lines.len() - 1],
+            [
+                "  0 ends pending for east/ops, its run /places/turn--east-ops",
+                "    messages:",
+                "      message/east/ops/0a1b2c3d from ops: the nightly job failed; handed to none",
+                "    reporting: fix--one, fix--two",
+            ]
+        );
+    }
+
+    #[test]
     fn a_doors_run_whose_stall_reached_no_one() {
         // 130, 132, 193: the run of its stream's own answerer, stalled
         // with no one to reach, named under the host's addresses.
@@ -3448,6 +3531,8 @@ mod tests {
                 standing: None,
                 carried: None,
                 wakes_nothing: None,
+                messages: vec![],
+                reporting: vec![],
                 stalled: Some(PendingEnd {
                     place: run,
                     key: "stall/420".parse().unwrap(),
@@ -3699,6 +3784,8 @@ mod tests {
                 standing: Some(standing),
                 carried: None,
                 wakes_nothing: None,
+                messages: vec![],
+                reporting: vec![],
                 stalled: None,
             }],
             ..HostStatus::default()

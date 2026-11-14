@@ -9,8 +9,9 @@
 //! 132, 193).
 
 use super::role_waking::{
-    asks, configure, configure_at, fix_for, planner_id, planner_run, runs, PLANNER,
+    address_of, asks, configure, configure_at, fix_for, planner_id, planner_run, runs, PLANNER,
 };
+use super::settling::deliver_fix;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::deliveries;
@@ -61,9 +62,14 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: confirmed_then_let_go_of,
         },
         Scenario {
-            name: "message: a message at east/planner past its expiry and never confirmed stays pending once the host is settled, owed to east/planner expired",
+            name: "message: a message at east/planner past its expiry and never confirmed stays pending once the host is settled, owed to east/planner expired, and status gives it expired under east/planner",
             cites: &["43", "53"],
             run: expired_and_kept,
+        },
+        Scenario {
+            name: "message: status gives east/ops, whose run two working fixes report to and a message from ops is pending at, handed to it by nothing, with its run, messages holding the message's key, ops, when and its first line, handed to none, and reporting naming both fixes; once one lands and is tidied, reporting names the other alone, a role's messages waiting at its address",
+            cites: &["56", "7", "43", "132"],
+            run: a_roles_messages_and_the_places_reporting_to_it,
         },
     ]
 }
@@ -496,6 +502,82 @@ fn expired_and_kept(_: &()) -> Outcome {
             .collect::<Vec<_>>(),
         vec![(PLANNER, true)],
         "whom it is owed to"
+    );
+    let status = address_of(&world, PLANNER)?;
+    ensure_eq!(
+        status
+            .messages
+            .iter()
+            .map(|message| (message.key.as_str(), message.expired))
+            .collect::<Vec<_>>(),
+        vec![(key.as_str(), true)],
+        "the message status gives expired under its reader"
+    );
+    Ok(())
+}
+
+fn a_roles_messages_and_the_places_reporting_to_it(_: &()) -> Outcome {
+    let world = World::new();
+    let ops = "east/ops";
+    configure_at(
+        &world,
+        ops,
+        "Read what is pending for you.",
+        planner_run(None, None),
+    );
+    let one = fix_for(&world, "one", &[ops])?;
+    let two = fix_for(&world, "two", &[ops])?;
+    let at = world.host.now();
+    let (key, _, _, run) = messaged(&world.engine.message_address(
+        ops,
+        "the nightly job failed\nsince Tuesday",
+        None,
+        &from(Some("ops")),
+    ))?;
+    let status = address_of(&world, ops)?;
+    ensure_eq!(status.run, run, "the address's run");
+    ensure_eq!(
+        status
+            .messages
+            .iter()
+            .map(|message| (
+                message.key.as_str(),
+                message.from.as_deref(),
+                message.at,
+                message.line.as_str(),
+                message.handovers.len(),
+                message.expired
+            ))
+            .collect::<Vec<_>>(),
+        vec![(
+            key.as_str(),
+            Some("ops"),
+            at,
+            "the nightly job failed",
+            0,
+            false
+        )],
+        "the messages pending at the address"
+    );
+    let mut reporting = status.reporting.clone();
+    reporting.sort();
+    ensure_eq!(
+        reporting,
+        vec![one.clone(), two.clone()],
+        "the places reporting"
+    );
+    deliver_fix(&world, &one);
+    world.settle(&one);
+    ensure!(
+        world
+            .held(&one)
+            .is_none_or(|held| held.phase != Phase::Live),
+        "one still live"
+    );
+    ensure_eq!(
+        address_of(&world, ops)?.reporting,
+        vec![two],
+        "the places reporting once one landed"
     );
     Ok(())
 }

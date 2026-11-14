@@ -840,6 +840,8 @@ fn host_status() -> HostStatus {
             standing: None,
             carried: None,
             wakes_nothing: None,
+            messages: vec![],
+            reporting: vec![],
             stalled: None,
         }, AddressStatus {
             address: "madswan/ops".into(),
@@ -854,6 +856,8 @@ fn host_status() -> HostStatus {
             standing: Some(standing_status()),
             carried: None,
             wakes_nothing: None,
+            messages: vec![],
+            reporting: vec![],
             stalled: None,
         }, AddressStatus {
             address: "north/planner".into(),
@@ -867,6 +871,8 @@ fn host_status() -> HostStatus {
                 answers: Some("The work's scope.".into()),
             }),
             wakes_nothing: None,
+            messages: vec![],
+            reporting: vec![],
             stalled: None,
         }, AddressStatus {
             address: "east/planner".into(),
@@ -877,6 +883,8 @@ fn host_status() -> HostStatus {
             standing: None,
             carried: None,
             wakes_nothing: Some("no source of the host declares east/planner".into()),
+            messages: vec![],
+            reporting: vec![],
             stalled: None,
         }, AddressStatus {
             address: "east/operator".into(),
@@ -887,6 +895,8 @@ fn host_status() -> HostStatus {
             standing: None,
             carried: None,
             wakes_nothing: None,
+            messages: vec![],
+            reporting: vec![],
             stalled: Some(PendingEnd {
                 place: PlaceId::new("/r/places/turn--east-operator"),
                 key: "stall/420".parse().unwrap(),
@@ -1434,6 +1444,8 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.addresses[].standing.session.name",
             "status.host.addresses[].standing.stream",
             "status.host.addresses[].stalled",
+            "status.host.addresses[].messages",
+            "status.host.addresses[].reporting",
             "status.host.addresses[].stalled.key",
             "status.host.addresses[].stalled.place",
             "status.host.addresses[].stalled.what",

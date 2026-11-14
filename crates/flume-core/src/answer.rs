@@ -961,8 +961,10 @@ pub struct PlaceClues {
 /// it, why, so it wakes nothing; and, where its run stalled and its
 /// stall reached no one, its run being its own stream's answerer or no
 /// role standing behind its stream, that stall, so status names what no
-/// one was told: each read at the ask, and none in a status written
-/// before (56, 130, 190, 191, 193; core.14, core.15).
+/// one was told; each message pending at it, and each place whose work is
+/// not over that reports to it: each read at the ask, and none in a
+/// status written before (56, 130, 190, 191, 193, 214; core.14,
+/// core.15).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AddressStatus {
     pub address: String,
@@ -978,6 +980,29 @@ pub struct AddressStatus {
     pub wakes_nothing: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stalled: Option<PendingEnd>,
+    /// Each message pending at the address, in the order recorded (214).
+    #[serde(default)]
+    pub messages: Vec<PendingMessage>,
+    /// Each place whose work is not over that names the address among
+    /// its recipients (7, 214).
+    #[serde(default)]
+    pub reporting: Vec<PlaceId>,
+}
+
+/// A message pending at a role's address, as status gives it: its
+/// delivery's key, who sent it where its first line names one, when it
+/// was recorded, its words' first line, each hand-over with its way and
+/// when, and whether it is expired for the address (43, 56, 214; weir
+/// 104).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PendingMessage {
+    pub key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
+    pub at: Seconds,
+    pub line: String,
+    pub handovers: Vec<Delivery>,
+    pub expired: bool,
 }
 
 /// A role's run as status gives it under its address: what its source's

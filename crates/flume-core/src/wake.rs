@@ -37,9 +37,12 @@
 //! that stalls with its own stream's answerer standing behind it, so its
 //! stall reaches no one, is named under the host's addresses (130, 193).
 
+use crate::message::{is_message_key, sent};
 use crate::standing::Standing;
 use crate::start::Starts;
-use crate::{what_ended, AddressStatus, Answer, Engine, PendingEnd, RoleStatus, Step, Woke};
+use crate::{
+    what_ended, AddressStatus, Answer, Engine, PendingEnd, PendingMessage, RoleStatus, Step, Woke,
+};
 use flume_seams::*;
 use std::collections::BTreeMap;
 
@@ -246,6 +249,11 @@ impl Engine {
                 .or_insert_with(|| AddressStatus::of(address))
                 .stalled = Some(stall);
         }
+        for (address, messages) in pending_messages(owing) {
+            by.entry(address.clone())
+                .or_insert_with(|| AddressStatus::of(address))
+                .messages = messages;
+        }
         let mut standing = Standing::of(roles);
         for address in standing.addresses() {
             by.entry(address.clone())
@@ -275,6 +283,12 @@ impl Engine {
                 .filter(|held| !matches!(held.phase, Phase::Tidied { .. }))
                 .find(|held| held.role.as_deref() == Some(status.address.as_str()))
                 .map(|held| held.place.id.clone());
+            status.reporting = every
+                .iter()
+                .filter(|held| matches!(held.phase, Phase::Making { .. } | Phase::Live))
+                .filter(|held| held.place.recipients.contains(&status.address))
+                .map(|held| held.place.id.clone())
+                .collect();
         }
         by.into_values().collect()
     }
@@ -314,6 +328,37 @@ fn pending_addresses(every: &[HeldState], owing: &Owing) -> BTreeMap<String, Add
                     status.unwoken = held.unwoken.get(&address).cloned();
                 }
             }
+        }
+    }
+    by
+}
+
+/// Each message pending at a role's address, by the address, in the order
+/// recorded: who sent it, when, its words' first line, each hand-over
+/// and whether it is expired (43, 214).
+fn pending_messages(owing: &Owing) -> BTreeMap<String, Vec<PendingMessage>> {
+    let mut by: BTreeMap<String, Vec<PendingMessage>> = BTreeMap::new();
+    for delivery in owing.in_order() {
+        if !is_message_key(&delivery.key) {
+            continue;
+        }
+        let (from, words) = sent(&delivery.message);
+        for owed in &delivery.owed {
+            by.entry(owed.recipient.clone())
+                .or_default()
+                .push(PendingMessage {
+                    key: delivery.key.clone(),
+                    from: from.clone(),
+                    at: delivery.recorded_at,
+                    line: words.lines().next().unwrap_or_default().to_string(),
+                    handovers: delivery
+                        .handovers
+                        .iter()
+                        .filter(|handover| handover.recipient == owed.recipient)
+                        .cloned()
+                        .collect(),
+                    expired: owed.expired,
+                });
         }
     }
     by
@@ -362,6 +407,8 @@ impl AddressStatus {
             standing: None,
             carried: None,
             wakes_nothing: None,
+            messages: vec![],
+            reporting: vec![],
             stalled: None,
         }
     }
