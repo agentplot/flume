@@ -2142,7 +2142,7 @@ fn the_resolver_holds_terminals_and_windows_by_name() {
     assert_eq!(window.windows(), vec![(command, "Work Agents".to_string())]);
     assert_eq!(resolver.terminal_profiles(), vec!["fake", "other"]);
     assert_eq!(resolver.window_profiles(), vec!["fake-window"]);
-    assert!(resolver.terminal("rex").is_none());
+    assert!(resolver.terminal("cmux").is_none());
     assert!(resolver.window("kitty").is_none());
 }
 
