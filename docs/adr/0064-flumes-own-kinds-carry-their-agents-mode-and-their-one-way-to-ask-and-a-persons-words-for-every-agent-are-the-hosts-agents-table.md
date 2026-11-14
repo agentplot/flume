@@ -12,6 +12,8 @@ decision-makers:
 
 Status: accepted. The direction is the user's, in agentplot-design's pane on 2026-11-09, reading the `kinds` table deneb's Boomdrive configuration gives flume, each of change, chore and fix with `mode = "full"` and the instructions "You are a construction agent: you never post a Pending You card or a Plannotator Inbox message [...] Where you would ask the user, run flume needs with your words", and fix with `label = "operation"`: "why is this in swancloud configs? the idea is that the are part of the recipe from crew/boomdrive". What the kinds say, and where a person's own words go, is agentplot-design's own choice, cheap to change.
 
+Amended 2026-11-14, boomdrive-design's, on the construct of flumes-own-kinds-carry-their-agents-mode: flume reads no stage's standing instructions yet, and record 0021's build waits on the user's plan, so the new versions say the one way to ask in each stage's prompt until it does.
+
 Deciders: the user, 2026-11-09, above; agentplot-design, for the form.
 Sources: `boomdrivedev/blueprints:design/principles.md` 14 ("The Boomdrive set derives or defaults every value the recipe knows: a tool's kinds and their words [...] A host writes only what is its own, and only through a tool's own settings"); `design/flume/requirements.md` 22, 28, 32, 148, 158, 162, 169, 180 and C.7, and its section on flume's own kinds; boomdrivedev/boomdrive's record 0034, point 3 (capture.md is the person's own); this repository's own kinds under `crates/flume/src/profiles/kinds/weir/own/`, whose stages give their agents no settings (`agents = [{}]`) and whose prompts end "If you cannot go on without an answer, or you find work this stage cannot deliver past, stop short: {{needs}}"; afterthought/swancloud's `lib/flume-config.nix:65-115`, which writes deneb's `kinds` table.
 
@@ -25,7 +27,7 @@ deneb's table also gives every kind the person's own process, a file every agent
 
 ## Considered options
 
-1. **flume's own kinds carry what every host gives them.** Their stages give their agents the mode `full` and say, in their standing instructions, that stopping short is their one way to ask. A person's own words for every agent are the host's table for every agent. A label stays the host's, and the Boomdrive set gives it.
+1. **flume's own kinds carry what every host gives them.** Their stages give their agents the mode `full` and say that stopping short is their one way to ask: in their standing instructions where flume reads a stage's (148), and until then in each stage's prompt, beside its way to stop short. A person's own words for every agent are the host's table for every agent. A label stays the host's, and the Boomdrive set gives it.
 2. The Boomdrive set gives the kinds' mode and words. A host without the set would still write them, and flume's own kinds would still need every host's words to run unattended.
 3. Nothing moves. Every host keeps writing the same table.
 
@@ -34,7 +36,7 @@ deneb's table also gives every kind the person's own process, a file every agent
 Option 1.
 
 - **flume's own kinds give `full`.** Each stage of change, chore and fix gives its agents the mode `full`, in the kind's layer, the last of 32's: such a stage commits in its own place, unattended, and flume answers no question an agent in `ask` or `edits` puts (169). A host that wants its agents to reach less states the mode in its own layers, which come before the kind's (162). plan's plan stage starts in its program's planning mode whatever a layer gives (163).
-- **Their one way to ask is to stop short.** Each stage's standing instructions say that an agent that needs an answer stops short with its words (28), and never asks through anything else, a card, an inbox, a message or a question in its pane, whatever a hook, a plugin, a file or a person's instructions given to every agent tell it. The words name no tool of anyone's.
+- **Their one way to ask is to stop short.** Each stage's standing instructions, and while flume reads none (148; record 0021, whose build waits on the user's plan) each stage's prompt beside its way to stop short, say that an agent that needs an answer stops short with its words (28), and never asks through anything else, a card, an inbox, a message or a question in its pane, whatever a hook, a plugin, a file or a person's instructions given to every agent tell it. The words name no tool of anyone's.
 - **A person's own words for every agent are the host's `[agents]` table.** A person who wants every agent to read their own process, as deneb's file names, gives it as the host's `instructions` for every agent (32), through flume's module, never in a kind's table. flume's own kinds hold none of a person's words.
 - **A label stays the host's.** flume's own kinds declare none (180). The Boomdrive set gives each the label its drives' streams name: fix's `operation` among them.
 - **A host writes no `kinds` table for flume's own kinds.** One that does still lays over them (32), and is taken.
