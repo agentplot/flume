@@ -10,7 +10,9 @@
 //! end pending for a recipient is expired, `<n>`, `<n>s`, `<n>m` or
 //! `<n>h` as `keep_open` is, at least a second (43, C.7); a file or a
 //! word left out is no bound, the printed command, a terminal view, the
-//! printed window and a week. Its
+//! printed window and a week. Its `[telemetry]`, the managed layer's
+//! alone, says whether flume sends telemetry and to which collector on
+//! the host's loopback, in sluice's words for its own (216, C.7). Its
 //! `[kinds.<kind>.agents]` and `[repos."<repository>".kinds.<kind>.agents]`
 //! tables, each naming one stage's by a further `.stages.<stage>` table,
 //! give a kind's agents in every repository and in one their `model`,
@@ -83,8 +85,8 @@ use flume_seams::{
     read_span, Account, ConfigLayer, ConfigValue, HostConfiguration, HostSource, HostSourceRead,
     KindSessions, KindSettings, LabelFrom, LabelHeld, LocalLayer, NamedBy, PinnedKey, Pool,
     PoolFrom, PoolNamed, ProfileHeld, RepositoryName, Seconds, Settings, Share, StageSession,
-    Strategy, Stream, StreamDisplay, StreamFrom, StreamHeld, View, ViewHeld, DEFAULT_STREAM,
-    ENDS_EXPIRE, SET,
+    Strategy, Stream, StreamDisplay, StreamFrom, StreamHeld, TelemetryTable, View, ViewHeld,
+    DEFAULT_STREAM, ENDS_EXPIRE, SET,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -178,6 +180,9 @@ pub struct HostConfig {
     /// `[host] ends_expire`; flume's own week where it gives none (43,
     /// C.7; weir 104).
     pub ends_expire: Seconds,
+    /// The managed layer's `[telemetry]`, none where it gives none, and
+    /// then flume sends nothing (216, C.7).
+    pub telemetry: Option<TelemetryTable>,
     /// The settings given each kind's agents in every repository, by the
     /// kind's name (32).
     pub kinds: BTreeMap<String, KindSettings>,
@@ -249,6 +254,7 @@ impl Default for HostConfig {
             view: None,
             terminal_app: None,
             ends_expire: ENDS_EXPIRE,
+            telemetry: None,
             kinds: BTreeMap::new(),
             repos: BTreeMap::new(),
             repos_agents: BTreeMap::new(),
@@ -507,6 +513,9 @@ impl HostConfig {
                 .map_err(|_| "[host] terminal_app is not a name".to_string())?;
             config.pool = text_of(host, "pool", "host")?;
             config.ends_expire = ends_expire_of(host)?;
+        }
+        if let Some(telemetry) = table.get("telemetry") {
+            config.telemetry = Some(telemetry_of(telemetry)?);
         }
         let declared = |pool: &str| config.pools.contains_key(pool);
         if let Some(pool) = config.pool.as_deref().filter(|pool| !declared(pool)) {
@@ -1650,6 +1659,155 @@ fn ends_expire_of(host: &Table) -> Result<Seconds, String> {
     }
 }
 
+/// The keys `[telemetry]` reads, sluice's own for its table (216, C.7;
+/// sluice record 0106).
+const TELEMETRY_KEYS: [&str; 7] = [
+    "send",
+    "collector",
+    "service",
+    "traces",
+    "metrics",
+    "logs",
+    "attributes",
+];
+
+/// `[telemetry]`, the managed layer's alone, as its keys read: `send`,
+/// `traces`, `metrics` and `logs` each a boolean; `collector` an address
+/// [`collector_of`] takes, which a table that sends names; `service` a
+/// non-empty string; `[telemetry.attributes]` each a string not shaped as
+/// a credential. Any other key, and any value its key does not take, is
+/// refused naming the key and never a value (216, C.7; core.45, core.50,
+/// core.56).
+fn telemetry_of(value: &Value) -> Result<TelemetryTable, String> {
+    let table = value
+        .as_table()
+        .ok_or("[telemetry] is not a table".to_string())?;
+    if let Some(unknown) = table
+        .keys()
+        .find(|key| !TELEMETRY_KEYS.contains(&key.as_str()))
+    {
+        return Err(format!(
+            "telemetry.{} is no key of [telemetry]: it reads {} (C.7)",
+            quoted(unknown),
+            TELEMETRY_KEYS.join(", ")
+        ));
+    }
+    let flag = |key: &str, unset: bool| match table.get(key) {
+        None => Ok(unset),
+        Some(Value::Boolean(flag)) => Ok(*flag),
+        Some(_) => Err(format!("[telemetry] {key} is not true or false")),
+    };
+    let mut read = TelemetryTable {
+        send: flag("send", false)?,
+        traces: flag("traces", true)?,
+        metrics: flag("metrics", true)?,
+        logs: flag("logs", true)?,
+        ..TelemetryTable::default()
+    };
+    read.collector = match table.get("collector") {
+        None => None,
+        Some(Value::String(written)) => Some(collector_of(written)?),
+        Some(_) => return Err("[telemetry] collector is not a string".into()),
+    };
+    if read.send && read.collector.is_none() {
+        return Err(
+            "[telemetry] collector is not named, where send = true sends to it (216, C.7)".into(),
+        );
+    }
+    match table.get("service") {
+        None => {}
+        Some(Value::String(service)) if !service.trim().is_empty() => {
+            read.service = service.clone();
+        }
+        Some(_) => return Err("[telemetry] service is not a name".into()),
+    }
+    if let Some(attributes) = table.get("attributes") {
+        let attributes = attributes
+            .as_table()
+            .ok_or("[telemetry] attributes is not a table".to_string())?;
+        for (name, value) in attributes {
+            let key = format!("telemetry.attributes.{}", quoted(name));
+            let Value::String(text) = value else {
+                return Err(format!("{key} is not a string"));
+            };
+            if flume_core::shaped_as_credential(name, text) {
+                return Err(format!(
+                    "{key} is shaped as a credential, which flume sends nowhere (core.50, core.56)"
+                ));
+            }
+            read.attributes.insert(name.clone(), text.clone());
+        }
+    }
+    Ok(read)
+}
+
+/// The collector `[telemetry]` names, as written: `http://`, a host of
+/// the loopback (`localhost`, an address of `127.0.0.0/8` or `[::1]`),
+/// `:` and a port, and at most a path, its final `/` taken off; else
+/// refused naming `[telemetry] collector` and what it lacks, and never
+/// its value (C.7; core.56).
+fn collector_of(written: &str) -> Result<String, String> {
+    let lacks = |what: &str| {
+        format!(
+            "[telemetry] collector is not {what}: it is http://, a host of the loopback, a port and at most a path (C.7)"
+        )
+    };
+    let rest = written
+        .strip_prefix("http://")
+        .ok_or_else(|| lacks("plain HTTP"))?;
+    let (authority, path) = match rest.find('/') {
+        Some(at) => rest.split_at(at),
+        None => (rest, ""),
+    };
+    let (host, port) = match authority.strip_prefix('[') {
+        Some(bracketed) => {
+            let (address, after) = bracketed
+                .split_once(']')
+                .ok_or_else(|| lacks("on the host's loopback"))?;
+            let host_is = address == "::1";
+            match after.strip_prefix(':') {
+                Some(port) => (host_is.then_some(()), Some(port)),
+                None if after.is_empty() => (host_is.then_some(()), None),
+                None => (None, None),
+            }
+        }
+        None => {
+            let (host, port) = match authority.rsplit_once(':') {
+                Some((host, port)) => (host, Some(port)),
+                None => (authority, None),
+            };
+            let loopback = host.eq_ignore_ascii_case("localhost") || {
+                let octets: Vec<&str> = host.split('.').collect();
+                octets.len() == 4
+                    && octets[0] == "127"
+                    && octets.iter().all(|octet| {
+                        !octet.is_empty()
+                            && octet.len() <= 3
+                            && octet.bytes().all(|digit| digit.is_ascii_digit())
+                            && octet.parse::<u16>().is_ok_and(|n| n <= 255)
+                    })
+            };
+            (loopback.then_some(()), port)
+        }
+    };
+    host.ok_or_else(|| lacks("on the host's loopback"))?;
+    let port = port.ok_or_else(|| lacks("given a port"))?;
+    if port.is_empty()
+        || port.len() > 5
+        || !port.bytes().all(|digit| digit.is_ascii_digit())
+        || !port.parse::<u32>().is_ok_and(|n| (1..=65535).contains(&n))
+    {
+        return Err(lacks("given a port"));
+    }
+    if path
+        .chars()
+        .any(|c| c.is_whitespace() || c.is_control() || matches!(c, '?' | '#' | '@' | '\\'))
+    {
+        return Err(lacks("given at most a path"));
+    }
+    Ok(written.strip_suffix('/').unwrap_or(written).to_string())
+}
+
 /// A settings file a host's agents table names at `written`, read on the
 /// host now: absolute, beginning `~/` read against the home as a
 /// repository's key is, or relative to `directory`, the configuration's,
@@ -1925,6 +2083,215 @@ mod tests {
             }
         );
         assert_eq!(config.ends_expire, ENDS_EXPIRE);
+    }
+
+    #[test]
+    fn telemetry_none_where_the_managed_layer_gives_none() {
+        // 216, C.7: no table, no telemetry.
+        assert_eq!(HostConfig::parse("").unwrap().telemetry, None);
+        assert_eq!(HostConfig::default().telemetry, None);
+    }
+
+    #[test]
+    fn telemetry_a_table_that_sends() {
+        // 216, C.7: the host-configuration spec's "A table that sends":
+        // the collector's final `/` taken off, the service `flume`, traces
+        // off and the rest on, each value given with its layer.
+        let config = HostConfig::layers(
+            "[telemetry]
+send = true
+collector = \"http://localhost:4318/\"
+traces = false
+\
+             [telemetry.attributes]\n\"deployment.environment\" = \"lab\"\n",
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            config.telemetry,
+            Some(TelemetryTable {
+                send: true,
+                collector: Some("http://localhost:4318".into()),
+                service: "flume".into(),
+                traces: false,
+                metrics: true,
+                logs: true,
+                attributes: BTreeMap::from([("deployment.environment".into(), "lab".into())]),
+            })
+        );
+        for (key, value) in [
+            ("telemetry.send", "true"),
+            ("telemetry.collector", "\"http://localhost:4318/\""),
+            ("telemetry.traces", "false"),
+            ("telemetry.attributes.\"deployment.environment\"", "\"lab\""),
+        ] {
+            assert_eq!(
+                value_at(&config, key),
+                Some((value.to_string(), ConfigLayer::Managed)),
+                "{key}"
+            );
+        }
+        let quiet = HostConfig::parse(
+            "[telemetry]
+service = \"flume-lab\"
+",
+        )
+        .unwrap();
+        assert_eq!(
+            quiet.telemetry,
+            Some(TelemetryTable {
+                service: "flume-lab".into(),
+                ..TelemetryTable::default()
+            }),
+            "a table that does not send needs no collector"
+        );
+    }
+
+    #[test]
+    fn telemetry_a_collector_on_the_loopback() {
+        // C.7: each host of the loopback with a port, and at most a path.
+        for (written, read) in [
+            ("http://localhost:4318", "http://localhost:4318"),
+            ("http://127.0.0.1:4318/", "http://127.0.0.1:4318"),
+            ("http://127.1.2.3:4318/otlp", "http://127.1.2.3:4318/otlp"),
+            ("http://[::1]:4318", "http://[::1]:4318"),
+        ] {
+            let config = HostConfig::parse(&format!(
+                "[telemetry]
+send = true
+collector = \"{written}\"
+"
+            ))
+            .unwrap_or_else(|refused| panic!("{written}: {refused}"));
+            assert_eq!(
+                config
+                    .telemetry
+                    .and_then(|table| table.collector)
+                    .as_deref(),
+                Some(read),
+                "{written}"
+            );
+        }
+    }
+
+    #[test]
+    fn telemetry_a_collector_off_the_loopback() {
+        // C.7; core.56: the host-configuration spec's "A collector off the
+        // loopback": each refused naming `[telemetry] collector` and what
+        // it lacks, and never its value.
+        for (written, lacks) in [
+            ("https://localhost:4318", "plain HTTP"),
+            ("localhost:4318", "plain HTTP"),
+            ("http://otel.example:4318", "the host's loopback"),
+            ("http://10.0.0.1:4318", "the host's loopback"),
+            ("http://user@localhost:4318", "the host's loopback"),
+            ("http://[::2]:4318", "the host's loopback"),
+            ("http://localhost", "a port"),
+            ("http://localhost:", "a port"),
+            ("http://localhost:99999", "a port"),
+            ("http://localhost:4318/v1?x=1", "a path"),
+        ] {
+            let refused = HostConfig::parse(&format!(
+                "[telemetry]
+send = true
+collector = \"{written}\"
+"
+            ))
+            .unwrap_err();
+            assert!(
+                refused.contains("[telemetry] collector") && refused.contains(lacks),
+                "{written}: {refused}"
+            );
+            assert!(!refused.contains(written), "{written}: {refused}");
+        }
+    }
+
+    #[test]
+    fn telemetry_a_table_that_sends_names_its_collector() {
+        // C.7: the host-configuration spec's "A table that sends names its
+        // collector".
+        let refused = HostConfig::parse(
+            "[telemetry]
+send = true
+",
+        )
+        .unwrap_err();
+        assert!(
+            refused.contains("[telemetry] collector") && refused.contains("send = true"),
+            "{refused}"
+        );
+    }
+
+    #[test]
+    fn telemetry_a_key_it_does_not_read() {
+        // C.7; core.50: the host-configuration spec's "A key telemetry
+        // does not read": an unknown key named, an attribute shaped as a
+        // credential named and never its value, and a value its key does
+        // not take named by its key.
+        let refused = HostConfig::parse(
+            "[telemetry]
+headers = \"x\"
+",
+        )
+        .unwrap_err();
+        assert!(refused.contains("telemetry.headers"), "{refused}");
+        let token = "ghp_0123456789abcdefghijABCDEFGHIJ012345";
+        let refused = HostConfig::parse(&format!(
+            "[telemetry]
+send = false
+[telemetry.attributes]
+token = \"{token}\"
+"
+        ))
+        .unwrap_err();
+        assert!(refused.contains("telemetry.attributes.token"), "{refused}");
+        assert!(!refused.contains(token), "{refused}");
+        for (written, key) in [
+            ("send = \"yes\"", "[telemetry] send"),
+            ("traces = 1", "[telemetry] traces"),
+            ("metrics = \"no\"", "[telemetry] metrics"),
+            ("logs = \"tail\"", "[telemetry] logs"),
+            ("service = \"\"", "[telemetry] service"),
+            ("collector = 4318", "[telemetry] collector"),
+            ("attributes = \"team=ops\"", "[telemetry] attributes"),
+            (
+                "[telemetry.attributes]\nteam = 1",
+                "telemetry.attributes.team",
+            ),
+        ] {
+            let refused = HostConfig::parse(&format!(
+                "[telemetry]
+{written}
+"
+            ))
+            .unwrap_err();
+            assert!(refused.contains(key), "{written}: {refused}");
+        }
+    }
+
+    #[test]
+    fn telemetry_set_by_the_local_layer() {
+        // C.7, 216; core.45: the host-configuration spec's "The local
+        // layer turns telemetry on": no key of it is taken, status names
+        // `telemetry.send`, and nothing is sent.
+        let config = HostConfig::layers(
+            "[host]
+agents = 3
+",
+            Some(
+                "[telemetry]
+send = true
+collector = \"http://localhost:4318\"
+",
+            ),
+        )
+        .unwrap();
+        let LocalLayer::NotTaken { keys, fault: None } = &config.configuration.local else {
+            panic!("the local layer taken: {:?}", config.configuration.local);
+        };
+        assert!(keys.contains(&"telemetry.send".to_string()), "{keys:?}");
+        assert_eq!(config.telemetry, None);
+        assert_eq!(config.agents, Some(3));
     }
 
     #[test]
