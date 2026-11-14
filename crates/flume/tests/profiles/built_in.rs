@@ -319,7 +319,7 @@ fn a_recipient_unnamed_is_the_herdr_pane_the_command_runs_in() {
     let socket = scratch.path("no-herdr.sock");
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_flume"));
     for (name, _) in std::env::vars() {
-        if name.starts_with("FLUME_") || name.starts_with("HERDR_") {
+        if name.starts_with("FLUME_") || name.starts_with("HERDR_") || name.starts_with("REX_") {
             command.env_remove(name);
         }
     }

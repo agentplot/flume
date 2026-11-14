@@ -2043,7 +2043,7 @@ mod tests {
     /// enough for its sockets, its rex a script that marks it was run;
     /// and the folder and that mark.
     fn over_records(name: &str) -> (Rex, PathBuf, PathBuf) {
-        let scratch = PathBuf::from("/tmp").join(format!("frx-{name}-{}", std::process::id()));
+        let scratch = std::env::temp_dir().join(format!("frx-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&scratch);
         fs::create_dir_all(&scratch).expect("a scratch folder");
         let program = scratch.join("rex");
@@ -2103,9 +2103,11 @@ mod tests {
                 .map(|socket| socket.with_extension("state")),
             Ok(records.join("work.state"))
         );
-        let room = SOCKET_LIMIT - records.join(".sock").as_os_str().len();
-        let longest = "w".repeat(room);
-        assert!(rex.socket(Some(&longest)).is_ok(), "a name that fits");
+        let room = SOCKET_LIMIT.saturating_sub(records.join(".sock").as_os_str().len());
+        if room > 0 {
+            let longest = "w".repeat(room);
+            assert!(rex.socket(Some(&longest)).is_ok(), "a name that fits");
+        }
         let long = "w".repeat(room + 1);
         for name in [long.as_str(), "", ".", "..", "../x", "a/b", "a\0b"] {
             let refused = rex.socket(Some(name)).expect_err(name);

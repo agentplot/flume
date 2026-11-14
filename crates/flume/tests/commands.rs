@@ -494,7 +494,8 @@ impl Host {
         let mut command = Command::new(program);
         command.current_dir(dir);
         for (name, _) in std::env::vars() {
-            if name.starts_with("FLUME_") || name.starts_with("HERDR_") {
+            if name.starts_with("FLUME_") || name.starts_with("HERDR_") || name.starts_with("REX_")
+            {
                 command.env_remove(name);
             }
         }
@@ -3998,12 +3999,13 @@ fn an_unknown_terminal_app() {
 
 #[test]
 fn a_streams_multiplexer_flume_does_not_carry() {
-    // 4, 190; core.8: a launch on `trial`, whose multiplexer is `rex`,
-    // refused naming the stream, `rex` and the terminal profiles, nothing
-    // made; a launch on another stream runs.
-    let host = Host::new("stream-rex");
-    host.configure("[streams.trial]\nmultiplexer = \"rex\"\n[streams.personal]\nagents = 2\n");
-    let repository = repository("stream-rex", None);
+    // 4, 190; core.8: the launching scenario "A stream's multiplexer flume
+    // does not carry": a launch on `trial`, whose multiplexer is `cmux`,
+    // refused naming the stream, `cmux` and the terminal profiles, `rex`
+    // among them, nothing made; a launch on another stream runs.
+    let host = Host::new("stream-cmux");
+    host.configure("[streams.trial]\nmultiplexer = \"cmux\"\n[streams.personal]\nagents = 2\n");
+    let repository = repository("stream-cmux", None);
     let kinds = kinds_file(&host, false);
     let launch = |name: &str, stream: &str| {
         host.stand_in(
@@ -4024,6 +4026,7 @@ fn a_streams_multiplexer_flume_does_not_carry() {
         .unwrap_or_default();
     assert!(
         reason.contains("trial")
+            && reason.contains("cmux")
             && reason.contains("rex")
             && reason.contains(&flume::profiles::terminal_profiles().join(", ")),
         "{reason}"
