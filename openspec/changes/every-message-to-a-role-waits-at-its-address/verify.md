@@ -1,8 +1,10 @@
 # Verify: every-message-to-a-role-waits-at-its-address
 
 Verified 2026-11-14 on `change/every-message-to-a-role-waits-at-its-address`
-at 866aaca7, cut from `bolt/flumes-roles-sleep-and-wake` at 2d180f0b,
-which is still the base's head.
+at aa8d2c5f, cut from `bolt/flumes-roles-sleep-and-wake` at 2d180f0b,
+which is still the base's head. The code is as it stood at 866aaca7:
+the commits since change only the change's delta specs, its tasks and
+this report.
 
 ## The whole checks: pass
 
@@ -10,53 +12,51 @@ The gate's checks ran once, with the host's sluice 0.93.2, as the
 merge queue gates:
 `devenv shell -- /etc/profiles/per-user/chuck/bin/sluice exec bolt/flumes-roles-sleep-and-wake`.
 The sluice the tree pins, 0.71.0, cannot read the host's sluice
-configuration, whose `[forge]` gives `credential`. ops answered that
-the checks run with the host's sluice, and that a fix of main moves
+configuration, whose `[forge]` gives `credential`; ops answered that
+the checks run with the host's sluice until a fix of main moves
 `sluiceVersion` to 0.93.2 for the bolt to take in. As a place on a
-bolt, it ran the bolt's `check-fast`: 40 tasks completed, 39 checks
-passed and none failed, and sluice recorded the 39 results under their
-keys for 866aaca7. The run exited 0.
+bolt, it ran the bolt's `check-fast` against 2d180f0: 40 tasks
+completed, 39 checks passed and none failed, and sluice recorded the
+39 results under their keys for aa8d2c5. The run exited 0. moon warned
+that it could not archive each task's outputs into `.moon/cache`,
+which the sandbox does not let it write; no check reads that archive.
 
-Among them, `conformance:test` runs
+Among them, `root:specs` passes 49 specs and `root:changes` the open
+changes; `conformance:test` runs
 `no_tool::no_tool_is_named_outside_a_profile` (core.1) and
-`the_engine_passes_its_scenarios`. `fakes:test` runs
-`the_terminal_holds_recipients_sessions_by_name` and `two_of_one_name`,
-each sending only to a waiting session. `flume:test` runs the MCP
-tests `the_mcp_tools_listed`, `message_over_mcp`,
+`the_engine_passes_its_scenarios`; `fakes:test` runs
+`the_terminal_holds_recipients_sessions_by_name` and `two_of_one_name`;
+and `flume:test` runs the MCP tests `status_over_mcp`,
+`the_mcp_tools_listed`, `message_over_mcp`,
 `launch_over_mcp_refused_as_the_command_line_refuses_it` and
-`a_role_runs_launch_over_mcp_reports_to_its_address`. Every one passes.
+`a_role_runs_launch_over_mcp_reports_to_its_address`, and the three
+`hooks_claude::hook_deliver_*` tests. Every one passes.
 
-## The archive: six specs fail `root:specs`
+## The archive
 
-Archived, the change's delta specs give six requirements that
-`openspec validate --specs --strict`, the gate's `root:specs`, refuses:
-each one's text is longer than 500 characters. The base's 49 specs
-pass that check, and the archive leaves 43 passing and 6 failing. Each
-requirement is one that this change MODIFIES. The check reads
-`openspec/specs` alone, so it passes while the change stands
-unarchived, and `root:changes` passes the change itself:
-
-| Spec | Requirement | Characters | Delta |
-|---|---|---|---|
-| caller-acts | An answer names the stop-short it answers by its key | 503 | `specs/caller-acts/spec.md:149` |
-| claude-code-plugin | /launch, and launch, status, message and wake over MCP | 769 | `specs/claude-code-plugin/spec.md:8` |
-| end-delivery | The settle delivers each end once to each recipient | 656 | `specs/end-delivery/spec.md:3` |
-| place-status | Status gives the roles a host wakes | 550 | `specs/place-status/spec.md:3` |
-| role-waking | A role's run's first prompt carries its batch | 721 | `specs/role-waking/spec.md:45` |
-| terminal-profiles | herdr reaches a recipient by pane and socket | 655 | `specs/terminal-profiles/spec.md:3` |
-
-Archived as it stands, the branch would fail its own gate at
-submission.
+Archived in a copy of `openspec/` by `openspec archive
+every-message-to-a-role-waits-at-its-address --yes`, the change applies
+26 requirements added, 20 modified, 1 removed and 3 renamed, and
+`openspec validate --specs --strict --no-interactive`, as `root:specs`
+runs it, passes all 49 specs with none failing. Every requirement the
+delta specs give is 500 characters or fewer: caller-acts's "An answer
+names the stop-short it answers by its key" and end-delivery's "The
+settle delivers each end once to each recipient" are cut, the batch
+that left the second held by end-delivery's ADDED "A recipient takes
+every delivery pending for it as one prompt" and "The deliver part
+takes the place of the terminal"; and claude-code-plugin's "The MCP
+tools take the command line's words", place-status's "Status gives a
+role's messages and the places reporting to it", role-waking's "A
+role's run's first prompt carries its batch" and terminal-profiles's
+"herdr types only into a pane that waits" each hold their own
+scenarios, herdr's "reaches a recipient by pane and socket" left as
+the base gives it.
 
 ## Tasks
 
-Every task of `tasks.md`, 1.1 to 9.1 with 4.7 and 7.2, is ticked done,
-36 in all. 4.7 keeps the fakes' own tests to seam-fakes' "Two of one
-name" now that the fake terminal types nothing into a session at work.
-7.2 keeps the MCP tests within core.1: their comments cite the agent
-program's plugin spec by its scenarios, and the role's MCP launch runs
-through the stand-in flume and names no program. Every test a task
-names exists under the name it gives, and `openspec validate
+Every task of `tasks.md`, 1.1 to 9.1 with 1.3, 4.7 and 7.2, is ticked
+done, 37 in all. 1.3 holds as the archive above shows. Every test a
+task names exists under the name it gives, and `openspec validate
 every-message-to-a-role-waits-at-its-address --strict` passes.
 
 ## Requirements and scenarios
@@ -101,7 +101,7 @@ before.
 | Scenario | Covered by |
 |---|---|
 | status over MCP | `commands::status_over_mcp`, kept |
-| The tools listed | `commands::the_mcp_tools_listed` |
+| The tools listed | `commands::the_mcp_tools_listed`; `mcp.rs` gives `message` `target`, `words`, `within` and `answers`, `launch` the command's long names, arrays where the flag repeats, `wake` `address`, and marks `status` alone read-only |
 | message over MCP | `commands::message_over_mcp` |
 | launch over MCP, refused as the command line refuses it | `commands::launch_over_mcp_refused_as_the_command_line_refuses_it` |
 | A later prompt and a compaction after the mode moved | kept from before |
@@ -174,9 +174,9 @@ line of keys.
 |---|---|
 | A message wakes the role | "message: a message to madswan/planner while no planner run is live or waiting launches one planner run by its own act …" |
 | A run not yet given its prompt | "role waking: an end for east/planner whose run's agent waits in its session before its start took its prompt …" |
+| What came after the prompt | "batch: an end for east/planner that comes after its run's prompt was filled …" |
 | The first prompt carries the batch | "batch: a message and a fix's end pending for east/planner when its run's start fills its prompt …" |
 | A start that never began | "batch: a run's start carrying a batch, read never begun …" |
-| What came after the prompt | "batch: an end for east/planner that comes after its run's prompt was filled …" |
 | The run starts | "role waking: a run's inbox with no recipient named, confirming on receipt, collects every end and every message …" |
 | A message while the run waits on its answer | "batch: a message for east/ops while its run's plan ended short needing an answer …" |
 | A role's run launches its project | "message: the run of east/ops launches a fix naming no recipient …" |
@@ -209,16 +209,10 @@ they said a tell.
 
 ## Outcome
 
-The whole checks pass on the branch as it stands, every task is ticked
-and every scenario of the delta specs has a test. Each test of
-`check-fast` passes in them. The walkthroughs `s126_…` and `s128_…`
-are `check-tools`'s, which a place on a bolt leaves to the bolt's
-merge onto main. Each scenario they cover also has an engine scenario
-or a commands test that passed here.
-
-The work still falls short. Archived, six of its MODIFIED requirements
-are longer than `openspec validate --strict` allows, so `root:specs`
-fails. Each needs its text cut to 500 characters or fewer, by moving
-detail into its scenarios or splitting it into requirements that each
-state one behavior. Then `openspec archive` gives specs that pass. The
-change is not archived and goes back to its code stage.
+The whole checks pass on the branch as it stands, every task is ticked,
+every scenario of the delta specs has a test, and the change archived
+gives specs that pass `root:specs`. The walkthroughs `s126_…` and
+`s128_…` are `check-tools`'s, which a place on a bolt leaves to the
+bolt's merge onto main; each scenario they cover also has an engine
+scenario or a commands test that passed here. The change is archived
+with this report.
