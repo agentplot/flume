@@ -444,8 +444,8 @@ fn the_hosts_sessions_labels_and_layers(_: &()) -> Outcome {
     let world = World::new();
     world.host.set_stream_session("work", Some("office"));
     let operation = Share {
-        reserve: 2,
-        keep_free: 1,
+        owed: 2,
+        reserved: 1,
         unknown: vec![],
     };
     world

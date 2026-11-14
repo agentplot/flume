@@ -1733,22 +1733,23 @@ fn queued_line(queued: &Queued) -> String {
     )
 }
 
-/// A stream's labels, each with its reserve, what it keeps free, its
-/// agents running and its stages waiting; its reserves passed over where
-/// it states no bound; and what it refuses (56, 181, 182).
+/// A stream's labels, each as `label <name>: owed <n>, reserved <m>, <r>
+/// agents running, <w> waiting`; `what its labels are owed is passed
+/// over: it states no bound` where it states none; and what it refuses
+/// (56, 181, 182).
 fn label_lines(stream: &StreamStatus) -> Vec<String> {
     let mut lines: Vec<String> = stream
         .labels
         .iter()
         .map(|label| {
             format!(
-                "    label {}: a reserve of {}, keeping {} free, {} agents running, {} waiting",
-                label.name, label.reserve, label.keep_free, label.running, label.waiting
+                "    label {}: owed {}, reserved {}, {} agents running, {} waiting",
+                label.name, label.owed, label.reserved, label.running, label.waiting
             )
         })
         .collect();
     if stream.reserves == Reserves::PassedOver {
-        lines.push("    its labels' reserves are passed over: it states no bound".into());
+        lines.push("    what its labels are owed is passed over: it states no bound".into());
     }
     let view = stream.view_refused.as_deref();
     let stages = match (stream.refused.as_deref(), view) {
@@ -5075,6 +5076,8 @@ mod tests {
             queue: vec![],
             labels: vec![flume_core::LabelStatus {
                 name: "operation".into(),
+                owed: 2,
+                reserved: 1,
                 reserve: 2,
                 keep_free: 1,
                 running: 1,
@@ -5096,13 +5099,12 @@ mod tests {
                     "nightly",
                     Some(1),
                     Reserves::Held,
-                    Some("the label operation of the stream nightly keeps 2 free of a reserve of 1, and a reserve is at least what it keeps free"),
+                    Some("the label operation of the stream nightly holds 2 reserved of the 1 it is owed, and a label holds reserved no more than it is owed"),
                 ),
             ],
             ..HostStatus::default()
         };
-        let operation =
-            "    label operation: a reserve of 2, keeping 1 free, 1 agents running, 1 waiting";
+        let operation = "    label operation: owed 2, reserved 1, 1 agents running, 1 waiting";
         assert_eq!(
             host_lines(&host)[1..host_lines(&host).len() - 1],
             [
@@ -5110,18 +5112,18 @@ mod tests {
                 "    its agents open in the session work, the stream's name".to_string(),
                 "    multiplexer printed (the host's), view terminal (the default), terminal app printed (the default), title \"work\" (the stream's name)".to_string(),
                 operation.to_string(),
-                "    waiting for room: /r/places/research--one's work in work, priority 0, short of the stream work's room, the rest kept free for operation".to_string(),
+                "    waiting for room: /r/places/research--one's work in work, priority 0, short of the stream work's room, the rest held reserved for operation".to_string(),
                 "    waiting for room: /r/places/deploy--two's work in work as operation, priority 0, short of the stream work's room, at its bound of 5".to_string(),
                 "  stream personal, priority 0: 5 agents running, no bound of its own".to_string(),
                 "    its agents open in the session personal, the stream's name".to_string(),
                 "    multiplexer printed (the host's), view terminal (the default), terminal app printed (the default), title \"personal\" (the stream's name)".to_string(),
                 operation.to_string(),
-                "    its labels' reserves are passed over: it states no bound".to_string(),
+                "    what its labels are owed is passed over: it states no bound".to_string(),
                 "  stream nightly, priority 0: 5 agents running of 1, room for 0".to_string(),
                 "    its agents open in the session nightly, the stream's name".to_string(),
                 "    multiplexer printed (the host's), view terminal (the default), terminal app printed (the default), title \"nightly\" (the stream's name)".to_string(),
                 operation.to_string(),
-                "    it starts no stage: the label operation of the stream nightly keeps 2 free of a reserve of 1, and a reserve is at least what it keeps free".to_string(),
+                "    it starts no stage: the label operation of the stream nightly holds 2 reserved of the 1 it is owed, and a label holds reserved no more than it is owed".to_string(),
             ]
         );
     }

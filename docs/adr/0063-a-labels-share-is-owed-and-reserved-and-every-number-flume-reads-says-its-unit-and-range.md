@@ -14,7 +14,7 @@ Status: accepted. The direction is the user's, in agentplot-design's pane on 202
 
 Amends record 0033 where it names a label's `reserve` and `keep_free`.
 
-Deciders: the user, 2026-11-09, above; agentplot-design, for the form.
+Deciders: the user, 2026-11-09, above; agentplot-design, for the form; the construction agent of `a-labels-share-is-owed-and-reserved`, on 2026-11-14, for the construction's choices below alone.
 Sources: `boomdrivedev/blueprints:design/principles.md` 13 ("A key is named in its reader's words. A number's unit and range are in its name or in its description, in the module's option and the tool's configuration reference"); `design/flume/requirements.md` 70, 143, 166, 167, 181, 185, C.7 and the vocabulary's reserve; record 0033; boomdrivedev/sluice's `[runs] reserved`, which keeps that many runs of the host's bound for submissions, "an agent's run in its worktree waits rather than take one" (its configuration reference); boomdrivedev/boomdrive's drive option `stream.labels.<label>.reserve`, Flume's `reserve` (its `nix/modules/options.nix` on the bolt `the-boomdrive-flake-configures-the-whole-host`); this repository's `nix/modules/options.nix` and `site/src/content/docs/reference/configuration.md`.
 
 ## Context and problem statement
@@ -45,6 +45,16 @@ Option 1 for each.
 - **Every number says its unit and range.** Each number flume reads, in the module's option description, in the configuration reference and in the statement's C.7, says what it counts, its range and its default: the host's and a stream's `agents` (agents running at once, a whole number from 1; none states no bound); an account's `agents` (the same, for its agents); a stream's `priority` (a whole number, higher starting first, 0 by default); `points` (points in flight, a whole number from 1) and `pace` (`points` from 1 per `hour`, `day` or `week`); a label's `owed` and `reserved` (above); a pool's `threshold` (a whole percent of any of an account's usage windows, from 1 to 100, past which it takes no new start, 90 by default); and each span, `keep_open` and `ends_expire` (a time, `<n>`, `<n>s`, `<n>m` or `<n>h`). A name that reads plainly with its description, `threshold` among them, keeps it.
 
 Not taken: the other options above, for the reasons given there.
+
+### The construction's choices
+
+The construction agent of `a-labels-share-is-owed-and-reserved` made these, which the written rules leave to it and which are cheap to change:
+
+- **The JSON form keeps `reserve` and `keep_free`, and the queue's tag `kept-free` (61; core.14).** Each stream's label in status gains `owed` and `reserved` and keeps `reserve` and `keep_free`, the same numbers, since the form only ever gains fields. A stage waiting on room other labels hold reserved keeps `"room": "kept-free"`, its words saying the room held reserved. Not taken: renaming the two fields, which removes fields a reader may read; a tag `reserved`, which drops the value a reader matches on; and both tags at once, which a tagged value cannot carry.
+- **`[host] agents` is read from 1, as a stream's and an account's `agents` are (70, C.7).** `[host] agents = 0` refuses the configuration naming the key, in the words `[host] agents is not a whole number from 1`. Not taken: the host's bound read from 0, a host where no stage ever starts, and the reference saying "from 0" for the host alone, which keeps one bound unlike the others and unlike this record's words.
+- **`host.ends_expire` is declared in the module (43, C.7).** flume reads it, and its option's description is where a host's author reads its unit and default. Not taken: leaving it undeclared, passed to the file as written, its unit said nowhere a module's author reads.
+- **A stream's `points` and `pace` stay undeclared in the module.** flume refuses them in a stream until record 0025's change reads them, and that change declares them with C.7's words. Not taken: declaring them now, which declares keys flume refuses at the module's revision.
+- **The statement says it first (core.19).** C.7's numbers each with their range and default, and S84 in 181's words, are amended at boomdrivedev/blueprints on the branch `design/flume-a-labels-share-is-owed-and-reserved` at 695c446, cut from main at 81288ba, for the orchestrator to push. Not taken: the module's and the reference's words resting on words the statement does not hold.
 
 ### Consequences
 

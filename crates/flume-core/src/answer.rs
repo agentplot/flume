@@ -996,8 +996,9 @@ pub struct Queued {
 /// The room a stage waiting for room is short of (70, 143, 145, 181): the
 /// host's, its own full or taken by stages that rank ahead; its stream's,
 /// whose bound its agents running have reached; its stream's room past
-/// what the stream's other labels keep free and do not use, naming those
-/// labels; or its pool's, every
+/// what the stream's other labels hold reserved and do not use, naming
+/// those labels, tagged `kept-free` in the JSON form, which only ever
+/// gains (61; core.14); or its pool's, every
 /// account that runs its program spent, past its threshold or at its own
 /// bound, with the soonest time one is back, none where each is only at
 /// its bound (185). A stage
@@ -1011,6 +1012,8 @@ pub enum RoomWanted {
         stream: String,
         bound: u32,
     },
+    /// Its stream's room, the rest held reserved for other labels; its
+    /// tag, `kept-free`, kept as callers match on it (61, 181; core.14).
     KeptFree {
         stream: String,
         labels: Vec<String>,
@@ -1039,7 +1042,7 @@ impl RoomWanted {
                 format!("the stream {stream}'s room, at its bound of {bound}")
             }
             RoomWanted::KeptFree { stream, labels } => format!(
-                "the stream {stream}'s room, the rest kept free for {}",
+                "the stream {stream}'s room, the rest held reserved for {}",
                 and_list(labels)
             ),
             RoomWanted::Pool {
@@ -1063,8 +1066,8 @@ impl RoomWanted {
 /// carries, its priority among streams, its agents running,
 /// the bound it states, none where the host's alone holds it, its room,
 /// none where it states no bound, its stages waiting for room in the
-/// order they would start, its labels' shares, whether their reserves
-/// are held, and why it refuses: its labels' fault, its multiplexer
+/// order they would start, its labels' shares, whether what they are
+/// owed is held, and why it refuses: its labels' fault, its multiplexer
 /// naming a terminal profile flume does not carry, or, for a terminal
 /// view, its terminal app naming a window profile flume does not carry,
 /// that last also given alone, since it refuses the stream's open and
@@ -1137,19 +1140,26 @@ pub struct TerminalStatus {
     pub watch: Watch,
 }
 
-/// A label of a stream (181): its reserve, the slots of the stream it
-/// keeps free while it runs fewer, its agents running, each counted by
-/// the label it started under, and its stages waiting for room.
+/// A label of a stream (181): the stream's agents it is owed, those of
+/// them it holds reserved, its agents running, each counted by the label
+/// it started under, and its stages waiting for room. `reserve` and
+/// `keep_free` give the same numbers as `owed` and `reserved`, under the
+/// names a label's table gave before record 0063, kept since the form
+/// only ever gains fields (61; core.14).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LabelStatus {
     pub name: String,
+    #[serde(default)]
+    pub owed: u32,
+    #[serde(default)]
+    pub reserved: u32,
     pub reserve: u32,
     pub keep_free: u32,
     pub running: u32,
     pub waiting: u32,
 }
 
-/// Whether a stream's labels' reserves are held: held where it states a
+/// Whether what a stream's labels are owed is held: held where it states a
 /// bound, passed over where it states none, and none where it gives no
 /// label a share (70, 181).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
