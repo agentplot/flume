@@ -79,6 +79,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["37", "38", "43", "132"],
             run: what_came_after_the_prompt,
         },
+        Scenario {
+            name: "batch: the fake agent of east/ops's run offers deliver; an end for the address comes while it works, and once it goes quiet a settle sends nothing through the terminal and its take answers the end's notice with its confirm, recorded handed to the address by notice, its deliver part taking the place of the terminal",
+            cites: &["43", "54", "121", "132"],
+            run: a_run_whose_agent_takes_its_batch,
+        },
     ]
 }
 
@@ -615,6 +620,64 @@ fn what_came_after_the_prompt(_: &()) -> Outcome {
         world.terminal.notices(PLANNER),
         vec![batch_of(&world, std::slice::from_ref(&end), PLANNER)?],
         "the end handed at the run's wait"
+    );
+    Ok(())
+}
+
+fn a_run_whose_agent_takes_its_batch(_: &()) -> Outcome {
+    let world = World::new();
+    world.agent.offer_deliver();
+    let ops = "east/ops";
+    configure_at(
+        &world,
+        ops,
+        "Read what is pending for you.",
+        planner_run(None, None),
+    );
+    ensure!(world.engine.wake(ops).refusal().is_none(), "the wake");
+    let run = World::id("turn", "east-ops");
+    world.settle(&run);
+    let agent = World::identity("turn", "east-ops", "plan", 1);
+    let secret = world
+        .held(&run)
+        .and_then(|held| held.stages[0].start.clone())
+        .map(|start| start.secret.0)
+        .ok_or("no start")?;
+    world.terminal.set_state(&agent, AgentState::Working);
+    let (_, end) = delivered_for(&world, "one", ops)?;
+    world.terminal.set_state(&agent, AgentState::Waiting);
+    world.settle(&run);
+    ensure!(
+        world.terminal.notices(ops).is_empty(),
+        "a notice through the terminal to a run that takes its own"
+    );
+    ensure_eq!(
+        handovers(&world, &end),
+        vec![],
+        "the end's hand-overs before the take"
+    );
+    let refused = world.engine.take(&run, &agent.to_string(), "another");
+    ensure!(
+        refused.refusal().is_some(),
+        "a take under another secret: {refused:?}"
+    );
+    let taken = world.engine.take(&run, &agent.to_string(), &secret);
+    ensure_eq!(
+        taken,
+        Answer::Taken {
+            words: Some(batch_of(&world, std::slice::from_ref(&end), ops)?)
+        },
+        "the take"
+    );
+    ensure_eq!(
+        handovers(&world, &end),
+        vec![(ops.to_string(), DeliveredBy::Notice)],
+        "the end's hand-overs"
+    );
+    ensure_eq!(
+        world.engine.take(&run, &agent.to_string(), &secret),
+        Answer::Taken { words: None },
+        "a second take"
     );
     Ok(())
 }

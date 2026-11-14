@@ -173,6 +173,11 @@ pub fn person(answer: &Answer) -> String {
             });
             lines.extend(place_lines(place));
         }
+        Answer::Taken { words } => {
+            if let Some(words) = words {
+                lines.push(words.clone());
+            }
+        }
         Answer::Messaged {
             key,
             address,

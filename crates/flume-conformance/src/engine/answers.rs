@@ -1150,6 +1150,12 @@ pub fn full() -> Vec<(&'static str, Answer)> {
             },
         ),
         (
+            "taken",
+            Answer::Taken {
+                words: Some("ops messages east/planner:\nthe nightly job failed".into()),
+            },
+        ),
+        (
             "messaged",
             Answer::Messaged {
                 key: "message/east/planner/0a1b2c3d".into(),
@@ -3038,6 +3044,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "held.standing.terminal",
         ],
     ),
+    ("taken", &["taken", "taken.words"]),
     (
         "messaged",
         &[

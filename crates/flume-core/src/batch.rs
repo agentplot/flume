@@ -29,7 +29,8 @@ use crate::deliveries::{owing, read_whole, rewrite_whole, time};
 use crate::ends::notice_to;
 use crate::message::is_message_key;
 use crate::standing::{Reached, Standing};
-use crate::Engine;
+use crate::start::Starts;
+use crate::{Answer, Engine, Step};
 use flume_seams::*;
 use std::collections::BTreeSet;
 use weir_delivery::Handed;
@@ -384,6 +385,9 @@ impl Engine {
         {
             return;
         }
+        if self.takes_itself(recipient) {
+            return;
+        }
         let standing = standing.get_or_insert_with(|| self.standing());
         let Some(Reached {
             terminal,
@@ -593,6 +597,149 @@ impl Engine {
             self.host
                 .log(&format!("a claim answered sent was not recorded: {why}"));
         }
+    }
+}
+
+impl Engine {
+    /// The deliver part's take: refused unless `identity` names the live
+    /// agent of the place's current stage, `secret` is its start's and
+    /// its profile offers deliver; nothing while its asking mark stands,
+    /// its prompt is not received or its stage waits on an answer;
+    /// otherwise the oldest message waiting on its start, alone, marked
+    /// taken, and else, for a role's run, its address's batch, recorded
+    /// handed in one write with no send between; the words, or nothing
+    /// (41, 42, 53, 54, 214, 215; design 7).
+    pub fn take(&self, place: &PlaceId, identity: &str, secret: &str) -> Answer {
+        let none = Answer::Taken { words: None };
+        let Some(read) = self.store.read(place) else {
+            return Answer::refused(format!("no place {place} stands on this host"));
+        };
+        let held = read.state;
+        let Some((index, start)) = held
+            .current
+            .and_then(|index| {
+                held.stages[index]
+                    .start
+                    .as_ref()
+                    .map(|start| (index, start))
+            })
+            .filter(|(_, start)| start.live && start.identity.to_string() == identity)
+        else {
+            return Answer::refused(format!(
+                "no live agent of {place}'s current stage is {identity}"
+            ));
+        };
+        if start.secret.0 != secret {
+            return Answer::refused(format!("the secret is not {identity}'s start's"));
+        }
+        let Some(agent) = self.agent(&start.program) else {
+            return Answer::refused(format!(
+                "no agent profile runs the program {}",
+                start.program
+            ));
+        };
+        if agent.deliver() != Offered::Offered {
+            return Answer::refused(format!(
+                "the profile of {}, which {identity} runs, offers no deliver part",
+                start.program
+            ));
+        }
+        let folder = self.store.folder(place);
+        if start.prompt.received_at.is_none()
+            || crate::open_sessions::waits_on_answer(&held).is_some()
+            || agent.asking(&folder, &start.identity) == Reading::Yes
+        {
+            return none;
+        }
+        let at = self.host.now();
+        let start_identity = start.identity.clone();
+        let taken = self
+            .update(place, |held| {
+                let Some(start) = held.stages[index]
+                    .start
+                    .as_mut()
+                    .filter(|start| start.live && start.identity == start_identity)
+                else {
+                    return Step::Keep(None);
+                };
+                match start
+                    .messages
+                    .iter_mut()
+                    .find(|message| message.taken_at.is_none())
+                {
+                    Some(message) => {
+                        message.taken_at = Some(at);
+                        Step::Write(Some(message.words.clone()))
+                    }
+                    None => Step::Keep(None),
+                }
+            })
+            .flatten();
+        if let Some(words) = taken {
+            return Answer::Taken { words: Some(words) };
+        }
+        let Some(address) = held.role.as_deref() else {
+            return none;
+        };
+        let items = self.take_batch(address, &held_back(&self.documents()), at);
+        if items.is_empty() {
+            return none;
+        }
+        Answer::Taken {
+            words: Some(batch_words(&items, address)),
+        }
+    }
+
+    /// `recipient`'s batch taken by its agent's deliver part: computed and
+    /// recorded handed, each by its way at `at`, in one write at the
+    /// version read, every claim that no longer stands removed; the items
+    /// taken (43, 75, 214, 215).
+    fn take_batch(&self, recipient: &str, held_back: &HeldBack, at: Seconds) -> Vec<Item> {
+        let when = time(at);
+        let mut taken: Vec<Item> = vec![];
+        let written = rewrite_whole(&*self.store, |records, claims| {
+            taken.clear();
+            let owing = owing(records, at);
+            let kept: Vec<DeliveryClaim> = claims
+                .iter()
+                .filter(|claim| stands(claim, &owing))
+                .cloned()
+                .collect();
+            let items = batch(&owing, &kept, held_back, recipient);
+            if items.is_empty() && kept.len() == claims.len() {
+                return None;
+            }
+            let mut all = records.to_vec();
+            for item in &items {
+                if let Ok(Handed::Add(added)) =
+                    weir_delivery::hand(&all, &item.key, recipient, item.by.way(), &when, false)
+                {
+                    all.extend(added);
+                    taken.push(item.clone());
+                }
+            }
+            Some((all, kept))
+        });
+        if let Err(why) = written {
+            self.host.log(&why);
+            return vec![];
+        }
+        taken
+    }
+
+    /// Whether `recipient` is a role's address whose run's live agent's
+    /// profile offers deliver, so its agent takes its batch itself and a
+    /// settle hands it nothing by the terminal (214, 215; design 6).
+    fn takes_itself(&self, recipient: &str) -> bool {
+        is_address(recipient)
+            && self.documents().iter().any(|held| {
+                held.role.as_deref() == Some(recipient)
+                    && !matches!(held.phase, Phase::Tidied { .. })
+                    && held.live_start().is_some_and(|(_, start)| {
+                        self.agent(&start.program)
+                            .is_some_and(|agent| agent.deliver() == Offered::Offered)
+                    })
+            })
     }
 }
 

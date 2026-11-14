@@ -103,6 +103,12 @@ pub enum Answer {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         why: Option<String>,
     },
+    /// The deliver part's take: the words its agent takes as one prompt,
+    /// none where nothing waits for it (215).
+    Taken {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        words: Option<String>,
+    },
     /// `flume kinds lock`'s act: the lock it wrote, each kind it recorded
     /// at its content's hash, and each it removed (155).
     Locked {
