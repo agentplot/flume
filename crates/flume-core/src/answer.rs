@@ -41,6 +41,14 @@ pub enum Answer {
     StopCheck { words: Option<String> },
     /// An act refused, naming why.
     Refused { refusal: Refusal },
+    /// A relay of a place's live agent's terminal, ended by its caller's
+    /// close or its terminal gone: the place, the agent relayed by its
+    /// identity, and which ended it (221).
+    Relayed {
+        place: PlaceId,
+        agent: String,
+        ended: crate::RelayEnded,
+    },
     /// A wait by place: the end of the stage's current start or of the
     /// submission it answers, handed to the recipient by this wait, and
     /// confirmed by it where the wait confirms on receipt, or answered as
