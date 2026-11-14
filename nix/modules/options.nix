@@ -6,7 +6,10 @@
 # record 0055). `settings` is free-form TOML (RFC 42) with the tables and
 # keys declared that C.7 types and flume reads at the module's revision;
 # a stream's `points` and `pace` and `host.terminal` are not, and pass as
-# written. Each declared key and table is null unless set and left out of
+# written, and a label's `reserve` and `keep_free`, the words its table gave
+# before `owed` and `reserved`, pass undeclared for flume to refuse (181,
+# 182; record 0063). Each number's option says what it counts, its range
+# and what holds where it is unset (record 0063). Each declared key and table is null unless set and left out of
 # the file, so flume's own default holds; a key the module does not
 # declare passes to the file, and flume judges it. Each table of named
 # entries merges across modules. `sources` is the host's sources of kinds,
@@ -55,6 +58,10 @@ let
   tables = options: types.attrsOf (table options);
 
   unsigned = types.ints.unsigned;
+  positive = types.ints.positive;
+  # A span as flume reads `ends_expire`: `<n>`, `<n>s`, `<n>m` or `<n>h`,
+  # `<n>` from 1 (43, C.7).
+  span = types.strMatching "0*[1-9][0-9]*[smh]?";
   # A path on the host as a source's file names one: absolute, or under
   # `~` (C.7).
   located = types.strMatching "/.*|~|~/.*";
@@ -62,11 +69,11 @@ let
     "terminal"
     "app"
   ];
-  agents = unset toml "An agents table, free-form whole: flume reads and judges its keys at each start (32, 195 to 198).";
+  agents = unset toml "An agents table, free-form whole: flume reads and judges its keys at each start (32, 195 to 198). Its `keep_open` is how long an agent that stops short is kept open for an answer, `<n>` or `<n>s` seconds, `<n>m` minutes or `<n>h` hours, `0` keeping none; flume's one hour where every layer leaves it unset (198).";
 
   stream = {
-    agents = unset unsigned "The bound on the stream's agents running.";
-    priority = unset types.int "The stream's priority; flume's 0 where unset.";
+    agents = unset positive "The stream's agents running at once, within the host's bound, a whole number from 1; the host's bound alone where unset (70, 143).";
+    priority = unset types.int "The stream's priority among streams, a whole number, negative allowed, a stream of higher priority starting first; flume's 0 where unset (143).";
     pool = unset types.str "The pool the stream's agents start under; the host's where unset.";
     session = unset types.str "The terminal session the stream's agents open in; the stream's name where unset.";
     multiplexer = unset types.str "The terminal profile the stream binds; the host's where unset.";
@@ -74,8 +81,8 @@ let
     title = unset types.str "The title of the stream's window; the stream's name where unset.";
     view = unset view "How the stream's agents are shown, `terminal` or `app`; the host's where unset.";
     labels = unset (tables {
-      reserve = unset unsigned "The stream's agents the label is owed.";
-      keep_free = unset unsigned "Of the label's reserve, how many are kept free for it.";
+      owed = unset unsigned "The stream's agents the label's places are first in line for, lent while it has nothing waiting, a whole number of agents from 0; flume's 0 where unset (181).";
+      reserved = unset unsigned "Of the agents the label is owed, those held for it alone, never lent, a whole number of agents from 0 and no more than `owed`; flume's 0 where unset (181).";
     }) "Each label's share of the stream's agents, `[streams.<stream>.labels.<label>]` (180, 181).";
     kinds = unset (tables {
       session = unset types.str "The session the kind's agents open in.";
@@ -90,7 +97,7 @@ let
     program = unset types.str "The agent program the account runs.";
     usage = unset types.str "The path of the account's reading of its usage (184).";
     env = unset (types.attrsOf types.str) "The account's environment, each value as written, a variable of the host user's login environment named by `$NAME` (29). It holds no credential.";
-    agents = unset unsigned "The bound on the account's agents running.";
+    agents = unset positive "The agents running under the account at once, a whole number from 1; no bound of its own where unset (144).";
   };
 
   pool = {
@@ -99,7 +106,7 @@ let
       "least-busy"
       "most-left"
     ]) "How the pool chooses an account for a start.";
-    threshold = unset (types.ints.between 1 100) "The percentage of its allowance past which an account takes no new start; flume's 90 where unset (185).";
+    threshold = unset (types.ints.between 1 100) "A whole percent, from 1 to 100, of any of an account's usage windows, past which the account takes no new start until that window resets; flume's 90 where unset (185).";
     accounts = unset (types.listOf (table account)) "The pool's accounts, in order.";
   };
 
@@ -161,7 +168,8 @@ in
     settings = mkOption {
       type = table {
         host = unset (table {
-          agents = unset unsigned "The bound on the host's agents running, every caller's counted together (70).";
+          agents = unset positive "The agents of flume's places running at once on the host, every caller's and stream's together, a whole number from 1; no bound where unset (70).";
+          ends_expire = unset span "How long an end stays pending for a recipient before status shows it expired, `<n>` or `<n>s` seconds, `<n>m` minutes or `<n>h` hours, `<n>` from 1, at least a second; flume's `168h` where unset (43, C.7).";
           multiplexer = unset types.str "The terminal profile the host binds; the printed command where unset (190).";
           pool = unset types.str "The host's own pool (144).";
           terminal_app = unset types.str "The window profile the host binds; the printed window where unset (188).";

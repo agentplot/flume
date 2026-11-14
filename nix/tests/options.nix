@@ -56,6 +56,74 @@ let
   within = option: option.type.getSubOptions [ ];
   hostKeys = within declared.host;
   streamKeys = within declared.streams;
+  labelKeys = within streamKeys.labels;
+  poolKeys = within declared.pools;
+  accountKeys = within poolKeys.accounts;
+
+  # Each number's option, by its name, with the words of its range and
+  # `unset`, which its description holds (the host-module spec's "Each
+  # number says its unit, range and default"; 70, 143, 181, 185, 198, C.7).
+  time = [
+    "seconds"
+    "minutes"
+    "hours"
+  ];
+  numbers = [
+    {
+      name = "host.agents";
+      option = hostKeys.agents;
+      words = [ "from 1" ];
+    }
+    {
+      name = "host.ends_expire";
+      option = hostKeys.ends_expire;
+      words = time;
+    }
+    {
+      name = "a stream's agents";
+      option = streamKeys.agents;
+      words = [ "from 1" ];
+    }
+    {
+      name = "a stream's priority";
+      option = streamKeys.priority;
+      words = [
+        "whole number"
+        "higher"
+      ];
+    }
+    {
+      name = "a label's owed";
+      option = labelKeys.owed;
+      words = [ "from 0" ];
+    }
+    {
+      name = "a label's reserved";
+      option = labelKeys.reserved;
+      words = [ "from 0" ];
+    }
+    {
+      name = "a pool's threshold";
+      option = poolKeys.threshold;
+      words = [ "1 to 100" ];
+    }
+    {
+      name = "an account's agents";
+      option = accountKeys.agents;
+      words = [ "from 1" ];
+    }
+    {
+      name = "the agents table";
+      option = declared.agents;
+      words = time;
+    }
+  ];
+  says =
+    number:
+    lib.concatMap (
+      word:
+      t.expect (lib.hasInfix word number.option.description) "${number.name}'s description says not ${word}: ${number.option.description}"
+    ) (number.words ++ [ "unset" ]);
 
   undeclared = [
     {
@@ -140,9 +208,26 @@ in
     !(builtins.tryEval (text [ { streams.work.agents = "five"; } ])).success
   ) "settings.streams.work.agents = \"five\" evaluates";
 
+  "A bound of zero" =
+    t.expect (
+      !(builtins.tryEval (text [ { host.agents = 0; } ])).success
+    ) "settings.host.agents = 0 evaluates"
+    ++ t.expect (
+      !(builtins.tryEval (text [ { streams.work.agents = 0; } ])).success
+    ) "settings.streams.work.agents = 0 evaluates";
+
+  "Each number says its unit, range and default" = lib.concatMap says numbers;
+
   "Only the keys flume reads are declared" =
     t.expect (hostKeys ? multiplexer) "host declares no multiplexer"
+    ++ t.expect (hostKeys ? ends_expire) "host declares no ends_expire"
     ++ t.expect (!(hostKeys ? terminal)) "host declares terminal, the word written before multiplexer"
+    ++ t.expect (labelKeys ? owed) "a label declares no owed"
+    ++ t.expect (labelKeys ? reserved) "a label declares no reserved"
+    ++ t.expect (!(labelKeys ? reserve)) "a label declares reserve, the word written before owed"
+    ++ t.expect (
+      !(labelKeys ? keep_free)
+    ) "a label declares keep_free, the word written before reserved"
     ++ t.expect (!(streamKeys ? points)) "a stream declares points, which flume does not read"
     ++ t.expect (!(streamKeys ? pace)) "a stream declares pace, which flume does not read";
 

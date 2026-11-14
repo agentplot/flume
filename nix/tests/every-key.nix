@@ -11,6 +11,7 @@
 {
   host = {
     agents = 8;
+    ends_expire = "48h";
     multiplexer = "printed";
     pool = "work";
     terminal_app = "printed";
@@ -30,10 +31,10 @@
       view = "app";
       labels = {
         operation = {
-          reserve = 2;
-          keep_free = 1;
+          owed = 2;
+          reserved = 1;
         };
-        construction.reserve = 2;
+        construction.owed = 2;
       };
       kinds.research = {
         session = "work-design";
