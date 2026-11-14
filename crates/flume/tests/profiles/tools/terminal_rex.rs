@@ -1676,6 +1676,192 @@ fn runs_reads_three_parts_at_once_and_starts_none() {
     ));
 }
 
+/// The clues of the place `fix--one` with `line`, its agent `who` and one
+/// place running on its base.
+fn clues(who: &Identity, line: &str) -> Clues {
+    Clues {
+        stage: "code".into(),
+        state: "working".into(),
+        agent: Some(who.clone()),
+        base: BaseCount {
+            running: 1,
+            ..BaseCount::default()
+        },
+        line: line.into(),
+    }
+}
+
+/// Each record the profile keeps of its agents, its bases' Rex sessions
+/// and its places' windows, with what it holds.
+fn records(fixture: &Fixture) -> BTreeMap<PathBuf, Vec<u8>> {
+    ["agents", "bases", "windows"]
+        .iter()
+        .flat_map(|kind| {
+            fs::read_dir(fixture.state.records().join(kind))
+                .into_iter()
+                .flatten()
+        })
+        .flatten()
+        .map(|entry| (entry.path(), fs::read(entry.path()).unwrap_or_default()))
+        .collect()
+}
+
+/// The label of each block of the Rex session `session` on the session
+/// `name`'s server, by its id.
+fn block_labels(fixture: &Fixture, name: &str, session: &str) -> BTreeMap<String, String> {
+    fixture.rex(name, &["api", "call", "-s", session, "session.view"])["windows"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|window| window["layers"].as_array().into_iter().flatten())
+        .flat_map(|layer| layer["blocks"].as_array().into_iter().flatten())
+        .filter_map(|block| {
+            Some((
+                block["block_id"].as_str()?.to_string(),
+                block["label"].as_str()?.to_string(),
+            ))
+        })
+        .collect()
+}
+
+/// The base's count as the seam gives it for one place running.
+const ONE_RUNNING: &str = "1 running · 0 asking · 0 waiting on caller · 0 stalled";
+
+#[test]
+fn show_labels_the_places_window_and_its_bases_rex_session() {
+    // 139, C.5; core.18: the place's window labelled `fix--one · <line>`
+    // and its base's Rex session `<repository> main · <count>`, read back
+    // by session.view and session.list; its block keeps its Rex name, no
+    // record is written, and a label past 128 characters is set as its
+    // first 128.
+    let fixture = Fixture::new();
+    let profile = fixture.profile();
+    let who = identity(1);
+    let place = fixture.place("fix--one");
+    let block = opened(&fixture, &profile, &who, &fixture.command(&[]));
+    let (session, _) = profile
+        .base_session(&place)
+        .expect("the base's Rex session");
+    let before = records(&fixture);
+    assert_eq!(
+        profile.show(&place, &clues(&who, "code · run 1 · working")),
+        Shown::Shown
+    );
+    assert_eq!(
+        fixture.windows("flume", &session),
+        vec![(
+            "fix--one · code · run 1 · working".to_string(),
+            vec![block.id.clone()]
+        )]
+    );
+    assert_eq!(
+        fixture.sessions("flume"),
+        vec![format!("repository main · {ONE_RUNNING}")]
+    );
+    assert_eq!(
+        block_labels(&fixture, "flume", &session),
+        BTreeMap::from([(block.id.clone(), rex_name(&who))]),
+        "a block was relabelled"
+    );
+    let line = format!("code · {}", "\u{e9}".repeat(200));
+    assert_eq!(profile.show(&place, &clues(&who, &line)), Shown::Shown);
+    let first: String = format!("fix--one · {line}").chars().take(128).collect();
+    assert_eq!(
+        fixture.windows("flume", &session),
+        vec![(first, vec![block.id.clone()])]
+    );
+    assert_eq!(records(&fixture), before, "show wrote a record");
+}
+
+#[test]
+fn show_passes_over_a_window_rex_closed_and_fails_naming_a_server_that_does_not_answer() {
+    // 139; core.29: the place's agent closed, so Rex closes its window
+    // with its last block: show passes over the window and labels the
+    // base's Rex session; the server stopped so it answers nothing: show
+    // fails within its bound, naming the window and the Rex session.
+    let fixture = Fixture::new();
+    let profile = fixture.profile();
+    let who = identity(1);
+    let place = fixture.place("fix--one");
+    opened(&fixture, &profile, &who, &fixture.command(&[]));
+    let (session, _) = profile
+        .base_session(&place)
+        .expect("the base's Rex session");
+    let (window, _) = profile.window(&place).expect("the place's window");
+    assert_eq!(profile.close(&who), Closed::Closed);
+    assert!(
+        fixture.windows("flume", &session).is_empty(),
+        "Rex kept the window: {:?}",
+        fixture.windows("flume", &session)
+    );
+    assert_eq!(
+        profile.show(&place, &clues(&who, "code · run 1 · waiting")),
+        Shown::Shown
+    );
+    assert_eq!(
+        fixture.sessions("flume"),
+        vec![format!("repository main · {ONE_RUNNING}")]
+    );
+    let pid = fixture.freeze("flume");
+    let began = Instant::now();
+    let shown = profile.show(&place, &clues(&who, "code · run 2 · working"));
+    let took = began.elapsed();
+    fixture.thaw(pid);
+    let Shown::Failed { reason } = shown else {
+        panic!("show gave {shown:?}");
+    };
+    assert!(
+        reason.contains(&window)
+            && reason.contains(&session)
+            && reason.contains(&format!("within {} seconds", BOUND.as_secs())),
+        "{reason}"
+    );
+    assert!(
+        took < BOUND * 2 + Duration::from_secs(2),
+        "show took {took:?}"
+    );
+}
+
+#[test]
+fn attach_for_the_app_names_the_socket_to_add_where_no_app_is_a_client() {
+    // 187, C.5; core.29: no server at w's socket and no app a client of
+    // it: attach for the app starts w's server and refuses, naming its
+    // socket and the Rex app's Remote Hosts; client.list there gives each
+    // of the command line's clients by client_id and info.kind, none app.
+    let fixture = Fixture::new();
+    let profile = fixture.profile();
+    let socket = fixture.state.socket("w");
+    assert!(
+        try_rex(&socket, &["api", "call", "server.status"]).is_err(),
+        "w's server ran before"
+    );
+    let attached = profile.attach(Some("w"), View::App);
+    fixture.server_pid("w");
+    let Attached::Refused { reason } = attached else {
+        panic!("attach gave {attached:?}");
+    };
+    assert!(
+        reason.contains(&socket.display().to_string()) && reason.contains("Remote Hosts"),
+        "{reason}"
+    );
+    let listed = fixture.rex("w", &["api", "call", "client.list"]);
+    let clients = listed["clients"].as_array().cloned().unwrap_or_default();
+    assert!(
+        clients.iter().any(|client| client["info"]["kind"] == "cli"),
+        "{listed}"
+    );
+    for client in &clients {
+        assert!(
+            client["client_id"]
+                .as_str()
+                .is_some_and(|id| id.starts_with("client:")),
+            "{client}"
+        );
+        assert!(client["info"]["kind"].is_string(), "{client}");
+        assert_ne!(client["info"]["kind"], "app", "{client}");
+    }
+}
+
 /// The stand-in as the agent seam reads it: started once it wrote its
 /// mark, a prompt received once it took the prompt's line; it asks
 /// nothing and starts no own work.
@@ -2081,8 +2267,10 @@ impl TerminalHarness for Harness {
         );
     }
 
+    /// The profile labels the place's window and its base's Rex session
+    /// (139, C.5).
     fn shows_clues(&self) -> bool {
-        false
+        true
     }
 
     fn recipient(&self) -> Option<String> {
@@ -2102,8 +2290,9 @@ impl TerminalHarness for Harness {
         .session()
     }
 
-    /// The pinned Rex has no terminal client, and the app's view is the
-    /// bolt's next unit (187, C.5).
+    /// The pinned Rex has no terminal client, and no app runs on a gate's
+    /// host, so attach for the app refuses there, naming the socket to add
+    /// under the Rex app's Remote Hosts (187, C.5).
     fn views(&self) -> Vec<View> {
         vec![]
     }
