@@ -43,7 +43,22 @@
 //! `rex:<block>@<socket>`; a role run's address reaches the block its live
 //! start holds, and a standing agent the block its server lists under its
 //! name (7, 43, 132). runs asks each part's server at once, starting none
-//! (201). attach refuses both views and show shows none (139, 187).
+//! (201).
+//!
+//! attach for a window is refused: the pinned Rex has no terminal client,
+//! and only its app shows a session. For the app, the part's server is
+//! found or started as open finds it, and the app, the client
+//! `client.list` lists there of `info.kind` `app`, listed once a person
+//! has added the server's socket under its Remote Hosts, is told by `-C
+//! <client> do session.select` to show the newest Rex session the profile
+//! made there; refused naming the socket to add where the app is no
+//! client of the server, and in Rex's words where the app refuses, as it
+//! does until a person turns on its Remote Control (187). show labels a
+//! place's window `<kind>--<name> · <line>` by `session.set_window_label`
+//! and its base's Rex session `<repository> <base> · <count>` by
+//! `session.set_label`, on the recorded ids, each label at most 128
+//! characters, a block keeping its agent's Rex name; shown_at names them
+//! from the records alone (139).
 //!
 //! Every call is `rex --autostart=false -S unix://<socket> <words>`, the
 //! calling process's `REX_*` stripped, under a bound, ten seconds where
@@ -125,6 +140,13 @@ pub const FLAVOR: &str = "com.superlogical.terminal.shell";
 /// The longest label a Rex name has: 119 characters, `-` and eight hex
 /// digits (C.5).
 const NAME_WORDS: usize = 119;
+
+/// The most characters a label holds in the pinned Rex, a window's and a
+/// Rex session's alike (C.5; `api describe session.set_label`).
+pub const LABEL_MOST: usize = 128;
+
+/// The `info.kind` of the Rex app among a server's clients (C.5).
+const APP: &str = "app";
 
 /// What Rex answers where no server listens at a socket.
 const NO_SERVER: &str = "no Rex server is running at";
@@ -1157,6 +1179,45 @@ impl Record {
     fn label(&self) -> &str {
         self.value["label"].as_str().unwrap_or(&self.id)
     }
+
+    /// It by its id and its server's socket, `rex:<id>@<socket>`, as
+    /// status gives where Rex shows a place's clues (139).
+    fn named(&self) -> String {
+        format!("rex:{}@{}", self.id, self.socket.display())
+    }
+}
+
+/// The client of a server that is the Rex app, from its `client.list`
+/// (C.5; design section 3).
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum App {
+    /// The last app listed whose connection is not lost, by its id.
+    Client(String),
+    /// Apps are listed, each with its connection lost.
+    Lost,
+    /// No client of `info.kind` `app` is listed.
+    None,
+}
+
+/// The app among `listed`'s `clients[]`, listed in the order they first
+/// connected: the last of `info.kind` `app` whose `connection_state` is
+/// not `lost`, a missing or unknown state read as connected, as the pinned
+/// Rex's `api describe client.list` says to read it.
+fn app_client(listed: &Value) -> App {
+    let apps: Vec<&Value> = listed["clients"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|client| client["info"]["kind"].as_str() == Some(APP))
+        .collect();
+    if apps.is_empty() {
+        return App::None;
+    }
+    apps.iter()
+        .rev()
+        .filter(|client| client["connection_state"].as_str() != Some("lost"))
+        .find_map(|client| client["client_id"].as_str())
+        .map_or(App::Lost, |id| App::Client(id.into()))
 }
 
 /// What came of the folder-trust question at a start.
@@ -1249,6 +1310,36 @@ fn place_short(place: &PlaceRef) -> String {
         || place.location.clone(),
         |name| name.to_string_lossy().into_owned(),
     )
+}
+
+/// The label show gives the place's window: `<kind>--<name> · <line>`,
+/// `<kind>--<name>` the place's folder's name as open labels the window and
+/// `<line>` the clues' short line, the place's name alone where the clues
+/// hold no line; cut to [`LABEL_MOST`] characters (139, C.5).
+pub fn window_label(place: &PlaceRef, clues: &Clues) -> String {
+    let short = place_short(place);
+    let line = clues.line.trim();
+    if line.is_empty() {
+        cut(&short, LABEL_MOST)
+    } else {
+        cut(&format!("{short} · {line}"), LABEL_MOST)
+    }
+}
+
+/// The label show gives the base's Rex session: `<repository> <base> ·
+/// <count>`, the count as the seam gives it; cut to [`LABEL_MOST`]
+/// characters (139, C.5).
+pub fn session_label(place: &PlaceRef, clues: &Clues) -> String {
+    cut(
+        &format!("{} · {}", base_label(place), clues.base),
+        LABEL_MOST,
+    )
+}
+
+/// `label` cut to at most `most` characters, between characters, keeping
+/// its head (C.5).
+pub fn cut(label: &str, most: usize) -> String {
+    label.chars().take(most).collect()
 }
 
 /// The start script's text: it removes `script`, itself, then execs
@@ -1752,35 +1843,127 @@ impl Terminal for Rex {
         kept
     }
 
-    /// Rex 0.1.0-preview.14 labels a window and a session, which the
-    /// bolt's next unit does; this profile shows nothing (139).
-    fn show(&self, _place: &PlaceRef, _clues: &Clues) -> Shown {
-        Shown::ShowsNone
+    /// Each window of the place the records hold, but one a tidy kept for
+    /// a block flume did not open, labelled `<kind>--<name> · <line>` by
+    /// `session.set_window_label`, and each Rex session of its repository
+    /// and base `<repository> <base> · <count>` by `session.set_label`, on
+    /// their recorded ids; a window or Rex session Rex answers not found,
+    /// or whose server does not run, passed over; no block relabelled and
+    /// no record written (139, C.5; core.18).
+    fn show(&self, place: &PlaceRef, clues: &Clues) -> Shown {
+        let windows = self.place_windows_of(place);
+        let bases = self.base_records(place);
+        if windows.is_empty() && bases.is_empty() {
+            return Shown::ShowsNone;
+        }
+        let mut shown = false;
+        let mut failures = vec![];
+        let label = window_label(place, clues);
+        for window in &windows {
+            let Some(session) = window.value["session"].as_str() else {
+                continue;
+            };
+            let args = json!({"window_id": window.id, "label": label}).to_string();
+            match self.labelled(
+                &window.socket,
+                &[
+                    "api",
+                    "call",
+                    "-s",
+                    session,
+                    "session.set_window_label",
+                    &args,
+                ],
+            ) {
+                Ok(true) => shown = true,
+                Ok(false) => {}
+                Err(reason) => failures.push(format!(
+                    "the window {} ({}) at {}: {reason}",
+                    window.label(),
+                    window.id,
+                    window.socket.display()
+                )),
+            }
+        }
+        let label = session_label(place, clues);
+        for base in &bases {
+            let args = json!({"label": label}).to_string();
+            match self.labelled(
+                &base.socket,
+                &["api", "call", "-s", &base.id, "session.set_label", &args],
+            ) {
+                Ok(true) => shown = true,
+                Ok(false) => {}
+                Err(reason) => failures.push(format!(
+                    "the Rex session {} ({}) at {}: {reason}",
+                    base.label(),
+                    base.id,
+                    base.socket.display()
+                )),
+            }
+        }
+        if !failures.is_empty() {
+            Shown::Failed {
+                reason: format!("not labelled: {}", failures.join("; ")),
+            }
+        } else if shown {
+            Shown::Shown
+        } else {
+            Shown::ShowsNone
+        }
     }
 
-    fn shown_at(&self, _place: &PlaceRef, _agent: Option<&Identity>) -> ShownAt {
-        ShownAt::default()
+    /// The place's window on the live agent's server, else its newest;
+    /// the live agent's block; the base's Rex session on that window's
+    /// server, else its newest; and each of the base's Rex sessions, on
+    /// every server: each by its id and socket, `rex:<id>@<socket>`, from
+    /// the records alone, a window a tidy kept for a block flume did not
+    /// open none of the place's (139).
+    fn shown_at(&self, place: &PlaceRef, agent: Option<&Identity>) -> ShownAt {
+        let block = agent.and_then(|agent| self.block(agent));
+        let windows = self.place_windows_of(place);
+        let window = block
+            .as_ref()
+            .and_then(|block| windows.iter().find(|window| window.socket == block.socket))
+            .or(windows.last());
+        let bases = self.base_records(place);
+        let base = window
+            .and_then(|window| bases.iter().find(|base| base.socket == window.socket))
+            .or(bases.last());
+        ShownAt {
+            place: window.map(Record::named),
+            agent: block.map(|block| block.session()),
+            base: base.map(Record::named),
+            bases: bases.iter().map(Record::named).collect(),
+        }
     }
 
     fn session(&self) -> Option<String> {
         self.caller.as_ref().map(Block::session)
     }
 
-    /// Refused for both views, nothing run: the pinned Rex has no terminal
-    /// client, only its app shows a session, and telling the app to show
-    /// one is the bolt's next unit (187, C.5).
+    /// For a window, refused with nothing run: the pinned Rex has no
+    /// terminal client, and only its app shows a session. For the app, the
+    /// part's server found or started as open finds it, the app the last
+    /// client `client.list` lists there of `info.kind` `app` whose
+    /// connection is not lost, told by `-C <client> do session.select` to
+    /// show the newest Rex session the profile made in that server that
+    /// `session.list` still lists; refused naming the socket to add under
+    /// the Rex app's Remote Hosts where the app is no client of the server,
+    /// and in Rex's words where the app refuses. Nothing is recorded or
+    /// read back (187, C.5; core.29, core.48).
     fn attach(&self, session: Option<&str>, view: View) -> Attached {
         let part = session.unwrap_or(SESSION);
-        Attached::Refused {
-            reason: match view {
-                View::Terminal => format!(
+        match view {
+            View::Terminal => Attached::Refused {
+                reason: format!(
                     "Rex 0.1.0-preview.14 has no terminal client, and only its app shows a \
                      session, so no window shows the Rex session {part}"
                 ),
-                View::App => format!(
-                    "flume does not yet tell the Rex app to show a session, so the app is not \
-                     shown the Rex session {part}"
-                ),
+            },
+            View::App => match self.show_in_app(session) {
+                Ok(()) => Attached::Shown,
+                Err(reason) => Attached::Refused { reason },
             },
         }
     }
@@ -1823,6 +2006,95 @@ impl Terminal for Rex {
 }
 
 impl Rex {
+    /// Each of the place's windows recorded, one on each server, oldest
+    /// first, but one a tidy kept for a block flume did not open, which is
+    /// no longer the place's (139; core.18).
+    fn place_windows_of(&self, place: &PlaceRef) -> Vec<Record> {
+        self.window_records(place)
+            .into_iter()
+            .filter(|window| window.value["tidied"] != Value::Bool(true))
+            .collect()
+    }
+
+    /// A label set by the call `args` on the server at `socket`: whether
+    /// it was set, false where Rex answers the window or Rex session not
+    /// found or no server listens there; Rex's words or the bound where it
+    /// failed otherwise (139; core.29).
+    fn labelled(&self, socket: &Path, args: &[&str]) -> Result<bool, String> {
+        match self.ask(socket, args) {
+            Call::Answered(_) => Ok(true),
+            call if call.no_server() => Ok(false),
+            Call::Refused(words) if words.contains("not found") => Ok(false),
+            call => Err(call.answer().err().unwrap_or_default()),
+        }
+    }
+
+    /// The Rex app told to show the newest Rex session the profile made in
+    /// the server of the session `name`, flume's own where none, as attach
+    /// for the app does; why not, naming the part and its socket (187,
+    /// C.5; design sections 2 to 4).
+    fn show_in_app(&self, name: Option<&str>) -> Result<(), String> {
+        let part = name.unwrap_or(SESSION);
+        let socket = self.socket(name)?;
+        let at = socket.display();
+        self.server(name).map_err(|reason| {
+            format!(
+                "the Rex app cannot be shown the session {part}, whose server is at {at}: {reason}"
+            )
+        })?;
+        let clients = self
+            .ask(&socket, &["api", "call", "client.list"])
+            .answer()
+            .map_err(|reason| {
+                format!("the clients of the session {part}'s Rex server at {at} could not be read: {reason}")
+            })?;
+        let client = match app_client(&clients) {
+            App::Client(client) => client,
+            App::Lost => {
+                return Err(format!(
+                    "the Rex app's connection to the session {part}'s Rex server at {at} is lost, \
+                     so the app cannot be shown the session; ask again once the app connects to \
+                     it again"
+                ))
+            }
+            App::None => {
+                return Err(format!(
+                    "the Rex app is no client of the session {part}'s Rex server, so it cannot be \
+                     shown the session: add {at} under the Rex app's Remote Hosts, which only a \
+                     person can do, then ask again"
+                ))
+            }
+        };
+        let listed: BTreeSet<String> = self
+            .sessions(&socket)
+            .map_err(|reason| {
+                format!("the Rex sessions of the session {part}'s server at {at} could not be read: {reason}")
+            })?
+            .into_iter()
+            .collect();
+        let Some(newest) = self
+            .records_of("bases", "session")
+            .into_iter()
+            .rev()
+            .find(|record| record.socket == socket && listed.contains(&record.id))
+        else {
+            return Err(format!(
+                "the session {part}'s Rex server at {at} holds no Rex session of flume's yet, so \
+                 the Rex app was shown nothing; one is shown once a place opens there"
+            ));
+        };
+        let chosen = format!("session_id={}", newest.id);
+        match self.ask(&socket, &["-C", &client, "do", "session.select", &chosen]) {
+            Call::Answered(_) => Ok(()),
+            Call::Refused(words) | Call::Unanswered(words) => Err(format!(
+                "the Rex app was not shown the Rex session {} ({}) of the session {part}, at {at}: \
+                 {words}",
+                newest.label(),
+                newest.id
+            )),
+        }
+    }
+
     /// The place's window `record` names closed, unless a block flume did
     /// not open stands in it: what was closed, none where it was gone, or
     /// what was kept and what holds it (137, 138).
@@ -2441,38 +2713,426 @@ mod tests {
         let _ = fs::remove_dir_all(scratch);
     }
 
-    #[test]
-    fn attach_refuses_both_views_and_show_shows_none() {
-        // 122, 139, 187, C.5: no terminal client, and the app's view the
-        // bolt's next unit; show shows none and says nowhere, and setup
-        // gives nothing; none of them calls Rex.
-        let (rex, scratch, ran) = over_records("attach");
-        let Attached::Refused { reason } = rex.attach(None, View::Terminal) else {
-            panic!("a window was attached");
-        };
-        assert!(
-            reason.contains("no terminal client")
-                && reason.contains("only its app shows a session"),
-            "{reason}"
-        );
-        assert!(matches!(
-            rex.attach(Some("work"), View::App),
-            Attached::Refused { reason } if reason.contains("work")
-        ));
-        let clues = Clues {
+    /// Clues for the place with `line`, and `running` places on its base.
+    fn clues(line: &str, running: u32) -> Clues {
+        Clues {
             stage: "code".into(),
             state: "working".into(),
             agent: Some(identity()),
-            base: flume_seams::BaseCount::default(),
-            line: "code · working".into(),
+            base: flume_seams::BaseCount {
+                running,
+                ..flume_seams::BaseCount::default()
+            },
+            line: line.into(),
+        }
+    }
+
+    /// `value` written as the record at `path`, its file's time `age`
+    /// seconds past a fixed moment, so the newest is the one the test
+    /// says.
+    fn recorded(path: &Path, value: Value, age: u64) {
+        write_json(path, &value).expect("a record");
+        let when = std::time::UNIX_EPOCH + Duration::from_secs(1_800_000_000 + age);
+        fs::File::options()
+            .write(true)
+            .open(path)
+            .and_then(|file| file.set_modified(when))
+            .expect("the record's time");
+    }
+
+    /// The base's Rex session `session` on the server at `socket`, as open
+    /// records it.
+    fn base_recorded(rex: &Rex, place: &PlaceRef, session: &str, socket: &Path, age: u64) {
+        recorded(
+            &rex.base_record(place, socket),
+            json!({
+                "session": session,
+                "socket": socket,
+                "repository": place.repository,
+                "base": place.base,
+                "label": base_label(place),
+            }),
+            age,
+        );
+    }
+
+    /// The place's window `window` in the Rex session `session` on the
+    /// server at `socket`, as open records it, marked tidied where `tidied`.
+    fn window_recorded(
+        rex: &Rex,
+        window: &str,
+        session: &str,
+        socket: &Path,
+        age: u64,
+        tidied: bool,
+    ) {
+        let mut value = json!({
+            "window": window,
+            "session": session,
+            "socket": socket,
+            "label": place_short(&place()),
+            "place": place().location,
+            "repository": place().repository,
+            "base": place().base,
+        });
+        if tidied {
+            value["tidied"] = Value::Bool(true);
+        }
+        recorded(&rex.window_record(&place(), socket), value, age);
+    }
+
+    /// Every file under `folder` with what it holds.
+    fn contents(folder: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+        let mut found = BTreeMap::new();
+        let mut folders = vec![folder.to_path_buf()];
+        while let Some(folder) = folders.pop() {
+            for entry in fs::read_dir(&folder).into_iter().flatten().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    folders.push(path);
+                } else {
+                    found.insert(path.clone(), fs::read(&path).unwrap_or_default());
+                }
+            }
+        }
+        found
+    }
+
+    /// The profile over records in a scratch folder of its own, its rex a
+    /// stand-in that logs each call's words to `log` and answers
+    /// `server.status`, `client.list`, `session.list` and `do
+    /// session.select` with what the test writes in `answers` under the
+    /// method's name, refusing in the words of `<method>.refused` where the
+    /// test writes one; and the folder, `answers` and `log`.
+    fn over_stand_in(name: &str) -> (Rex, PathBuf, PathBuf, PathBuf) {
+        let (_, scratch, _) = over_records(name);
+        let program = scratch.join("rex");
+        let answers = scratch.join("answers");
+        let log = scratch.join("log");
+        fs::create_dir_all(&answers).expect("the answers' folder");
+        fs::write(
+            &program,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{log}'\na='{answers}'\nfor word in \"$@\"; do\n  \
+                 case \"$word\" in\n    server.status|client.list|session.list|session.select)\n      \
+                 if [ -f \"$a/$word.refused\" ]; then cat \"$a/$word.refused\" >&2; exit 1; fi\n      \
+                 if [ -f \"$a/$word\" ]; then cat \"$a/$word\"; fi\n      exit 0;;\n  esac\ndone\n\
+                 echo \"Error: the stand-in answers no $*\" >&2\nexit 1\n",
+                log = log.display(),
+                answers = answers.display()
+            ),
+        )
+        .expect("the stand-in rex");
+        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).expect("executable");
+        fs::write(
+            answers.join("server.status"),
+            json!({"api_revision": API_REVISION, "rex_version": "0.1.0-preview.14"}).to_string(),
+        )
+        .expect("the server's status");
+        let rex = Rex::new(scratch.join("terminal/rex")).with_program(&program);
+        (rex, scratch, answers, log)
+    }
+
+    /// `client.list` as the pinned Rex answers it, each client by its id,
+    /// its `info.kind` and its `connection_state`, none where none.
+    fn clients(listed: &[(&str, &str, Option<&str>)]) -> String {
+        json!({
+            "clients": listed
+                .iter()
+                .map(|(id, kind, state)| {
+                    let mut client = json!({
+                        "client_id": id,
+                        "info": {"kind": kind, "transport": "unix", "display": "uid 501"},
+                        "principal": {"kind": "peer", "transport": "unix", "display": "uid 501"},
+                        "connected_at": "2026-11-13T09:30:00Z",
+                    });
+                    if let Some(state) = state {
+                        client["connection_state"] = json!(state);
+                    }
+                    client
+                })
+                .collect::<Vec<_>>()
+        })
+        .to_string()
+    }
+
+    /// `session.list` listing `sessions` by id.
+    fn listed(sessions: &[&str]) -> String {
+        json!({
+            "sessions": sessions
+                .iter()
+                .map(|id| json!({"session_id": id, "label": "a label"}))
+                .collect::<Vec<_>>()
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn a_label_is_its_place_and_clues_cut_to_128_characters() {
+        // 139, C.5: the window `<kind>--<name> · <line>`, the place's
+        // folder's name alone where the line is empty; the base's Rex
+        // session `<repository> <base> · <count>`; each cut to 128
+        // characters between characters, keeping its head.
+        let place = place();
+        assert_eq!(
+            window_label(&place, &clues("code 1/2 · run 1 · tasks 2/5 · working", 1)),
+            "fix--one · code 1/2 · run 1 · tasks 2/5 · working"
+        );
+        assert_eq!(window_label(&place, &clues("", 1)), "fix--one");
+        assert_eq!(window_label(&place, &clues("  ", 1)), "fix--one");
+        assert_eq!(
+            session_label(&place, &clues("code · working", 1)),
+            "acme main · 1 running · 0 asking · 0 waiting on caller · 0 stalled"
+        );
+        let line = format!("code · {}", "\u{e9}\u{1f600}".repeat(80));
+        let full = format!("fix--one · {line}");
+        assert!(full.chars().count() > LABEL_MOST);
+        let label = window_label(&place, &clues(&line, 1));
+        assert_eq!(label.chars().count(), LABEL_MOST, "{label}");
+        assert!(label.len() > LABEL_MOST, "cut by bytes: {label}");
+        assert!(full.starts_with(&label), "{label}");
+        let long = PlaceRef {
+            repository: format!("/r/{}", "r\u{e9}po".repeat(40)),
+            ..place.clone()
         };
-        assert_eq!(rex.show(&place(), &clues), Shown::ShowsNone);
+        let label = session_label(&long, &clues("", 1));
+        assert_eq!(label.chars().count(), LABEL_MOST, "{label}");
+        assert!(label.starts_with("r\u{e9}por\u{e9}po"), "{label}");
+        assert_eq!(cut("short", LABEL_MOST), "short");
+        assert_eq!(cut("\u{e9}\u{e9}\u{e9}", 2), "\u{e9}\u{e9}");
+    }
+
+    #[test]
+    fn attach_for_a_window_is_refused_and_calls_nothing() {
+        // 187, C.5: Rex 0.1.0-preview.14 has no terminal client, and only
+        // its app shows a session; refused before any call, for a session
+        // named and for the terminal's own.
+        let (rex, scratch, ran) = over_records("window");
+        for (session, part) in [(Some("w"), "w"), (None, SESSION)] {
+            let Attached::Refused { reason } = rex.attach(session, View::Terminal) else {
+                panic!("a window was attached");
+            };
+            assert!(
+                reason.contains("Rex 0.1.0-preview.14 has no terminal client")
+                    && reason.contains("only its app shows a session")
+                    && reason.contains(&format!("Rex session {part}")),
+                "{reason}"
+            );
+        }
+        assert!(!ran.exists(), "a rex command was run");
+        assert!(!scratch.join("terminal").exists(), "something was recorded");
+        let _ = fs::remove_dir_all(scratch);
+    }
+
+    #[test]
+    fn show_and_shown_at_with_nothing_recorded_call_nothing() {
+        // 122, 139: no window of the place and no Rex session of its base
+        // recorded, show shows none, shown_at gives none of each, and
+        // setup gives nothing; none of them calls Rex.
+        let (rex, scratch, ran) = over_records("nothing");
+        assert_eq!(
+            rex.show(&place(), &clues("code · working", 1)),
+            Shown::ShowsNone
+        );
         assert_eq!(
             rex.shown_at(&place(), Some(&identity())),
             ShownAt::default()
         );
+        assert_eq!(rex.shown_at(&place(), None), ShownAt::default());
         assert_eq!(rex.setup(), Vec::<String>::new());
         assert!(!ran.exists(), "a rex command was run");
+        let _ = fs::remove_dir_all(scratch);
+    }
+
+    #[test]
+    fn shown_at_names_the_window_the_block_and_the_bases_rex_sessions() {
+        // 139; design section 7: from the records alone, the place's
+        // window on the live agent's server, else its newest; the live
+        // agent's block; the base's Rex session on that window's server,
+        // else its newest; each of the base's Rex sessions; a window a
+        // tidy kept passed over.
+        let (rex, scratch, ran) = over_records("shownat");
+        let own = rex.socket(None).expect("flume's own socket");
+        let w = rex.socket(Some("w")).expect("w's socket");
+        let x = rex.socket(Some("x")).expect("x's socket");
+        base_recorded(&rex, &place(), "session:own", &own, 1);
+        window_recorded(&rex, "window:w", "session:w", &w, 2, false);
+        base_recorded(&rex, &place(), "session:w", &w, 3);
+        window_recorded(&rex, "window:own", "session:own", &own, 4, false);
+        window_recorded(&rex, "window:x", "session:x", &x, 5, true);
+        let other = PlaceRef {
+            base: "dev".into(),
+            ..place()
+        };
+        base_recorded(&rex, &other, "session:dev", &w, 6);
+        recorded(
+            &rex.agent_record(&identity()),
+            json!({
+                "identity": identity(),
+                "name": rex_name(&identity()),
+                "place": place().location,
+                "block": "block:live",
+                "socket": w,
+                "session": "session:w",
+            }),
+            7,
+        );
+        let at = |id: &str, socket: &Path| format!("rex:{id}@{}", socket.display());
+        assert_eq!(
+            rex.shown_at(&place(), Some(&identity())),
+            ShownAt {
+                place: Some(at("window:w", &w)),
+                agent: Some(at("block:live", &w)),
+                base: Some(at("session:w", &w)),
+                bases: vec![at("session:own", &own), at("session:w", &w)],
+            }
+        );
+        assert_eq!(
+            rex.shown_at(&place(), None),
+            ShownAt {
+                place: Some(at("window:own", &own)),
+                agent: None,
+                base: Some(at("session:own", &own)),
+                bases: vec![at("session:own", &own), at("session:w", &w)],
+            }
+        );
+        assert!(!ran.exists(), "a rex command was run");
+        let _ = fs::remove_dir_all(scratch);
+    }
+
+    #[test]
+    fn attach_for_the_app_selects_the_newest_rex_session_flume_made() {
+        // 187, C.5; design sections 2 to 4: the app the last client of
+        // `info.kind` app whose connection is not lost, told to show the
+        // newest Rex session the records hold for the part's server that
+        // `session.list` still lists; nothing recorded.
+        let (rex, scratch, answers, log) = over_stand_in("app");
+        let w = rex.socket(Some("w")).expect("w's socket");
+        let own = rex.socket(None).expect("flume's own socket");
+        let dev = PlaceRef {
+            base: "dev".into(),
+            ..place()
+        };
+        base_recorded(&rex, &place(), "session:older", &w, 1);
+        base_recorded(&rex, &dev, "session:newer", &w, 2);
+        base_recorded(&rex, &place(), "session:own", &own, 3);
+        fs::write(
+            answers.join("client.list"),
+            clients(&[
+                ("client:cli", "cli", Some("connected")),
+                ("client:app-lost", "app", Some("lost")),
+                ("client:app", "app", None),
+                ("client:app-gone", "app", Some("lost")),
+            ]),
+        )
+        .expect("the clients");
+        fs::write(
+            answers.join("session.list"),
+            listed(&["session:older", "session:theirs", "session:newer"]),
+        )
+        .expect("the sessions");
+        let before = contents(&scratch.join("terminal"));
+        let select = |session: &str| {
+            format!(
+                "--autostart=false -S unix://{} -C client:app do session.select session_id={session}",
+                w.display()
+            )
+        };
+        assert_eq!(rex.attach(Some("w"), View::App), Attached::Shown);
+        let said = fs::read_to_string(&log).expect("the log");
+        assert!(
+            said.lines().any(|line| line == select("session:newer")),
+            "{said}"
+        );
+        assert!(
+            said.contains(&format!("unix://{} api call client.list", w.display()))
+                && said.contains(&format!("unix://{} api call session.list", w.display())),
+            "{said}"
+        );
+        fs::write(
+            answers.join("session.list"),
+            listed(&["session:older", "session:theirs"]),
+        )
+        .expect("the sessions");
+        fs::remove_file(&log).expect("the log cleared");
+        assert_eq!(rex.attach(Some("w"), View::App), Attached::Shown);
+        let said = fs::read_to_string(&log).expect("the log");
+        assert!(
+            said.lines().any(|line| line == select("session:older")),
+            "{said}"
+        );
+        assert_eq!(
+            contents(&scratch.join("terminal")),
+            before,
+            "attach recorded something"
+        );
+        let _ = fs::remove_dir_all(scratch);
+    }
+
+    #[test]
+    fn attach_for_the_app_is_refused_naming_why() {
+        // 187, C.5; design section 2: no app a client, every app lost, and
+        // no Rex session of flume's listed, each refused naming the part
+        // and its socket with no select; the app's refusal in Rex's words
+        // without its `Error: ` lead, naming the Rex session.
+        let (rex, scratch, answers, log) = over_stand_in("refused");
+        let w = rex.socket(Some("w")).expect("w's socket");
+        let at = w.display().to_string();
+        base_recorded(&rex, &place(), "session:mine", &w, 1);
+        let ask = |clients_listed: String, sessions: &[&str]| {
+            fs::write(answers.join("client.list"), clients_listed).expect("the clients");
+            fs::write(answers.join("session.list"), listed(sessions)).expect("the sessions");
+            let _ = fs::remove_file(&log);
+            let Attached::Refused { reason } = rex.attach(Some("w"), View::App) else {
+                panic!("the app was shown");
+            };
+            let said = fs::read_to_string(&log).unwrap_or_default();
+            (reason, said)
+        };
+        let (reason, said) = ask(clients(&[("client:cli", "cli", None)]), &["session:mine"]);
+        assert!(
+            reason.contains(&at) && reason.contains("Remote Hosts") && reason.contains("session w"),
+            "{reason}"
+        );
+        assert!(!said.contains(" do "), "{said}");
+        let (reason, said) = ask(
+            clients(&[
+                ("client:app-1", "app", Some("lost")),
+                ("client:app-2", "app", Some("lost")),
+            ]),
+            &["session:mine"],
+        );
+        assert!(
+            reason.contains(&at) && reason.contains("lost") && reason.contains("session w"),
+            "{reason}"
+        );
+        assert!(!said.contains(" do "), "{said}");
+        let app = clients(&[("client:app", "app", Some("connected"))]);
+        let (reason, said) = ask(app.clone(), &["session:theirs"]);
+        assert!(
+            reason.contains(&at)
+                && reason.contains("holds no Rex session of flume's yet")
+                && reason.contains("session w"),
+            "{reason}"
+        );
+        assert!(!said.contains(" do "), "{said}");
+        fs::write(
+            answers.join("session.select.refused"),
+            "Error: client is not accepting actions\n",
+        )
+        .expect("the app's refusal");
+        let (reason, said) = ask(app, &["session:mine"]);
+        assert!(
+            reason.contains("client is not accepting actions")
+                && !reason.contains("Error: ")
+                && reason.contains("session:mine")
+                && reason.contains(&at),
+            "{reason}"
+        );
+        assert!(
+            said.contains("-C client:app do session.select session_id=session:mine"),
+            "{said}"
+        );
         let _ = fs::remove_dir_all(scratch);
     }
 }
