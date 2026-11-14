@@ -1,7 +1,7 @@
 ---
 number: 69
 title: A stage whose kind hibernates it sleeps once its prompt cache no longer pays and resumes its own session at a message, and every message to a role waits at the role's address
-status: proposed
+status: accepted
 date: 2026-11-14
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # A stage whose kind hibernates it sleeps once its prompt cache no longer pays and resumes its own session at a message, and every message to a role waits at the role's address
 
-Status: proposed to the user on 2026-11-14, from their own words and choices of 2026-11-11 and 2026-11-12 in the talk `boomdrivedev/blueprints:design/research/2026-11-11-a-session-sleeps-and-wakes.md`, where this record was drafted under the number 0065; accepted on their yes. Its statement is flume's clauses 212 to 215 and their amendments, merged to boomdrivedev/blueprints' main on the user's word of 2026-11-13.
+Status: accepted by the user on 2026-11-14, on their card. Drawn from their own words and choices of 2026-11-11 and 2026-11-12 in the talk `boomdrivedev/blueprints:design/research/2026-11-11-a-session-sleeps-and-wakes.md`, where it was drafted under the number 0065. Its statement is flume's clauses 212 to 215 and their amendments, merged to boomdrivedev/blueprints' main on the user's word of 2026-11-13.
 
 Deciders: the user, the operator in flume's words. Their words: "Call it hibernate and resume, and keep
 it separate from the standard state machine concept. They're two different
@@ -129,10 +129,9 @@ for which an agent may pass on, which no host has yet.
 
 ### Consequences
 
-- Rules to amend: core.10, so a resume is one fresh agent of a start that
-  counts none; core.32,
-  for a resume's account and carry, its "no other retry carries one" still
-  true of retries.
+- Rules core.10 and core.32 are amended with it: a resume is one fresh
+  agent carrying its stage's own session, on the account clause 213
+  names, and is no retry.
 - The deliver row needs a Claude Code release that runs hooks modules: read
   on 2.1.322, and flume pins 2.1.296.
 - Open: a resume's identity, and how a resumed Claude Code agent passes
