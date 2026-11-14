@@ -1,0 +1,31 @@
+## MODIFIED Requirements
+
+### Requirement: The suite knows the statement's clauses
+
+The suite SHALL hold the numbers of every clause of Part A and Part B,
+the invariants I1 to I8 and the scenarios of section 11, with the
+statement's revision they were read at, and SHALL name each clause no
+change has built yet, each named as the change that builds it. A clause the statement adds or removes SHALL
+change this list in the commit that adopts it.
+
+#### Scenario: The clauses listed
+
+- **WHEN** the suite's list is read
+- **THEN** it names boomdrivedev/blueprints main at 55b89a4, the revision that adds 211; Parts A and B hold every clause that revision states, 211 in Part B; the scenarios run to S123; and it names as unbuilt what it named before this change and S121 to S123, which that revision holds and records 0060 and 0061's changes built before the list held them, and nothing of 211
+
+### Requirement: A clause cited by nothing fails the suite
+
+The coverage check SHALL fail naming every clause of Part A and Part B,
+every invariant and every scenario of section 11 that no scenario of
+the suite cites, but for those the list names as built by no change yet,
+and SHALL fail naming any of those a scenario cites.
+
+#### Scenario: A clause left out
+
+- **WHEN** the check runs over scenarios that between them leave clause 70 out
+- **THEN** it fails naming 70
+
+#### Scenario: The suite as this change leaves it
+
+- **WHEN** the coverage check runs over the suite as this change lands it
+- **THEN** it passes: every clause of Parts A and B, I1 to I8 and every scenario the list holds but those named as unbuilt is cited, 211 by the agent seam's windows scenarios and the account pools' scenarios of a report taken

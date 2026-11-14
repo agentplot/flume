@@ -307,11 +307,14 @@ fn world_caller() -> String {
 
 /// The account `work-1` of the pool `work` spent until `until`.
 fn spent_until(until: Seconds) -> HostDocument {
-    HostDocument::Account(AccountSpent {
-        until,
-        words: Some("You've hit your session limit · resets 3pm (UTC)".into()),
-        recorded_at: until - 3600,
-        unread: false,
+    HostDocument::Account(AccountDocument {
+        spent: Some(AccountSpent {
+            until,
+            words: Some("You've hit your session limit · resets 3pm (UTC)".into()),
+            recorded_at: until - 3600,
+            unread: false,
+        }),
+        reading: None,
     })
 }
 
@@ -383,6 +386,142 @@ fn a_spent_time_is_seen_by_another_process_and_kept_from_other_users() {
         Written::Written { .. }
     ));
     assert!(root.join("intents/0f1e2d.json").is_file());
+}
+
+/// A reading of work-1 taken at 14:02 from a fix's code agent: its
+/// 5-hour window 42% used resetting at 17:00, and its 7-day window 23.5%
+/// with no reset (184, C.7).
+fn a_reading() -> AccountReading {
+    AccountReading {
+        taken_at: 1_793_887_320,
+        agent: "flume:r:fix--one:code:1".into(),
+        session: Some("s-1".into()),
+        windows: vec![
+            UsageWindow {
+                name: "five_hour".into(),
+                used: 4_200,
+                resets_at: Some(1_793_898_000),
+            },
+            UsageWindow {
+                name: "seven_day".into(),
+                used: 2_350,
+                resets_at: None,
+            },
+        ],
+    }
+}
+
+/// The store-profile spec's scenario "A reading beside a spent time"
+/// (153, 184, C.7).
+#[test]
+fn an_accounts_reading_beside_its_spent_time() {
+    use std::os::unix::fs::PermissionsExt;
+    let harness = Harness::new();
+    let root = harness.scratch.path("state/flume");
+    let HostDocument::Account(spent) = spent_until(1_793_890_800) else {
+        unreachable!("an account's document");
+    };
+    let document = HostDocument::Account(AccountDocument {
+        reading: Some(a_reading()),
+        ..spent
+    });
+    assert!(matches!(
+        StateDir::at(&root).write_host(&work_1(), None, Some(&document)),
+        Written::Written { .. }
+    ));
+    let file = root.join("accounts/work/work-1.json");
+    let text = std::fs::read_to_string(&file)
+        .unwrap_or_else(|error| panic!("{}: {error}", file.display()));
+    let written: serde_json::Value = serde_json::from_str(&text).expect("JSON");
+    let held = &written["document"];
+    assert_eq!(held["until"], serde_json::json!(1_793_890_800), "{text}");
+    assert_eq!(
+        held["reading"],
+        serde_json::json!({
+            "taken_at": "2026-11-05T14:02:00Z",
+            "agent": "flume:r:fix--one:code:1",
+            "session": "s-1",
+            "windows": [
+                {"name": "five_hour", "used": 42, "resets_at": "2026-11-05T17:00:00Z"},
+                {"name": "seven_day", "used": 23.5},
+            ],
+        }),
+        "{text}"
+    );
+    let mode = std::fs::metadata(&file)
+        .expect("the document")
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o600, "the document's mode");
+    assert_eq!(
+        StateDir::at(&root)
+            .read_host(&work_1())
+            .map(|read| read.document),
+        Some(document),
+        "a second store's read"
+    );
+}
+
+/// The store-profile spec's scenario "An account's document an earlier
+/// release wrote" (153).
+#[test]
+fn an_accounts_document_an_earlier_release_wrote() {
+    let harness = Harness::new();
+    let root = harness.scratch.path("state/flume");
+    let file = root.join("accounts/work/work-1.json");
+    std::fs::create_dir_all(file.parent().expect("the accounts directory")).expect("made");
+    let before = serde_json::json!({
+        "version": 3,
+        "document": {
+            "of": "account",
+            "until": 54_000,
+            "words": "You've hit your session limit",
+            "recorded_at": 47_400,
+        },
+    });
+    std::fs::write(&file, before.to_string()).expect("written");
+    let read = StateDir::at(&root)
+        .read_host(&work_1())
+        .expect("the document");
+    assert_eq!(read.version, 3);
+    let HostDocument::Account(document) = read.document else {
+        panic!("an account's document read as another's");
+    };
+    assert_eq!(
+        document,
+        AccountDocument {
+            spent: Some(AccountSpent {
+                until: 54_000,
+                words: Some("You've hit your session limit".into()),
+                recorded_at: 47_400,
+                unread: false,
+            }),
+            reading: None,
+        }
+    );
+    let next = HostDocument::Account(AccountDocument {
+        reading: Some(a_reading()),
+        ..document
+    });
+    assert!(matches!(
+        StateDir::at(&root).write_host(&work_1(), Some(3), Some(&next)),
+        Written::Written { .. }
+    ));
+    let text = std::fs::read_to_string(&file).expect("read");
+    let written: serde_json::Value = serde_json::from_str(&text).expect("JSON");
+    let held = &written["document"];
+    for (key, value) in [
+        ("until", serde_json::json!(54_000)),
+        ("words", serde_json::json!("You've hit your session limit")),
+        ("recorded_at", serde_json::json!(47_400)),
+    ] {
+        assert_eq!(held[key], value, "{key} in {text}");
+    }
+    assert_eq!(
+        held["reading"]["taken_at"],
+        serde_json::json!("2026-11-05T14:02:00Z"),
+        "{text}"
+    );
 }
 
 /// An intent's affinity holding an account for `agent` and one for

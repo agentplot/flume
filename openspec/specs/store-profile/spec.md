@@ -57,13 +57,13 @@ no stream, pool or settings (32, 70, 105, 143, 144, 162, C.7).
 
 ### Requirement: The host's own documents
 
-The store profile SHALL keep each account's spent time at
-`accounts/<pool>/<account>.json` and each intent's affinity at
-`intents/<digest>.json` under `$XDG_STATE_HOME/flume/`, each with its
-version, written whole by compare-and-set under the store's lock and
-readable by the host's user alone, and reached by every flume process
-on the host; an intent's document an earlier release wrote SHALL read
-as written (146, 147, 153, C.7).
+The store profile SHALL keep each account's spent time and reading in
+one document at `accounts/<pool>/<account>.json` and each intent's
+affinity at `intents/<digest>.json` under `$XDG_STATE_HOME/flume/`,
+each with its version, written whole by compare-and-set under the
+store's lock and readable by the host's user alone, and reached by
+every flume process on the host; a document an earlier release wrote
+SHALL read as written (146, 147, 153, 184, C.7).
 
 #### Scenario: Two processes record one account spent
 
@@ -79,6 +79,16 @@ as written (146, 147, 153, C.7).
 
 - **WHEN** `intents/<digest>.json` holds an affinity with one `pool` and `account`, as an earlier release wrote it, and an affinity of two programs is then written over it
 - **THEN** the first reads with that pool and account, and the file then holds an account for each program and no `pool` or `account` key (147, 153)
+
+#### Scenario: A reading beside a spent time
+
+- **WHEN** a document of work-1 holding a spent time until 15:00 and a reading is written over the state directory
+- **THEN** `accounts/work/work-1.json` holds `until` and `reading`, the reading's `taken_at` and each reset RFC 3339's with their offset and each window's `used` a share from 0 to 100, its mode 0600, and a second store over the same state directory reads both (153, 184, C.7)
+
+#### Scenario: An account's document an earlier release wrote
+
+- **WHEN** `accounts/work/work-1.json` holds `until`, `words` and `recorded_at` alone, as an earlier release wrote it, and a document holding those and a reading is then written over it at its version
+- **THEN** the first reads spent with no reading, and the file then holds the spent keys as they stood and the reading (153)
 
 ### Requirement: A mode in the host's agents tables
 
@@ -96,51 +106,6 @@ and any other SHALL refuse the configuration naming the table and
 
 - **WHEN** the configuration gives `[kinds.fix.agents] mode = "auto"`, or `mode = 3`, or `mode = { claude = 3 }`
 - **THEN** every launch and start is refused naming `kinds.fix.agents` and `mode` (162, 169, C.7)
-
-### Requirement: A pool's strategy and threshold and an account's reading in the configuration
-
-The host's configuration SHALL read a pool's `strategy`, `fill-first`,
-`least-busy` or `most-left`, its optional `threshold`, a whole number
-from 1 to 100, and an account's optional `usage`, a path, each in the
-managed layer alone, and SHALL refuse any other value of them, naming
-the key (144, 184, 185, C.7).
-
-#### Scenario: A most-left pool with readings
-
-- **WHEN** the configuration gives `[pools.work] strategy = "most-left"`, `threshold = 85`, and an account `{ name = "work-1", program = "claude", usage = "~/.local/state/usage/work-1.json" }`
-- **THEN** the pool reads most-left with a threshold of 85, and work-1's `usage` reads as written, its `~` read against the login environment only when the reading is asked (184, C.7)
-
-#### Scenario: C.7's example with readings
-
-- **WHEN** the configuration is C.7's example, its accounts of `work` each naming `usage`
-- **THEN** each of work-1 and work-2 reads its `usage`, and `work` reads fill-first with a threshold of 90 (185, C.7)
-
-#### Scenario: Values that refuse
-
-- **WHEN** a pool gives `threshold = 0`, then `101`, then `"90%"`, an account `usage = 7`, or a pool `strategy = "round-robin"`
-- **THEN** every launch and start is refused naming the key, and the strategy's words name fill-first, least-busy and most-left (4, C.7)
-
-### Requirement: An account's reading is read from its file
-
-The real host SHALL read an account's reading from the file at its
-path in C.7's form, each time RFC 3339's with its offset and every key
-it does not know ignored, and SHALL answer why there is none in words
-that name no path (184, C.7).
-
-#### Scenario: The form read
-
-- **WHEN** a scratch file holds C.7's example reading with a `used` of 71.5, a window with no `resets_at`, and a key `login` at the top and `kind` in a window
-- **THEN** the host reads `read_at`, both windows, 7150 hundredths and no reset for the second, and ignores both keys (184, C.7)
-
-#### Scenario: A missing file
-
-- **WHEN** the path names no file
-- **THEN** the host answers that the file is missing, naming no path (184)
-
-#### Scenario: A document not in the form
-
-- **WHEN** the file is not JSON, or names no `read_at`, or gives a `read_at` with no offset, or a window whose `used` is 120
-- **THEN** the host answers why, naming the key or the window by its place in the list (184, C.7)
 
 ### Requirement: The host's tables for every agent and for a stream
 
@@ -303,3 +268,33 @@ C.7; core.45; weir 104).
 
 - **WHEN** only the local layer gives `[host] ends_expire = "1h"`
 - **THEN** the local layer is not taken, status naming the key, and the span reads a week (C.7; core.45)
+
+### Requirement: A pool's strategy and threshold in the configuration
+
+The host's configuration SHALL read a pool's `strategy`, `fill-first`,
+`least-busy` or `most-left`, and its optional `threshold`, a whole
+number from 1 to 100, each in the managed layer alone, and an account's
+`name`, `program`, `env` and `agents` alone; it SHALL refuse an
+account's `usage` as every word an account does not hold, naming the
+account and the key, with no alias kept, and any other value of the
+pool's keys, naming the key (144, 184, 185, C.7; record 0062).
+
+#### Scenario: A most-left pool
+
+- **WHEN** the configuration gives `[pools.work] strategy = "most-left"`, `threshold = 85`, and an account `{ name = "work-1", program = "claude" }`
+- **THEN** the pool reads most-left with a threshold of 85, and work-1 names no reading (184, C.7)
+
+#### Scenario: C.7's example
+
+- **WHEN** the configuration is C.7's example, its accounts of `work` naming no reading
+- **THEN** each of work-1 and work-2 reads, and `work` reads fill-first with a threshold of 90 (185, C.7)
+
+#### Scenario: An account naming usage
+
+- **WHEN** the configuration gives an account `{ name = "work-1", program = "claude", usage = "~/.local/state/usage/work-1.json" }`
+- **THEN** every launch and start is refused naming `[pools.work.accounts[0]]` and `usage` as no word of an account (184, C.7; record 0062)
+
+#### Scenario: Values that refuse
+
+- **WHEN** a pool gives `threshold = 0`, then `101`, then `"90%"`, or `strategy = "round-robin"`
+- **THEN** every launch and start is refused naming the key, and the strategy's words name fill-first, least-busy and most-left (4, C.7)

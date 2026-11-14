@@ -282,88 +282,6 @@ fn a_files_write_time_by_the_hosts_clock() {
     );
 }
 
-/// `text` written whole at `path`: a new file beside it renamed over the
-/// old, as a host's reader writes a reading (C.7).
-fn written_whole(path: &Path, text: &str) {
-    let new = path.with_extension("json.new");
-    std::fs::write(&new, text).unwrap();
-    std::fs::rename(&new, path).unwrap();
-}
-
-/// The store-profile spec's reading read from its file: a scratch file
-/// in C.7's form read as it stands at each asking and never written, and
-/// a missing one, or one not in the form, answered in words that name no
-/// path (184, C.7).
-#[test]
-fn an_accounts_reading_from_its_file() {
-    let scratch = Scratch::new("usage");
-    let host = host(&scratch, HostConfig::default());
-    let dir = scratch.path("state/usage");
-    std::fs::create_dir_all(&dir).unwrap();
-    let file = dir.join("work-1.json");
-    let path = file.to_string_lossy().to_string();
-    let refused = host.usage(&path).unwrap_err();
-    assert_eq!(refused, "the file is missing");
-    written_whole(
-        &file,
-        r#"{ "read_at": "2026-11-05T14:02:11Z", "login": "fine", "windows": [
-            { "name": "5-hour", "used": 42, "resets_at": "2026-11-05T17:00:00Z" },
-            { "name": "7-day", "used": 71.5 }
-        ] }"#,
-    );
-    let before = as_it_stands(&file);
-    assert_eq!(
-        host.usage(&path),
-        Ok(Usage {
-            read_at: 1_793_887_331,
-            windows: vec![
-                UsageWindow {
-                    name: "5-hour".into(),
-                    used: 4_200,
-                    resets_at: Some(1_793_898_000),
-                },
-                UsageWindow {
-                    name: "7-day".into(),
-                    used: 7_150,
-                    resets_at: None,
-                },
-            ],
-        })
-    );
-    assert_eq!(as_it_stands(&file), before, "the reading was written");
-    written_whole(
-        &file,
-        r#"{ "read_at": "2026-11-05T14:07:11Z", "windows": [{ "name": "5-hour", "used": 48 }] }"#,
-    );
-    assert_eq!(
-        host.usage(&path)
-            .map(|usage| (usage.read_at, usage.windows[0].used)),
-        Ok((1_793_887_631, 4_800)),
-        "the reading as it stands at the next asking"
-    );
-    written_whole(
-        &file,
-        r#"{ "read_at": "2026-11-05T14:07:11", "windows": [] }"#,
-    );
-    let refused = host.usage(&path).unwrap_err();
-    assert_eq!(refused, "read_at is not an RFC 3339 time with its offset");
-    std::fs::write(&file, "half a {").unwrap();
-    let refused = host.usage(&path).unwrap_err();
-    assert!(refused.starts_with("the file is not JSON: "), "{refused}");
-    let root = scratch.root.to_string_lossy().to_string();
-    for words in [
-        host.usage(&path).unwrap_err(),
-        host.usage(&dir.to_string_lossy()).unwrap_err(),
-        host.usage(&scratch.path("nowhere/work-2.json").to_string_lossy())
-            .unwrap_err(),
-    ] {
-        assert!(
-            !words.contains(&root) && !words.contains("work-"),
-            "a path in {words}"
-        );
-    }
-}
-
 #[test]
 fn the_bound_the_configuration_states() {
     let scratch = Scratch::new("bound");
@@ -1460,14 +1378,12 @@ fn the_modules_files_read_whole() {
                 program: "scribe".into(),
                 env: BTreeMap::from([("SCRIBE_HOME".into(), "$HOME/.scribe-work-1".into())]),
                 agents: Some(4),
-                usage: Some("~/.local/state/usage/work-1.json".into()),
             },
             Account {
                 name: "work-2".into(),
                 program: "scribe".into(),
                 env: BTreeMap::from([("SCRIBE_HOME".into(), "~/.scribe-work-2".into())]),
                 agents: None,
-                usage: None,
             },
         ]
     );

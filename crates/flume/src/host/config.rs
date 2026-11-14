@@ -872,10 +872,10 @@ struct Leaf {
 
 /// Every value `value` at `at` holds, pushed onto `values` by its dotted
 /// key: a unit of [`LOCAL_KEYS`] whole, an array of tables by index
-/// (`pools.work.accounts[0].name`), an `env` table's values and an
-/// account's `usage` as `<set>` and never as written, and every other
-/// leaf as TOML writes it; each local where it lies at or under a unit of
-/// `taken`, else managed (184, C.7; core.30, core.32).
+/// (`pools.work.accounts[0].name`), an `env` table's values as `<set>`
+/// and never as written, and every other leaf as TOML writes it; each
+/// local where it lies at or under a unit of `taken`, else managed (C.7;
+/// core.30).
 fn values_of(value: &Value, at: Leaf, taken: &[Vec<String>], values: &mut Vec<ConfigValue>) {
     let layer = if at.listed && taken.iter().any(|unit| as_read(&at.path).starts_with(unit)) {
         ConfigLayer::Local
@@ -890,8 +890,6 @@ fn values_of(value: &Value, at: Leaf, taken: &[Vec<String>], values: &mut Vec<Co
         })
     };
     let env = at.path.last().is_some_and(|name| name == "env");
-    let reading = at.path.first().is_some_and(|name| name == "pools")
-        && at.path.last().is_some_and(|name| name == "usage");
     match value {
         Value::Table(table) if at.secret || env || !(at.listed && is_unit(&at.path, value)) => {
             for (name, inner) in table {
@@ -906,9 +904,7 @@ fn values_of(value: &Value, at: Leaf, taken: &[Vec<String>], values: &mut Vec<Co
                 values_of(inner, inner_at, taken, values);
             }
         }
-        _ if at.secret || env || reading || own_credential(&at.path, value) => {
-            push(SET.to_string())
-        }
+        _ if at.secret || env || own_credential(&at.path, value) => push(SET.to_string()),
         Value::Array(items)
             if !items.is_empty()
                 && items.iter().all(Value::is_table)
@@ -1382,10 +1378,11 @@ fn streams_declared(streams: &Value) -> Result<BTreeMap<String, Stream>, String>
 
 /// The `pools` table: each pool's strategy, its optional threshold and
 /// its accounts in order, each with a name, a program, an `env` kept as
-/// written, an optional bound and an optional `usage`, the path of its
-/// reading kept as written; a pool with no accounts, two accounts of one
-/// name, an account with no name or program, a value either cannot hold,
-/// or a key either does not know refused naming it (144, 184, 185, C.7).
+/// written and an optional bound; a pool with no accounts, two accounts
+/// of one name, an account with no name or program, a value either cannot
+/// hold, or a key either does not know refused naming it, an account's
+/// `usage` among them, which names no reading since its program reports
+/// it (144, 184, 185, C.7; record 0062).
 fn pools_declared(pools: &Value) -> Result<BTreeMap<String, Pool>, String> {
     let pools = pools
         .as_table()
@@ -1421,7 +1418,7 @@ fn pools_declared(pools: &Value) -> Result<BTreeMap<String, Pool>, String> {
             let account = account.as_table().ok_or(format!("[{at}] is not a table"))?;
             only(
                 account,
-                &["name", "program", "env", "agents", "usage"],
+                &["name", "program", "env", "agents"],
                 &at,
                 "an account",
             )?;
@@ -1436,7 +1433,6 @@ fn pools_declared(pools: &Value) -> Result<BTreeMap<String, Pool>, String> {
                     .ok_or(format!("[{at}] names no program"))?,
                 env: env_of(account, &at)?,
                 agents: bound_of(account, "agents", &at)?,
-                usage: usage_of(account, &at)?,
                 name,
             });
         }
@@ -1466,16 +1462,6 @@ fn threshold_of(table: &Table, at: &str) -> Result<Option<u32>, String> {
         .ok_or(format!(
             "[{at}] threshold is not a whole percentage from 1 to 100"
         ))
-}
-
-/// An account's `usage`, the path of its reading kept as written, its `~`
-/// and `$VAR` read only when the reading is asked; none where it is left
-/// out (184, C.7).
-fn usage_of(account: &Table, at: &str) -> Result<Option<String>, String> {
-    match text_of(account, "usage", at)? {
-        Some(usage) if usage.is_empty() => Err(format!("[{at}] usage is empty")),
-        usage => Ok(usage),
-    }
 }
 
 /// An `env` table of variables, each value kept as written (29).
@@ -2104,8 +2090,8 @@ pool = "personal"
 [pools.work]
 strategy = "fill-first"
 accounts = [
-  { name = "work-1", program = "agent", env = { AGENT_HOME = "~/.agent-work-1" }, agents = 4, usage = "~/.local/state/usage/work-1.json" },
-  { name = "work-2", program = "agent", env = { AGENT_HOME = "~/.agent-work-2" }, usage = "~/.local/state/usage/work-2.json" },
+  { name = "work-1", program = "agent", env = { AGENT_HOME = "~/.agent-work-1" }, agents = 4 },
+  { name = "work-2", program = "agent", env = { AGENT_HOME = "~/.agent-work-2" } },
 ]
 
 [pools.personal]
@@ -2145,8 +2131,8 @@ label = "inception"
             }
         );
         let work = &config.pools["work"];
-        // The store-profile spec's C.7's example with readings: work
-        // fill-first, stating no threshold, so 90 holds (185).
+        // The store-profile spec's C.7's example: work fill-first, stating
+        // no threshold, so 90 holds, its accounts naming no reading (185).
         assert_eq!(work.strategy, Strategy::FillFirst);
         assert_eq!(work.threshold, None);
         assert_eq!(
@@ -2157,19 +2143,16 @@ label = "inception"
                     program: "agent".into(),
                     env: BTreeMap::from([("AGENT_HOME".into(), "~/.agent-work-1".into())]),
                     agents: Some(4),
-                    usage: Some("~/.local/state/usage/work-1.json".into()),
                 },
                 Account {
                     name: "work-2".into(),
                     program: "agent".into(),
                     env: BTreeMap::from([("AGENT_HOME".into(), "~/.agent-work-2".into())]),
                     agents: None,
-                    usage: Some("~/.local/state/usage/work-2.json".into()),
                 },
             ],
-            "in order, each env and usage kept as written"
+            "in order, each env kept as written"
         );
-        assert_eq!(config.pools["personal"].accounts[0].usage, None);
         assert_eq!(config.pools["personal"].strategy, Strategy::LeastBusy);
         assert_eq!(config.stream_for(&folder("/elsewhere"), "fix"), None);
         assert_eq!(config.pool_for("default"), None, "no pool for default");
@@ -2800,22 +2783,27 @@ label = "inception"
         }
     }
 
-    /// The store-profile spec's most-left pool with readings: its
-    /// strategy, its threshold, and an account's `usage` kept as written,
-    /// its `~` read only when the reading is asked (184, 185, C.7).
+    /// The store-profile spec's scenario "A most-left pool": its strategy
+    /// and its threshold, and an account naming no reading (184, 185,
+    /// C.7).
     #[test]
-    fn a_most_left_pool_with_readings() {
+    fn a_most_left_pool() {
         let config = HostConfig::parse(
             "[pools.work]\nstrategy = \"most-left\"\nthreshold = 85\n\
-             accounts = [{ name = \"work-1\", program = \"agent\", usage = \"~/.local/state/usage/work-1.json\" }]\n",
+             accounts = [{ name = \"work-1\", program = \"agent\" }]\n",
         )
         .unwrap();
         let work = &config.pools["work"];
         assert_eq!(work.strategy, Strategy::MostLeft);
         assert_eq!(work.threshold, Some(85));
         assert_eq!(
-            work.accounts[0].usage.as_deref(),
-            Some("~/.local/state/usage/work-1.json")
+            work.accounts,
+            vec![Account {
+                name: "work-1".into(),
+                program: "agent".into(),
+                env: BTreeMap::new(),
+                agents: None,
+            }]
         );
         for threshold in [1, 100] {
             let config = HostConfig::parse(&format!(
@@ -2827,10 +2815,29 @@ label = "inception"
         }
     }
 
+    /// The store-profile spec's scenario "An account naming usage": the
+    /// account's `usage` is no word of an account, refused naming the
+    /// account and the key, with no alias kept, whatever it holds (184,
+    /// C.7; record 0062).
+    #[test]
+    fn an_accounts_usage_is_no_word_of_an_account() {
+        for usage in ["\"~/.local/state/usage/work-1.json\"", "\"\"", "7"] {
+            let text = format!(
+                "[pools.work]\nstrategy = \"fill-first\"\n\
+                 accounts = [{{ name = \"work-1\", program = \"agent\", usage = {usage} }}]\n"
+            );
+            assert_eq!(
+                HostConfig::parse(&text).unwrap_err(),
+                "[pools.work.accounts[0]] usage is no word of an account",
+                "{text}"
+            );
+        }
+    }
+
     /// The store-profile spec's values that refuse: each names its key,
     /// and the strategy's words name all three (4, C.7).
     #[test]
-    fn a_threshold_a_usage_and_a_strategy_that_refuse() {
+    fn a_threshold_and_a_strategy_that_refuse() {
         let account = "accounts = [{ name = \"w\", program = \"agent\" }]";
         for (text, words) in [
             (
@@ -2850,14 +2857,6 @@ label = "inception"
                 "[pools.work] threshold is not a whole percentage from 1 to 100",
             ),
             (
-                "[pools.work]\nstrategy = \"fill-first\"\naccounts = [{ name = \"w\", program = \"agent\", usage = 7 }]\n".to_string(),
-                "[pools.work.accounts[0]] usage is not a string",
-            ),
-            (
-                "[pools.work]\nstrategy = \"fill-first\"\naccounts = [{ name = \"w\", program = \"agent\", usage = \"\" }]\n".to_string(),
-                "[pools.work.accounts[0]] usage is empty",
-            ),
-            (
                 format!("[pools.work]\nstrategy = \"round-robin\"\n{account}\n"),
                 "[pools.work] strategy is round-robin, where a pool's strategy is fill-first, least-busy or most-left",
             ),
@@ -2866,14 +2865,12 @@ label = "inception"
         }
     }
 
-    /// A reading's path is the managed layer's alone and given as `<set>`:
-    /// a local layer setting a pool's threshold or an account's usage is
-    /// not taken, and the configuration's values give no path (184, C.7;
-    /// core.30, core.32, core.45).
+    /// A pool's threshold is the managed layer's alone: a local layer
+    /// setting it is not taken (185, C.7; core.45).
     #[test]
-    fn a_threshold_and_a_usage_are_the_managed_layers() {
+    fn a_threshold_is_the_managed_layers() {
         let managed = "[pools.work]\nstrategy = \"most-left\"\nthreshold = 85\n\
-             accounts = [{ name = \"w\", program = \"agent\", usage = \"~/.local/state/usage/w.json\" }]\n";
+             accounts = [{ name = \"w\", program = \"agent\" }]\n";
         let config = HostConfig::layers(managed, None).unwrap();
         let values: Vec<(&str, &str)> = config
             .configuration
@@ -2884,20 +2881,13 @@ label = "inception"
         for value in [
             ("pools.work.strategy", "\"most-left\""),
             ("pools.work.threshold", "85"),
-            ("pools.work.accounts[0].usage", SET),
         ] {
             assert!(values.contains(&value), "{value:?} in {values:?}");
         }
-        assert!(
-            !values
-                .iter()
-                .any(|(_, value)| value.contains("usage/w.json")),
-            "a reading's path in {values:?}"
-        );
         for local in [
             "[pools.work]\nthreshold = 50\n",
             "[pools.work]\nstrategy = \"most-left\"\nthreshold = 50\n\
-             accounts = [{ name = \"w\", program = \"agent\", usage = \"/elsewhere.json\" }]\n",
+             accounts = [{ name = \"w\", program = \"agent\" }]\n",
         ] {
             let config = HostConfig::layers(managed, Some(local)).unwrap();
             assert_eq!(
@@ -2909,10 +2899,6 @@ label = "inception"
                 "{local}"
             );
             assert_eq!(config.pools["work"].threshold, Some(85));
-            assert_eq!(
-                config.pools["work"].accounts[0].usage.as_deref(),
-                Some("~/.local/state/usage/w.json")
-            );
         }
     }
 

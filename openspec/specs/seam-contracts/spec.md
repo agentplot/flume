@@ -234,9 +234,9 @@ process it starts, none by default (161).
 ### Requirement: The store keeps the host's own documents
 
 The store seam SHALL read and write the host's own documents, each
-account's spent time and each intent's affinity, by key, compare-and-set
-on a version as a place's held state is, and reached by every flume
-process on the host (102 to 104, 153).
+account's spent time and reading in one document and each intent's
+affinity, by key, compare-and-set on a version as a place's held state
+is, and reached by every flume process on the host (102 to 104, 153).
 
 #### Scenario: A host document written at a moved version
 
@@ -415,30 +415,26 @@ The terminal seam SHALL offer `setup`, what the terminal's own configuration lac
 - **WHEN** the fake terminal is scripted with one missing entry and status is asked
 - **THEN** status gives that entry, and the fake recorded no open, send or close (57)
 
-### Requirement: The host gives an account's reading
-
-The host's facts SHALL give the reading in the file at a path, or why
-there is none, and the core SHALL ask it with the account's `usage`
-expanded against the login environment, a `$VAR` that environment lacks
-being no reading whose words name the variable (29, 184).
-
-#### Scenario: The fake host's reading
-
-- **WHEN** a test sets the fake host's reading for `work-1` and a refusal for `work-2`
-- **THEN** the core reads the reading for `work-1`, the refusal's words for `work-2`, and that the file is missing for `work-3` (184)
-
 ### Requirement: The types of a reading and a move past a threshold
 
-The seams SHALL pass one type each for a reading and its windows, a
-pool's threshold, an account's `usage`, the strategy `most-left`, and a
-move whose `why` is `threshold` with its window and end; each SHALL
-serialize to JSON and back unchanged, and a move recorded before SHALL
-read with no window and no end (147, 184, 185; core.14).
+The seams SHALL pass one type each for a reading, with when flume took
+it, the agent and session it came from and its windows, for an
+account's document of its spent time and its reading, for a pool's
+threshold, the strategy `most-left`, and a move whose `why` is
+`threshold` with its window and end; each SHALL serialize to JSON in
+C.7's form and back unchanged, and a document or a move an earlier
+release wrote SHALL read as written (147, 153, 184, 185, C.7;
+core.14).
 
 #### Scenario: A pool and a reading
 
-- **WHEN** a most-left pool with a threshold of 85 and an account naming `usage`, and a reading of two windows, one with no reset, are written and read
-- **THEN** each reads back unchanged, the strategy spelled `most-left` (184, 185)
+- **WHEN** a most-left pool with a threshold of 85, and a reading taken from an agent's session of two windows, one 23.5% used with no reset, are written and read
+- **THEN** each reads back unchanged, the strategy spelled `most-left`, the reading's `taken_at` RFC 3339's with its offset and the window's `used` 23.5, a share from 0 to 100 (184, 185, C.7)
+
+#### Scenario: An account's document
+
+- **WHEN** an account's document holding a spent time and a reading is written and read, and then one an earlier release wrote, holding `until`, `words` and `recorded_at` alone
+- **THEN** the first reads back unchanged, and the second reads spent until its `until` with no reading (153, C.7)
 
 #### Scenario: A move past a threshold
 
@@ -1031,3 +1027,23 @@ written before, which has none, reads answered (43, 61, 75).
 
 - **WHEN** `round_trip.rs` writes an end with a notice claimed answered and one claimed sending, and reads each back
 - **THEN** each reads as written, and the answered claim is written with no `sending`, as a claim written before
+
+### Requirement: The agent seam reads the windows its program reported
+
+The agent seam SHALL give, for an agent read in the place's own folder,
+the usage windows its program last reported for the account it runs
+under, with when flume's own part of the program took them and the
+session they came from where its record names one, or none yet, or
+unknown; and SHALL say whether its profile builds that part. Both
+SHALL be unknown and not offered by default, so a program whose profile
+builds none is degraded there (171, 174, 211).
+
+#### Scenario: Windows over the seam's scenarios
+
+- **WHEN** the agent seam's scenarios run against a profile that reports windows, for an agent that has reported none, then a report taken at 14:02, then one taken at 14:05
+- **THEN** `reports_windows` answers offered, and `windows` reads none yet, then the 14:02 report, then the 14:05 one, each with the agent's session, and unknown read in another place's folder (211)
+
+#### Scenario: A profile that reports no windows
+
+- **WHEN** the seam's scenarios run against a profile that builds no windows
+- **THEN** `reports_windows` answers not offered, and `windows` reads unknown for any agent (171, 174)

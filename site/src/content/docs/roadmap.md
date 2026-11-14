@@ -31,7 +31,7 @@ the same answers you do.
 | Labels owed a stream's agents, each holding some of them reserved | ✓ | ✓ |
 | Pools of accounts, a spent account paused and its agent's conversation carried to another where the host shares it, else its stage started afresh | ✓ | ✓ |
 | An intent's agents kept to one account while it is usable | ✓ | ✓ |
-| A pool choosing the account with the most of its allowance left by the host's reading, and starting nothing on an account past its threshold | ✓ | ✓ |
+| A pool choosing the account with the most of its allowance left by the windows its agent program reports, and starting nothing on an account past its threshold | ✓ | ✓ |
 | Each agent's start checked against its program and environment | ✓ | ✓ |
 | Agents in herdr panes, one workspace per base, or a printed command | ✓ | ✓ |
 | Agents in Rex blocks, each session a Rex server of flume's own, one Rex session per base and a window per place, each labelled with the base's count and the place's line, and a stream's session shown in the Rex app | ✓ | not yet checked |

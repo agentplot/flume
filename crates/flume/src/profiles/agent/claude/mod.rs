@@ -11,9 +11,10 @@
 //! transcript's records, its folder-trust dialog and the keys that answer
 //! it, the words of its usage limits, its permission modes ([`mode`]),
 //! the efforts it takes and the variable it reads over them ([`effort`]),
-//! where it keeps a session and how it resumes one ([`carry`]), and how it
+//! where it keeps a session and how it resumes one ([`carry`]), how it
 //! takes its own settings and which of them another setting owns
-//! ([`settings`]).
+//! ([`settings`]), and the usage windows its engine reports to a plugin's
+//! module ([`windows`]).
 
 pub mod carry;
 pub mod effort;
@@ -26,12 +27,13 @@ pub mod record;
 pub mod settings;
 pub mod status_line;
 pub mod transcript;
+pub mod windows;
 pub mod withheld;
 pub mod wrapper;
 
 use flume_seams::{
     Agent, AgentCommand, Carry, FolderTrust, Guarded, Identity, Live, ModeEntry, Offered, PlaceRef,
-    Reading, Received, Reserved, Secret, Settings, Spent, Unsettled,
+    Reading, Received, Reserved, Secret, Settings, Spent, Unsettled, Windows,
 };
 use record::Record;
 use sha2::{Digest, Sha256};
@@ -82,9 +84,11 @@ pub const PLACE: &str = "FLUME_PLACE";
 pub const STAGE: &str = "FLUME_STAGE";
 
 /// The plugin's files, as `plugins/claude` holds them, by their path in
-/// the plugin: its manifests, its hooks, the module that pins the place's
-/// line under the prompt (design 4) and the /launch command.
-pub const PLUGIN: [(&str, &str); 5] = [
+/// the plugin: its manifests, its hooks, its one hooks module and the two
+/// it registers, the one that pins the place's line under the prompt
+/// (design 4) and the one that passes the account's usage windows to
+/// `flume hook usage` (211), and the /launch command.
+pub const PLUGIN: [(&str, &str); 7] = [
     (
         ".claude-plugin/plugin.json",
         include_str!("../../../../../../plugins/claude/.claude-plugin/plugin.json"),
@@ -94,8 +98,16 @@ pub const PLUGIN: [(&str, &str); 5] = [
         include_str!("../../../../../../plugins/claude/hooks/hooks.json"),
     ),
     (
+        "hooks/flume.ts",
+        include_str!("../../../../../../plugins/claude/hooks/flume.ts"),
+    ),
+    (
         "hooks/line.ts",
         include_str!("../../../../../../plugins/claude/hooks/line.ts"),
+    ),
+    (
+        "hooks/usage.ts",
+        include_str!("../../../../../../plugins/claude/hooks/usage.ts"),
     ),
     (
         ".mcp.json",
@@ -108,8 +120,8 @@ pub const PLUGIN: [(&str, &str); 5] = [
 ];
 
 /// A file of the plugin as the binary writes it for the agents it
-/// starts: each command naming `flume`, a hook's or the module's, names
-/// the binary by its absolute path instead (C.4; design 4). The manifest
+/// starts: each command naming `flume`, a hook's or a module's, names the
+/// binary by its absolute path instead (C.4; design 4). The manifest
 /// carries the binary's version as `plugins/claude` holds it, the
 /// workspace's (135).
 pub fn written(text: &str, binary: &Path) -> String {
@@ -520,6 +532,19 @@ impl Agent for Claude {
             },
             _ => Spent::No,
         }
+    }
+
+    /// The windows `flume hook usage` kept beside the start's record, with
+    /// the session its started ack names; none yet where the record holds
+    /// none; unknown where it cannot be read ([`windows`]; 171, 211, C.4).
+    fn windows(&self, folder: &str, agent: &Identity) -> Windows {
+        windows::windows(folder, agent)
+    }
+
+    /// The plugin's module passes each report of the windows to `flume
+    /// hook usage` (211, C.4).
+    fn reports_windows(&self) -> Offered {
+        Offered::Offered
     }
 
     /// Yes with the stopped start's session where the chosen account's

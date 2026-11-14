@@ -131,17 +131,6 @@ none SHALL read a configuration file of the host's (106).
 - **WHEN** a test scripts the fake kinds' `deploy` with the label `operation`
 - **THEN** a deploy place's label is `operation` from `kind` where the fake host gives none (180)
 
-### Requirement: The fake host scripts each account's reading
-
-The fake host SHALL hold a reading or a refusal for each path a test
-sets, answer that the file is missing for any other, and pass the
-host's reading scenario; no fake SHALL read a real file (106, 184).
-
-#### Scenario: A scripted reading
-
-- **WHEN** a test sets the fake host's reading for `work-1`, then sets it again with a later `read_at`
-- **THEN** the core reads the later reading at the next choice, and the fake's log shows each reading asked (184)
-
 ### Requirement: The fake terminal scripts attach by view
 
 The fake terminal SHALL answer attach with a command of its own for the
@@ -387,3 +376,22 @@ moved, writing nothing (75, 102, 103).
 
 - **WHEN** the next write of a place's kept document is refused and a tidy writes it
 - **THEN** the write is refused as moved, nothing is written, and the next write of it lands
+
+### Requirement: The fake agent scripts the windows its program reports
+
+The fake agent SHALL keep, for a start a test names, the windows its
+program reports with when they were taken, read by `windows` in the
+folder the start recorded with the session the test gave the start, the
+later of two reports standing, log each `windows` read, and report no
+windows where the test says its profile builds none; it SHALL pass the
+agent seam's windows scenarios both ways (106, 211).
+
+#### Scenario: A scripted report
+
+- **WHEN** a test scripts a start's program to report `five_hour` 42% used taken at 14:02, then 50% used taken at 14:05
+- **THEN** `windows` reads the 14:05 report with the start's session, and the fake's log shows each `windows` read (211)
+
+#### Scenario: A profile scripted to report none
+
+- **WHEN** a test scripts the fake agent's profile to build no windows
+- **THEN** `reports_windows` answers not offered, and `windows` reads unknown for every start (171, 174)

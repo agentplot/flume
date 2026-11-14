@@ -17,9 +17,10 @@
 //! stream's the host's; a host that states no bound, in a stream that
 //! states none, has no queue.
 
-use crate::accounts::{AccountRoom, PoolRoom, Usable, THRESHOLD};
+use crate::accounts::{AccountRoom, PoolRoom, Reading, Usable, THRESHOLD};
 use crate::answer::and_list;
 use crate::live::waits_on_session;
+use crate::spent::account_document;
 use crate::{
     AccountStatus, Act, Answer, Engine, HostStatus, LabelStatus, PoolStatus, Queued, Reserves,
     RoomWanted, Step, StreamStatus, TitleFrom, TitleHeld,
@@ -830,7 +831,9 @@ impl Engine {
     }
 
     /// The host's queue as the store holds it now, each account of each
-    /// pool with its reading as the host's file holds it now (184).
+    /// pool with its spent time and its reading as its own document holds
+    /// them now, one read, asking nothing of its program (153, 184;
+    /// core.32).
     pub(crate) fn queue(&self) -> Queue {
         let every = self.store.read_every();
         let mut streams: BTreeMap<String, StreamRoom> = self
@@ -894,21 +897,23 @@ impl Engine {
                         pool: name.clone(),
                         account: account.name.clone(),
                     };
-                    let (spent_until, spent_unread) = match self.store.read_host(&key) {
-                        Some(HostVersioned {
-                            document: HostDocument::Account(spent),
-                            ..
-                        }) if spent.until > now => {
+                    let document = account_document(self.store.read_host(&key).as_ref());
+                    let (spent_until, spent_unread) = match document.spent {
+                        Some(spent) if spent.until > now => {
                             (Some(spent.until), spent.words.filter(|_| spent.unread))
                         }
                         _ => (None, None),
+                    };
+                    let reading = match document.reading {
+                        Some(reading) => Reading::Taken(reading),
+                        None => Reading::None(self.no_reading(&account)),
                     };
                     let running = on_accounts
                         .get(&(name.clone(), account.name.clone()))
                         .copied()
                         .unwrap_or(0);
                     AccountRoom {
-                        reading: self.reading(&account),
+                        reading,
                         account,
                         running,
                         spent_until,

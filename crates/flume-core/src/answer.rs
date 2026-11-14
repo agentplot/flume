@@ -1191,9 +1191,9 @@ fn threshold() -> u32 {
 /// flume's agents running on it, its own bound, none where it states
 /// none, the time it is spent until, none where it is not spent, and,
 /// where that time is the hour 146 gives because flume read no reset in
-/// its agent's words, those words, its reading, none where it names none,
-/// and what holds it past its threshold, none where nothing does; never a
-/// value of its environment or a reading's path.
+/// its agent's words, those words, its reading or why it has none, and
+/// what holds it past its threshold, none where nothing does; never a
+/// value of its environment or a path.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountStatus {
     pub name: String,
@@ -1209,15 +1209,20 @@ pub struct AccountStatus {
     pub past: Option<Past>,
 }
 
-/// An account's reading as status gives it (184): when the host read it,
-/// whether it is fresh at the host's clock, and each of its windows; or,
-/// where the account names one that cannot be read, why, in words that
-/// name no path.
+/// An account's reading as status gives it (184): when flume took it,
+/// the agent whose start's program reported it, by its identity, and its
+/// session, none where its record named none, whether it is fresh at the
+/// host's clock, and each of its windows; or why it has none, in words
+/// that name no path (56, 171, 184; core.14).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ReadingStatus {
     Read {
         read_at: Seconds,
+        #[serde(default)]
+        agent: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        session: Option<String>,
         fresh: bool,
         windows: Vec<WindowStatus>,
     },

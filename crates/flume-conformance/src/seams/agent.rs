@@ -1,5 +1,5 @@
 //! The agent seam's scenarios (B.4, 88 to 93, 115, 116, 121, 128, 134,
-//! 135, 151, 161, 162, 169, 179, 196, 197, 207).
+//! 135, 151, 161, 162, 169, 171, 174, 179, 196, 197, 207, 211).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -86,6 +86,24 @@ pub trait AgentHarness {
     /// them or the harness scripted them; none of either where it keeps
     /// the seam's defaults (197).
     fn efforts(&self) -> Efforts;
+
+    /// The agent's program reports `windows` for its account, taken at
+    /// `taken_at` by the host's clock, kept as flume's own part of the
+    /// program keeps them (184, 211).
+    fn report_windows(&self, identity: &Identity, taken_at: Seconds, windows: &[UsageWindow]);
+
+    /// Where the profile builds the windows' part, as its program's
+    /// release has it or the harness scripted it, the session `identity`,
+    /// a start the harness started, reads its windows with; none where the
+    /// profile builds no windows (171, 174, 211).
+    fn windows_from(&self, identity: &Identity) -> Option<WindowsFrom>;
+}
+
+/// What a profile's windows are read with for an agent: the session its
+/// own record names, none where it names none (211).
+#[derive(Clone, Debug, Default)]
+pub struct WindowsFrom {
+    pub session: Option<String>,
 }
 
 /// The words a profile takes as its program's effort, each passed as
@@ -225,6 +243,16 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
             name: "agent: spent reads a usage limit and its reset from the agent's own record, and nothing from another folder",
             cites: &["151", "146", "93", "128"],
             run: spent_reads_the_usage_limit::<H>,
+        },
+        Scenario {
+            name: "agent: windows reads none yet before a report, then each report its program made with the agent's session, the later of two standing, and unknown in another folder, where its profile reports windows",
+            cites: &["211", "184", "128"],
+            run: windows_reads_each_report::<H>,
+        },
+        Scenario {
+            name: "agent: a profile that builds no windows answers not offered, and windows reads unknown for any agent",
+            cites: &["211"],
+            run: windows_not_offered::<H>,
         },
         Scenario {
             name: "agent: started without names each variable the agent began without, read from its own record, and nothing from another folder",
@@ -865,6 +893,113 @@ fn spent_reads_the_usage_limit<H: AgentHarness>(harness: &H) -> Outcome {
         Spent::Unknown,
         "spent, read in another folder"
     );
+    Ok(())
+}
+
+/// 2026-11-05T14:02:00Z, by the host's clock.
+const AT_1402: Seconds = 1_793_887_320;
+
+/// The windows a program reports at 14:02: its 5-hour window `used`
+/// hundredths used, resetting at 17:00, and its 7-day window 18% with no
+/// reset (211).
+fn reported(used: u32) -> Vec<UsageWindow> {
+    vec![
+        UsageWindow {
+            name: "five_hour".into(),
+            used,
+            resets_at: Some(AT_1402 + 2 * 3600 + 58 * 60),
+        },
+        UsageWindow {
+            name: "seven_day".into(),
+            used: 1_800,
+            resets_at: None,
+        },
+    ]
+}
+
+/// The seam-contracts spec's scenario "Windows over the seam's
+/// scenarios" (211).
+fn windows_reads_each_report<H: AgentHarness>(harness: &H) -> Outcome {
+    let who = started(harness, "code");
+    // A profile that builds no windows answers by the scenario after.
+    let Some(from) = harness.windows_from(&who) else {
+        return Ok(());
+    };
+    ensure_eq!(
+        harness.seam().reports_windows(),
+        Offered::Offered,
+        "whether the profile reports windows"
+    );
+    let folder = harness.folder();
+    ensure_eq!(
+        harness.seam().windows(&folder, &who),
+        Windows::NoneYet,
+        "windows before any report"
+    );
+    harness.report_windows(&who, AT_1402, &reported(4_200));
+    ensure_eq!(
+        harness.seam().windows(&folder, &who),
+        Windows::Reported {
+            taken_at: AT_1402,
+            windows: reported(4_200),
+            session: from.session.clone(),
+        },
+        "the 14:02 report"
+    );
+    harness.report_windows(&who, AT_1402 + 180, &reported(5_000));
+    let latest = Windows::Reported {
+        taken_at: AT_1402 + 180,
+        windows: reported(5_000),
+        session: from.session.clone(),
+    };
+    ensure_eq!(
+        harness.seam().windows(&folder, &who),
+        latest.clone(),
+        "the 14:05 report"
+    );
+    harness.report_windows(&who, AT_1402 + 60, &reported(4_600));
+    ensure_eq!(
+        harness.seam().windows(&folder, &who),
+        latest,
+        "the 14:05 report, after one taken at 14:03"
+    );
+    ensure_eq!(
+        harness
+            .seam()
+            .windows(&format!("{folder}-of-another-place"), &who),
+        Windows::Unknown,
+        "windows, read in another folder"
+    );
+    Ok(())
+}
+
+/// The seam-contracts spec's scenario "A profile that reports no
+/// windows" (171, 174, 211). It cites 211 alone: the list leaves 171 and
+/// 174, a degraded part of the agent seam, to record 0026's change.
+fn windows_not_offered<H: AgentHarness>(harness: &H) -> Outcome {
+    let who = started(harness, "code");
+    // A profile that builds windows answers by the scenario before.
+    if harness.windows_from(&who).is_some() {
+        return Ok(());
+    }
+    ensure_eq!(
+        harness.seam().reports_windows(),
+        Offered::NotOffered,
+        "whether the profile reports windows"
+    );
+    harness.report_windows(&who, AT_1402, &reported(4_200));
+    let folder = harness.folder();
+    for (at, agent) in [
+        (folder.clone(), &who),
+        (folder.clone(), &identity("verify")),
+        (format!("{folder}-of-another-place"), &who),
+    ] {
+        ensure_eq!(
+            harness.seam().windows(&at, agent),
+            Windows::Unknown,
+            format!("windows of {agent} in {at}")
+        );
+    }
     Ok(())
 }
 

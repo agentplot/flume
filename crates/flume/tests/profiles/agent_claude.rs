@@ -30,10 +30,10 @@ use flume::profiles::agent::claude::{
     as_received, digest, written, Claude, NAME, PLUGIN, STANDING_PROMPT_FLAG, TRUST_CONFIRM,
     TRUST_FOCUS, TRUST_NEXT, TRUST_QUESTION, VERSION,
 };
-use flume::profiles::agent::claude::{carry, effort, live, mode, settings, transcript};
+use flume::profiles::agent::claude::{carry, effort, live, mode, settings, transcript, windows};
 use flume::profiles::{core_over, BuiltIn, DEFAULT_PROGRAM};
 use flume_conformance::scenario::pass_all;
-use flume_conformance::seams::agent::{self, AgentHarness, Efforts, Modes, OwnWay};
+use flume_conformance::seams::agent::{self, AgentHarness, Efforts, Modes, OwnWay, WindowsFrom};
 use flume_core::{Answer, EffortStatus};
 use flume_seams::*;
 use serde_json::{json, Value};
@@ -562,6 +562,36 @@ impl AgentHarness for Harness {
                 .to_vec(),
             variable: Some("CLAUDE_CODE_EFFORT_LEVEL"),
         }
+    }
+
+    /// The plugin's module passes the windows in the engine's form, and
+    /// `flume hook usage` keeps them on the start's record as it keeps
+    /// them, taken at `taken_at` (211, C.4).
+    fn report_windows(&self, identity: &Identity, taken_at: Seconds, reported: &[UsageWindow]) {
+        let rate_limits: Vec<Value> = reported
+            .iter()
+            .map(|window| {
+                let mut given = json!({
+                    "kind": window.name,
+                    "percentUsed": f64::from(window.used) / 100.0,
+                });
+                if let Some(resets_at) = window.resets_at {
+                    given["resetsAt"] = json!(rfc3339_of(resets_at));
+                }
+                given
+            })
+            .collect();
+        let input = json!({ "rateLimits": rate_limits }).to_string();
+        let read = windows::report(&input).expect("the engine's form read");
+        windows::keep(&self.record(identity), read, taken_at);
+    }
+
+    /// The profile builds the windows, read with the session the started
+    /// ack names (211, C.4).
+    fn windows_from(&self, _identity: &Identity) -> Option<WindowsFrom> {
+        Some(WindowsFrom {
+            session: Some(SESSION.into()),
+        })
     }
 
     /// The JSON object of the file the command names by `--settings`, as
@@ -1439,13 +1469,18 @@ fn the_plugin_an_agent_loads() {
         "{hooks}"
     );
     assert!(!hooks.contains("\"command\": \"flume\""), "{hooks}");
-    // The module runs the same binary by its path (design 4).
-    let module = std::fs::read_to_string(dir.join("hooks/line.ts")).expect("the module");
-    assert!(
-        module.contains("const FLUME = \"/opt/flume/bin/flume\";"),
-        "{module}"
-    );
-    assert!(!module.contains("const FLUME = \"flume\";"), "{module}");
+    // Each module runs the same binary by its path (design 4, 211).
+    for module in ["hooks/line.ts", "hooks/usage.ts"] {
+        let text = std::fs::read_to_string(dir.join(module)).expect(module);
+        assert!(
+            text.contains("const FLUME = \"/opt/flume/bin/flume\";"),
+            "{module}: {text}"
+        );
+        assert!(
+            !text.contains("const FLUME = \"flume\";"),
+            "{module}: {text}"
+        );
+    }
     // The manifest carries the binary's version, a release's where the
     // repository's says the workspace's, which the started ack reports
     // back (135).

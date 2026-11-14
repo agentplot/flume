@@ -7,7 +7,10 @@
 //! session it runs with its start's record before it acks, and
 //! UserPromptSubmit, at the start's first prompt, the mode its session
 //! runs in, which 2.1.296 gives no SessionStart input, blocking the prompt
-//! where it is another (161, 162). Outside such an agent every hook does
+//! where it is another (161, 162). The plugin's module runs `usage` with
+//! each report of the program's usage windows, which it keeps beside the
+//! start's record and has the core take as the account's reading
+//! ([`windows`]; 184, 211). Outside such an agent every hook does
 //! nothing but SessionStart, which runs `flume inbox` as the session the
 //! terminal names and gives the agent what waits on it (43; design 9). A
 //! hook never fails and never holds up a start or a turn: what
@@ -17,8 +20,8 @@
 
 use super::record::{self, Asking, Failure, Record, Started};
 use super::{
-    as_received, collapsed, digest, guard, mode, status_line, transcript, wrapper, AGENT, PLACE,
-    SECRET, STAGE,
+    as_received, collapsed, digest, guard, mode, status_line, transcript, windows, wrapper, AGENT,
+    PLACE, SECRET, STAGE,
 };
 use crate::host::process::{parent_executable, program_path};
 use flume_core::{variable_digest, Answer, Engine};
@@ -325,6 +328,12 @@ pub fn hook(
 ) -> String {
     if event == status_line::EVENT {
         return status_line::line(start.place.as_deref(), start.agent.as_deref(), build);
+    }
+    if event == windows::EVENT {
+        if let (Some(agent), Some(secret)) = (&start.agent, &start.secret) {
+            windows::hook(input, agent, secret, now(), build);
+        }
+        return String::new();
     }
     if start.agent.is_none() || start.secret.is_none() {
         return match event {

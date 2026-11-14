@@ -214,7 +214,7 @@ A session that outlived its start, such as a repetition's earlier agent
 still open, shows the place's current stage with
 `· this session is not its agent` at the end of the line.
 
-**How it is drawn.** The plugin's module runs `flume hook status-line`
+**How it is drawn.** The plugin's hooks module runs `flume hook status-line`
 at the session's start, after each tool call and at each turn's end.
 It runs it again every ten seconds, so a hold, a stall or a stop-short
 shows while the agent sits idle. It pins the line the hook prints as the plugin's own
@@ -238,6 +238,40 @@ module pins nothing and runs nothing.
 
 flume checks the module against the engine the pinned Claude Code
 writes, so a release that changes it fails flume's own checks first.
+
+## The account's usage windows
+
+Claude Code hands its plugins the usage windows each response reports:
+how much of the account's 5-hour and 7-day windows is used, and when
+each resets. In every session flume starts, the plugin's module passes
+each report whose windows moved to `flume hook usage`, which keeps it
+beside the start's record and has flume take it as the reading of the
+account the start runs under ([an account's
+reading](/flume/guides/agent-settings/#an-accounts-reading)). A
+`most-left` pool chooses by those readings, and a pool's threshold
+holds an account near its limit.
+
+**What it passes.** The module passes a report only where the windows
+moved and it holds one. A session off a subscription, or before its
+first response, reports none, and passes nothing, so a reading kept
+stands. It runs the hook and goes on, never waiting on it, so Claude
+Code's measuring is never held; a run that fails changes nothing, and
+the next report is passed as it comes.
+
+**What the hook keeps.** The hook reads each window's `kind`,
+`percentUsed` and `resetsAt` as the pinned release gives them, a use
+past 100 read as 100. A report with a window in no such form keeps
+nothing. It records the report with the time it took it, and flume
+writes it into the account's document beside its spent time, with the
+agent's identity and its session. A report taken no later than the
+reading kept changes nothing. A start under no pool keeps the report
+beside its record and writes no account's document. The hook prints
+nothing and always exits 0. In a session flume did not start it reads
+nothing and writes nothing.
+
+flume asks Claude Code and its maker nothing for it, reads no sign-in
+and fetches nothing: the windows are what the session's own responses
+reported.
 
 ## Prompt delivery
 

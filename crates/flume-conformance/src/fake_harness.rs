@@ -2,7 +2,7 @@
 //! scenarios a profile does (106).
 
 use crate::seams::{
-    agent::{AgentHarness, CarryAccounts, Efforts, LiveSessions, Modes, OwnWay},
+    agent::{AgentHarness, CarryAccounts, Efforts, LiveSessions, Modes, OwnWay, WindowsFrom},
     change::ChangeHarness,
     history::HistoryHarness,
     kinds::{KindsHarness, SourceDir},
@@ -395,6 +395,10 @@ pub struct FakeAgentHarness {
     /// The efforts the harness scripted the fake to take, by
     /// [`fake_efforts`], or none where it keeps the seam's defaults (197).
     efforts: Efforts,
+    /// Whether the harness left the fake reporting windows, or scripted
+    /// it to build none, as a profile that keeps the seam's defaults (171,
+    /// 211).
+    windows: bool,
 }
 
 impl FakeAgentHarness {
@@ -407,6 +411,23 @@ impl FakeAgentHarness {
         };
         harness.agent.live_not_read();
         harness
+    }
+
+    /// The fake scripted to report no windows, as a profile that keeps
+    /// the seam's defaults (171, 174, 211).
+    pub fn reporting_no_windows() -> Self {
+        let harness = FakeAgentHarness {
+            windows: false,
+            ..FakeAgentHarness::default()
+        };
+        harness.agent.reports_no_windows();
+        harness
+    }
+
+    /// The session the harness gives `identity`'s word that it started
+    /// where it reports windows (211).
+    fn session_of(identity: &Identity) -> String {
+        format!("session-of-{}-{}", identity.stage, identity.start)
     }
 
     /// The fake left taking no own settings and reserving no key, as a
@@ -425,6 +446,7 @@ impl FakeAgentHarness {
             carries: true,
             own: OwnWay::default(),
             efforts: fake_efforts(),
+            windows: true,
         }
     }
 
@@ -441,6 +463,7 @@ impl FakeAgentHarness {
             carries: true,
             own,
             efforts: Efforts::default(),
+            windows: true,
         }
     }
 }
@@ -531,6 +554,7 @@ impl Default for FakeAgentHarness {
             carries: true,
             own,
             efforts: fake_efforts(),
+            windows: true,
         }
     }
 }
@@ -592,6 +616,18 @@ impl AgentHarness for FakeAgentHarness {
 
     fn say_last(&self, identity: &Identity, words: &str) {
         self.agent.set_last_words(identity, words);
+    }
+
+    fn report_windows(&self, identity: &Identity, taken_at: Seconds, windows: &[UsageWindow]) {
+        self.agent
+            .set_session(identity, &FakeAgentHarness::session_of(identity));
+        self.agent.report_windows(identity, taken_at, windows);
+    }
+
+    fn windows_from(&self, identity: &Identity) -> Option<WindowsFrom> {
+        self.windows.then(|| WindowsFrom {
+            session: Some(FakeAgentHarness::session_of(identity)),
+        })
     }
 
     fn hit_usage_limit(&self, identity: &Identity) -> Seconds {

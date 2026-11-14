@@ -893,8 +893,8 @@ pool = "personal"
 [pools.work]
 strategy = "fill-first"
 accounts = [
-  { name = "work-1", program = "claude", env = { CLAUDE_CONFIG_DIR = "~/.claude-work-1" }, agents = 4, usage = "~/.local/state/usage/work-1.json" },
-  { name = "work-2", program = "claude", env = { CLAUDE_CONFIG_DIR = "~/.claude-work-2" }, usage = "~/.local/state/usage/work-2.json" },
+  { name = "work-1", program = "claude", env = { CLAUDE_CONFIG_DIR = "~/.claude-work-1" }, agents = 4 },
+  { name = "work-2", program = "claude", env = { CLAUDE_CONFIG_DIR = "~/.claude-work-2" } },
 ]
 
 [pools.personal]
@@ -1119,9 +1119,9 @@ are its stream's.
 
 A pool, `[pools.<pool>]`, lists accounts in order. Each account is a
 `name`, the `program` it runs, an `env` that is its agents'
-environment, an optional `agents`, the bound on agents running under
-it, and an optional `usage`, the file of its reading ([an account's
-reading](#an-accounts-reading)). A stage's pool is its stream's `pool`,
+environment, and an optional `agents`, the bound on agents running
+under it. It names nothing for its reading, which its program reports
+([an account's reading](#an-accounts-reading)). A stage's pool is its stream's `pool`,
 else the host's `[host] pool`. With no pool named anywhere, flume
 chooses no account, and agents run under the login environment alone.
 
@@ -1151,73 +1151,56 @@ answers no sign-in on an agent's behalf.
 
 ### An account's reading
 
-flume asks no one how much of an account's allowance is left. It reads
-what your host last read, from the file the account's `usage` names:
+flume asks no one how much of an account's allowance is left. An
+account's **reading** is the usage windows its agent program last
+reported for it in a session flume started: for each window, how much
+of it is used and when it resets. Claude Code reports its windows to its
+plugins as each response comes back, and in every session flume starts,
+flume's plugin passes each report to `flume hook usage` ([Claude
+Code](/flume/guides/claude-code/#the-plugin-flume-hands-its-agents)). flume keeps it as the reading
+of the account that session runs under, in the account's own document
+beside its spent time ([state](/flume/reference/state/#the-hosts-own-documents)),
+with when flume took it and from which agent's session. An account
+names nothing for it:
 
 ```toml
 [pools.work]
 strategy = "most-left"
 accounts = [
-  { name = "work-1", program = "claude", env = { CLAUDE_CONFIG_DIR = "~/.claude-work-1" }, usage = "~/.local/state/usage/work-1.json" },
-  { name = "work-2", program = "claude", env = { CLAUDE_CONFIG_DIR = "~/.claude-work-2" }, usage = "~/.local/state/usage/work-2.json" },
+  { name = "work-1", program = "claude", env = { CLAUDE_CONFIG_DIR = "~/.claude-work-1" } },
+  { name = "work-2", program = "claude", env = { CLAUDE_CONFIG_DIR = "~/.claude-work-2" } },
 ]
 ```
 
-In `usage`, as in `env`, a leading `~` is your home and `$VAR` or
-`${VAR}` a variable of your login environment. The file holds one JSON
-document:
+- A window goes by the name its program gives it: Claude Code's
+  `five_hour` and `seven_day`, and a gateway's `spend_limit`. Its use is
+  the share of the window used, from 0 to 100, and a spend limit past
+  100 reads as 100.
+- A reading is **fresh** for fifteen minutes from when flume took it, by
+  the host's clock. A window whose reset has passed reads as nothing
+  used.
+- A report taken no later than the reading the document holds changes
+  nothing, so two sessions on one account never turn its reading back.
+- flume fetches nothing, asks no agent program or its maker what an
+  account has left, reads no account's sign-in, and reads no file your
+  host writes for it.
 
-```json
-{
-  "read_at": "2026-11-05T14:02:11Z",
-  "windows": [
-    { "name": "5-hour", "used": 42, "resets_at": "2026-11-05T17:00:00Z" },
-    { "name": "7-day", "used": 71.5, "resets_at": "2026-11-09T08:00:00Z" }
-  ]
-}
-```
-
-- `read_at` is when your host read the account's allowance, not when it
-  wrote the file.
-- `windows` gives one entry for each usage window that holds every
-  model of the account: for Claude Code, its 5-hour window and its
-  7-day window. Leave out a window that holds one model alone, since
-  flume holds every start on the account by every window the file
-  gives.
-- Each window's `name` is yours: status gives it, and flume reads no
-  meaning into it. `used` is the percentage of the window used, from 0
-  to 100, fractions allowed. `resets_at` is when the window resets, and
-  a window may leave it out.
-- Each time is RFC 3339's, with its offset.
-- flume ignores every other key, so your host may keep its own beside
-  these. Put no token or credential in the file.
-
-Something of your host's writes the file, and flume reads it and never
-writes it. flume keeps no copy of it, fetches nothing to make it, asks
-no agent program or its maker what an account has left, and reads no
-account's sign-in. How your host learns an account's use is yours to
-choose: choose a way that leaves each account's sign-in as it is.
-
-Write the file whole: a new file in the same folder, renamed over the
-old, so flume never reads half of one. Write it at least every five
-minutes while your host can read the account. A reading is **fresh**
-for fifteen minutes from its `read_at`, by the host's clock, so one
-missed write costs nothing. Keep the file outside flume's own folders
-and outside the account's configuration home. Two pools' entries for
-one account may name one file.
-
-flume reads each account's file as it stands at each choice of an
-account and whenever status is asked. A window whose `resets_at` has
-passed reads as nothing used. A file that is missing, or that is not
-this form, is no reading: status says why, and no start is refused and
-no settle fails for it. Where your host can no longer read an account,
-write nothing new for it, or remove its file. Its reading then goes
-stale, or there is none.
+An account flume runs no agent on keeps its last reading as it ages: it
+goes stale after fifteen minutes, but a window it gives past the
+threshold holds the account until that window resets ([a
+threshold](#a-threshold)). An account no session of flume's has
+reported for has no reading, and status says `no session flume started
+has reported its windows`. An account whose program's profile gives no
+windows has none either, and status says `its program's profile gives
+no windows`. Neither refuses a start or fails a settle. An account
+signed in with a key rather than a subscription reports no windows, so
+it has no reading.
 
 What an account has **left** is the least any of its windows leaves:
 40% of its 5-hour window used and 80% of its 7-day window leave it 20.
 Take a `most-left` pool over work-1 with that reading, work-2 whose
-reading gives 60% and 30%, and work-3, which names no reading. A first
+reading gives 60% and 30%, and work-3, for which no session has
+reported. A first
 place starts on work-2, which has 40 left to work-1's 20, and a second
 place of another intent starts there too while the reading stands.
 Once work-2's reading is twenty minutes old with none newer, the next
@@ -1226,8 +1209,9 @@ work-1 is spent, the next starts on work-3, which runs fewer of flume's
 agents than work-2. A pool with no fresh reading anywhere chooses as
 `least-busy` does.
 
-A reading moves only when your host writes it, so every start between
-two readings goes to the account with most left, up to its own
+A reading moves only when a session flume started on the account
+reports its windows, so every start between two reports goes to the
+account with most left, up to its own
 `agents`. An intent keeps its agents on one account in any case
 ([affinity](#an-intent-keeps-an-account-per-program)), and the
 threshold stops new work on an account once a reading shows it near
@@ -1627,28 +1611,27 @@ pin, or, where it was not taken, each key it may not set or its fault:
 
 A pool gives its strategy and its threshold, then each account with its
 reading under it. A reading gives each window's use and reset, then
-when the host read it, `stale` where it is no longer fresh. An account
-whose reading cannot be read says `no reading:` and why. An account past its threshold says which window
-holds it and until when. Status never gives a reading's path: the
-configuration's values give an account's `usage` as `<set>`, as they
-give its variables.
+when flume took it and from which agent, `stale` where it is no longer
+fresh. An account with no reading says `no reading:` and why. An
+account past its threshold says which window holds it and until when.
+Status gives no path.
 
 ```text
   pool work, most-left, threshold 90%:
     work-1 (claude): 2 agents running of 4
-      5-hour 93% (resets 1793304000) · 7-day 55% (resets 1793520000) · read at 1793291300
-      past its threshold in 5-hour until 1793304000
+      five_hour 93% (resets 1793304000) · seven_day 55% (resets 1793520000) · taken at 1793291300 from flume:b3e4c15d5ebe:fix--parser:code:1
+      past its threshold in five_hour until 1793304000
     work-2 (claude): 1 agents running, no bound of its own
-      5-hour 40% (resets 1793304000) · 7-day 35% (resets 1793520000) · read at 1793291280
+      five_hour 40% (resets 1793304000) · seven_day 35% (resets 1793520000) · stale, taken at 1793290280 from flume:b3e4c15d5ebe:fix--lexer:code:1
     work-3 (claude): 0 agents running, no bound of its own
-      no reading: the file is missing
+      no reading: no session flume started has reported its windows
 ```
 
 A move off an account past its threshold names the window and its
 reset:
 
 ```text
-  moved: the intent moved for claude from work-1 to work-2 at 1793291334, work-1 past its threshold in 5-hour until 1793304000, its agents after starting without work-1's cache
+  moved: the intent moved for claude from work-1 to work-2 at 1793291334, work-1 past its threshold in five_hour until 1793304000, its agents after starting without work-1's cache
 ```
 
 A stage waiting for an account of its pool names the soonest time an

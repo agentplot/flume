@@ -1778,3 +1778,197 @@ fn a_carried_starts_length_kept_at_a_compaction() {
     assert_eq!(started.source, "compact");
     assert_eq!(started.from, 4096, "{started:?}");
 }
+
+/// `flume hook usage` run in `env` as the plugin's module runs it, its
+/// input the engine's report `rate_limits`.
+fn usage(host: &Host, env: &[(String, String)], rate_limits: Value) -> Ran {
+    let env: Vec<(&str, &str)> = env
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+        .collect();
+    let ran = host.flume(
+        &["hook", "usage"],
+        &env,
+        &json!({ "rateLimits": rate_limits }).to_string(),
+    );
+    assert_eq!(ran.code, 0, "hook usage exits 0: {}", ran.out);
+    assert_eq!(ran.out, "", "hook usage printed");
+    ran
+}
+
+/// work-1's document in the scratch state directory, none where there
+/// is none.
+fn work_1_document(host: &Host) -> Option<Value> {
+    let text = std::fs::read_to_string(host.path("state/flume/accounts/work/work-1.json")).ok()?;
+    let read: Value = serde_json::from_str(&text).expect("the document as JSON");
+    Some(read["document"].clone())
+}
+
+/// A code agent flume launched under work-1, started in the environment
+/// its account gives it, and that environment.
+fn started_under_work_1(host: &Host) -> (Agent, Vec<(String, String)>) {
+    let account = with_an_account(host);
+    let agent = host.launch("fix");
+    let mut env = agent.env();
+    env.push((
+        "CLAUDE_CONFIG_DIR".into(),
+        account.to_string_lossy().into_owned(),
+    ));
+    host.hook_in(
+        &agent,
+        "session-start",
+        json!({ "source": "startup" }),
+        &env,
+    );
+    assert_eq!(host.agent_status(&agent.place)["started"], "yes");
+    (agent, env)
+}
+
+#[test]
+fn a_report_of_the_windows_is_the_accounts_reading() {
+    // The claude-code-plugin spec's scenario "A report under an account":
+    // the hook keeps the report beside the start's record and the core
+    // takes it as work-1's reading, from the code agent's identity and
+    // the session its started ack names, a use past 100 read as 100,
+    // which status gives fresh (184, 185, 211).
+    let host = Host::new("usage-account");
+    let (agent, env) = started_under_work_1(&host);
+    let seventeen = now() + 3 * 3600;
+    let before = now();
+    usage(
+        &host,
+        &env,
+        json!([
+            {"kind": "five_hour", "percentUsed": 42, "resetsAt": flume_seams::rfc3339_of(seventeen)},
+            {"kind": "seven_day", "percentUsed": 107.5},
+        ]),
+    );
+    let after = now();
+    let document = work_1_document(&host).expect("work-1's document");
+    let reading = &document["reading"];
+    let taken_at = reading["taken_at"].as_str().expect("taken_at");
+    let taken = flume_seams::rfc3339_read(taken_at).expect("RFC 3339");
+    assert!((before..=after).contains(&taken), "{document}");
+    assert_eq!(reading["agent"], json!(agent.identity), "{document}");
+    assert_eq!(reading["session"], json!(SESSION), "{document}");
+    assert_eq!(
+        reading["windows"],
+        json!([
+            {"name": "five_hour", "used": 42, "resets_at": flume_seams::rfc3339_of(seventeen)},
+            {"name": "seven_day", "used": 100},
+        ]),
+        "{document}"
+    );
+    assert!(
+        record_of(&host, &agent)
+            .dir()
+            .join("windows.json")
+            .is_file(),
+        "the report kept beside the start's record"
+    );
+    let ran = host.flume(&["status", "--json"], &[], "");
+    assert_eq!(ran.code, 0, "status: {}", ran.out);
+    let status = ran.json();
+    let account = &status["status"]["host"]["pools"][0]["accounts"][0];
+    assert_eq!(account["name"], "work-1", "{status}");
+    assert_eq!(account["reading"]["fresh"], true, "{status}");
+    assert_eq!(
+        account["reading"]["agent"],
+        json!(agent.identity),
+        "{status}"
+    );
+    assert_eq!(account["reading"]["read_at"], json!(taken), "{status}");
+}
+
+#[test]
+fn a_window_in_no_form_keeps_nothing() {
+    // The claude-code-plugin spec's scenario "A window in no such form":
+    // each keeps nothing, work-1's reading stands, and the hook exits 0
+    // (184).
+    let host = Host::new("usage-no-form");
+    let (agent, env) = started_under_work_1(&host);
+    usage(
+        &host,
+        &env,
+        json!([{"kind": "five_hour", "percentUsed": 30}]),
+    );
+    let standing = work_1_document(&host).expect("work-1's document");
+    let kept = std::fs::read(record_of(&host, &agent).dir().join("windows.json"))
+        .expect("the report kept");
+    for window in [
+        json!({"percentUsed": 42}),
+        json!({"kind": "five_hour", "percentUsed": "42%"}),
+        json!({"kind": "five_hour", "percentUsed": 42, "resetsAt": "at five"}),
+    ] {
+        usage(
+            &host,
+            &env,
+            json!([{"kind": "seven_day", "percentUsed": 18}, window]),
+        );
+        assert_eq!(
+            work_1_document(&host).as_ref(),
+            Some(&standing),
+            "work-1's reading after {window}"
+        );
+        assert_eq!(
+            std::fs::read(record_of(&host, &agent).dir().join("windows.json"))
+                .expect("the report kept"),
+            kept,
+            "the report kept after {window}"
+        );
+    }
+}
+
+#[test]
+fn a_report_under_no_account_writes_no_accounts_document() {
+    // The claude-code-plugin spec's scenario "A start under no account":
+    // the report is kept beside the start's record, no account's
+    // document is written, and the hook exits 0 (184).
+    let host = Host::new("usage-no-account");
+    let agent = host.launch("fix");
+    host.hook(&agent, "session-start", json!({ "source": "startup" }));
+    usage(
+        &host,
+        &agent.env(),
+        json!([{"kind": "five_hour", "percentUsed": 42}]),
+    );
+    assert!(
+        record_of(&host, &agent)
+            .dir()
+            .join("windows.json")
+            .is_file(),
+        "the report kept beside the start's record"
+    );
+    assert!(
+        !host.path("state/flume/accounts").exists(),
+        "an account's document written"
+    );
+}
+
+#[test]
+fn hook_usage_outside_a_session_flume_started_writes_nothing() {
+    // The claude-code-plugin spec's scenario "Outside a session flume
+    // started": with no FLUME_AGENT and no FLUME_SECRET the hook prints
+    // nothing, every file under the scratch state directory is as it was,
+    // and it exits 0 (C.4).
+    let host = Host::new("usage-outside");
+    let agent = host.launch("fix");
+    host.hook(&agent, "session-start", json!({ "source": "startup" }));
+    let before = host.state();
+    let env: Vec<(String, String)> = agent
+        .env()
+        .into_iter()
+        .filter(|(name, _)| name != "FLUME_AGENT" && name != "FLUME_SECRET")
+        .collect();
+    usage(
+        &host,
+        &env,
+        json!([{"kind": "five_hour", "percentUsed": 42}]),
+    );
+    usage(
+        &host,
+        &[],
+        json!([{"kind": "five_hour", "percentUsed": 42}]),
+    );
+    assert_eq!(host.state(), before, "hook usage wrote flume's state");
+}
