@@ -36,17 +36,40 @@ pub fn report(input: &str) -> Option<Vec<UsageWindow>> {
     given.iter().map(window).collect()
 }
 
-/// The engine's report `input` kept beside the start's `record`, taken
-/// at `taken_at` by the host's clock, as `flume hook usage` keeps it: false
-/// where it is no report [`report`] reads, the file could not be written,
-/// or a report taken later stands there (184, 211).
-pub fn keep(record: &Record, input: &str, taken_at: u64) -> bool {
-    let Some(windows) = report(input) else {
-        return false;
-    };
+/// The windows of a report, as [`report`] read them, kept beside the
+/// start's `record`, taken at `taken_at` by the host's clock, as `flume
+/// hook usage` keeps them: false where the file could not be written or a
+/// report taken later stands there (184, 211).
+pub fn keep(record: &Record, windows: Vec<UsageWindow>, taken_at: u64) -> bool {
     record
         .keep_windows(&KeptWindows { taken_at, windows })
         .unwrap_or(false)
+}
+
+/// `flume hook usage` in the start `agent` names with its `secret`: the
+/// report `input` read, kept beside the start's record with the time the
+/// hook ran, `now`, and the core built by `build` asked to take it as the
+/// account's reading. A report in no form [`report`] reads keeps nothing
+/// and asks nothing; what it cannot do it leaves undone (184, 211, C.4).
+pub fn hook(
+    input: &str,
+    agent: &str,
+    secret: &str,
+    now: u64,
+    build: &dyn Fn() -> Result<flume_core::Engine, String>,
+) {
+    let Some(windows) = report(input) else {
+        return;
+    };
+    let Ok(core) = build() else {
+        return;
+    };
+    let Ok(folder) = core.agent_folder(agent, secret) else {
+        return;
+    };
+    if keep(&Record::named(&folder, agent), windows, now) {
+        let _ = core.take_reading(agent, secret);
+    }
 }
 
 /// One window of the engine's report, none where it is in no form

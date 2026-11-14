@@ -582,7 +582,8 @@ impl AgentHarness for Harness {
             })
             .collect();
         let input = json!({ "rateLimits": rate_limits }).to_string();
-        windows::keep(&self.record(identity), &input, taken_at);
+        let read = windows::report(&input).expect("the engine's form read");
+        windows::keep(&self.record(identity), read, taken_at);
     }
 
     /// The profile builds the windows, read with the session the started

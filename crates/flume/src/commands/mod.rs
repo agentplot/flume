@@ -198,7 +198,8 @@ enum Command {
     /// From an agent program's hook: what the hook for `event` does with
     /// the input on standard input, in an agent flume started; nothing
     /// elsewhere. `status-line` reads no input and prints the place's
-    /// line. It always exits 0 (C.4).
+    /// line; `usage` keeps the usage windows on its input as its
+    /// account's reading. It always exits 0 (184, 211, C.4).
     Hook {
         /// One of the plugin's hooks; any other does nothing.
         event: String,
