@@ -97,7 +97,7 @@ attribution = { commit = "", pr = "", sessionUrl = false }
 | Key | Values | Meaning |
 |---|---|---|
 | `agents` | a whole number from 0 | The bound on agents running at once on the host, every caller's and every stream's counted together. A stage starts only while the host is under it and otherwise waits for room. With none, and no stream's bound, every stage starts at once and the host has no queue. |
-| `multiplexer` | `"herdr"`, `"printed"` | The multiplexer a stream's agents run in where the stream names none: herdr panes, or a command flume prints for you to run. `"printed"` where none is given. Any other name makes every command refuse, naming the terminal profiles there are. |
+| `multiplexer` | `"herdr"`, `"rex"`, `"printed"` | The multiplexer a stream's agents run in where the stream names none: herdr panes, blocks in Rex servers of flume's own, each session's at `<state>/terminal/rex/<session>.sock`, or a command flume prints for you to run. `"printed"` where none is given. Any other name makes every command refuse, naming the terminal profiles there are. |
 | `terminal` | as `multiplexer` | The word written before `multiplexer`, read as it. A `[host]` giving both is refused. |
 | `view` | `"terminal"`, `"app"` | How `flume open` shows a stream's agents where the stream names none: in a window of a terminal app, or in the multiplexer's own app. `"terminal"` where none is given. |
 | `terminal_app` | `"ghostty"`, `"terminal"`, `"printed"` | The program that opens a stream's window where the stream names none: Ghostty, Terminal.app on macOS, or none, `flume open` printing the line to run. `"printed"` where none is given. Any other name refuses each stream's `flume open` that takes it, naming the window profiles there are; every other command runs. |
@@ -118,7 +118,7 @@ for; a `[streams.default]` table gives it keys of its own.
 | `priority` | a whole number, negative allowed | the stream's priority: waiting stages start by it first, then by their place's | `0` |
 | `pool` | a pool's name | the pool its places' agents take accounts from | `[host] pool` |
 | `session` | a string herdr takes as a session's name | the herdr session its agents open in, but those of a kind or a stage it names another for ([a stream's sessions](/flume/guides/agent-settings/#a-streams-sessions)) | the stream's own name, and flume's own session for `default` |
-| `multiplexer` | `"herdr"`, `"printed"` | the multiplexer its agents run in, read at each start; an agent stays in the one it opened in ([a stream's multiplexer](/flume/guides/agent-settings/#a-streams-multiplexer-and-view)) | `[host] multiplexer` |
+| `multiplexer` | `"herdr"`, `"rex"`, `"printed"` | the multiplexer its agents run in, read at each start; an agent stays in the one it opened in ([a stream's multiplexer](/flume/guides/agent-settings/#a-streams-multiplexer-and-view)); under Rex each of its sessions is a Rex server of flume's own at `<state>/terminal/rex/<session>.sock` ([places under Rex](/flume/guides/places-and-herdr/#places-under-rex)) | `[host] multiplexer` |
 | `view` | `"terminal"`, `"app"` | how `flume open` shows its agents | `[host] view` |
 | `terminal_app` | `"ghostty"`, `"terminal"`, `"printed"` | the program that opens its window | `[host] terminal_app` |
 | `title` | a string | its window's title, which a window manager can file the window by | the stream's name |
@@ -739,3 +739,4 @@ lists what a prompt may ask for.
 | `FLUME_AGENT`, `FLUME_SECRET` | `needs`, `ack`, `hook` | the identity and secret of the agent's start, set by flume on each agent |
 | `FLUME_PLACE`, `FLUME_STAGE` | `hook`, `wait`, `inbox` | the agent's place and stage; a command run in a role's run takes its role from `FLUME_PLACE` |
 | `HERDR_*` | the herdr terminal | the pane a command runs in, read as its session; stripped from every herdr call flume makes and from `sluice submit` |
+| `REX_BLOCK`, `REX_SERVER` | the Rex terminal | the block a command runs in, on its server, read as its session; every `REX_*` stripped from every Rex call flume makes and from `sluice submit` |

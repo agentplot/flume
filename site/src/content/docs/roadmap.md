@@ -34,14 +34,15 @@ the same answers you do.
 | A pool choosing the account with the most of its allowance left by the host's reading, and starting nothing on an account past its threshold | ✓ | ✓ |
 | Each agent's start checked against its program and environment | ✓ | ✓ |
 | Agents in herdr panes, one workspace per base, or a printed command | ✓ | ✓ |
+| Agents in Rex blocks, each session a Rex server of flume's own, one Rex session per base and a window per place | ✓ | not yet checked |
 | Each stream's agents under a multiplexer of its own, the host's where it names none | ✓ | ✓ |
 | `flume open`: a stream's agents in a window titled as the stream declares, or the line to run | Ghostty, Terminal.app | Ghostty |
 | The herdr plugin's sidebar rows and popup | ✓ | ✓ |
 | The Claude Code plugin's `/launch` and status over MCP | ✓ | ✓ |
 | Release binaries | Apple silicon | x86-64, ARM64 |
 
-A stream's multiplexer is herdr or the printed command. No profile is
-written yet for herdr-core, Rex, cmux or TUIOS. Each is a change of its
+A stream's multiplexer is herdr, Rex or the printed command. No profile
+is written yet for herdr-core, cmux or TUIOS. Each is a change of its
 own, checked against its release, and offers the views its multiplexer
 has: a window running its terminal client, its own app, or both
 ([record 0037](https://github.com/boomdrivedev/flume/blob/main/docs/adr/0037-a-stream-names-its-multiplexer-its-view-and-its-terminal-app-the-hosts-where-it-names-none-and-a-person-opens-its-agents-in-that-view.md)).
@@ -53,6 +54,15 @@ the profiles there are.
 Each of these is decided in a record of the repository and stated in
 flume's statement, and waits on its build. Until then flume behaves as
 the rest of this site says.
+
+- **A Rex stream's agents in the Rex app**
+  ([record 0067](https://github.com/boomdrivedev/flume/blob/main/docs/adr/0067-rex-is-flumes-second-terminal-its-calls-bounded-and-checked-against-the-pinned-rex-as-herdrs-are.md)).
+  `flume open` of a session under Rex tells the Rex app to show it,
+  once you add the session's server's socket under the app's Remote
+  Hosts, and each place's window and its base's Rex session carry the
+  place's line and the base's count. Until then `flume open` refuses a
+  Rex stream's session, and flume labels nothing in Rex but each
+  block's agent.
 
 - **A stage that repeats per task group**
   ([record 0019](https://github.com/boomdrivedev/flume/blob/main/docs/adr/0019-a-stage-may-repeat-per-task-group-a-fresh-agent-for-each-group-and-change-2s-code-stage-does.md)).
